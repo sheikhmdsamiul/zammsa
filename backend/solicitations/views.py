@@ -66,6 +66,12 @@ class SolicitationListView(BaseView, generics.ListCreateAPIView):
             return SolicitationListSerializer
         return SolicitationSerializer
 
+    def perform_create(self, serializer):
+        if self.request.user.role not in ('procurement_officer', 'system_admin'):
+            from rest_framework.exceptions import PermissionDenied
+            raise PermissionDenied('Only Procurement Officer can create solicitations.')
+        serializer.save(created_by=self.request.user)
+
 
 class SolicitationDetailView(generics.RetrieveUpdateDestroyAPIView):
     queryset = Solicitation.objects.select_related('requisition').prefetch_related('evaluation_criteria', 'addenda', 'documents').all()
@@ -91,7 +97,7 @@ def solicitation_submit_view(request, pk):
         }, status=400)
 
     user_role = request.user.role
-    if user_role not in ('procurement_manager', 'procurement_officer'):
+    if user_role not in ('procurement_officer', 'system_admin'):
         return Response({'error': 'Not authorized to submit for approval'}, status=403)
 
     sol.status = 'pending_approval'
@@ -117,8 +123,10 @@ def solicitation_approve_view(request, pk):
         }, status=400)
 
     user_role = request.user.role
-    if user_role not in ('procurement_manager', 'director_procurement'):
+    if user_role not in ('procurement_manager', 'system_admin'):
         return Response({'error': 'Not authorized to approve'}, status=403)
+    if sol.created_by_id and sol.created_by_id == request.user.id:
+        return Response({'error': 'Self-approval is not allowed'}, status=403)
 
     sol.status = 'approved'
     sol.approved_by = request.user
@@ -138,7 +146,7 @@ def solicitation_publish_view(request, pk):
         return Response({'error': 'Only approved solicitations can be published'}, status=400)
 
     user_role = request.user.role
-    if user_role not in ('procurement_manager', 'director_procurement'):
+    if user_role not in ('procurement_officer', 'system_admin'):
         return Response({'error': 'Not authorized to publish'}, status=403)
 
     sol.status = 'published'

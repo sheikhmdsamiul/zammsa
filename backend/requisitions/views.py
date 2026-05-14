@@ -8,6 +8,7 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.pagination import PageNumberPagination
+from rest_framework.exceptions import PermissionDenied
 from django_filters.rest_framework import DjangoFilterBackend
 import django_filters
 
@@ -66,6 +67,11 @@ class RequisitionListView(BaseView, generics.ListCreateAPIView):
             return RequisitionListSerializer
         return RequisitionSerializer
 
+    def perform_create(self, serializer):
+        if self.request.user.role not in ('user_dept_staff', 'system_admin'):
+            raise PermissionDenied('Only User Department Staff can create requisitions.')
+        serializer.save(requester=self.request.user)
+
 
 class RequisitionDetailView(generics.RetrieveUpdateDestroyAPIView):
     queryset = Requisition.objects.select_related('department', 'requester').prefetch_related('items', 'approvals').all()
@@ -113,6 +119,8 @@ def requisition_submit_view(request, pk):
 
     if req.status != 'draft':
         return Response({'error': 'Only draft requisitions can be submitted'}, status=400)
+    if req.requester_id != request.user.id and request.user.role != 'system_admin':
+        return Response({'error': 'Only the requester can submit this requisition'}, status=403)
 
     budget_warnings = _check_budget_and_encumber(req)
     if budget_warnings:
@@ -178,14 +186,12 @@ def _get_flow_for_role(user_role, req):
         return {'from': 'submitted', 'to': 'pending_finance', 'level': 'department_head_approval'}
     if user_role == 'finance_officer':
         estimated = float(req.estimated_total)
-        if estimated <= 250000:
-            return {'from': 'pending_finance', 'to': 'pending_dg', 'level': 'finance_validation'}
-        return {'from': 'pending_finance', 'to': 'pending_zpc', 'level': 'finance_validation'}
+        return {'from': 'pending_finance', 'to': 'pending_dg', 'level': 'finance_validation'}
     if user_role == 'director_general':
         estimated = float(req.estimated_total)
         if estimated <= 250000:
             return {'from': 'pending_dg', 'to': 'approved', 'level': 'dg_approval'}
-        return None
+        return {'from': 'pending_dg', 'to': 'pending_zpc', 'level': 'dg_approval'}
     if user_role == 'zpc_member':
         estimated = float(req.estimated_total)
         if estimated > 250000:
@@ -204,6 +210,8 @@ def _advance_requisition(req, user, decision, comments):
 
     if req.status != flow['from']:
         return None, f'Requisition is not at the {flow["from"]} stage. Current status: {req.status}'
+    if req.requester_id == user.id:
+        return None, 'Self-approval is not allowed'
 
     if decision == 'rejected':
         req.status = 'rejected'

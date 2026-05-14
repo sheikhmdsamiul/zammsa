@@ -9,8 +9,19 @@ const SolicitationCreate: React.FC = () => {
   const navigate = useNavigate();
   const [form, setForm] = useState({
     title: '', description: '', type: 'rfb', department: '', procurement_method: 'open',
-    estimated_value: 0, currency: 'ZMW', budget_code: '', issue_date: '', closing_date: '', opening_date: '', requisition: '',
+    estimated_value: 0, currency: 'ZMW', budget_code: '', issue_date: '',
+    closing_date: '', closing_hour: '10', closing_minute: '00',
+    opening_date: '', opening_hour: '10', opening_minute: '00',
+    requisition: '',
   });
+
+  const getDateTime = (date: string, hour: string, minute: string) => {
+    if (!date) return '';
+    return `${date}T${hour.padStart(2, '0')}:${minute.padStart(2, '0')}:00`;
+  };
+
+  const hours = Array.from({ length: 12 }, (_, i) => String(i + 8).padStart(2, '0'));
+  const minutes = ['00', '15', '30', '45'];
 
   const mutation = useMutation({
     mutationFn: (data: any) => solicitationsApi.create(data),
@@ -22,7 +33,11 @@ const SolicitationCreate: React.FC = () => {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    mutation.mutate(form);
+    mutation.mutate({
+      ...form,
+      closing_date: getDateTime(form.closing_date, form.closing_hour, form.closing_minute),
+      opening_date: getDateTime(form.opening_date, form.opening_hour, form.opening_minute),
+    });
   };
 
   return (
@@ -87,18 +102,38 @@ const SolicitationCreate: React.FC = () => {
 
         <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 space-y-4">
           <h2 className="text-lg font-semibold text-gray-900">Timeline</h2>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Issue Date</label>
               <input type="date" value={form.issue_date} onChange={(e) => setForm({ ...form, issue_date: e.target.value })} className="w-full border-gray-300 rounded-lg px-3 py-2 focus:ring-zammsa-green focus:border-zammsa-green" />
             </div>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Closing Date</label>
-              <input type="datetime-local" value={form.closing_date} onChange={(e) => setForm({ ...form, closing_date: e.target.value })} required className="w-full border-gray-300 rounded-lg px-3 py-2 focus:ring-zammsa-green focus:border-zammsa-green" />
+              <input type="date" value={form.closing_date} onChange={(e) => setForm({ ...form, closing_date: e.target.value })} required className="w-full border-gray-300 rounded-lg px-3 py-2 focus:ring-zammsa-green focus:border-zammsa-green" />
+              <div className="flex gap-2 mt-2">
+                <select value={form.closing_hour} onChange={(e) => setForm({ ...form, closing_hour: e.target.value })} className="flex-1 border-gray-300 rounded-lg px-2 py-2 focus:ring-zammsa-green focus:border-zammsa-green text-sm">
+                  {hours.map((h) => <option key={h} value={h}>{h}</option>)}
+                </select>
+                <span className="self-center text-gray-500">:</span>
+                <select value={form.closing_minute} onChange={(e) => setForm({ ...form, closing_minute: e.target.value })} className="flex-1 border-gray-300 rounded-lg px-2 py-2 focus:ring-zammsa-green focus:border-zammsa-green text-sm">
+                  {minutes.map((m) => <option key={m} value={m}>{m}</option>)}
+                </select>
+              </div>
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Opening Date</label>
-              <input type="datetime-local" value={form.opening_date} onChange={(e) => setForm({ ...form, opening_date: e.target.value })} required className="w-full border-gray-300 rounded-lg px-3 py-2 focus:ring-zammsa-green focus:border-zammsa-green" />
+              <input type="date" value={form.opening_date} onChange={(e) => setForm({ ...form, opening_date: e.target.value })} required className="w-full border-gray-300 rounded-lg px-3 py-2 focus:ring-zammsa-green focus:border-zammsa-green" />
+              <div className="flex gap-2 mt-2">
+                <select value={form.opening_hour} onChange={(e) => setForm({ ...form, opening_hour: e.target.value })} className="flex-1 border-gray-300 rounded-lg px-2 py-2 focus:ring-zammsa-green focus:border-zammsa-green text-sm">
+                  {hours.map((h) => <option key={h} value={h}>{h}</option>)}
+                </select>
+                <span className="self-center text-gray-500">:</span>
+                <select value={form.opening_minute} onChange={(e) => setForm({ ...form, opening_minute: e.target.value })} className="flex-1 border-gray-300 rounded-lg px-2 py-2 focus:ring-zammsa-green focus:border-zammsa-green text-sm">
+                  {minutes.map((m) => <option key={m} value={m}>{m}</option>)}
+                </select>
+              </div>
             </div>
           </div>
         </div>

@@ -11,10 +11,16 @@ interface Props {
 }
 
 const DepartmentSelect: React.FC<Props> = ({ value, onChange, required, placeholder, className }) => {
-  const { data: departments, isLoading } = useQuery({
+  const { data: departments, isLoading, isError, error } = useQuery({
     queryKey: ['departments'],
     queryFn: fetchDepartments,
   });
+
+  if (isError) {
+    console.error('Error loading departments:', error);
+  }
+
+  console.log('Departments data:', departments);
 
   return (
     <select
@@ -25,8 +31,9 @@ const DepartmentSelect: React.FC<Props> = ({ value, onChange, required, placehol
     >
       <option value="">{placeholder || 'Select Department'}</option>
       {isLoading && <option disabled>Loading...</option>}
-      {departments?.map((d) => (
-        <option key={d.id} value={d.name}>
+      {!isLoading && departments && departments.length === 0 && <option disabled>No departments available</option>}
+      {!isLoading && departments?.length && departments?.map((d) => (
+        <option key={d.id} value={d.id}>
           {d.name} ({d.code})
         </option>
       ))}

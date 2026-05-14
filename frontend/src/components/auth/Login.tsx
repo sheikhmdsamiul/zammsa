@@ -8,7 +8,7 @@ import { LoadingSpinner } from '../common/LoadingSpinner';
 
 const TEST_ACCOUNTS = [
   { label: 'System Admin', email: 'admin@zammsa.zm', pw: 'Test@123' },
-  { label: 'Director General', email: 'dg@zammsa.zm', pw: 'Test@123' },
+  { label: 'Director General', email: 'dg@zammsa.gov.zm', pw: 'Test@123' },
   { label: 'Dir. Procurement', email: 'dirproc@zammsa.zm', pw: 'Test@123' },
   { label: 'Proc. Manager', email: 'pm@zammsa.zm', pw: 'Test@123' },
   { label: 'Proc. Officer', email: 'po@zammsa.zm', pw: 'Test@123' },
@@ -16,12 +16,12 @@ const TEST_ACCOUNTS = [
   { label: 'Dept Staff', email: 'staff@zammsa.zm', pw: 'Test@123' },
   { label: 'Finance Officer', email: 'fo@zammsa.zm', pw: 'Test@123' },
   { label: 'Budget Controller', email: 'bc@zammsa.zm', pw: 'Test@123' },
-  { label: 'ZPC Member', email: 'zpc@zammsa.zm', pw: 'Test@123' },
+  { label: 'ZPC Member', email: 'zpc@zammsa.gov.zm', pw: 'Test@123' },
   { label: 'EC Chair', email: 'ecchair@zammsa.zm', pw: 'Test@123' },
   { label: 'EC Member', email: 'ecm1@zammsa.zm', pw: 'Test@123' },
   { label: 'Contract Manager', email: 'cm@zammsa.zm', pw: 'Test@123' },
   { label: 'ZPPA Reporter', email: 'zppa@zammsa.zm', pw: 'Test@123' },
-  { label: 'Auditor', email: 'auditor@zammsa.zm', pw: 'Test@123' },
+  { label: 'Auditor', email: 'auditor@zammsa.gov.zm', pw: 'Test@123' },
   { label: 'Supplier', email: 'vendor@healthpharma.zm', pw: 'Vendor@123' },
 ];
 

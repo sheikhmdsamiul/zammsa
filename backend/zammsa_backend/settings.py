@@ -120,8 +120,10 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 CORS_ALLOWED_ORIGINS = [
     'http://localhost:3000',
+    'http://127.0.0.1:3000',
     'https://procurement.zammsa.zm',
 ]
+CORS_ALLOW_ALL_ORIGINS = True
 CORS_ALLOW_ALL_ORIGINS = True if DEBUG else False
 CORS_ALLOW_CREDENTIALS = True
 CORS_MAX_AGE = 0 if DEBUG else 86400

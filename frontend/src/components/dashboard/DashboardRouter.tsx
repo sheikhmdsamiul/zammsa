@@ -1,6 +1,7 @@
 import React from 'react';
 import { Navigate } from 'react-router-dom';
 import { useAppSelector } from '../../hooks/useRedux';
+import { ROLES } from '../../config/rbac';
 
 const ProcurementDashboard = React.lazy(() => import('./ProcurementDashboard'));
 const FinanceDashboard = React.lazy(() => import('./FinanceDashboard'));
@@ -12,28 +13,22 @@ const ContractManagerDashboard = React.lazy(() => import('./ContractManagerDashb
 const AuditorDashboard = React.lazy(() => import('./AuditorDashboard'));
 
 const roleDashboard: Record<string, React.LazyExoticComponent<React.ComponentType>> = {
-  procurement_officer: ProcurementDashboard,
-  procurement_manager: ProcurementDashboard,
-  director_procurement: ProcurementDashboard,
-  finance: FinanceDashboard,
-  finance_officer: FinanceDashboard,
-  budget_controller: FinanceDashboard,
-  department_head: DepartmentHeadDashboard,
-  user_dept_staff: DepartmentHeadDashboard,
-  director_general: DirectorGeneralDashboard,
-  zpc: ZPCDashboard,
-  zpc_officer: ZPCDashboard,
-  zpc_member: ZPCDashboard,
-  evaluator: EvaluationDashboard,
-  evaluation_chair: EvaluationDashboard,
-  evaluation_committee_member: EvaluationDashboard,
-  evaluation_committee_chair: EvaluationDashboard,
-  contract_manager: ContractManagerDashboard,
-  supplier_relationship_manager: ContractManagerDashboard,
-  auditor: AuditorDashboard,
-  super_auditor: AuditorDashboard,
-  zppa_reporting_officer: ProcurementDashboard,
-  integration_manager: ProcurementDashboard,
+  [ROLES.PROCUREMENT_OFFICER]: ProcurementDashboard,
+  [ROLES.PROCUREMENT_MANAGER]: ProcurementDashboard,
+  [ROLES.DIRECTOR_PROCUREMENT]: ProcurementDashboard,
+  [ROLES.FINANCE_OFFICER]: FinanceDashboard,
+  [ROLES.BUDGET_CONTROLLER]: FinanceDashboard,
+  [ROLES.DEPARTMENT_HEAD]: DepartmentHeadDashboard,
+  [ROLES.USER_DEPT_STAFF]: DepartmentHeadDashboard,
+  [ROLES.DIRECTOR_GENERAL]: DirectorGeneralDashboard,
+  [ROLES.ZPC_MEMBER]: ZPCDashboard,
+  [ROLES.EVALUATION_COMMITTEE_MEMBER]: EvaluationDashboard,
+  [ROLES.EVALUATION_COMMITTEE_CHAIR]: EvaluationDashboard,
+  [ROLES.CONTRACT_MANAGER]: ContractManagerDashboard,
+  [ROLES.SUPPLIER_RELATIONSHIP_MANAGER]: ContractManagerDashboard,
+  [ROLES.AUDITOR]: AuditorDashboard,
+  [ROLES.ZPPA_REPORTING_OFFICER]: ProcurementDashboard,
+  [ROLES.INTEGRATION_MANAGER]: ProcurementDashboard,
 };
 
 const DashboardRouter: React.FC = () => {
@@ -51,7 +46,7 @@ const DashboardRouter: React.FC = () => {
   const DashboardComponent = roleDashboard[role];
 
   if (!DashboardComponent) {
-    if (['system_admin', 'admin', 'super_admin'].includes(role)) {
+    if (role === ROLES.SYSTEM_ADMIN) {
       return <Navigate to="/admin" replace />;
     }
     return (

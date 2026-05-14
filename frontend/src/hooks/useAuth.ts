@@ -5,6 +5,7 @@ import { useAppDispatch, useAppSelector } from './useRedux';
 import { setUser, logout as logoutAction, setLoading } from '../store/authSlice';
 import { authApi } from '../api/auth';
 import { LoginCredentials } from '../types';
+import { ROLES } from '../config/rbac';
 
 export function useLogin() {
   const dispatch = useAppDispatch();
@@ -21,7 +22,7 @@ export function useLogin() {
         toast.success('Login successful');
         if (res.must_change_password) {
           navigate('/change-password');
-        } else if (res.user.role === 'supplier_user' || res.user.role === 'vendor') {
+        } else if (res.user.role === ROLES.SUPPLIER_USER) {
           navigate('/vendor');
         } else {
           navigate('/');
@@ -80,11 +81,11 @@ export function usePermission() {
     [user]
   );
 
-  const isAdmin = user?.role === 'system_admin' || user?.role === 'admin' || user?.role === 'super_admin';
-  const isFinance = user?.role === 'finance';
-  const isVendor = user?.role === 'vendor' || user?.role === 'supplier_user';
-  const isDeptHead = user?.role === 'department_head';
-  const isDG = user?.role === 'director_general';
+  const isAdmin = user?.role === ROLES.SYSTEM_ADMIN;
+  const isFinance = user?.role === ROLES.FINANCE_OFFICER || user?.role === ROLES.BUDGET_CONTROLLER;
+  const isVendor = user?.role === ROLES.SUPPLIER_USER;
+  const isDeptHead = user?.role === ROLES.DEPARTMENT_HEAD;
+  const isDG = user?.role === ROLES.DIRECTOR_GENERAL;
 
   return { hasRole, isAdmin, isFinance, isVendor, isDeptHead, isDG, role: user?.role };
 }

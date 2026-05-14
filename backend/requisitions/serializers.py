@@ -72,11 +72,15 @@ class RequisitionSerializer(serializers.ModelSerializer):
         from datetime import datetime
         from master_data.models import Department, UnitOfMeasure
         from .models import RequisitionItem
-        department_name = self.initial_data.get('department')
-        if department_name:
-            dept = Department.objects.filter(dept_name=department_name).first()
+        department_value = self.initial_data.get('department')
+        if department_value:
+            dept = Department.objects.filter(pk=department_value).first()
             if dept:
                 validated_data['department'] = dept
+            else:
+                dept = Department.objects.filter(dept_name=department_value).first()
+                if dept:
+                    validated_data['department'] = dept
         validated_data['requester'] = self.context['request'].user
         if 'req_number' not in validated_data:
             validated_data['req_number'] = f"REQ-{datetime.now().strftime('%Y%m%d')}-{uuid.uuid4().hex[:6].upper()}"
@@ -102,11 +106,15 @@ class RequisitionSerializer(serializers.ModelSerializer):
     def update(self, instance, validated_data):
         from master_data.models import Department, UnitOfMeasure
         from .models import RequisitionItem
-        department_name = self.initial_data.get('department')
-        if department_name:
-            dept = Department.objects.filter(dept_name=department_name).first()
+        department_value = self.initial_data.get('department')
+        if department_value:
+            dept = Department.objects.filter(pk=department_value).first()
             if dept:
                 validated_data['department'] = dept
+            else:
+                dept = Department.objects.filter(dept_name=department_value).first()
+                if dept:
+                    validated_data['department'] = dept
         instance = super().update(instance, validated_data)
         items_data = self.initial_data.get('items')
         if items_data is not None:

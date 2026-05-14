@@ -1,5 +1,6 @@
 import uuid
 from django.db import models
+from django.db.models import F, Q
 from django.utils import timezone
 from accounts.models import User
 from requisitions.models import Requisition
@@ -75,6 +76,12 @@ class Solicitation(models.Model):
         verbose_name = 'Solicitation'
         verbose_name_plural = 'Solicitations'
         ordering = ['-created_at']
+        constraints = [
+            models.CheckConstraint(
+                check=~Q(created_by=F('approved_by')),
+                name='sol_no_self_approval',
+            ),
+        ]
 
     def __str__(self):
         return f'{self.sol_number} - {self.title}'

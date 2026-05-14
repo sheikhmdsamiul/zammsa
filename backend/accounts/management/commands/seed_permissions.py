@@ -25,8 +25,8 @@ PERMISSION_MATRIX = {
         'users': ['read'],
     },
     'director_procurement': {
-        'requisitions': ['create', 'read', 'update', 'approve', 'export'],
-        'solicitations': ['create', 'read', 'update', 'approve', 'export'],
+        'requisitions': ['read', 'approve', 'export'],
+        'solicitations': ['read', 'export'],
         'bids': ['read', 'export'],
         'evaluations': ['read', 'approve'],
         'contracts': ['create', 'read', 'update', 'approve', 'export'],
@@ -44,8 +44,8 @@ PERMISSION_MATRIX = {
         'reporting': ['read', 'export'],
     },
     'procurement_manager': {
-        'requisitions': ['create', 'read', 'update', 'approve'],
-        'solicitations': ['create', 'read', 'update', 'approve'],
+        'requisitions': ['read'],
+        'solicitations': ['read', 'approve'],
         'bids': ['read', 'update'],
         'evaluations': ['read'],
         'contracts': ['create', 'read', 'update'],
@@ -55,7 +55,7 @@ PERMISSION_MATRIX = {
         'reporting': ['read', 'create', 'export'],
     },
     'procurement_officer': {
-        'requisitions': ['create', 'read', 'update'],
+        'requisitions': ['read'],
         'solicitations': ['create', 'read', 'update'],
         'bids': ['read'],
         'evaluations': ['read'],
@@ -72,16 +72,16 @@ PERMISSION_MATRIX = {
         'procurement_planning': ['read', 'approve'],
     },
     'finance_officer': {
-        'finance': ['create', 'read', 'update', 'export'],
+        'finance': ['create', 'read', 'update', 'approve', 'export'],
         'requisitions': ['read'],
         'contracts': ['read'],
     },
     'department_head': {
-        'requisitions': ['create', 'read', 'update', 'approve'],
+        'requisitions': ['read', 'approve'],
         'solicitations': ['read'],
         'contracts': ['read'],
         'reporting': ['read'],
-        'procurement_planning': ['create', 'read'],
+        'procurement_planning': ['read', 'approve'],
     },
     'user_dept_staff': {
         'requisitions': ['create', 'read', 'update'],

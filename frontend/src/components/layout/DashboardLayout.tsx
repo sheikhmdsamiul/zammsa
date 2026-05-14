@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Outlet, Link, useLocation } from 'react-router-dom';
 import { useAuth, useLogout } from '../../hooks/useAuth';
+import { ROLES } from '../../config/rbac';
 
 const PageLoader = () => (
   <div className="flex items-center justify-center min-h-[60vh]">
@@ -10,24 +11,25 @@ const PageLoader = () => (
 
 const navItems = [
   { label: 'Dashboard', path: '/dashboard', icon: '📊' },
-  { label: 'Plan. Budgets', path: '/procurement-planning/budgets', icon: '💰' },
-  { label: 'Annual Plans', path: '/procurement-planning', icon: '📋' },
-  { label: 'GPNs', path: '/procurement-planning/gpns', icon: '📢' },
-  { label: 'Requisitions', path: '/requisitions', icon: '📝' },
-  { label: 'Solicitations', path: '/solicitations', icon: '📋' },
-  { label: 'Bids', path: '/bids', icon: '📄' },
-  { label: 'Evaluations', path: '/evaluations', icon: '📑' },
-  { label: 'Contracts', path: '/contracts', icon: '📃' },
-  { label: 'Finance', path: '/finance', icon: '💰' },
-  { label: 'Suppliers', path: '/suppliers', icon: '🏢' },
-  { label: 'Reports', path: '/reports', icon: '📈' },
-];
+  { label: 'Plan. Budgets', path: '/procurement-planning/budgets', icon: '💰', roles: [ROLES.FINANCE_OFFICER, ROLES.BUDGET_CONTROLLER, ROLES.DIRECTOR_PROCUREMENT, ROLES.DIRECTOR_GENERAL, ROLES.SYSTEM_ADMIN] },
+  { label: 'Annual Plans', path: '/procurement-planning', icon: '📋', roles: [ROLES.USER_DEPT_STAFF, ROLES.DEPARTMENT_HEAD, ROLES.PROCUREMENT_OFFICER, ROLES.PROCUREMENT_MANAGER, ROLES.DIRECTOR_PROCUREMENT, ROLES.DIRECTOR_GENERAL, ROLES.ZPC_MEMBER, ROLES.SYSTEM_ADMIN] },
+  { label: 'GPNs', path: '/procurement-planning/gpns', icon: '📢', roles: [ROLES.PROCUREMENT_OFFICER, ROLES.PROCUREMENT_MANAGER, ROLES.DIRECTOR_PROCUREMENT, ROLES.DIRECTOR_GENERAL, ROLES.ZPC_MEMBER, ROLES.AUDITOR, ROLES.SYSTEM_ADMIN] },
+  { label: 'Requisitions', path: '/requisitions', icon: '📝', roles: [ROLES.USER_DEPT_STAFF, ROLES.DEPARTMENT_HEAD, ROLES.PROCUREMENT_OFFICER, ROLES.FINANCE_OFFICER, ROLES.DIRECTOR_GENERAL, ROLES.ZPC_MEMBER, ROLES.BUDGET_CONTROLLER, ROLES.AUDITOR, ROLES.SYSTEM_ADMIN] },
+  { label: 'Solicitations', path: '/solicitations', icon: '📋', roles: [ROLES.PROCUREMENT_OFFICER, ROLES.PROCUREMENT_MANAGER, ROLES.DIRECTOR_PROCUREMENT, ROLES.SYSTEM_ADMIN, ROLES.AUDITOR] },
+  { label: 'Bids', path: '/bids', icon: '📄', roles: [ROLES.PROCUREMENT_OFFICER, ROLES.PROCUREMENT_MANAGER, ROLES.EVALUATION_COMMITTEE_MEMBER, ROLES.EVALUATION_COMMITTEE_CHAIR, ROLES.ZPC_MEMBER, ROLES.DIRECTOR_PROCUREMENT, ROLES.AUDITOR, ROLES.SYSTEM_ADMIN] },
+  { label: 'Evaluations', path: '/evaluations', icon: '📑', roles: [ROLES.EVALUATION_COMMITTEE_MEMBER, ROLES.EVALUATION_COMMITTEE_CHAIR, ROLES.ZPC_MEMBER, ROLES.DIRECTOR_PROCUREMENT, ROLES.PROCUREMENT_OFFICER, ROLES.PROCUREMENT_MANAGER, ROLES.AUDITOR, ROLES.SYSTEM_ADMIN] },
+  { label: 'Contracts', path: '/contracts', icon: '📃', roles: [ROLES.PROCUREMENT_OFFICER, ROLES.CONTRACT_MANAGER, ROLES.PROCUREMENT_MANAGER, ROLES.DIRECTOR_PROCUREMENT, ROLES.DIRECTOR_GENERAL, ROLES.ZPC_MEMBER, ROLES.AUDITOR, ROLES.SYSTEM_ADMIN] },
+  { label: 'Finance', path: '/finance', icon: '💰', roles: [ROLES.FINANCE_OFFICER, ROLES.BUDGET_CONTROLLER, ROLES.DEPARTMENT_HEAD, ROLES.DIRECTOR_GENERAL, ROLES.CONTRACT_MANAGER, ROLES.AUDITOR, ROLES.SYSTEM_ADMIN] },
+  { label: 'Suppliers', path: '/suppliers', icon: '🏢', roles: [ROLES.SUPPLIER_RELATIONSHIP_MANAGER, ROLES.PROCUREMENT_OFFICER, ROLES.PROCUREMENT_MANAGER, ROLES.DIRECTOR_PROCUREMENT, ROLES.AUDITOR, ROLES.SYSTEM_ADMIN] },
+  { label: 'Reports', path: '/reports', icon: '📈', roles: [ROLES.PROCUREMENT_MANAGER, ROLES.FINANCE_OFFICER, ROLES.ZPC_MEMBER, ROLES.DIRECTOR_PROCUREMENT, ROLES.DIRECTOR_GENERAL, ROLES.ZPPA_REPORTING_OFFICER, ROLES.BUDGET_CONTROLLER, ROLES.AUDITOR, ROLES.SYSTEM_ADMIN] },
+] as Array<{ label: string; path: string; icon: string; roles?: string[] }>;
 
 const DashboardLayout: React.FC = () => {
   const { user } = useAuth();
   const logout = useLogout();
   const location = useLocation();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const visibleNav = navItems.filter((item) => !item.roles || (user?.role && item.roles.includes(user.role)));
 
   return (
     <div className="min-h-screen flex bg-gray-50">
@@ -39,7 +41,7 @@ const DashboardLayout: React.FC = () => {
           <span className="font-bold text-zammsa-green">ZAMMSA</span>
         </div>
         <nav className="mt-4 px-3 space-y-1 overflow-y-auto max-h-[calc(100vh-4rem)]">
-          {navItems.map((item) => (
+          {visibleNav.map((item) => (
             <Link
               key={item.path}
               to={item.path}

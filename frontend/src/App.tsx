@@ -9,6 +9,7 @@ import ProtectedRoute from './components/common/ProtectedRoute';
 import ErrorBoundary from './components/common/ErrorBoundary';
 import { useAuth } from './hooks/useAuth';
 import PublicLayout from './components/public/PublicLayout';
+import { INTERNAL_PORTAL_ROLES, ROLES, VENDOR_PORTAL_ROLES } from './config/rbac';
 
 const queryClient = new QueryClient({
   defaultOptions: { queries: { retry: 1, refetchOnWindowFocus: false } },
@@ -102,7 +103,7 @@ const BackupManagement = React.lazy(() => import('./components/admin/BackupManag
 const PublicHome: React.FC = () => {
   const { isAuthenticated, user } = useAuth();
   if (isAuthenticated) {
-    if (user?.role === 'supplier_user' || user?.role === 'vendor') {
+    if (user?.role === ROLES.SUPPLIER_USER) {
       return <Navigate to="/vendor/dashboard" replace />;
     }
     return <Navigate to="/dashboard" replace />;
@@ -140,37 +141,101 @@ function App() {
                 <Route
                   path="/"
                   element={
-                    <ProtectedRoute roles={['system_admin', 'admin', 'super_admin', 'finance', 'finance_officer', 'budget_controller', 'department_head', 'procurement_officer', 'procurement_manager', 'director_procurement', 'director_general', 'user_dept_staff', 'evaluator', 'evaluation_chair', 'evaluation_committee_member', 'evaluation_committee_chair', 'contract_manager', 'supplier_relationship_manager', 'auditor', 'super_auditor', 'zpc', 'zpc_officer', 'zpc_member', 'zppa_reporting_officer', 'integration_manager']}>
+                    <ProtectedRoute roles={[...INTERNAL_PORTAL_ROLES]}>
                       <DashboardLayout />
                     </ProtectedRoute>
                   }
                 >
                   <Route index element={<Navigate to="dashboard" replace />} />
                   <Route path="dashboard" element={<DashboardRouter />} />
-                  <Route path="requisitions" element={<RequisitionsList />} />
-                  <Route path="requisitions/create" element={<RequisitionCreate />} />
+                  <Route path="requisitions" element={
+                    <ProtectedRoute roles={[ROLES.USER_DEPT_STAFF, ROLES.DEPARTMENT_HEAD, ROLES.PROCUREMENT_OFFICER, ROLES.FINANCE_OFFICER, ROLES.BUDGET_CONTROLLER, ROLES.DIRECTOR_GENERAL, ROLES.ZPC_MEMBER, ROLES.AUDITOR, ROLES.SYSTEM_ADMIN]}>
+                      <RequisitionsList />
+                    </ProtectedRoute>
+                  } />
+                  <Route path="requisitions/create" element={
+                    <ProtectedRoute roles={[ROLES.USER_DEPT_STAFF, ROLES.SYSTEM_ADMIN]}>
+                      <RequisitionCreate />
+                    </ProtectedRoute>
+                  } />
                   <Route path="requisitions/:id" element={<RequisitionDetail />} />
                   <Route path="requisitions/:id/edit" element={<RequisitionEdit />} />
-                  <Route path="solicitations" element={<SolicitationsList />} />
-                  <Route path="solicitations/create" element={<SolicitationCreate />} />
+                  <Route path="solicitations" element={
+                    <ProtectedRoute roles={[ROLES.PROCUREMENT_OFFICER, ROLES.PROCUREMENT_MANAGER, ROLES.DIRECTOR_PROCUREMENT, ROLES.SYSTEM_ADMIN, ROLES.AUDITOR]}>
+                      <SolicitationsList />
+                    </ProtectedRoute>
+                  } />
+                  <Route path="solicitations/create" element={
+                    <ProtectedRoute roles={[ROLES.PROCUREMENT_OFFICER, ROLES.SYSTEM_ADMIN]}>
+                      <SolicitationCreate />
+                    </ProtectedRoute>
+                  } />
                   <Route path="solicitations/:id" element={<SolicitationDetail />} />
-                  <Route path="bids" element={<BidsList />} />
+                  <Route path="bids" element={
+                    <ProtectedRoute roles={[ROLES.PROCUREMENT_OFFICER, ROLES.PROCUREMENT_MANAGER, ROLES.EVALUATION_COMMITTEE_MEMBER, ROLES.EVALUATION_COMMITTEE_CHAIR, ROLES.ZPC_MEMBER, ROLES.DIRECTOR_PROCUREMENT, ROLES.AUDITOR, ROLES.SYSTEM_ADMIN]}>
+                      <BidsList />
+                    </ProtectedRoute>
+                  } />
                   <Route path="bids/:id" element={<BidDetail />} />
-                  <Route path="evaluations" element={<EvaluationsList />} />
+                  <Route path="evaluations" element={
+                    <ProtectedRoute roles={[ROLES.EVALUATION_COMMITTEE_MEMBER, ROLES.EVALUATION_COMMITTEE_CHAIR, ROLES.ZPC_MEMBER, ROLES.DIRECTOR_PROCUREMENT, ROLES.PROCUREMENT_OFFICER, ROLES.PROCUREMENT_MANAGER, ROLES.AUDITOR, ROLES.SYSTEM_ADMIN]}>
+                      <EvaluationsList />
+                    </ProtectedRoute>
+                  } />
                   <Route path="evaluations/:id" element={<EvaluationDetail />} />
-                  <Route path="contracts" element={<ContractsList />} />
-                  <Route path="contracts/create" element={<ContractCreate />} />
+                  <Route path="contracts" element={
+                    <ProtectedRoute roles={[ROLES.PROCUREMENT_OFFICER, ROLES.CONTRACT_MANAGER, ROLES.PROCUREMENT_MANAGER, ROLES.DIRECTOR_PROCUREMENT, ROLES.DIRECTOR_GENERAL, ROLES.ZPC_MEMBER, ROLES.AUDITOR, ROLES.SYSTEM_ADMIN]}>
+                      <ContractsList />
+                    </ProtectedRoute>
+                  } />
+                  <Route path="contracts/create" element={
+                    <ProtectedRoute roles={[ROLES.PROCUREMENT_OFFICER, ROLES.SYSTEM_ADMIN]}>
+                      <ContractCreate />
+                    </ProtectedRoute>
+                  } />
                   <Route path="contracts/:id" element={<ContractDetail />} />
-                  <Route path="finance" element={<FinanceDashboard />} />
-                  <Route path="finance/budgets" element={<FinanceBudgets />} />
-                  <Route path="finance/invoices" element={<FinanceInvoices />} />
-                  <Route path="finance/payments" element={<FinancePayments />} />
-                  <Route path="finance/letters-of-credit" element={<FinanceLettersOfCredit />} />
+                  <Route path="finance" element={
+                    <ProtectedRoute roles={[ROLES.FINANCE_OFFICER, ROLES.BUDGET_CONTROLLER, ROLES.DEPARTMENT_HEAD, ROLES.DIRECTOR_GENERAL, ROLES.CONTRACT_MANAGER, ROLES.AUDITOR, ROLES.SYSTEM_ADMIN]}>
+                      <FinanceDashboard />
+                    </ProtectedRoute>
+                  } />
+                  <Route path="finance/budgets" element={
+                    <ProtectedRoute roles={[ROLES.FINANCE_OFFICER, ROLES.BUDGET_CONTROLLER, ROLES.DIRECTOR_PROCUREMENT, ROLES.DIRECTOR_GENERAL, ROLES.SYSTEM_ADMIN]}>
+                      <FinanceBudgets />
+                    </ProtectedRoute>
+                  } />
+                  <Route path="finance/invoices" element={
+                    <ProtectedRoute roles={[ROLES.FINANCE_OFFICER, ROLES.DEPARTMENT_HEAD, ROLES.DIRECTOR_GENERAL, ROLES.SYSTEM_ADMIN]}>
+                      <FinanceInvoices />
+                    </ProtectedRoute>
+                  } />
+                  <Route path="finance/payments" element={
+                    <ProtectedRoute roles={[ROLES.FINANCE_OFFICER, ROLES.DEPARTMENT_HEAD, ROLES.DIRECTOR_GENERAL, ROLES.SYSTEM_ADMIN]}>
+                      <FinancePayments />
+                    </ProtectedRoute>
+                  } />
+                  <Route path="finance/letters-of-credit" element={
+                    <ProtectedRoute roles={[ROLES.FINANCE_OFFICER, ROLES.SYSTEM_ADMIN]}>
+                      <FinanceLettersOfCredit />
+                    </ProtectedRoute>
+                  } />
                   <Route path="suppliers" element={<SuppliersList />} />
                   <Route path="suppliers/:id" element={<SupplierDetail />} />
-                  <Route path="reports" element={<Reports />} />
-                  <Route path="procurement-planning" element={<APPList />} />
-                  <Route path="procurement-planning/create" element={<APPCreate />} />
+                  <Route path="reports" element={
+                    <ProtectedRoute roles={[ROLES.PROCUREMENT_MANAGER, ROLES.FINANCE_OFFICER, ROLES.ZPC_MEMBER, ROLES.DIRECTOR_PROCUREMENT, ROLES.DIRECTOR_GENERAL, ROLES.ZPPA_REPORTING_OFFICER, ROLES.BUDGET_CONTROLLER, ROLES.AUDITOR, ROLES.SYSTEM_ADMIN]}>
+                      <Reports />
+                    </ProtectedRoute>
+                  } />
+                  <Route path="procurement-planning" element={
+                    <ProtectedRoute roles={[ROLES.USER_DEPT_STAFF, ROLES.DEPARTMENT_HEAD, ROLES.PROCUREMENT_OFFICER, ROLES.PROCUREMENT_MANAGER, ROLES.DIRECTOR_PROCUREMENT, ROLES.DIRECTOR_GENERAL, ROLES.ZPC_MEMBER, ROLES.SYSTEM_ADMIN]}>
+                      <APPList />
+                    </ProtectedRoute>
+                  } />
+                  <Route path="procurement-planning/create" element={
+                    <ProtectedRoute roles={[ROLES.USER_DEPT_STAFF, ROLES.SYSTEM_ADMIN]}>
+                      <APPCreate />
+                    </ProtectedRoute>
+                  } />
                   <Route path="procurement-planning/:id" element={<APPDetail />} />
                   <Route path="procurement-planning/budgets" element={<BudgetAllocationList />} />
                   <Route path="procurement-planning/gpns" element={<GPNList />} />
@@ -179,7 +244,7 @@ function App() {
                 <Route
                   path="/vendor"
                   element={
-                    <ProtectedRoute roles={['vendor', 'supplier_user']}>
+                    <ProtectedRoute roles={[...VENDOR_PORTAL_ROLES]}>
                       <VendorLayout />
                     </ProtectedRoute>
                   }
