@@ -16,6 +16,7 @@ from .serializers import (
     SupplierDocumentSerializer, SupplierPerformanceSerializer,
     SupplierRiskScoreSerializer, BlacklistSerializer,
 )
+from django.utils.crypto import get_random_string
 from accounts.models import User
 
 
@@ -119,6 +120,8 @@ def vendor_application_submit_view(request, pk):
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def vendor_application_review_view(request, pk):
+    if request.user.role != 'supplier_relationship_manager':
+        return Response({'error': 'Only Supplier Relationship Managers can review applications'}, status=403)
     try:
         app = VendorApplication.objects.get(pk=pk)
     except VendorApplication.DoesNotExist:
@@ -145,7 +148,7 @@ def vendor_application_review_view(request, pk):
                     employee_id=f'SUP-{supplier.registration_number}',
                     full_name=app.company_name,
                     email=app.email,
-                    password=app.password or User.objects.make_random_password(),
+                    password=app.password or get_random_string(16),
                     role='supplier_user',
                 )
             except Exception:

@@ -487,10 +487,11 @@ def app_consolidate_view(request, pk):
 
 
 class APPLineItemListView(BaseView, generics.ListCreateAPIView):
-    queryset = APPLineItem.objects.select_related('funding_source', 'commodity', 'app').all()
+    queryset = APPLineItem.objects.select_related('app__department', 'app__fiscal_year', 'commodity').all()
     serializer_class = APPLineItemSerializer
     ordering = ['-line_item_id']
-    filterset_fields = ['app']
+    filterset_fields = ['app__department', 'app__fiscal_year', 'commodity']
+    search_fields = ['description', 'app__department__dept_name']
 
     def perform_create(self, serializer):
         item = serializer.save()

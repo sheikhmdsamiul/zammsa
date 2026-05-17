@@ -56,4 +56,11 @@ export const ROUTES = {
     PROCUREMENT_METHODS: '/admin/procurement-methods',
     NOTIFICATIONS: '/admin/notifications',
   },
+  SUPPLIER_RELATIONS: {
+    HOME: '/supplier-relations',
+    DASHBOARD: '/supplier-relations',
+    VENDOR_APPLICATIONS: '/supplier-relations/vendor-applications',
+    VENDORS: '/supplier-relations/vendors',
+    REPORTS: '/supplier-relations/reports',
+  },
 } as const;

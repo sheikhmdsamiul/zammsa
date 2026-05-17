@@ -45,7 +45,7 @@ class RequisitionListSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Requisition
-        fields = ('id', 'requisition_id', 'req_number', 'title', 'department', 'department_name', 'requester_name', 'estimated_total', 'required_date', 'status', 'current_approver', 'submitted_at', 'approved_at', 'created_at', 'days_at_current_stage')
+        fields = ('id', 'requisition_id', 'req_number', 'title', 'department', 'department_name', 'requester_name', 'estimated_total', 'required_date', 'status', 'current_approver', 'submitted_at', 'approved_at', 'created_at', 'days_at_current_stage', 'app_line_item')
 
 
 class RequisitionSerializer(serializers.ModelSerializer):
@@ -58,13 +58,20 @@ class RequisitionSerializer(serializers.ModelSerializer):
     estimated_value = serializers.DecimalField(source='estimated_total', max_digits=15, decimal_places=2, required=False)
     date_required = serializers.DateField(source='required_date', required=False)
     delivery_location = serializers.CharField(read_only=True)
+    app_line_item_id = serializers.UUIDField(source='app_line_item.line_item_id', read_only=True, allow_null=True)
+    app_line_item_ref = serializers.CharField(source='app_line_item.description', read_only=True, allow_null=True)
     items = RequisitionItemSerializer(many=True, read_only=True)
     approvals = RequisitionApprovalSerializer(many=True, read_only=True)
     requester_name = serializers.CharField(source='requester.full_name', read_only=True)
 
+    def validate(self, data):
+        if self.instance is None and not data.get('app_line_item'):
+            raise serializers.ValidationError({'app_line_item': 'APP line item is required on create.'})
+        return data
+
     class Meta:
         model = Requisition
-        fields = ('id', 'requisition_id', 'title', 'description', 'req_number', 'department', 'department_name', 'requester_name', 'created_by', 'estimated_value', 'estimated_total', 'date_required', 'delivery_location', 'status', 'budget_validated', 'encumbrance_ref', 'submitted_at', 'approved_at', 'created_at', 'updated_at', 'current_approver', 'items', 'approvals')
+        fields = ('id', 'requisition_id', 'title', 'description', 'req_number', 'department', 'department_name', 'requester_name', 'created_by', 'estimated_value', 'estimated_total', 'date_required', 'delivery_location', 'app_line_item', 'app_line_item_id', 'app_line_item_ref', 'status', 'budget_validated', 'encumbrance_ref', 'submitted_at', 'approved_at', 'created_at', 'updated_at', 'current_approver', 'items', 'approvals')
         read_only_fields = ('requisition_id', 'req_number', 'submitted_at', 'approved_at', 'created_at', 'updated_at', 'days_at_current_stage')
 
     def create(self, validated_data):

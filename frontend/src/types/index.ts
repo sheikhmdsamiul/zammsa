@@ -77,6 +77,9 @@ export interface Requisition {
   approved_at?: string | null;
   budget_validated?: boolean;
   encumbrance_ref?: string;
+  app_line_item?: string;
+  app_line_item_id?: string;
+  app_line_item_ref?: string;
   items: RequisitionItem[];
   specifications?: any[];
   approvals?: any[];

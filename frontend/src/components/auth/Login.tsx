@@ -23,6 +23,7 @@ const TEST_ACCOUNTS = [
   { label: 'ZPPA Reporter', email: 'zppa@zammsa.zm', pw: 'Test@123' },
   { label: 'Auditor', email: 'auditor@zammsa.gov.zm', pw: 'Test@123' },
   { label: 'Supplier', email: 'vendor@healthpharma.zm', pw: 'Vendor@123' },
+  { label: 'Supplier Rel. Mgr', email: 'supplier.manager@zammsa.gov.zm', pw: 'Test@123' },
 ];
 
 const loginSchema = z.object({

@@ -3629,3 +3629,1581 @@ Traceback (most recent call last):
            ^^^^^^^^^^^^^^^^^^^^^^^^^
 AssertionError: It is redundant to specify `source='closing_date'` on field 'DateTimeField' in serializer 'TenderPublicListSerializer', because it is the same as the field name. Remove the `source` keyword argument.
 ERROR 2026-05-14 11:50:17,480 basehttp 12582 134869623502528 "GET /api/v1/public/tenders/?page=1&page_size=10 HTTP/1.1" 500 157569
+ERROR 2026-05-17 08:50:39,073 log 163052 139506414077632 Internal Server Error: /api/v1/public/tenders/
+Traceback (most recent call last):
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/core/handlers/exception.py", line 55, in inner
+    response = get_response(request)
+               ^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/core/handlers/base.py", line 197, in _get_response
+    response = wrapped_callback(request, *callback_args, **callback_kwargs)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/views/decorators/csrf.py", line 65, in _view_wrapper
+    return view_func(request, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/views/generic/base.py", line 104, in view
+    return self.dispatch(request, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/views.py", line 515, in dispatch
+    response = self.handle_exception(exc)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/views.py", line 475, in handle_exception
+    self.raise_uncaught_exception(exc)
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/views.py", line 486, in raise_uncaught_exception
+    raise exc
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/views.py", line 512, in dispatch
+    response = handler(request, *args, **kwargs)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/generics.py", line 203, in get
+    return self.list(request, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/mixins.py", line 43, in list
+    return self.get_paginated_response(serializer.data)
+                                       ^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/serializers.py", line 797, in data
+    ret = super().data
+          ^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/serializers.py", line 251, in data
+    self._data = self.to_representation(self.instance)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/serializers.py", line 716, in to_representation
+    self.child.to_representation(item) for item in iterable
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/serializers.py", line 525, in to_representation
+    for field in fields:
+                 ^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/serializers.py", line 386, in _readable_fields
+    for field in self.fields.values():
+                 ^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/utils/functional.py", line 47, in __get__
+    res = instance.__dict__[self.name] = self.func(instance)
+                                         ^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/serializers.py", line 375, in fields
+    fields[key] = value
+    ~~~~~~^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/utils/serializer_helpers.py", line 167, in __setitem__
+    field.bind(field_name=key, parent=self.serializer)
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/fields.py", line 358, in bind
+    assert self.source != field_name, (
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: It is redundant to specify `source='closing_date'` on field 'DateTimeField' in serializer 'TenderPublicListSerializer', because it is the same as the field name. Remove the `source` keyword argument.
+ERROR 2026-05-17 08:50:39,079 basehttp 163052 139506414077632 "GET /api/v1/public/tenders/?limit=6 HTTP/1.1" 500 156851
+ERROR 2026-05-17 08:50:40,151 log 163052 139506414077632 Internal Server Error: /api/v1/public/tenders/
+Traceback (most recent call last):
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/core/handlers/exception.py", line 55, in inner
+    response = get_response(request)
+               ^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/core/handlers/base.py", line 197, in _get_response
+    response = wrapped_callback(request, *callback_args, **callback_kwargs)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/views/decorators/csrf.py", line 65, in _view_wrapper
+    return view_func(request, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/views/generic/base.py", line 104, in view
+    return self.dispatch(request, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/views.py", line 515, in dispatch
+    response = self.handle_exception(exc)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/views.py", line 475, in handle_exception
+    self.raise_uncaught_exception(exc)
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/views.py", line 486, in raise_uncaught_exception
+    raise exc
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/views.py", line 512, in dispatch
+    response = handler(request, *args, **kwargs)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/generics.py", line 203, in get
+    return self.list(request, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/mixins.py", line 43, in list
+    return self.get_paginated_response(serializer.data)
+                                       ^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/serializers.py", line 797, in data
+    ret = super().data
+          ^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/serializers.py", line 251, in data
+    self._data = self.to_representation(self.instance)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/serializers.py", line 716, in to_representation
+    self.child.to_representation(item) for item in iterable
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/serializers.py", line 525, in to_representation
+    for field in fields:
+                 ^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/serializers.py", line 386, in _readable_fields
+    for field in self.fields.values():
+                 ^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/utils/functional.py", line 47, in __get__
+    res = instance.__dict__[self.name] = self.func(instance)
+                                         ^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/serializers.py", line 375, in fields
+    fields[key] = value
+    ~~~~~~^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/utils/serializer_helpers.py", line 167, in __setitem__
+    field.bind(field_name=key, parent=self.serializer)
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/fields.py", line 358, in bind
+    assert self.source != field_name, (
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: It is redundant to specify `source='closing_date'` on field 'DateTimeField' in serializer 'TenderPublicListSerializer', because it is the same as the field name. Remove the `source` keyword argument.
+ERROR 2026-05-17 08:50:40,153 basehttp 163052 139506414077632 "GET /api/v1/public/tenders/?limit=6 HTTP/1.1" 500 156851
+ERROR 2026-05-17 11:14:36,093 log 219499 124159358338752 Internal Server Error: /api/v1/public/tenders/
+Traceback (most recent call last):
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/core/handlers/exception.py", line 55, in inner
+    response = get_response(request)
+               ^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/core/handlers/base.py", line 197, in _get_response
+    response = wrapped_callback(request, *callback_args, **callback_kwargs)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/views/decorators/csrf.py", line 65, in _view_wrapper
+    return view_func(request, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/views/generic/base.py", line 104, in view
+    return self.dispatch(request, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/views.py", line 515, in dispatch
+    response = self.handle_exception(exc)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/views.py", line 475, in handle_exception
+    self.raise_uncaught_exception(exc)
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/views.py", line 486, in raise_uncaught_exception
+    raise exc
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/views.py", line 512, in dispatch
+    response = handler(request, *args, **kwargs)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/generics.py", line 203, in get
+    return self.list(request, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/mixins.py", line 43, in list
+    return self.get_paginated_response(serializer.data)
+                                       ^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/serializers.py", line 797, in data
+    ret = super().data
+          ^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/serializers.py", line 251, in data
+    self._data = self.to_representation(self.instance)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/serializers.py", line 716, in to_representation
+    self.child.to_representation(item) for item in iterable
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/serializers.py", line 525, in to_representation
+    for field in fields:
+                 ^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/serializers.py", line 386, in _readable_fields
+    for field in self.fields.values():
+                 ^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/utils/functional.py", line 47, in __get__
+    res = instance.__dict__[self.name] = self.func(instance)
+                                         ^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/serializers.py", line 375, in fields
+    fields[key] = value
+    ~~~~~~^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/utils/serializer_helpers.py", line 167, in __setitem__
+    field.bind(field_name=key, parent=self.serializer)
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/fields.py", line 358, in bind
+    assert self.source != field_name, (
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: It is redundant to specify `source='closing_date'` on field 'DateTimeField' in serializer 'TenderPublicListSerializer', because it is the same as the field name. Remove the `source` keyword argument.
+ERROR 2026-05-17 11:14:36,097 basehttp 219499 124159358338752 "GET /api/v1/public/tenders/?limit=6 HTTP/1.1" 500 156851
+ERROR 2026-05-17 11:14:37,310 log 219499 124159358338752 Internal Server Error: /api/v1/public/tenders/
+Traceback (most recent call last):
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/core/handlers/exception.py", line 55, in inner
+    response = get_response(request)
+               ^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/core/handlers/base.py", line 197, in _get_response
+    response = wrapped_callback(request, *callback_args, **callback_kwargs)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/views/decorators/csrf.py", line 65, in _view_wrapper
+    return view_func(request, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/views/generic/base.py", line 104, in view
+    return self.dispatch(request, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/views.py", line 515, in dispatch
+    response = self.handle_exception(exc)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/views.py", line 475, in handle_exception
+    self.raise_uncaught_exception(exc)
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/views.py", line 486, in raise_uncaught_exception
+    raise exc
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/views.py", line 512, in dispatch
+    response = handler(request, *args, **kwargs)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/generics.py", line 203, in get
+    return self.list(request, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/mixins.py", line 43, in list
+    return self.get_paginated_response(serializer.data)
+                                       ^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/serializers.py", line 797, in data
+    ret = super().data
+          ^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/serializers.py", line 251, in data
+    self._data = self.to_representation(self.instance)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/serializers.py", line 716, in to_representation
+    self.child.to_representation(item) for item in iterable
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/serializers.py", line 525, in to_representation
+    for field in fields:
+                 ^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/serializers.py", line 386, in _readable_fields
+    for field in self.fields.values():
+                 ^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/utils/functional.py", line 47, in __get__
+    res = instance.__dict__[self.name] = self.func(instance)
+                                         ^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/serializers.py", line 375, in fields
+    fields[key] = value
+    ~~~~~~^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/utils/serializer_helpers.py", line 167, in __setitem__
+    field.bind(field_name=key, parent=self.serializer)
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/fields.py", line 358, in bind
+    assert self.source != field_name, (
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: It is redundant to specify `source='closing_date'` on field 'DateTimeField' in serializer 'TenderPublicListSerializer', because it is the same as the field name. Remove the `source` keyword argument.
+ERROR 2026-05-17 11:14:37,312 basehttp 219499 124159358338752 "GET /api/v1/public/tenders/?limit=6 HTTP/1.1" 500 156851
+ERROR 2026-05-17 11:14:46,324 log 219499 124159366731456 Internal Server Error: /api/v1/public/tenders/
+Traceback (most recent call last):
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/core/handlers/exception.py", line 55, in inner
+    response = get_response(request)
+               ^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/core/handlers/base.py", line 197, in _get_response
+    response = wrapped_callback(request, *callback_args, **callback_kwargs)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/views/decorators/csrf.py", line 65, in _view_wrapper
+    return view_func(request, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/views/generic/base.py", line 104, in view
+    return self.dispatch(request, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/views.py", line 515, in dispatch
+    response = self.handle_exception(exc)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/views.py", line 475, in handle_exception
+    self.raise_uncaught_exception(exc)
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/views.py", line 486, in raise_uncaught_exception
+    raise exc
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/views.py", line 512, in dispatch
+    response = handler(request, *args, **kwargs)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/generics.py", line 203, in get
+    return self.list(request, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/mixins.py", line 43, in list
+    return self.get_paginated_response(serializer.data)
+                                       ^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/serializers.py", line 797, in data
+    ret = super().data
+          ^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/serializers.py", line 251, in data
+    self._data = self.to_representation(self.instance)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/serializers.py", line 716, in to_representation
+    self.child.to_representation(item) for item in iterable
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/serializers.py", line 525, in to_representation
+    for field in fields:
+                 ^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/serializers.py", line 386, in _readable_fields
+    for field in self.fields.values():
+                 ^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/utils/functional.py", line 47, in __get__
+    res = instance.__dict__[self.name] = self.func(instance)
+                                         ^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/serializers.py", line 375, in fields
+    fields[key] = value
+    ~~~~~~^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/utils/serializer_helpers.py", line 167, in __setitem__
+    field.bind(field_name=key, parent=self.serializer)
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/fields.py", line 358, in bind
+    assert self.source != field_name, (
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: It is redundant to specify `source='closing_date'` on field 'DateTimeField' in serializer 'TenderPublicListSerializer', because it is the same as the field name. Remove the `source` keyword argument.
+ERROR 2026-05-17 11:14:46,326 basehttp 219499 124159366731456 "GET /api/v1/public/tenders/?limit=6 HTTP/1.1" 500 156851
+ERROR 2026-05-17 11:14:47,442 log 219499 124159358338752 Internal Server Error: /api/v1/public/tenders/
+Traceback (most recent call last):
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/core/handlers/exception.py", line 55, in inner
+    response = get_response(request)
+               ^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/core/handlers/base.py", line 197, in _get_response
+    response = wrapped_callback(request, *callback_args, **callback_kwargs)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/views/decorators/csrf.py", line 65, in _view_wrapper
+    return view_func(request, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/views/generic/base.py", line 104, in view
+    return self.dispatch(request, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/views.py", line 515, in dispatch
+    response = self.handle_exception(exc)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/views.py", line 475, in handle_exception
+    self.raise_uncaught_exception(exc)
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/views.py", line 486, in raise_uncaught_exception
+    raise exc
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/views.py", line 512, in dispatch
+    response = handler(request, *args, **kwargs)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/generics.py", line 203, in get
+    return self.list(request, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/mixins.py", line 43, in list
+    return self.get_paginated_response(serializer.data)
+                                       ^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/serializers.py", line 797, in data
+    ret = super().data
+          ^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/serializers.py", line 251, in data
+    self._data = self.to_representation(self.instance)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/serializers.py", line 716, in to_representation
+    self.child.to_representation(item) for item in iterable
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/serializers.py", line 525, in to_representation
+    for field in fields:
+                 ^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/serializers.py", line 386, in _readable_fields
+    for field in self.fields.values():
+                 ^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/utils/functional.py", line 47, in __get__
+    res = instance.__dict__[self.name] = self.func(instance)
+                                         ^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/serializers.py", line 375, in fields
+    fields[key] = value
+    ~~~~~~^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/utils/serializer_helpers.py", line 167, in __setitem__
+    field.bind(field_name=key, parent=self.serializer)
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/fields.py", line 358, in bind
+    assert self.source != field_name, (
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: It is redundant to specify `source='closing_date'` on field 'DateTimeField' in serializer 'TenderPublicListSerializer', because it is the same as the field name. Remove the `source` keyword argument.
+ERROR 2026-05-17 11:14:47,443 basehttp 219499 124159358338752 "GET /api/v1/public/tenders/?limit=6 HTTP/1.1" 500 156851
+ERROR 2026-05-17 11:17:23,295 log 219499 124159341553344 Internal Server Error: /api/v1/public/tenders/
+Traceback (most recent call last):
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/core/handlers/exception.py", line 55, in inner
+    response = get_response(request)
+               ^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/core/handlers/base.py", line 197, in _get_response
+    response = wrapped_callback(request, *callback_args, **callback_kwargs)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/views/decorators/csrf.py", line 65, in _view_wrapper
+    return view_func(request, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/views/generic/base.py", line 104, in view
+    return self.dispatch(request, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/views.py", line 515, in dispatch
+    response = self.handle_exception(exc)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/views.py", line 475, in handle_exception
+    self.raise_uncaught_exception(exc)
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/views.py", line 486, in raise_uncaught_exception
+    raise exc
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/views.py", line 512, in dispatch
+    response = handler(request, *args, **kwargs)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/generics.py", line 203, in get
+    return self.list(request, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/mixins.py", line 43, in list
+    return self.get_paginated_response(serializer.data)
+                                       ^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/serializers.py", line 797, in data
+    ret = super().data
+          ^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/serializers.py", line 251, in data
+    self._data = self.to_representation(self.instance)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/serializers.py", line 716, in to_representation
+    self.child.to_representation(item) for item in iterable
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/serializers.py", line 525, in to_representation
+    for field in fields:
+                 ^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/serializers.py", line 386, in _readable_fields
+    for field in self.fields.values():
+                 ^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/utils/functional.py", line 47, in __get__
+    res = instance.__dict__[self.name] = self.func(instance)
+                                         ^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/serializers.py", line 375, in fields
+    fields[key] = value
+    ~~~~~~^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/utils/serializer_helpers.py", line 167, in __setitem__
+    field.bind(field_name=key, parent=self.serializer)
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/fields.py", line 358, in bind
+    assert self.source != field_name, (
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: It is redundant to specify `source='closing_date'` on field 'DateTimeField' in serializer 'TenderPublicListSerializer', because it is the same as the field name. Remove the `source` keyword argument.
+ERROR 2026-05-17 11:17:23,297 basehttp 219499 124159341553344 "GET /api/v1/public/tenders/?limit=6 HTTP/1.1" 500 156851
+ERROR 2026-05-17 11:17:37,394 log 219499 124159341553344 Internal Server Error: /api/v1/public/tenders/
+Traceback (most recent call last):
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/core/handlers/exception.py", line 55, in inner
+    response = get_response(request)
+               ^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/core/handlers/base.py", line 197, in _get_response
+    response = wrapped_callback(request, *callback_args, **callback_kwargs)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/views/decorators/csrf.py", line 65, in _view_wrapper
+    return view_func(request, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/views/generic/base.py", line 104, in view
+    return self.dispatch(request, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/views.py", line 515, in dispatch
+    response = self.handle_exception(exc)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/views.py", line 475, in handle_exception
+    self.raise_uncaught_exception(exc)
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/views.py", line 486, in raise_uncaught_exception
+    raise exc
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/views.py", line 512, in dispatch
+    response = handler(request, *args, **kwargs)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/generics.py", line 203, in get
+    return self.list(request, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/mixins.py", line 43, in list
+    return self.get_paginated_response(serializer.data)
+                                       ^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/serializers.py", line 797, in data
+    ret = super().data
+          ^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/serializers.py", line 251, in data
+    self._data = self.to_representation(self.instance)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/serializers.py", line 716, in to_representation
+    self.child.to_representation(item) for item in iterable
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/serializers.py", line 525, in to_representation
+    for field in fields:
+                 ^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/serializers.py", line 386, in _readable_fields
+    for field in self.fields.values():
+                 ^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/utils/functional.py", line 47, in __get__
+    res = instance.__dict__[self.name] = self.func(instance)
+                                         ^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/serializers.py", line 375, in fields
+    fields[key] = value
+    ~~~~~~^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/utils/serializer_helpers.py", line 167, in __setitem__
+    field.bind(field_name=key, parent=self.serializer)
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/fields.py", line 358, in bind
+    assert self.source != field_name, (
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: It is redundant to specify `source='closing_date'` on field 'DateTimeField' in serializer 'TenderPublicListSerializer', because it is the same as the field name. Remove the `source` keyword argument.
+ERROR 2026-05-17 11:17:37,396 basehttp 219499 124159341553344 "GET /api/v1/public/tenders/?limit=6 HTTP/1.1" 500 156851
+ERROR 2026-05-17 11:17:47,528 log 219499 124159341553344 Internal Server Error: /api/v1/public/tenders/
+Traceback (most recent call last):
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/core/handlers/exception.py", line 55, in inner
+    response = get_response(request)
+               ^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/core/handlers/base.py", line 197, in _get_response
+    response = wrapped_callback(request, *callback_args, **callback_kwargs)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/views/decorators/csrf.py", line 65, in _view_wrapper
+    return view_func(request, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/views/generic/base.py", line 104, in view
+    return self.dispatch(request, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/views.py", line 515, in dispatch
+    response = self.handle_exception(exc)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/views.py", line 475, in handle_exception
+    self.raise_uncaught_exception(exc)
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/views.py", line 486, in raise_uncaught_exception
+    raise exc
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/views.py", line 512, in dispatch
+    response = handler(request, *args, **kwargs)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/generics.py", line 203, in get
+    return self.list(request, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/mixins.py", line 43, in list
+    return self.get_paginated_response(serializer.data)
+                                       ^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/serializers.py", line 797, in data
+    ret = super().data
+          ^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/serializers.py", line 251, in data
+    self._data = self.to_representation(self.instance)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/serializers.py", line 716, in to_representation
+    self.child.to_representation(item) for item in iterable
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/serializers.py", line 525, in to_representation
+    for field in fields:
+                 ^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/serializers.py", line 386, in _readable_fields
+    for field in self.fields.values():
+                 ^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/utils/functional.py", line 47, in __get__
+    res = instance.__dict__[self.name] = self.func(instance)
+                                         ^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/serializers.py", line 375, in fields
+    fields[key] = value
+    ~~~~~~^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/utils/serializer_helpers.py", line 167, in __setitem__
+    field.bind(field_name=key, parent=self.serializer)
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/fields.py", line 358, in bind
+    assert self.source != field_name, (
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: It is redundant to specify `source='closing_date'` on field 'DateTimeField' in serializer 'TenderPublicListSerializer', because it is the same as the field name. Remove the `source` keyword argument.
+ERROR 2026-05-17 11:17:47,530 basehttp 219499 124159341553344 "GET /api/v1/public/tenders/?limit=6 HTTP/1.1" 500 156851
+ERROR 2026-05-17 11:17:48,606 log 219499 124159341553344 Internal Server Error: /api/v1/public/tenders/
+Traceback (most recent call last):
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/core/handlers/exception.py", line 55, in inner
+    response = get_response(request)
+               ^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/core/handlers/base.py", line 197, in _get_response
+    response = wrapped_callback(request, *callback_args, **callback_kwargs)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/views/decorators/csrf.py", line 65, in _view_wrapper
+    return view_func(request, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/views/generic/base.py", line 104, in view
+    return self.dispatch(request, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/views.py", line 515, in dispatch
+    response = self.handle_exception(exc)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/views.py", line 475, in handle_exception
+    self.raise_uncaught_exception(exc)
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/views.py", line 486, in raise_uncaught_exception
+    raise exc
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/views.py", line 512, in dispatch
+    response = handler(request, *args, **kwargs)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/generics.py", line 203, in get
+    return self.list(request, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/mixins.py", line 43, in list
+    return self.get_paginated_response(serializer.data)
+                                       ^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/serializers.py", line 797, in data
+    ret = super().data
+          ^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/serializers.py", line 251, in data
+    self._data = self.to_representation(self.instance)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/serializers.py", line 716, in to_representation
+    self.child.to_representation(item) for item in iterable
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/serializers.py", line 525, in to_representation
+    for field in fields:
+                 ^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/serializers.py", line 386, in _readable_fields
+    for field in self.fields.values():
+                 ^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/utils/functional.py", line 47, in __get__
+    res = instance.__dict__[self.name] = self.func(instance)
+                                         ^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/serializers.py", line 375, in fields
+    fields[key] = value
+    ~~~~~~^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/utils/serializer_helpers.py", line 167, in __setitem__
+    field.bind(field_name=key, parent=self.serializer)
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/fields.py", line 358, in bind
+    assert self.source != field_name, (
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: It is redundant to specify `source='closing_date'` on field 'DateTimeField' in serializer 'TenderPublicListSerializer', because it is the same as the field name. Remove the `source` keyword argument.
+ERROR 2026-05-17 11:17:48,607 basehttp 219499 124159341553344 "GET /api/v1/public/tenders/?limit=6 HTTP/1.1" 500 156851
+ERROR 2026-05-17 11:21:39,151 log 219499 124159358338752 Internal Server Error: /api/v1/public/tenders/
+Traceback (most recent call last):
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/core/handlers/exception.py", line 55, in inner
+    response = get_response(request)
+               ^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/core/handlers/base.py", line 197, in _get_response
+    response = wrapped_callback(request, *callback_args, **callback_kwargs)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/views/decorators/csrf.py", line 65, in _view_wrapper
+    return view_func(request, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/views/generic/base.py", line 104, in view
+    return self.dispatch(request, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/views.py", line 515, in dispatch
+    response = self.handle_exception(exc)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/views.py", line 475, in handle_exception
+    self.raise_uncaught_exception(exc)
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/views.py", line 486, in raise_uncaught_exception
+    raise exc
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/views.py", line 512, in dispatch
+    response = handler(request, *args, **kwargs)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/generics.py", line 203, in get
+    return self.list(request, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/mixins.py", line 43, in list
+    return self.get_paginated_response(serializer.data)
+                                       ^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/serializers.py", line 797, in data
+    ret = super().data
+          ^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/serializers.py", line 251, in data
+    self._data = self.to_representation(self.instance)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/serializers.py", line 716, in to_representation
+    self.child.to_representation(item) for item in iterable
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/serializers.py", line 525, in to_representation
+    for field in fields:
+                 ^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/serializers.py", line 386, in _readable_fields
+    for field in self.fields.values():
+                 ^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/utils/functional.py", line 47, in __get__
+    res = instance.__dict__[self.name] = self.func(instance)
+                                         ^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/serializers.py", line 375, in fields
+    fields[key] = value
+    ~~~~~~^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/utils/serializer_helpers.py", line 167, in __setitem__
+    field.bind(field_name=key, parent=self.serializer)
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/fields.py", line 358, in bind
+    assert self.source != field_name, (
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: It is redundant to specify `source='closing_date'` on field 'DateTimeField' in serializer 'TenderPublicListSerializer', because it is the same as the field name. Remove the `source` keyword argument.
+ERROR 2026-05-17 11:21:39,153 basehttp 219499 124159358338752 "GET /api/v1/public/tenders/?limit=6 HTTP/1.1" 500 156851
+ERROR 2026-05-17 11:21:40,375 log 219499 124159358338752 Internal Server Error: /api/v1/public/tenders/
+Traceback (most recent call last):
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/core/handlers/exception.py", line 55, in inner
+    response = get_response(request)
+               ^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/core/handlers/base.py", line 197, in _get_response
+    response = wrapped_callback(request, *callback_args, **callback_kwargs)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/views/decorators/csrf.py", line 65, in _view_wrapper
+    return view_func(request, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/views/generic/base.py", line 104, in view
+    return self.dispatch(request, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/views.py", line 515, in dispatch
+    response = self.handle_exception(exc)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/views.py", line 475, in handle_exception
+    self.raise_uncaught_exception(exc)
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/views.py", line 486, in raise_uncaught_exception
+    raise exc
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/views.py", line 512, in dispatch
+    response = handler(request, *args, **kwargs)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/generics.py", line 203, in get
+    return self.list(request, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/mixins.py", line 43, in list
+    return self.get_paginated_response(serializer.data)
+                                       ^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/serializers.py", line 797, in data
+    ret = super().data
+          ^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/serializers.py", line 251, in data
+    self._data = self.to_representation(self.instance)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/serializers.py", line 716, in to_representation
+    self.child.to_representation(item) for item in iterable
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/serializers.py", line 525, in to_representation
+    for field in fields:
+                 ^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/serializers.py", line 386, in _readable_fields
+    for field in self.fields.values():
+                 ^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/utils/functional.py", line 47, in __get__
+    res = instance.__dict__[self.name] = self.func(instance)
+                                         ^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/serializers.py", line 375, in fields
+    fields[key] = value
+    ~~~~~~^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/utils/serializer_helpers.py", line 167, in __setitem__
+    field.bind(field_name=key, parent=self.serializer)
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/fields.py", line 358, in bind
+    assert self.source != field_name, (
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: It is redundant to specify `source='closing_date'` on field 'DateTimeField' in serializer 'TenderPublicListSerializer', because it is the same as the field name. Remove the `source` keyword argument.
+ERROR 2026-05-17 11:21:40,378 basehttp 219499 124159358338752 "GET /api/v1/public/tenders/?limit=6 HTTP/1.1" 500 156851
+ERROR 2026-05-17 11:22:53,316 log 219499 124159333160640 Internal Server Error: /api/v1/public/tenders/
+Traceback (most recent call last):
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/core/handlers/exception.py", line 55, in inner
+    response = get_response(request)
+               ^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/core/handlers/base.py", line 197, in _get_response
+    response = wrapped_callback(request, *callback_args, **callback_kwargs)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/views/decorators/csrf.py", line 65, in _view_wrapper
+    return view_func(request, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/views/generic/base.py", line 104, in view
+    return self.dispatch(request, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/views.py", line 515, in dispatch
+    response = self.handle_exception(exc)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/views.py", line 475, in handle_exception
+    self.raise_uncaught_exception(exc)
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/views.py", line 486, in raise_uncaught_exception
+    raise exc
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/views.py", line 512, in dispatch
+    response = handler(request, *args, **kwargs)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/generics.py", line 203, in get
+    return self.list(request, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/mixins.py", line 43, in list
+    return self.get_paginated_response(serializer.data)
+                                       ^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/serializers.py", line 797, in data
+    ret = super().data
+          ^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/serializers.py", line 251, in data
+    self._data = self.to_representation(self.instance)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/serializers.py", line 716, in to_representation
+    self.child.to_representation(item) for item in iterable
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/serializers.py", line 525, in to_representation
+    for field in fields:
+                 ^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/serializers.py", line 386, in _readable_fields
+    for field in self.fields.values():
+                 ^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/utils/functional.py", line 47, in __get__
+    res = instance.__dict__[self.name] = self.func(instance)
+                                         ^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/serializers.py", line 375, in fields
+    fields[key] = value
+    ~~~~~~^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/utils/serializer_helpers.py", line 167, in __setitem__
+    field.bind(field_name=key, parent=self.serializer)
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/fields.py", line 358, in bind
+    assert self.source != field_name, (
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: It is redundant to specify `source='closing_date'` on field 'DateTimeField' in serializer 'TenderPublicListSerializer', because it is the same as the field name. Remove the `source` keyword argument.
+ERROR 2026-05-17 11:22:53,318 basehttp 219499 124159333160640 "GET /api/v1/public/tenders/?limit=6 HTTP/1.1" 500 156851
+ERROR 2026-05-17 11:22:54,423 log 219499 124159333160640 Internal Server Error: /api/v1/public/tenders/
+Traceback (most recent call last):
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/core/handlers/exception.py", line 55, in inner
+    response = get_response(request)
+               ^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/core/handlers/base.py", line 197, in _get_response
+    response = wrapped_callback(request, *callback_args, **callback_kwargs)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/views/decorators/csrf.py", line 65, in _view_wrapper
+    return view_func(request, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/views/generic/base.py", line 104, in view
+    return self.dispatch(request, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/views.py", line 515, in dispatch
+    response = self.handle_exception(exc)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/views.py", line 475, in handle_exception
+    self.raise_uncaught_exception(exc)
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/views.py", line 486, in raise_uncaught_exception
+    raise exc
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/views.py", line 512, in dispatch
+    response = handler(request, *args, **kwargs)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/generics.py", line 203, in get
+    return self.list(request, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/mixins.py", line 43, in list
+    return self.get_paginated_response(serializer.data)
+                                       ^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/serializers.py", line 797, in data
+    ret = super().data
+          ^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/serializers.py", line 251, in data
+    self._data = self.to_representation(self.instance)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/serializers.py", line 716, in to_representation
+    self.child.to_representation(item) for item in iterable
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/serializers.py", line 525, in to_representation
+    for field in fields:
+                 ^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/serializers.py", line 386, in _readable_fields
+    for field in self.fields.values():
+                 ^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/utils/functional.py", line 47, in __get__
+    res = instance.__dict__[self.name] = self.func(instance)
+                                         ^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/serializers.py", line 375, in fields
+    fields[key] = value
+    ~~~~~~^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/utils/serializer_helpers.py", line 167, in __setitem__
+    field.bind(field_name=key, parent=self.serializer)
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/fields.py", line 358, in bind
+    assert self.source != field_name, (
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: It is redundant to specify `source='closing_date'` on field 'DateTimeField' in serializer 'TenderPublicListSerializer', because it is the same as the field name. Remove the `source` keyword argument.
+ERROR 2026-05-17 11:22:54,425 basehttp 219499 124159333160640 "GET /api/v1/public/tenders/?limit=6 HTTP/1.1" 500 156851
+ERROR 2026-05-17 11:23:04,441 log 219499 124159349946048 Internal Server Error: /api/v1/public/tenders/
+Traceback (most recent call last):
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/core/handlers/exception.py", line 55, in inner
+    response = get_response(request)
+               ^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/core/handlers/base.py", line 197, in _get_response
+    response = wrapped_callback(request, *callback_args, **callback_kwargs)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/views/decorators/csrf.py", line 65, in _view_wrapper
+    return view_func(request, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/views/generic/base.py", line 104, in view
+    return self.dispatch(request, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/views.py", line 515, in dispatch
+    response = self.handle_exception(exc)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/views.py", line 475, in handle_exception
+    self.raise_uncaught_exception(exc)
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/views.py", line 486, in raise_uncaught_exception
+    raise exc
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/views.py", line 512, in dispatch
+    response = handler(request, *args, **kwargs)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/generics.py", line 203, in get
+    return self.list(request, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/mixins.py", line 43, in list
+    return self.get_paginated_response(serializer.data)
+                                       ^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/serializers.py", line 797, in data
+    ret = super().data
+          ^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/serializers.py", line 251, in data
+    self._data = self.to_representation(self.instance)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/serializers.py", line 716, in to_representation
+    self.child.to_representation(item) for item in iterable
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/serializers.py", line 525, in to_representation
+    for field in fields:
+                 ^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/serializers.py", line 386, in _readable_fields
+    for field in self.fields.values():
+                 ^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/utils/functional.py", line 47, in __get__
+    res = instance.__dict__[self.name] = self.func(instance)
+                                         ^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/serializers.py", line 375, in fields
+    fields[key] = value
+    ~~~~~~^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/utils/serializer_helpers.py", line 167, in __setitem__
+    field.bind(field_name=key, parent=self.serializer)
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/fields.py", line 358, in bind
+    assert self.source != field_name, (
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: It is redundant to specify `source='closing_date'` on field 'DateTimeField' in serializer 'TenderPublicListSerializer', because it is the same as the field name. Remove the `source` keyword argument.
+ERROR 2026-05-17 11:23:04,443 basehttp 219499 124159349946048 "GET /api/v1/public/tenders/?limit=6 HTTP/1.1" 500 156851
+ERROR 2026-05-17 11:23:05,507 log 219499 124159349946048 Internal Server Error: /api/v1/public/tenders/
+Traceback (most recent call last):
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/core/handlers/exception.py", line 55, in inner
+    response = get_response(request)
+               ^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/core/handlers/base.py", line 197, in _get_response
+    response = wrapped_callback(request, *callback_args, **callback_kwargs)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/views/decorators/csrf.py", line 65, in _view_wrapper
+    return view_func(request, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/views/generic/base.py", line 104, in view
+    return self.dispatch(request, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/views.py", line 515, in dispatch
+    response = self.handle_exception(exc)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/views.py", line 475, in handle_exception
+    self.raise_uncaught_exception(exc)
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/views.py", line 486, in raise_uncaught_exception
+    raise exc
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/views.py", line 512, in dispatch
+    response = handler(request, *args, **kwargs)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/generics.py", line 203, in get
+    return self.list(request, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/mixins.py", line 43, in list
+    return self.get_paginated_response(serializer.data)
+                                       ^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/serializers.py", line 797, in data
+    ret = super().data
+          ^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/serializers.py", line 251, in data
+    self._data = self.to_representation(self.instance)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/serializers.py", line 716, in to_representation
+    self.child.to_representation(item) for item in iterable
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/serializers.py", line 525, in to_representation
+    for field in fields:
+                 ^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/serializers.py", line 386, in _readable_fields
+    for field in self.fields.values():
+                 ^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/utils/functional.py", line 47, in __get__
+    res = instance.__dict__[self.name] = self.func(instance)
+                                         ^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/serializers.py", line 375, in fields
+    fields[key] = value
+    ~~~~~~^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/utils/serializer_helpers.py", line 167, in __setitem__
+    field.bind(field_name=key, parent=self.serializer)
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/fields.py", line 358, in bind
+    assert self.source != field_name, (
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: It is redundant to specify `source='closing_date'` on field 'DateTimeField' in serializer 'TenderPublicListSerializer', because it is the same as the field name. Remove the `source` keyword argument.
+ERROR 2026-05-17 11:23:05,508 basehttp 219499 124159349946048 "GET /api/v1/public/tenders/?limit=6 HTTP/1.1" 500 156851
+ERROR 2026-05-17 11:23:19,143 log 219499 124159349946048 Internal Server Error: /api/v1/public/tenders/
+Traceback (most recent call last):
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/core/handlers/exception.py", line 55, in inner
+    response = get_response(request)
+               ^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/core/handlers/base.py", line 197, in _get_response
+    response = wrapped_callback(request, *callback_args, **callback_kwargs)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/views/decorators/csrf.py", line 65, in _view_wrapper
+    return view_func(request, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/views/generic/base.py", line 104, in view
+    return self.dispatch(request, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/views.py", line 515, in dispatch
+    response = self.handle_exception(exc)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/views.py", line 475, in handle_exception
+    self.raise_uncaught_exception(exc)
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/views.py", line 486, in raise_uncaught_exception
+    raise exc
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/views.py", line 512, in dispatch
+    response = handler(request, *args, **kwargs)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/generics.py", line 203, in get
+    return self.list(request, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/mixins.py", line 43, in list
+    return self.get_paginated_response(serializer.data)
+                                       ^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/serializers.py", line 797, in data
+    ret = super().data
+          ^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/serializers.py", line 251, in data
+    self._data = self.to_representation(self.instance)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/serializers.py", line 716, in to_representation
+    self.child.to_representation(item) for item in iterable
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/serializers.py", line 525, in to_representation
+    for field in fields:
+                 ^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/serializers.py", line 386, in _readable_fields
+    for field in self.fields.values():
+                 ^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/utils/functional.py", line 47, in __get__
+    res = instance.__dict__[self.name] = self.func(instance)
+                                         ^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/serializers.py", line 375, in fields
+    fields[key] = value
+    ~~~~~~^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/utils/serializer_helpers.py", line 167, in __setitem__
+    field.bind(field_name=key, parent=self.serializer)
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/fields.py", line 358, in bind
+    assert self.source != field_name, (
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: It is redundant to specify `source='closing_date'` on field 'DateTimeField' in serializer 'TenderPublicListSerializer', because it is the same as the field name. Remove the `source` keyword argument.
+ERROR 2026-05-17 11:23:19,145 basehttp 219499 124159349946048 "GET /api/v1/public/tenders/?page=1&page_size=10 HTTP/1.1" 500 157189
+ERROR 2026-05-17 11:23:20,270 log 219499 124159349946048 Internal Server Error: /api/v1/public/tenders/
+Traceback (most recent call last):
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/core/handlers/exception.py", line 55, in inner
+    response = get_response(request)
+               ^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/core/handlers/base.py", line 197, in _get_response
+    response = wrapped_callback(request, *callback_args, **callback_kwargs)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/views/decorators/csrf.py", line 65, in _view_wrapper
+    return view_func(request, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/views/generic/base.py", line 104, in view
+    return self.dispatch(request, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/views.py", line 515, in dispatch
+    response = self.handle_exception(exc)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/views.py", line 475, in handle_exception
+    self.raise_uncaught_exception(exc)
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/views.py", line 486, in raise_uncaught_exception
+    raise exc
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/views.py", line 512, in dispatch
+    response = handler(request, *args, **kwargs)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/generics.py", line 203, in get
+    return self.list(request, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/mixins.py", line 43, in list
+    return self.get_paginated_response(serializer.data)
+                                       ^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/serializers.py", line 797, in data
+    ret = super().data
+          ^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/serializers.py", line 251, in data
+    self._data = self.to_representation(self.instance)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/serializers.py", line 716, in to_representation
+    self.child.to_representation(item) for item in iterable
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/serializers.py", line 525, in to_representation
+    for field in fields:
+                 ^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/serializers.py", line 386, in _readable_fields
+    for field in self.fields.values():
+                 ^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/utils/functional.py", line 47, in __get__
+    res = instance.__dict__[self.name] = self.func(instance)
+                                         ^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/serializers.py", line 375, in fields
+    fields[key] = value
+    ~~~~~~^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/utils/serializer_helpers.py", line 167, in __setitem__
+    field.bind(field_name=key, parent=self.serializer)
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/fields.py", line 358, in bind
+    assert self.source != field_name, (
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: It is redundant to specify `source='closing_date'` on field 'DateTimeField' in serializer 'TenderPublicListSerializer', because it is the same as the field name. Remove the `source` keyword argument.
+ERROR 2026-05-17 11:23:20,272 basehttp 219499 124159349946048 "GET /api/v1/public/tenders/?page=1&page_size=10 HTTP/1.1" 500 157189
+ERROR 2026-05-17 11:23:22,612 log 219499 124159366731456 Internal Server Error: /api/v1/public/tenders/
+Traceback (most recent call last):
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/core/handlers/exception.py", line 55, in inner
+    response = get_response(request)
+               ^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/core/handlers/base.py", line 197, in _get_response
+    response = wrapped_callback(request, *callback_args, **callback_kwargs)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/views/decorators/csrf.py", line 65, in _view_wrapper
+    return view_func(request, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/views/generic/base.py", line 104, in view
+    return self.dispatch(request, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/views.py", line 515, in dispatch
+    response = self.handle_exception(exc)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/views.py", line 475, in handle_exception
+    self.raise_uncaught_exception(exc)
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/views.py", line 486, in raise_uncaught_exception
+    raise exc
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/views.py", line 512, in dispatch
+    response = handler(request, *args, **kwargs)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/generics.py", line 203, in get
+    return self.list(request, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/mixins.py", line 43, in list
+    return self.get_paginated_response(serializer.data)
+                                       ^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/serializers.py", line 797, in data
+    ret = super().data
+          ^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/serializers.py", line 251, in data
+    self._data = self.to_representation(self.instance)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/serializers.py", line 716, in to_representation
+    self.child.to_representation(item) for item in iterable
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/serializers.py", line 525, in to_representation
+    for field in fields:
+                 ^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/serializers.py", line 386, in _readable_fields
+    for field in self.fields.values():
+                 ^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/utils/functional.py", line 47, in __get__
+    res = instance.__dict__[self.name] = self.func(instance)
+                                         ^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/serializers.py", line 375, in fields
+    fields[key] = value
+    ~~~~~~^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/utils/serializer_helpers.py", line 167, in __setitem__
+    field.bind(field_name=key, parent=self.serializer)
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/fields.py", line 358, in bind
+    assert self.source != field_name, (
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: It is redundant to specify `source='closing_date'` on field 'DateTimeField' in serializer 'TenderPublicListSerializer', because it is the same as the field name. Remove the `source` keyword argument.
+ERROR 2026-05-17 11:23:22,615 basehttp 219499 124159366731456 "GET /api/v1/public/tenders/?limit=6 HTTP/1.1" 500 156851
+ERROR 2026-05-17 11:23:23,725 log 219499 124159349946048 Internal Server Error: /api/v1/public/tenders/
+Traceback (most recent call last):
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/core/handlers/exception.py", line 55, in inner
+    response = get_response(request)
+               ^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/core/handlers/base.py", line 197, in _get_response
+    response = wrapped_callback(request, *callback_args, **callback_kwargs)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/views/decorators/csrf.py", line 65, in _view_wrapper
+    return view_func(request, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/views/generic/base.py", line 104, in view
+    return self.dispatch(request, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/views.py", line 515, in dispatch
+    response = self.handle_exception(exc)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/views.py", line 475, in handle_exception
+    self.raise_uncaught_exception(exc)
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/views.py", line 486, in raise_uncaught_exception
+    raise exc
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/views.py", line 512, in dispatch
+    response = handler(request, *args, **kwargs)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/generics.py", line 203, in get
+    return self.list(request, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/mixins.py", line 43, in list
+    return self.get_paginated_response(serializer.data)
+                                       ^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/serializers.py", line 797, in data
+    ret = super().data
+          ^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/serializers.py", line 251, in data
+    self._data = self.to_representation(self.instance)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/serializers.py", line 716, in to_representation
+    self.child.to_representation(item) for item in iterable
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/serializers.py", line 525, in to_representation
+    for field in fields:
+                 ^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/serializers.py", line 386, in _readable_fields
+    for field in self.fields.values():
+                 ^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/utils/functional.py", line 47, in __get__
+    res = instance.__dict__[self.name] = self.func(instance)
+                                         ^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/serializers.py", line 375, in fields
+    fields[key] = value
+    ~~~~~~^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/utils/serializer_helpers.py", line 167, in __setitem__
+    field.bind(field_name=key, parent=self.serializer)
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/fields.py", line 358, in bind
+    assert self.source != field_name, (
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: It is redundant to specify `source='closing_date'` on field 'DateTimeField' in serializer 'TenderPublicListSerializer', because it is the same as the field name. Remove the `source` keyword argument.
+ERROR 2026-05-17 11:23:23,727 basehttp 219499 124159349946048 "GET /api/v1/public/tenders/?limit=6 HTTP/1.1" 500 156851
+ERROR 2026-05-17 11:23:38,918 log 219499 124159366731456 Internal Server Error: /api/v1/public/tenders/
+Traceback (most recent call last):
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/core/handlers/exception.py", line 55, in inner
+    response = get_response(request)
+               ^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/core/handlers/base.py", line 197, in _get_response
+    response = wrapped_callback(request, *callback_args, **callback_kwargs)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/views/decorators/csrf.py", line 65, in _view_wrapper
+    return view_func(request, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/views/generic/base.py", line 104, in view
+    return self.dispatch(request, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/views.py", line 515, in dispatch
+    response = self.handle_exception(exc)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/views.py", line 475, in handle_exception
+    self.raise_uncaught_exception(exc)
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/views.py", line 486, in raise_uncaught_exception
+    raise exc
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/views.py", line 512, in dispatch
+    response = handler(request, *args, **kwargs)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/generics.py", line 203, in get
+    return self.list(request, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/mixins.py", line 43, in list
+    return self.get_paginated_response(serializer.data)
+                                       ^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/serializers.py", line 797, in data
+    ret = super().data
+          ^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/serializers.py", line 251, in data
+    self._data = self.to_representation(self.instance)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/serializers.py", line 716, in to_representation
+    self.child.to_representation(item) for item in iterable
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/serializers.py", line 525, in to_representation
+    for field in fields:
+                 ^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/serializers.py", line 386, in _readable_fields
+    for field in self.fields.values():
+                 ^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/utils/functional.py", line 47, in __get__
+    res = instance.__dict__[self.name] = self.func(instance)
+                                         ^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/serializers.py", line 375, in fields
+    fields[key] = value
+    ~~~~~~^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/utils/serializer_helpers.py", line 167, in __setitem__
+    field.bind(field_name=key, parent=self.serializer)
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/fields.py", line 358, in bind
+    assert self.source != field_name, (
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: It is redundant to specify `source='closing_date'` on field 'DateTimeField' in serializer 'TenderPublicListSerializer', because it is the same as the field name. Remove the `source` keyword argument.
+ERROR 2026-05-17 11:23:38,921 basehttp 219499 124159366731456 "GET /api/v1/public/tenders/?limit=6 HTTP/1.1" 500 156851
+ERROR 2026-05-17 11:23:39,991 log 219499 124159349946048 Internal Server Error: /api/v1/public/tenders/
+Traceback (most recent call last):
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/core/handlers/exception.py", line 55, in inner
+    response = get_response(request)
+               ^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/core/handlers/base.py", line 197, in _get_response
+    response = wrapped_callback(request, *callback_args, **callback_kwargs)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/views/decorators/csrf.py", line 65, in _view_wrapper
+    return view_func(request, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/views/generic/base.py", line 104, in view
+    return self.dispatch(request, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/views.py", line 515, in dispatch
+    response = self.handle_exception(exc)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/views.py", line 475, in handle_exception
+    self.raise_uncaught_exception(exc)
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/views.py", line 486, in raise_uncaught_exception
+    raise exc
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/views.py", line 512, in dispatch
+    response = handler(request, *args, **kwargs)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/generics.py", line 203, in get
+    return self.list(request, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/mixins.py", line 43, in list
+    return self.get_paginated_response(serializer.data)
+                                       ^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/serializers.py", line 797, in data
+    ret = super().data
+          ^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/serializers.py", line 251, in data
+    self._data = self.to_representation(self.instance)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/serializers.py", line 716, in to_representation
+    self.child.to_representation(item) for item in iterable
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/serializers.py", line 525, in to_representation
+    for field in fields:
+                 ^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/serializers.py", line 386, in _readable_fields
+    for field in self.fields.values():
+                 ^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/utils/functional.py", line 47, in __get__
+    res = instance.__dict__[self.name] = self.func(instance)
+                                         ^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/serializers.py", line 375, in fields
+    fields[key] = value
+    ~~~~~~^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/utils/serializer_helpers.py", line 167, in __setitem__
+    field.bind(field_name=key, parent=self.serializer)
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/fields.py", line 358, in bind
+    assert self.source != field_name, (
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: It is redundant to specify `source='closing_date'` on field 'DateTimeField' in serializer 'TenderPublicListSerializer', because it is the same as the field name. Remove the `source` keyword argument.
+ERROR 2026-05-17 11:23:39,992 basehttp 219499 124159349946048 "GET /api/v1/public/tenders/?limit=6 HTTP/1.1" 500 156851
+ERROR 2026-05-17 11:26:19,828 log 219499 124159358338752 Internal Server Error: /api/v1/public/tenders/
+Traceback (most recent call last):
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/core/handlers/exception.py", line 55, in inner
+    response = get_response(request)
+               ^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/core/handlers/base.py", line 197, in _get_response
+    response = wrapped_callback(request, *callback_args, **callback_kwargs)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/views/decorators/csrf.py", line 65, in _view_wrapper
+    return view_func(request, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/views/generic/base.py", line 104, in view
+    return self.dispatch(request, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/views.py", line 515, in dispatch
+    response = self.handle_exception(exc)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/views.py", line 475, in handle_exception
+    self.raise_uncaught_exception(exc)
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/views.py", line 486, in raise_uncaught_exception
+    raise exc
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/views.py", line 512, in dispatch
+    response = handler(request, *args, **kwargs)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/generics.py", line 203, in get
+    return self.list(request, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/mixins.py", line 43, in list
+    return self.get_paginated_response(serializer.data)
+                                       ^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/serializers.py", line 797, in data
+    ret = super().data
+          ^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/serializers.py", line 251, in data
+    self._data = self.to_representation(self.instance)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/serializers.py", line 716, in to_representation
+    self.child.to_representation(item) for item in iterable
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/serializers.py", line 525, in to_representation
+    for field in fields:
+                 ^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/serializers.py", line 386, in _readable_fields
+    for field in self.fields.values():
+                 ^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/utils/functional.py", line 47, in __get__
+    res = instance.__dict__[self.name] = self.func(instance)
+                                         ^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/serializers.py", line 375, in fields
+    fields[key] = value
+    ~~~~~~^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/utils/serializer_helpers.py", line 167, in __setitem__
+    field.bind(field_name=key, parent=self.serializer)
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/fields.py", line 358, in bind
+    assert self.source != field_name, (
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: It is redundant to specify `source='closing_date'` on field 'DateTimeField' in serializer 'TenderPublicListSerializer', because it is the same as the field name. Remove the `source` keyword argument.
+ERROR 2026-05-17 11:26:19,830 basehttp 219499 124159358338752 "GET /api/v1/public/tenders/?limit=6 HTTP/1.1" 500 156851
+ERROR 2026-05-17 11:26:21,236 log 219499 124159358338752 Internal Server Error: /api/v1/public/tenders/
+Traceback (most recent call last):
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/core/handlers/exception.py", line 55, in inner
+    response = get_response(request)
+               ^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/core/handlers/base.py", line 197, in _get_response
+    response = wrapped_callback(request, *callback_args, **callback_kwargs)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/views/decorators/csrf.py", line 65, in _view_wrapper
+    return view_func(request, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/views/generic/base.py", line 104, in view
+    return self.dispatch(request, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/views.py", line 515, in dispatch
+    response = self.handle_exception(exc)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/views.py", line 475, in handle_exception
+    self.raise_uncaught_exception(exc)
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/views.py", line 486, in raise_uncaught_exception
+    raise exc
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/views.py", line 512, in dispatch
+    response = handler(request, *args, **kwargs)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/generics.py", line 203, in get
+    return self.list(request, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/mixins.py", line 43, in list
+    return self.get_paginated_response(serializer.data)
+                                       ^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/serializers.py", line 797, in data
+    ret = super().data
+          ^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/serializers.py", line 251, in data
+    self._data = self.to_representation(self.instance)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/serializers.py", line 716, in to_representation
+    self.child.to_representation(item) for item in iterable
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/serializers.py", line 525, in to_representation
+    for field in fields:
+                 ^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/serializers.py", line 386, in _readable_fields
+    for field in self.fields.values():
+                 ^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/utils/functional.py", line 47, in __get__
+    res = instance.__dict__[self.name] = self.func(instance)
+                                         ^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/serializers.py", line 375, in fields
+    fields[key] = value
+    ~~~~~~^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/utils/serializer_helpers.py", line 167, in __setitem__
+    field.bind(field_name=key, parent=self.serializer)
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/fields.py", line 358, in bind
+    assert self.source != field_name, (
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: It is redundant to specify `source='closing_date'` on field 'DateTimeField' in serializer 'TenderPublicListSerializer', because it is the same as the field name. Remove the `source` keyword argument.
+ERROR 2026-05-17 11:26:21,238 basehttp 219499 124159358338752 "GET /api/v1/public/tenders/?limit=6 HTTP/1.1" 500 156851
+ERROR 2026-05-17 11:26:32,673 log 219499 124159341553344 Internal Server Error: /api/v1/public/tenders/
+Traceback (most recent call last):
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/core/handlers/exception.py", line 55, in inner
+    response = get_response(request)
+               ^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/core/handlers/base.py", line 197, in _get_response
+    response = wrapped_callback(request, *callback_args, **callback_kwargs)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/views/decorators/csrf.py", line 65, in _view_wrapper
+    return view_func(request, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/views/generic/base.py", line 104, in view
+    return self.dispatch(request, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/views.py", line 515, in dispatch
+    response = self.handle_exception(exc)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/views.py", line 475, in handle_exception
+    self.raise_uncaught_exception(exc)
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/views.py", line 486, in raise_uncaught_exception
+    raise exc
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/views.py", line 512, in dispatch
+    response = handler(request, *args, **kwargs)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/generics.py", line 203, in get
+    return self.list(request, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/mixins.py", line 43, in list
+    return self.get_paginated_response(serializer.data)
+                                       ^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/serializers.py", line 797, in data
+    ret = super().data
+          ^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/serializers.py", line 251, in data
+    self._data = self.to_representation(self.instance)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/serializers.py", line 716, in to_representation
+    self.child.to_representation(item) for item in iterable
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/serializers.py", line 525, in to_representation
+    for field in fields:
+                 ^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/serializers.py", line 386, in _readable_fields
+    for field in self.fields.values():
+                 ^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/utils/functional.py", line 47, in __get__
+    res = instance.__dict__[self.name] = self.func(instance)
+                                         ^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/serializers.py", line 375, in fields
+    fields[key] = value
+    ~~~~~~^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/utils/serializer_helpers.py", line 167, in __setitem__
+    field.bind(field_name=key, parent=self.serializer)
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/fields.py", line 358, in bind
+    assert self.source != field_name, (
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: It is redundant to specify `source='closing_date'` on field 'DateTimeField' in serializer 'TenderPublicListSerializer', because it is the same as the field name. Remove the `source` keyword argument.
+ERROR 2026-05-17 11:26:32,675 basehttp 219499 124159341553344 "GET /api/v1/public/tenders/?limit=6 HTTP/1.1" 500 156851
+ERROR 2026-05-17 11:26:33,768 log 219499 124159341553344 Internal Server Error: /api/v1/public/tenders/
+Traceback (most recent call last):
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/core/handlers/exception.py", line 55, in inner
+    response = get_response(request)
+               ^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/core/handlers/base.py", line 197, in _get_response
+    response = wrapped_callback(request, *callback_args, **callback_kwargs)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/views/decorators/csrf.py", line 65, in _view_wrapper
+    return view_func(request, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/views/generic/base.py", line 104, in view
+    return self.dispatch(request, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/views.py", line 515, in dispatch
+    response = self.handle_exception(exc)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/views.py", line 475, in handle_exception
+    self.raise_uncaught_exception(exc)
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/views.py", line 486, in raise_uncaught_exception
+    raise exc
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/views.py", line 512, in dispatch
+    response = handler(request, *args, **kwargs)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/generics.py", line 203, in get
+    return self.list(request, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/mixins.py", line 43, in list
+    return self.get_paginated_response(serializer.data)
+                                       ^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/serializers.py", line 797, in data
+    ret = super().data
+          ^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/serializers.py", line 251, in data
+    self._data = self.to_representation(self.instance)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/serializers.py", line 716, in to_representation
+    self.child.to_representation(item) for item in iterable
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/serializers.py", line 525, in to_representation
+    for field in fields:
+                 ^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/serializers.py", line 386, in _readable_fields
+    for field in self.fields.values():
+                 ^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/utils/functional.py", line 47, in __get__
+    res = instance.__dict__[self.name] = self.func(instance)
+                                         ^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/serializers.py", line 375, in fields
+    fields[key] = value
+    ~~~~~~^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/utils/serializer_helpers.py", line 167, in __setitem__
+    field.bind(field_name=key, parent=self.serializer)
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/fields.py", line 358, in bind
+    assert self.source != field_name, (
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: It is redundant to specify `source='closing_date'` on field 'DateTimeField' in serializer 'TenderPublicListSerializer', because it is the same as the field name. Remove the `source` keyword argument.
+ERROR 2026-05-17 11:26:33,769 basehttp 219499 124159341553344 "GET /api/v1/public/tenders/?limit=6 HTTP/1.1" 500 156851
+ERROR 2026-05-17 11:30:25,981 log 249163 136388694505152 Internal Server Error: /api/v1/public/tenders/e0eeba23-1bb8-4284-a99c-1d0f38cc8ecb/
+Traceback (most recent call last):
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/core/handlers/exception.py", line 55, in inner
+    response = get_response(request)
+               ^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/core/handlers/base.py", line 197, in _get_response
+    response = wrapped_callback(request, *callback_args, **callback_kwargs)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/views/decorators/csrf.py", line 65, in _view_wrapper
+    return view_func(request, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/views/generic/base.py", line 104, in view
+    return self.dispatch(request, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/views.py", line 515, in dispatch
+    response = self.handle_exception(exc)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/views.py", line 475, in handle_exception
+    self.raise_uncaught_exception(exc)
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/views.py", line 486, in raise_uncaught_exception
+    raise exc
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/views.py", line 512, in dispatch
+    response = handler(request, *args, **kwargs)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/generics.py", line 212, in get
+    return self.retrieve(request, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/mixins.py", line 54, in retrieve
+    instance = self.get_object()
+               ^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/generics.py", line 92, in get_object
+    assert lookup_url_kwarg in self.kwargs, (
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: Expected view TenderDetail to be called with a URL keyword argument named "solicitation_id". Fix your URL conf, or set the `.lookup_field` attribute on the view correctly.
+ERROR 2026-05-17 11:30:25,983 basehttp 249163 136388694505152 "GET /api/v1/public/tenders/e0eeba23-1bb8-4284-a99c-1d0f38cc8ecb/ HTTP/1.1" 500 119621
+ERROR 2026-05-17 11:30:27,063 log 249163 136388694505152 Internal Server Error: /api/v1/public/tenders/e0eeba23-1bb8-4284-a99c-1d0f38cc8ecb/
+Traceback (most recent call last):
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/core/handlers/exception.py", line 55, in inner
+    response = get_response(request)
+               ^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/core/handlers/base.py", line 197, in _get_response
+    response = wrapped_callback(request, *callback_args, **callback_kwargs)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/views/decorators/csrf.py", line 65, in _view_wrapper
+    return view_func(request, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/views/generic/base.py", line 104, in view
+    return self.dispatch(request, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/views.py", line 515, in dispatch
+    response = self.handle_exception(exc)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/views.py", line 475, in handle_exception
+    self.raise_uncaught_exception(exc)
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/views.py", line 486, in raise_uncaught_exception
+    raise exc
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/views.py", line 512, in dispatch
+    response = handler(request, *args, **kwargs)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/generics.py", line 212, in get
+    return self.retrieve(request, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/mixins.py", line 54, in retrieve
+    instance = self.get_object()
+               ^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/generics.py", line 92, in get_object
+    assert lookup_url_kwarg in self.kwargs, (
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: Expected view TenderDetail to be called with a URL keyword argument named "solicitation_id". Fix your URL conf, or set the `.lookup_field` attribute on the view correctly.
+ERROR 2026-05-17 11:30:27,064 basehttp 249163 136388694505152 "GET /api/v1/public/tenders/e0eeba23-1bb8-4284-a99c-1d0f38cc8ecb/ HTTP/1.1" 500 119621

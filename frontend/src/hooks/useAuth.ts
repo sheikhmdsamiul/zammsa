@@ -24,6 +24,8 @@ export function useLogin() {
           navigate('/change-password');
         } else if (res.user.role === ROLES.SUPPLIER_USER) {
           navigate('/vendor');
+        } else if (res.user.role === ROLES.SUPPLIER_RELATIONSHIP_MANAGER) {
+          navigate('/supplier-relations');
         } else {
           navigate('/');
         }

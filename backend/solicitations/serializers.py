@@ -111,7 +111,7 @@ class SolicitationSerializer(serializers.ModelSerializer):
     department = serializers.SerializerMethodField()
     department_name = serializers.SerializerMethodField()
     opening_date = serializers.DateTimeField(required=False)
-    requisition = serializers.PrimaryKeyRelatedField(required=False, allow_null=True, queryset=Requisition.objects.all())
+    requisition = serializers.PrimaryKeyRelatedField(required=True, queryset=Requisition.objects.all())
     document_sets = SolicitationDocumentSerializer(many=True, source='documents', read_only=True)
     clarification_responses = ClarificationRequestSerializer(many=True, source='clarifications', read_only=True)
     evaluation_criteria = EvaluationCriterionSerializer(many=True, read_only=True)

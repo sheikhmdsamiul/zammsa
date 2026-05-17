@@ -100,6 +100,9 @@ const FiscalYearManagement = React.lazy(() => import('./components/admin/FiscalY
 const AdminReports = React.lazy(() => import('./components/admin/Reports'));
 const BackupManagement = React.lazy(() => import('./components/admin/BackupManagement'));
 
+const SupplierRelationsLayout = React.lazy(() => import('./components/layout/SupplierRelationsLayout'));
+const SupplierRelationsDashboard = React.lazy(() => import('./components/supplier-relations/SupplierRelationsDashboard'));
+
 const PublicHome: React.FC = () => {
   const { isAuthenticated, user } = useAuth();
   if (isAuthenticated) {
@@ -286,6 +289,20 @@ function App() {
                   <Route path="fiscal-years" element={<FiscalYearManagement />} />
                   <Route path="reports" element={<AdminReports />} />
                   <Route path="backups" element={<BackupManagement />} />
+                </Route>
+
+                <Route
+                  path="/supplier-relations"
+                  element={
+                    <ProtectedRoute roles={['supplier_relationship_manager']}>
+                      <SupplierRelationsLayout />
+                    </ProtectedRoute>
+                  }
+                >
+                  <Route index element={<SupplierRelationsDashboard />} />
+                  <Route path="vendor-applications" element={<VendorApplications />} />
+                  <Route path="vendors" element={<VendorManagement />} />
+                  <Route path="reports" element={<AdminReports />} />
                 </Route>
 
                 <Route path="*" element={

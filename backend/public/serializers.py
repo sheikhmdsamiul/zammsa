@@ -61,18 +61,13 @@ class TenderPublicSerializer(serializers.ModelSerializer):
     currency = serializers.SerializerMethodField()
     fee_required = serializers.BooleanField(default=False)
     fee_amount = serializers.DecimalField(max_digits=15, decimal_places=2, default=0)
-    closing_date = serializers.DateTimeField(source='closing_date')
-    opening_date = serializers.DateTimeField(source='opening_date')
+    closing_date = serializers.DateTimeField()
+    opening_date = serializers.DateTimeField()
     issue_date = serializers.DateTimeField(source='published_at')
-    status = serializers.CharField(source='status')
+    status = serializers.CharField()
     view_count = serializers.SerializerMethodField()
-    documents = PublicDocumentSerializer(many=True, read_only=True, source='documents')
-    addenda = PublicAddendumSerializer(many=True, read_only=True)
-    clarifications = PublicClarificationSerializer(many=True, read_only=True)
-    evaluation_criteria = PublicEvaluationCriterionSerializer(many=True, read_only=True)
     award_notice = serializers.SerializerMethodField()
     bid_opening_results = serializers.SerializerMethodField()
-    created_at = serializers.DateTimeField()
 
     class Meta:
         model = Solicitation
@@ -134,10 +129,10 @@ class TenderPublicListSerializer(serializers.ModelSerializer):
     currency = serializers.SerializerMethodField()
     fee_required = serializers.BooleanField(default=False)
     fee_amount = serializers.DecimalField(max_digits=15, decimal_places=2, default=0)
-    closing_date = serializers.DateTimeField(source='closing_date')
-    opening_date = serializers.DateTimeField(source='opening_date')
+    closing_date = serializers.DateTimeField()
+    opening_date = serializers.DateTimeField()
     issue_date = serializers.DateTimeField(source='published_at')
-    status = serializers.CharField(source='status')
+    status = serializers.CharField()
     view_count = serializers.SerializerMethodField()
 
     class Meta:

@@ -4,8 +4,12 @@ import toast from 'react-hot-toast';
 import { fetchVendorApplications, fetchVendorApplicationDetail, approveVendorApplication, rejectVendorApplication, requestMoreInfo } from '../../api/admin';
 import { LoadingSpinner } from '../common/LoadingSpinner';
 import { Pagination } from '../common/Pagination';
+import { useAuth } from '../../hooks/useAuth';
+import { ROLES } from '../../config/rbac';
 
 const VendorApplications: React.FC = () => {
+  const { user } = useAuth();
+  const canReview = user?.role === ROLES.SUPPLIER_RELATIONSHIP_MANAGER;
   const qc = useQueryClient();
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
@@ -144,11 +148,15 @@ const VendorApplications: React.FC = () => {
                 </div>
 
                 {/* Actions */}
-                <div className="flex flex-col gap-2">
-                  <button onClick={() => approveMut.mutate(selected.application_id)} disabled={approveMut.isPending || selected.status === 'approved'} className="w-full px-4 py-2 bg-zammsa-green text-white text-sm rounded-lg hover:bg-green-700 disabled:opacity-50">Approve & Create Account</button>
-                  <button onClick={() => setShowReject(true)} disabled={selected.status === 'approved' || selected.status === 'rejected'} className="w-full px-4 py-2 bg-red-600 text-white text-sm rounded-lg hover:bg-red-700 disabled:opacity-50">Reject</button>
-                  <button onClick={() => setShowInfo(true)} className="w-full px-4 py-2 bg-yellow-600 text-white text-sm rounded-lg hover:bg-yellow-700">Request More Information</button>
-                </div>
+                {canReview ? (
+                  <div className="flex flex-col gap-2">
+                    <button onClick={() => approveMut.mutate(selected.application_id)} disabled={approveMut.isPending || selected.status === 'approved'} className="w-full px-4 py-2 bg-zammsa-green text-white text-sm rounded-lg hover:bg-green-700 disabled:opacity-50">Approve & Create Account</button>
+                    <button onClick={() => setShowReject(true)} disabled={selected.status === 'approved' || selected.status === 'rejected'} className="w-full px-4 py-2 bg-red-600 text-white text-sm rounded-lg hover:bg-red-700 disabled:opacity-50">Reject</button>
+                    <button onClick={() => setShowInfo(true)} disabled className="w-full px-4 py-2 bg-yellow-600 text-white text-sm rounded-lg hover:bg-yellow-700 opacity-60 cursor-not-allowed" title="Not yet implemented">Request More Information</button>
+                  </div>
+                ) : (
+                  <p className="text-sm text-gray-400 text-center py-4">Only Supplier Relationship Managers can review applications.</p>
+                )}
               </div>
             </div>
           </div>

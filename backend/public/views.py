@@ -66,6 +66,7 @@ class TenderDetail(generics.RetrieveAPIView):
     permission_classes = [AllowAny]
     serializer_class = TenderPublicSerializer
     lookup_field = 'solicitation_id'
+    lookup_url_kwarg = 'pk'
 
     def get_queryset(self):
         return Solicitation.objects.select_related('requisition').prefetch_related(

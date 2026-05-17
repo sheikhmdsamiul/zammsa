@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useMutation } from '@tanstack/react-query';
+import { useQuery, useMutation } from '@tanstack/react-query';
 import { requisitionsApi } from '../../api/requisitions';
+import { procurementPlanningApi } from '../../api/procurement_planning';
 import toast from 'react-hot-toast';
 import DepartmentSelect from '../common/DepartmentSelect';
 
@@ -10,9 +11,15 @@ const RequisitionCreate: React.FC = () => {
   const [form, setForm] = useState({
     title: '', description: '', department: '', priority: 'medium',
     estimated_value: 0, currency: 'ZMW', procurement_method: 'open',
-    date_required: '', notes: '',
+    date_required: '', notes: '', app_line_item: '',
   });
   const [items, setItems] = useState([{ item_code: '', description: '', quantity: 1, unit: 'each', estimated_unit_cost: 0 }]);
+
+  const { data: lineItemsData } = useQuery({
+    queryKey: ['appLineItems'],
+    queryFn: () => procurementPlanningApi.lineItems.list({ page_size: 200 }),
+  });
+  const lineItems = lineItemsData?.results ?? [];
 
   const addItem = () => setItems([...items, { item_code: '', description: '', quantity: 1, unit: 'each', estimated_unit_cost: 0 }]);
   const removeItem = (i: number) => setItems(items.filter((_, idx) => idx !== i));
@@ -31,8 +38,12 @@ const RequisitionCreate: React.FC = () => {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    if (!form.app_line_item) {
+      toast.error('Please select an APP Line Item');
+      return;
+    }
     const total = items.reduce((sum, item) => sum + item.quantity * item.estimated_unit_cost, 0);
-    mutation.mutate({ ...form, estimated_value: total, items });
+    mutation.mutate({ ...form, app_line_item: form.app_line_item, estimated_value: total, items });
   };
 
   return (
@@ -88,6 +99,17 @@ const RequisitionCreate: React.FC = () => {
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Date Required</label>
               <input type="date" value={form.date_required} onChange={(e) => setForm({ ...form, date_required: e.target.value })} className="w-full border-gray-300 rounded-lg px-3 py-2 focus:ring-zammsa-green focus:border-zammsa-green" />
+            </div>
+            <div className="md:col-span-2">
+              <label className="block text-sm font-medium text-gray-700 mb-1">APP Line Item <span className="text-red-500">*</span></label>
+              <select value={form.app_line_item} onChange={(e) => setForm({ ...form, app_line_item: e.target.value })} required className="w-full border-gray-300 rounded-lg px-3 py-2 focus:ring-zammsa-green focus:border-zammsa-green">
+                <option value="">-- Select APP Line Item --</option>
+                {lineItems.map((li: any) => (
+                  <option key={li.line_item_id} value={li.line_item_id}>
+                    {li.app_name || li.app || ''} - {li.description} ({li.estimated_value?.toLocaleString()} ZMW)
+                  </option>
+                ))}
+              </select>
             </div>
           </div>
         </div>

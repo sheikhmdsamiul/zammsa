@@ -25,7 +25,7 @@ const roleDashboard: Record<string, React.LazyExoticComponent<React.ComponentTyp
   [ROLES.EVALUATION_COMMITTEE_MEMBER]: EvaluationDashboard,
   [ROLES.EVALUATION_COMMITTEE_CHAIR]: EvaluationDashboard,
   [ROLES.CONTRACT_MANAGER]: ContractManagerDashboard,
-  [ROLES.SUPPLIER_RELATIONSHIP_MANAGER]: ContractManagerDashboard,
+  [ROLES.SUPPLIER_RELATIONSHIP_MANAGER]: ProcurementDashboard,
   [ROLES.AUDITOR]: AuditorDashboard,
   [ROLES.ZPPA_REPORTING_OFFICER]: ProcurementDashboard,
   [ROLES.INTEGRATION_MANAGER]: ProcurementDashboard,
@@ -48,6 +48,9 @@ const DashboardRouter: React.FC = () => {
   if (!DashboardComponent) {
     if (role === ROLES.SYSTEM_ADMIN) {
       return <Navigate to="/admin" replace />;
+    }
+    if (role === ROLES.SUPPLIER_RELATIONSHIP_MANAGER) {
+      return <Navigate to="/supplier-relations" replace />;
     }
     return (
       <div className="flex items-center justify-center h-64">

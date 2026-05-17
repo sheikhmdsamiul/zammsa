@@ -4,6 +4,7 @@ from django.utils import timezone
 from simple_history.models import HistoricalRecords
 from accounts.models import User
 from master_data.models import Department, Commodity, UnitOfMeasure
+from procurement_planning.models import APPLineItem
 
 REQ_STATUS_CHOICES = [
     ('draft', 'Draft'),
@@ -49,6 +50,11 @@ class Requisition(models.Model):
     status = models.CharField(max_length=50, choices=REQ_STATUS_CHOICES, default='draft')
     budget_validated = models.BooleanField(default=False)
     encumbrance_ref = models.CharField(max_length=100, blank=True)
+    app_line_item = models.ForeignKey(
+        APPLineItem, on_delete=models.PROTECT,
+        null=True, blank=True,
+        related_name='requisitions'
+    )
     submitted_at = models.DateTimeField(null=True, blank=True)
     approved_at = models.DateTimeField(null=True, blank=True)
     current_approver = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='pending_approvals')

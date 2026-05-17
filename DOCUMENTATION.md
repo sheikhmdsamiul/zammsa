@@ -634,6 +634,7 @@ For ZAMMSA employees with role-based access:
 | ZPPA Reporter | zppa@zammsa.zm | Test@123 |
 | Auditor | auditor@zammsa.zm | Test@123 |
 | Supplier | vendor@healthpharma.zm | Vendor@123 |
+| Supplier Relationship Manager | supplier.manager@zammsa.gov.zm | Test@123 |
 
 ---
 

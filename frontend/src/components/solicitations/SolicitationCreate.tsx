@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useMutation } from '@tanstack/react-query';
+import { useQuery, useMutation } from '@tanstack/react-query';
 import { solicitationsApi } from '../../api/solicitations';
+import { requisitionsApi } from '../../api/requisitions';
 import toast from 'react-hot-toast';
 import DepartmentSelect from '../common/DepartmentSelect';
 
@@ -14,6 +15,12 @@ const SolicitationCreate: React.FC = () => {
     opening_date: '', opening_hour: '10', opening_minute: '00',
     requisition: '',
   });
+
+  const { data: reqsData } = useQuery({
+    queryKey: ['requisitions'],
+    queryFn: () => requisitionsApi.list({ page_size: 200 }),
+  });
+  const requisitions = reqsData?.results ?? [];
 
   const getDateTime = (date: string, hour: string, minute: string) => {
     if (!date) return '';
@@ -33,6 +40,10 @@ const SolicitationCreate: React.FC = () => {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    if (!form.requisition) {
+      toast.error('Please select a linked Requisition');
+      return;
+    }
     mutation.mutate({
       ...form,
       closing_date: getDateTime(form.closing_date, form.closing_hour, form.closing_minute),
@@ -93,9 +104,16 @@ const SolicitationCreate: React.FC = () => {
               <label className="block text-sm font-medium text-gray-700 mb-1">Budget Code</label>
               <input type="text" value={form.budget_code} onChange={(e) => setForm({ ...form, budget_code: e.target.value })} className="w-full border-gray-300 rounded-lg px-3 py-2 focus:ring-zammsa-green focus:border-zammsa-green" />
             </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Requisition ID (optional)</label>
-              <input type="text" value={form.requisition} onChange={(e) => setForm({ ...form, requisition: e.target.value })} className="w-full border-gray-300 rounded-lg px-3 py-2 focus:ring-zammsa-green focus:border-zammsa-green" />
+            <div className="md:col-span-2">
+              <label className="block text-sm font-medium text-gray-700 mb-1">Linked Requisition <span className="text-red-500">*</span></label>
+              <select value={form.requisition} onChange={(e) => setForm({ ...form, requisition: e.target.value })} required className="w-full border-gray-300 rounded-lg px-3 py-2 focus:ring-zammsa-green focus:border-zammsa-green">
+                <option value="">-- Select Requisition --</option>
+                {requisitions.map((r: any) => (
+                  <option key={r.id || r.requisition_id} value={r.id || r.requisition_id}>
+                    {r.req_number} - {r.title || r.description} ({r.department_name})
+                  </option>
+                ))}
+              </select>
             </div>
           </div>
         </div>
