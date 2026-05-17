@@ -1,10 +1,11 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { Link } from 'react-router-dom';
-import { useLogin } from '../../hooks/useAuth';
+import { Link, useNavigate } from 'react-router-dom';
+import { useAuth, useLogin } from '../../hooks/useAuth';
 import { LoadingSpinner } from '../common/LoadingSpinner';
+import { ROLES } from '../../config/rbac';
 
 const TEST_ACCOUNTS = [
   { label: 'System Admin', email: 'admin@zammsa.zm', pw: 'Test@123' },
@@ -40,6 +41,8 @@ type MFAForm = z.infer<typeof mfaSchema>;
 
 const Login: React.FC = () => {
   const login = useLogin();
+  const { isAuthenticated, user } = useAuth();
+  const navigate = useNavigate();
   const [step, setStep] = useState<'credentials' | 'mfa'>('credentials');
   const [email, setEmail] = useState('');
   const [error, setError] = useState('');
@@ -53,6 +56,24 @@ const Login: React.FC = () => {
   const mfaForm = useForm<MFAForm>({
     resolver: zodResolver(mfaSchema),
   });
+
+  useEffect(() => {
+    if (!isAuthenticated || !user) return;
+
+    if (user.role === ROLES.SUPPLIER_USER) navigate('/vendor/dashboard', { replace: true });
+    else if (user.role === ROLES.SUPPLIER_RELATIONSHIP_MANAGER) navigate('/supplier-relations', { replace: true });
+    else if (user.role === ROLES.SYSTEM_ADMIN) navigate('/admin', { replace: true });
+    else navigate('/dashboard', { replace: true });
+  }, [isAuthenticated, user, navigate]);
+
+  useEffect(() => {
+    const handlePopState = () => {
+      navigate('/', { replace: true });
+    };
+
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, [navigate]);
 
   const onLogin = async (data: LoginForm) => {
     setError('');
@@ -181,6 +202,11 @@ const Login: React.FC = () => {
           <div className="flex items-center justify-end">
             <Link to="/forgot-password" className="text-sm text-zammsa-green hover:underline">
               Forgot password?
+            </Link>
+          </div>
+          <div className="flex items-center justify-start">
+            <Link to="/" className="text-sm text-gray-600 hover:text-zammsa-green hover:underline">
+              Continue to Public Portal
             </Link>
           </div>
           <button

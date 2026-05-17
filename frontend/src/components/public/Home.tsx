@@ -4,10 +4,14 @@ import { useQuery } from '@tanstack/react-query';
 import publicApi from '../../api/public';
 import { useCountdown } from '../../hooks/useCountdown';
 import { TenderPublic, NewsArticle, Notice, Event } from '../../types';
+import {
+  ClipboardListIcon, SpeakerphoneIcon, OfficeBuildingIcon,
+  DocumentTextIcon, CashIcon, BookmarkIcon,
+} from '@heroicons/react/outline';
 
-const StatCard: React.FC<{ label: string; value: number; icon: string }> = ({ label, value, icon }) => (
+const StatCard: React.FC<{ label: string; value: number; icon: React.ReactNode }> = ({ label, value, icon }) => (
   <div className="bg-white rounded-xl shadow-sm p-6 flex items-center gap-4">
-    <div className="w-12 h-12 bg-zammsa-green bg-opacity-10 rounded-lg flex items-center justify-center text-2xl">
+    <div className="w-12 h-12 bg-zammsa-green bg-opacity-10 rounded-lg flex items-center justify-center">
       {icon}
     </div>
     <div>
@@ -100,11 +104,11 @@ const Home: React.FC = () => {
 
       <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 -mt-10 relative z-10">
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
-          <StatCard label="Total Tenders" value={stats?.total_tenders || 0} icon="📋" />
-          <StatCard label="Active Tenders" value={stats?.active_tenders || 0} icon="📢" />
-          <StatCard label="Registered Suppliers" value={stats?.registered_suppliers || 0} icon="🏢" />
-          <StatCard label="Contracts Awarded" value={stats?.contracts_awarded || 0} icon="📜" />
-          <StatCard label="Total Value (ZMW)" value={stats?.total_value || 0} icon="💰" />
+          <StatCard label="Total Tenders" value={stats?.total_tenders || 0} icon={<ClipboardListIcon className="h-7 w-7 text-zammsa-green" />} />
+          <StatCard label="Active Tenders" value={stats?.active_tenders || 0} icon={<SpeakerphoneIcon className="h-7 w-7 text-zammsa-green" />} />
+          <StatCard label="Registered Suppliers" value={stats?.registered_suppliers || 0} icon={<OfficeBuildingIcon className="h-7 w-7 text-zammsa-green" />} />
+          <StatCard label="Contracts Awarded" value={stats?.contracts_awarded || 0} icon={<DocumentTextIcon className="h-7 w-7 text-zammsa-green" />} />
+          <StatCard label="Total Value (ZMW)" value={stats?.total_value || 0} icon={<CashIcon className="h-7 w-7 text-zammsa-green" />} />
         </div>
       </section>
 
@@ -151,7 +155,7 @@ const Home: React.FC = () => {
                       <span className="px-2 py-0.5 text-xs font-medium rounded bg-zammsa-orange bg-opacity-10 text-zammsa-orange">
                         {notice.type}
                       </span>
-                      {notice.is_pinned && <span className="text-xs text-red-500">📌 Pinned</span>}
+                      {notice.is_pinned && <span className="inline-flex items-center gap-1 text-xs text-red-500"><BookmarkIcon className="h-3 w-3" /> Pinned</span>}
                     </div>
                     <h3 className="font-medium text-gray-900 text-sm">{notice.title}</h3>
                   </div>

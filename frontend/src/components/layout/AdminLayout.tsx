@@ -1,6 +1,13 @@
 import React, { useState } from 'react';
 import { Outlet, Link, useLocation } from 'react-router-dom';
 import { useAuth, useLogout } from '../../hooks/useAuth';
+import {
+  ChartBarIcon, UserGroupIcon, LockClosedIcon, ClipboardListIcon,
+  OfficeBuildingIcon, HeartIcon, AdjustmentsIcon, LinkIcon,
+  CogIcon, CalendarIcon, TrendingUpIcon, SaveIcon,
+} from '@heroicons/react/outline';
+
+const iconClass = 'h-5 w-5';
 
 const PageLoader = () => (
   <div className="flex items-center justify-center min-h-[60vh]">
@@ -9,20 +16,20 @@ const PageLoader = () => (
 );
 
 const navItems = [
-  { label: 'Dashboard', path: '/admin', icon: '📊' },
-  { label: 'User Management', path: '/admin/users', icon: '👥' },
-  { label: 'Role Management', path: '/admin/roles', icon: '🔐' },
-  { label: 'Vendor Applications', path: '/admin/vendor-applications', icon: '📋' },
-  { label: 'Vendor Management', path: '/admin/vendors', icon: '🏢' },
-  { label: 'System Health', path: '/admin/system-health', icon: '💚' },
-  { label: 'Audit Logs', path: '/admin/audit-logs', icon: '📋' },
-  { label: 'Governance Settings', path: '/admin/governance', icon: '⚖️' },
-  { label: 'Integration Monitor', path: '/admin/integrations', icon: '🔗' },
-  { label: 'System Settings', path: '/admin/settings', icon: '⚙️' },
-  { label: 'Departments', path: '/admin/departments', icon: '🏛️' },
-  { label: 'Fiscal Years', path: '/admin/fiscal-years', icon: '📅' },
-  { label: 'Reports', path: '/admin/reports', icon: '📈' },
-  { label: 'Backup Management', path: '/admin/backups', icon: '💾' },
+  { label: 'Dashboard', path: '/admin', icon: <ChartBarIcon className={iconClass} /> },
+  { label: 'User Management', path: '/admin/users', icon: <UserGroupIcon className={iconClass} /> },
+  { label: 'Role Management', path: '/admin/roles', icon: <LockClosedIcon className={iconClass} /> },
+  { label: 'Vendor Applications', path: '/admin/vendor-applications', icon: <ClipboardListIcon className={iconClass} /> },
+  { label: 'Vendor Management', path: '/admin/vendors', icon: <OfficeBuildingIcon className={iconClass} /> },
+  { label: 'System Health', path: '/admin/system-health', icon: <HeartIcon className={iconClass} /> },
+  { label: 'Audit Logs', path: '/admin/audit-logs', icon: <ClipboardListIcon className={iconClass} /> },
+  { label: 'Governance Settings', path: '/admin/governance', icon: <AdjustmentsIcon className={iconClass} /> },
+  { label: 'Integration Monitor', path: '/admin/integrations', icon: <LinkIcon className={iconClass} /> },
+  { label: 'System Settings', path: '/admin/settings', icon: <CogIcon className={iconClass} /> },
+  { label: 'Departments', path: '/admin/departments', icon: <OfficeBuildingIcon className={iconClass} /> },
+  { label: 'Fiscal Years', path: '/admin/fiscal-years', icon: <CalendarIcon className={iconClass} /> },
+  { label: 'Reports', path: '/admin/reports', icon: <TrendingUpIcon className={iconClass} /> },
+  { label: 'Backup Management', path: '/admin/backups', icon: <SaveIcon className={iconClass} /> },
 ];
 
 const AdminLayout: React.FC = () => {
@@ -51,7 +58,7 @@ const AdminLayout: React.FC = () => {
                   : 'text-gray-300 hover:bg-gray-800'
               }`}
             >
-              <span>{item.icon}</span>
+              {item.icon}
               {item.label}
             </Link>
           ))}

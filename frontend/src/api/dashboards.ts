@@ -15,10 +15,10 @@ export const fetchProcurementDashboard = (): Promise<ProcurementDashboardData> =
     const raw = r.data as any;
     return {
       key_metrics: [
-        { label: 'Total Procurements', value: raw.by_status?.reduce((s: any, i: any) => s + (i.count || 0), 0) || 0, change: 0, icon: '📦' },
-        { label: 'Avg Processing Days', value: raw.average_processing_days || 0, change: 0, icon: '⏱️' },
-        { label: 'Active Solicitations', value: raw.by_status?.filter((i: any) => i.status === 'active' || i.status === 'published').reduce((s: any, i: any) => s + (i.count || 0), 0) || 0, change: 0, icon: '📄' },
-        { label: 'Completed', value: raw.by_status?.filter((i: any) => i.status === 'completed' || i.status === 'awarded').reduce((s: any, i: any) => s + (i.count || 0), 0) || 0, change: 0, icon: '✅' },
+        { label: 'Total Procurements', value: raw.by_status?.reduce((s: any, i: any) => s + (i.count || 0), 0) || 0, change: 0 },
+        { label: 'Avg Processing Days', value: raw.average_processing_days || 0, change: 0 },
+        { label: 'Active Solicitations', value: raw.by_status?.filter((i: any) => i.status === 'active' || i.status === 'published').reduce((s: any, i: any) => s + (i.count || 0), 0) || 0, change: 0 },
+        { label: 'Completed', value: raw.by_status?.filter((i: any) => i.status === 'completed' || i.status === 'awarded').reduce((s: any, i: any) => s + (i.count || 0), 0) || 0, change: 0 },
       ],
       solicitations_by_status: (raw.by_status || []).map((s: any) => ({ status: s.status, count: s.count })),
       upcoming_deadlines: [],

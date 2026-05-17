@@ -6,6 +6,7 @@ import { StatusBadge } from '../common/StatusBadge';
 import { SearchBar } from '../common/SearchBar';
 import { Pagination } from '../common/Pagination';
 import { LoadingSpinner } from '../common/LoadingSpinner';
+import { CheckCircleIcon, XCircleIcon } from '@heroicons/react/outline';
 
 const PAGE_SIZE = 10;
 
@@ -83,8 +84,8 @@ const MyContracts: React.FC = () => {
                 </div>
                 <div className="flex items-center justify-between pt-3 border-t border-gray-100">
                   <div className="flex gap-4 text-sm text-gray-500">
-                    <span>Signed by vendor: {contract.signed_by_vendor ? '✅' : '❌'}</span>
-                    <span>Signed by authority: {contract.signed_by_authority ? '✅' : '❌'}</span>
+                    <span className="inline-flex items-center gap-1">{contract.signed_by_vendor ? <CheckCircleIcon className="h-4 w-4 text-green-600" /> : <XCircleIcon className="h-4 w-4 text-red-500" />} Signed by vendor</span>
+                    <span className="inline-flex items-center gap-1">{contract.signed_by_authority ? <CheckCircleIcon className="h-4 w-4 text-green-600" /> : <XCircleIcon className="h-4 w-4 text-red-500" />} Signed by authority</span>
                   </div>
                   <Link to={`/vendor/contracts/${contract.id}`} className="px-3 py-1.5 text-sm text-zammsa-green border border-zammsa-green rounded-lg hover:bg-green-50">View Details</Link>
                 </div>

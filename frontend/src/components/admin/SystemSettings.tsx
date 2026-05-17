@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import { fetchSystemSettings, updateSystemSetting, uploadLogo, testEmail } from '../../api/admin';
 import { LoadingSpinner } from '../common/LoadingSpinner';
+import { OfficeBuildingIcon } from '@heroicons/react/outline';
 
 const SystemSettings: React.FC = () => {
   const qc = useQueryClient();
@@ -51,7 +52,7 @@ const SystemSettings: React.FC = () => {
       <div className="bg-white rounded-lg shadow p-5">
         {tab === 'general' && (
           <div className="space-y-4">
-            <div><label className="text-xs text-gray-500">Site Logo</label><div className="mt-1 flex items-center gap-3"><div className="w-16 h-16 bg-gray-100 rounded-lg flex items-center justify-center text-2xl">🏛️</div><input type="file" accept="image/*" onChange={(e) => e.target.files?.[0] && logoMut.mutate(e.target.files[0])} className="text-sm" /></div></div>
+            <div><label className="text-xs text-gray-500">Site Logo</label><div className="mt-1 flex items-center gap-3"><div className="w-16 h-16 bg-gray-100 rounded-lg flex items-center justify-center"><OfficeBuildingIcon className="h-8 w-8 text-gray-400" /></div><input type="file" accept="image/*" onChange={(e) => e.target.files?.[0] && logoMut.mutate(e.target.files[0])} className="text-sm" /></div></div>
             {data?.map((s: any) => (
               <div key={s.key}>
                 <label className="text-xs text-gray-500">{s.description || s.key}</label>

@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import { fetchBackups, createBackup, restoreBackup, updateBackupSchedule } from '../../api/admin';
 import { LoadingSpinner } from '../common/LoadingSpinner';
+import { CheckIcon, ExclamationIcon } from '@heroicons/react/outline';
 
 const BackupManagement: React.FC = () => {
   const qc = useQueryClient();
@@ -65,7 +66,7 @@ const BackupManagement: React.FC = () => {
                     <td className="px-4 py-3 text-center">
                       <div className="flex items-center justify-center gap-2">
                         <button onClick={() => setShowRestore(b.id)} disabled={b.status !== 'completed'} className="text-xs text-blue-600 hover:underline disabled:text-gray-400 disabled:cursor-not-allowed">Restore</button>
-                        <span className={`text-xs ${b.downloaded ? 'text-green-600' : 'text-gray-400'}`}>{b.downloaded ? '✓' : '○'}</span>
+                        {b.downloaded ? <CheckIcon className="h-4 w-4 text-green-600" /> : <span className="inline-block w-3 h-3 rounded-full border border-gray-400" />}
                       </div>
                     </td>
                   </tr>
@@ -97,7 +98,7 @@ const BackupManagement: React.FC = () => {
             <h3 className="text-lg font-medium text-gray-900">Restore Backup</h3>
             <p className="text-sm text-gray-500 mt-2">Restoring will replace current data with the selected backup. The system will be unavailable during the restore process. This action cannot be undone.</p>
             <div className="mt-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
-              <p className="text-xs text-yellow-700">⚠️ All current data since this backup will be lost. Ensure you have a recent backup of the current state.</p>
+              <p className="text-xs text-yellow-700 flex items-center gap-1"><ExclamationIcon className="h-4 w-4 flex-shrink-0" /> All current data since this backup will be lost. Ensure you have a recent backup of the current state.</p>
             </div>
             <div className="flex justify-end gap-3 mt-6">
               <button onClick={() => setShowRestore(null)} className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50">Cancel</button>

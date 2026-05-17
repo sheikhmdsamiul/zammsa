@@ -5207,3 +5207,17 @@ Traceback (most recent call last):
            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 AssertionError: Expected view TenderDetail to be called with a URL keyword argument named "solicitation_id". Fix your URL conf, or set the `.lookup_field` attribute on the view correctly.
 ERROR 2026-05-17 11:30:27,064 basehttp 249163 136388694505152 "GET /api/v1/public/tenders/e0eeba23-1bb8-4284-a99c-1d0f38cc8ecb/ HTTP/1.1" 500 119621
+ERROR 2026-05-17 11:59:09,294 exception 282471 140370335050624 Invalid HTTP_HOST header: 'testserver'. You may need to add 'testserver' to ALLOWED_HOSTS.
+Traceback (most recent call last):
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/core/handlers/exception.py", line 55, in inner
+    response = get_response(request)
+               ^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/utils/deprecation.py", line 128, in __call__
+    response = self.process_request(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/middleware/common.py", line 48, in process_request
+    host = request.get_host()
+           ^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/http/request.py", line 151, in get_host
+    raise DisallowedHost(msg)
+django.core.exceptions.DisallowedHost: Invalid HTTP_HOST header: 'testserver'. You may need to add 'testserver' to ALLOWED_HOSTS.

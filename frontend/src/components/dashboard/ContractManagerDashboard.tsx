@@ -3,6 +3,11 @@ import { useQuery } from '@tanstack/react-query';
 import { fetchContractManagerDashboard } from '../../api/dashboards';
 import { LoadingSpinner } from '../common/LoadingSpinner';
 import { useAppSelector } from '../../hooks/useRedux';
+import {
+  PencilIcon, PencilAltIcon, ChartBarIcon, CalendarIcon,
+} from '@heroicons/react/outline';
+
+const iconClass = 'h-6 w-6 text-gray-500';
 
 const ContractManagerDashboard: React.FC = () => {
   const { user } = useAppSelector((s) => s.auth);
@@ -29,13 +34,13 @@ const ContractManagerDashboard: React.FC = () => {
       {/* Quick Actions */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
         {[
-          { label: 'New Contract', icon: '📝', href: '#' },
-          { label: 'Create Amendment', icon: '✏️', href: '#' },
-          { label: 'Generate Report', icon: '📊', href: '#' },
-          { label: 'View Calendar', icon: '📅', href: '#' },
+          { label: 'New Contract', icon: <PencilAltIcon className={iconClass} />, href: '#' },
+          { label: 'Create Amendment', icon: <PencilIcon className={iconClass} />, href: '#' },
+          { label: 'Generate Report', icon: <ChartBarIcon className={iconClass} />, href: '#' },
+          { label: 'View Calendar', icon: <CalendarIcon className={iconClass} />, href: '#' },
         ].map((a) => (
           <a key={a.label} href={a.href} className="bg-white rounded-lg shadow p-4 flex flex-col items-center justify-center hover:border-zammsa-green hover:border transition-colors">
-            <span className="text-2xl mb-1">{a.icon}</span>
+            <span className="mb-1">{a.icon}</span>
             <span className="text-xs font-medium text-gray-700">{a.label}</span>
           </a>
         ))}

@@ -4,15 +4,29 @@ import toast from 'react-hot-toast';
 import { fetchRoles, createRole, updateRole, deleteRole, updateRolePermissions } from '../../api/admin';
 import { LoadingSpinner } from '../common/LoadingSpinner';
 
-const MODULES = ['users', 'roles', 'vendors', 'solicitations', 'bids', 'evaluations', 'contracts', 'finance', 'reports', 'settings', 'audit', 'integrations', 'departments', 'fiscal_years', 'notifications'];
+const MODULES = ['users', 'roles', 'suppliers', 'solicitations', 'bids', 'evaluations', 'contracts', 'finance', 'reporting', 'system_config', 'integrations', 'master_data'];
 const ACTIONS = ['view', 'create', 'edit', 'delete', 'approve', 'export', 'import'];
 
 const EXISTING_ROLES = [
-  'system_admin', 'super_admin', 'admin', 'procurement_officer', 'finance', 'finance_officer',
-  'department_head', 'director_general', 'zpc', 'zpc_officer',
-  'evaluator', 'evaluation_chair', 'contract_manager',
-  'auditor', 'super_auditor', 'vendor', 'vendor_staff',
-  'report_viewer', 'compliance_officer', 'helpdesk',
+  'user_dept_staff',
+  'department_head',
+  'procurement_officer',
+  'procurement_manager',
+  'evaluation_committee_member',
+  'evaluation_committee_chair',
+  'finance_officer',
+  'zpc_member',
+  'director_procurement',
+  'director_general',
+  'supplier_user',
+  'contract_manager',
+  'system_admin',
+  'auditor',
+  'public_portal_viewer',
+  'zppa_reporting_officer',
+  'supplier_relationship_manager',
+  'budget_controller',
+  'integration_manager',
 ];
 
 const RoleManagement: React.FC = () => {

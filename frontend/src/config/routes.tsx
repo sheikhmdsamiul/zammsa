@@ -8,6 +8,17 @@ export const ROUTES = {
     FORGOT_PASSWORD: '/forgot-password',
     RESET_PASSWORD: '/reset-password',
   },
+  SUPPLIER: {
+    DASHBOARD: '/vendor/dashboard',
+    BIDS: '/vendor/bids',
+    BID_DETAIL: '/vendor/bids/:id',
+    SOLICITATIONS: '/vendor/solicitations',
+    SOLICITATION_DETAIL: '/vendor/solicitations/:id',
+    CONTRACTS: '/vendor/contracts',
+    CONTRACT_DETAIL: '/vendor/contracts/:id',
+    PROFILE: '/vendor/profile',
+  },
+  // Backward compatibility
   VENDOR: {
     DASHBOARD: '/vendor/dashboard',
     BIDS: '/vendor/bids',

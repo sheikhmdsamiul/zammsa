@@ -7,6 +7,19 @@ import { useQuery } from '@tanstack/react-query';
 import { fetchProcurementDashboard } from '../../api/dashboards';
 import { LoadingSpinner } from '../common/LoadingSpinner';
 import { useAppSelector } from '../../hooks/useRedux';
+import {
+  DocumentTextIcon, ChartBarIcon, StarIcon, TrendingUpIcon,
+  CubeIcon, ClockIcon, DocumentIcon, CheckCircleIcon,
+} from '@heroicons/react/outline';
+
+const iconClass = 'h-6 w-6 text-gray-500';
+
+const metricIcons: Record<string, React.ReactNode> = {
+  'Total Procurements': <CubeIcon className={iconClass} />,
+  'Avg Processing Days': <ClockIcon className={iconClass} />,
+  'Active Solicitations': <DocumentIcon className={iconClass} />,
+  'Completed': <CheckCircleIcon className={iconClass} />,
+};
 
 const STATUS_COLORS: Record<string, string> = {
   draft: '#9CA3AF', published: '#3B82F6', evaluating: '#F59E0B',
@@ -14,10 +27,10 @@ const STATUS_COLORS: Record<string, string> = {
 };
 
 const quickActions = [
-  { label: 'New Solicitation', href: '#', icon: '📄' },
-  { label: 'Evaluate Bids', href: '#', icon: '📊' },
-  { label: 'Award Contract', href: '#', icon: '🏆' },
-  { label: 'View Reports', href: '#', icon: '📈' },
+  { label: 'New Solicitation', href: '#', icon: <DocumentTextIcon className={iconClass} /> },
+  { label: 'Evaluate Bids', href: '#', icon: <ChartBarIcon className={iconClass} /> },
+  { label: 'Award Contract', href: '#', icon: <StarIcon className={iconClass} /> },
+  { label: 'View Reports', href: '#', icon: <TrendingUpIcon className={iconClass} /> },
 ];
 
 const ProcurementDashboard: React.FC = () => {
@@ -50,7 +63,7 @@ const ProcurementDashboard: React.FC = () => {
           <div key={m.label} className="bg-white rounded-lg shadow p-5">
             <div className="flex items-center justify-between">
               <span className="text-sm text-gray-500">{m.label}</span>
-              <span className="text-lg">{m.icon}</span>
+              <span className="text-lg">{metricIcons[m.label] || <CubeIcon className={iconClass} />}</span>
             </div>
             <p className="mt-2 text-2xl font-bold text-gray-900">{m.value.toLocaleString()}</p>
             <span className={`text-xs ${m.change >= 0 ? 'text-green-600' : 'text-red-600'}`}>
@@ -71,7 +84,7 @@ const ProcurementDashboard: React.FC = () => {
                 href={a.href}
                 className="flex flex-col items-center justify-center p-4 rounded-lg border border-gray-200 hover:border-zammsa-green hover:bg-green-50 transition-colors"
               >
-                <span className="text-2xl mb-1">{a.icon}</span>
+                <span className="mb-1">{a.icon}</span>
                 <span className="text-xs font-medium text-gray-700 text-center">{a.label}</span>
               </a>
             ))}

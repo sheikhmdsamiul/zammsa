@@ -1,6 +1,12 @@
 import React, { useState } from 'react';
 import { Outlet, Link, useLocation } from 'react-router-dom';
 import { useAuth, useLogout } from '../../hooks/useAuth';
+import {
+  ChartBarIcon, ClipboardListIcon, DocumentTextIcon,
+  DuplicateIcon, CashIcon, UserIcon, CogIcon,
+} from '@heroicons/react/outline';
+
+const iconClass = 'h-5 w-5';
 
 const PageLoader = () => (
   <div className="flex items-center justify-center min-h-[60vh]">
@@ -9,13 +15,13 @@ const PageLoader = () => (
 );
 
 const navItems = [
-  { label: 'Dashboard', path: '/vendor/dashboard', icon: '📊' },
-  { label: 'Open Tenders', path: '/vendor/open-tenders', icon: '📋' },
-  { label: 'My Bids', path: '/vendor/bids', icon: '📄' },
-  { label: 'My Contracts', path: '/vendor/contracts', icon: '📑' },
-  { label: 'Invoices', path: '/vendor/invoices', icon: '💰' },
-  { label: 'Profile', path: '/vendor/profile', icon: '👤' },
-  { label: 'Settings', path: '/vendor/settings', icon: '⚙️' },
+  { label: 'Dashboard', path: '/vendor/dashboard', icon: <ChartBarIcon className={iconClass} /> },
+  { label: 'Open Tenders', path: '/vendor/open-tenders', icon: <ClipboardListIcon className={iconClass} /> },
+  { label: 'My Bids', path: '/vendor/bids', icon: <DocumentTextIcon className={iconClass} /> },
+  { label: 'My Contracts', path: '/vendor/contracts', icon: <DuplicateIcon className={iconClass} /> },
+  { label: 'Invoices', path: '/vendor/invoices', icon: <CashIcon className={iconClass} /> },
+  { label: 'Profile', path: '/vendor/profile', icon: <UserIcon className={iconClass} /> },
+  { label: 'Settings', path: '/vendor/settings', icon: <CogIcon className={iconClass} /> },
 ];
 
 const VendorLayout: React.FC = () => {
@@ -31,7 +37,7 @@ const VendorLayout: React.FC = () => {
           <div className="w-8 h-8 bg-zammsa-green rounded-full flex items-center justify-center">
             <span className="text-white text-sm font-bold">Z</span>
           </div>
-          <span className="font-bold text-zammsa-green">Vendor Portal</span>
+          <span className="font-bold text-zammsa-green">Supplier Portal</span>
         </div>
         <nav className="mt-4 px-3 space-y-1">
           {navItems.map((item) => (
@@ -44,7 +50,7 @@ const VendorLayout: React.FC = () => {
                   : 'text-gray-600 hover:bg-gray-100'
               }`}
             >
-              <span>{item.icon}</span>
+              {item.icon}
               {item.label}
             </Link>
           ))}

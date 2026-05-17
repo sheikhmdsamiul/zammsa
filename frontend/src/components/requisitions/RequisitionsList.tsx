@@ -42,6 +42,11 @@ const RequisitionsList: React.FC = () => {
     } catch { toast.error('Export failed'); }
   };
 
+  const safeNumber = (value: unknown, fallback = 0): number => {
+    const n = typeof value === 'number' ? value : Number(value);
+    return Number.isFinite(n) ? n : fallback;
+  };
+
   const columns = [
     { key: 'title', label: 'Title', sortable: true, render: (_: any, row: any) => (
       <Link to={`/requisitions/${row.id}`} className="text-zammsa-green hover:underline font-medium">{row.title}</Link>
@@ -52,7 +57,7 @@ const RequisitionsList: React.FC = () => {
         {v?.charAt(0).toUpperCase() + v?.slice(1)}
       </span>
     )},
-    { key: 'estimated_value', label: 'Value', render: (v: number) => v?.toLocaleString() },
+    { key: 'estimated_value', label: 'Value', render: (v: number) => safeNumber(v).toLocaleString() },
     { key: 'status', label: 'Status', render: (v: string) => <StatusBadge status={v} /> },
     { key: 'created_at', label: 'Created', sortable: true, render: (v: string) => new Date(v).toLocaleDateString() },
     { key: 'actions', label: '', render: (_: any, row: any) => (
@@ -95,9 +100,9 @@ const RequisitionsList: React.FC = () => {
         {data && (
           <Pagination
             currentPage={page}
-            totalPages={Math.ceil(data.count / pageSize)}
+            totalPages={Math.max(1, Math.ceil(safeNumber(data.count) / pageSize))}
             pageSize={pageSize}
-            totalItems={data.count}
+            totalItems={safeNumber(data.count)}
             onPageChange={setPage}
             onPageSizeChange={(s) => { setPageSize(s); setPage(1); }}
           />

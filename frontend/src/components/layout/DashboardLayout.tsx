@@ -2,6 +2,13 @@ import React, { useState } from 'react';
 import { Outlet, Link, useLocation } from 'react-router-dom';
 import { useAuth, useLogout } from '../../hooks/useAuth';
 import { ROLES } from '../../config/rbac';
+import {
+  ChartBarIcon, CashIcon, ClipboardListIcon,
+  PencilIcon, DocumentTextIcon, DocumentDuplicateIcon,
+  DocumentIcon, OfficeBuildingIcon, TrendingUpIcon,
+} from '@heroicons/react/outline';
+
+const iconClass = 'h-5 w-5';
 
 const PageLoader = () => (
   <div className="flex items-center justify-center min-h-[60vh]">
@@ -10,26 +17,25 @@ const PageLoader = () => (
 );
 
 const navItems = [
-  { label: 'Dashboard', path: '/dashboard', icon: '📊' },
-  { label: 'Plan. Budgets', path: '/procurement-planning/budgets', icon: '💰', roles: [ROLES.FINANCE_OFFICER, ROLES.BUDGET_CONTROLLER, ROLES.DIRECTOR_PROCUREMENT, ROLES.DIRECTOR_GENERAL, ROLES.SYSTEM_ADMIN] },
-  { label: 'Annual Plans', path: '/procurement-planning', icon: '📋', roles: [ROLES.USER_DEPT_STAFF, ROLES.DEPARTMENT_HEAD, ROLES.PROCUREMENT_OFFICER, ROLES.PROCUREMENT_MANAGER, ROLES.DIRECTOR_PROCUREMENT, ROLES.DIRECTOR_GENERAL, ROLES.ZPC_MEMBER, ROLES.SYSTEM_ADMIN] },
-  { label: 'GPNs', path: '/procurement-planning/gpns', icon: '📢', roles: [ROLES.PROCUREMENT_OFFICER, ROLES.PROCUREMENT_MANAGER, ROLES.DIRECTOR_PROCUREMENT, ROLES.DIRECTOR_GENERAL, ROLES.ZPC_MEMBER, ROLES.AUDITOR, ROLES.SYSTEM_ADMIN] },
-  { label: 'Requisitions', path: '/requisitions', icon: '📝', roles: [ROLES.USER_DEPT_STAFF, ROLES.DEPARTMENT_HEAD, ROLES.PROCUREMENT_OFFICER, ROLES.FINANCE_OFFICER, ROLES.DIRECTOR_GENERAL, ROLES.ZPC_MEMBER, ROLES.BUDGET_CONTROLLER, ROLES.AUDITOR, ROLES.SYSTEM_ADMIN] },
-  { label: 'Solicitations', path: '/solicitations', icon: '📋', roles: [ROLES.PROCUREMENT_OFFICER, ROLES.PROCUREMENT_MANAGER, ROLES.DIRECTOR_PROCUREMENT, ROLES.SYSTEM_ADMIN, ROLES.AUDITOR] },
-  { label: 'Bids', path: '/bids', icon: '📄', roles: [ROLES.PROCUREMENT_OFFICER, ROLES.PROCUREMENT_MANAGER, ROLES.EVALUATION_COMMITTEE_MEMBER, ROLES.EVALUATION_COMMITTEE_CHAIR, ROLES.ZPC_MEMBER, ROLES.DIRECTOR_PROCUREMENT, ROLES.AUDITOR, ROLES.SYSTEM_ADMIN] },
-  { label: 'Evaluations', path: '/evaluations', icon: '📑', roles: [ROLES.EVALUATION_COMMITTEE_MEMBER, ROLES.EVALUATION_COMMITTEE_CHAIR, ROLES.ZPC_MEMBER, ROLES.DIRECTOR_PROCUREMENT, ROLES.PROCUREMENT_OFFICER, ROLES.PROCUREMENT_MANAGER, ROLES.AUDITOR, ROLES.SYSTEM_ADMIN] },
-  { label: 'Contracts', path: '/contracts', icon: '📃', roles: [ROLES.PROCUREMENT_OFFICER, ROLES.CONTRACT_MANAGER, ROLES.PROCUREMENT_MANAGER, ROLES.DIRECTOR_PROCUREMENT, ROLES.DIRECTOR_GENERAL, ROLES.ZPC_MEMBER, ROLES.AUDITOR, ROLES.SYSTEM_ADMIN] },
-  { label: 'Finance', path: '/finance', icon: '💰', roles: [ROLES.FINANCE_OFFICER, ROLES.BUDGET_CONTROLLER, ROLES.DEPARTMENT_HEAD, ROLES.DIRECTOR_GENERAL, ROLES.CONTRACT_MANAGER, ROLES.AUDITOR, ROLES.SYSTEM_ADMIN] },
-  { label: 'Suppliers', path: '/suppliers', icon: '🏢', roles: [ROLES.SUPPLIER_RELATIONSHIP_MANAGER, ROLES.PROCUREMENT_OFFICER, ROLES.PROCUREMENT_MANAGER, ROLES.DIRECTOR_PROCUREMENT, ROLES.AUDITOR, ROLES.SYSTEM_ADMIN] },
-  { label: 'Reports', path: '/reports', icon: '📈', roles: [ROLES.PROCUREMENT_MANAGER, ROLES.FINANCE_OFFICER, ROLES.ZPC_MEMBER, ROLES.DIRECTOR_PROCUREMENT, ROLES.DIRECTOR_GENERAL, ROLES.ZPPA_REPORTING_OFFICER, ROLES.BUDGET_CONTROLLER, ROLES.AUDITOR, ROLES.SYSTEM_ADMIN] },
-] as Array<{ label: string; path: string; icon: string; roles?: string[] }>;
+  { label: 'Dashboard', path: '/dashboard', icon: <ChartBarIcon className={iconClass} /> },
+  { label: 'Procurement Planning', path: '/procurement-planning', icon: <ClipboardListIcon className={iconClass} />, roles: [ROLES.USER_DEPT_STAFF, ROLES.DEPARTMENT_HEAD, ROLES.PROCUREMENT_OFFICER, ROLES.PROCUREMENT_MANAGER, ROLES.FINANCE_OFFICER, ROLES.ZPC_MEMBER, ROLES.DIRECTOR_PROCUREMENT, ROLES.DIRECTOR_GENERAL] },
+  { label: 'Requisitions', path: '/requisitions', icon: <PencilIcon className={iconClass} />, roles: [ROLES.USER_DEPT_STAFF, ROLES.DEPARTMENT_HEAD, ROLES.PROCUREMENT_OFFICER, ROLES.FINANCE_OFFICER, ROLES.DIRECTOR_GENERAL] },
+  { label: 'Solicitations', path: '/solicitations', icon: <ClipboardListIcon className={iconClass} />, roles: [ROLES.PROCUREMENT_OFFICER, ROLES.PROCUREMENT_MANAGER, ROLES.DIRECTOR_PROCUREMENT] },
+  { label: 'Bid Management', path: '/bids', icon: <DocumentTextIcon className={iconClass} />, roles: [ROLES.PROCUREMENT_OFFICER, ROLES.PROCUREMENT_MANAGER, ROLES.EVALUATION_COMMITTEE_MEMBER, ROLES.EVALUATION_COMMITTEE_CHAIR, ROLES.ZPC_MEMBER, ROLES.DIRECTOR_PROCUREMENT] },
+  { label: 'Bid Evaluation', path: '/evaluations', icon: <DocumentDuplicateIcon className={iconClass} />, roles: [ROLES.EVALUATION_COMMITTEE_MEMBER, ROLES.EVALUATION_COMMITTEE_CHAIR, ROLES.ZPC_MEMBER, ROLES.DIRECTOR_PROCUREMENT] },
+  { label: 'Contracts', path: '/contracts', icon: <DocumentIcon className={iconClass} />, roles: [ROLES.PROCUREMENT_OFFICER, ROLES.PROCUREMENT_MANAGER, ROLES.ZPC_MEMBER, ROLES.DIRECTOR_PROCUREMENT, ROLES.DIRECTOR_GENERAL, ROLES.CONTRACT_MANAGER] },
+  { label: 'Finance & Payments', path: '/finance', icon: <CashIcon className={iconClass} />, roles: [ROLES.FINANCE_OFFICER, ROLES.BUDGET_CONTROLLER, ROLES.DIRECTOR_GENERAL, ROLES.CONTRACT_MANAGER] },
+  { label: 'Suppliers', path: '/suppliers', icon: <OfficeBuildingIcon className={iconClass} />, roles: [ROLES.SUPPLIER_RELATIONSHIP_MANAGER] },
+  { label: 'Reports & Analytics', path: '/reports', icon: <TrendingUpIcon className={iconClass} />, roles: [ROLES.PROCUREMENT_MANAGER, ROLES.FINANCE_OFFICER, ROLES.ZPC_MEMBER, ROLES.DIRECTOR_PROCUREMENT, ROLES.DIRECTOR_GENERAL, ROLES.ZPPA_REPORTING_OFFICER, ROLES.BUDGET_CONTROLLER] },
+] as Array<{ label: string; path: string; icon: React.ReactNode; roles?: string[] }>;
 
 const DashboardLayout: React.FC = () => {
   const { user } = useAuth();
   const logout = useLogout();
   const location = useLocation();
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const visibleNav = navItems.filter((item) => !item.roles || (user?.role && item.roles.includes(user.role)));
+  const normalizedRole = user?.role === 'zppa_reporter' ? 'zppa_reporting_officer' : user?.role;
+  const visibleNav = navItems.filter((item) => !item.roles || (normalizedRole && item.roles.includes(normalizedRole)));
 
   return (
     <div className="min-h-screen flex bg-gray-50">
@@ -51,7 +57,7 @@ const DashboardLayout: React.FC = () => {
                   : 'text-gray-600 hover:bg-gray-100'
               }`}
             >
-              <span>{item.icon}</span>
+              {item.icon}
               {item.label}
             </Link>
           ))}

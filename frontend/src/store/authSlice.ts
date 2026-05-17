@@ -7,10 +7,22 @@ interface AuthState {
   loading: boolean;
 }
 
+const normalizeRole = (role?: string): string => {
+  const aliases: Record<string, string> = {
+    zppa_reporter: 'zppa_reporting_officer',
+  };
+  return role ? (aliases[role] || role) : '';
+};
+
+const normalizeUser = (user: User | null): User | null => {
+  if (!user) return null;
+  return { ...user, role: normalizeRole(user.role) };
+};
+
 const loadUser = (): User | null => {
   try {
     const stored = localStorage.getItem('user');
-    return stored ? JSON.parse(stored) : null;
+    return stored ? normalizeUser(JSON.parse(stored)) : null;
   } catch {
     return null;
   }
@@ -27,9 +39,10 @@ const authSlice = createSlice({
   initialState,
   reducers: {
     setUser(state, action: PayloadAction<User>) {
-      state.user = action.payload;
+      const normalizedUser = normalizeUser(action.payload);
+      state.user = normalizedUser;
       state.isAuthenticated = true;
-      localStorage.setItem('user', JSON.stringify(action.payload));
+      localStorage.setItem('user', JSON.stringify(normalizedUser));
     },
     logout(state) {
       state.user = null;

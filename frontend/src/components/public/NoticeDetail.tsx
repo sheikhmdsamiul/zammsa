@@ -4,6 +4,7 @@ import { useQuery } from '@tanstack/react-query';
 import publicApi from '../../api/public';
 import { LoadingSpinner } from '../common/LoadingSpinner';
 import { PrintButton } from '../common/PrintButton';
+import { BookmarkIcon } from '@heroicons/react/outline';
 
 const NoticeDetail: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -35,7 +36,7 @@ const NoticeDetail: React.FC = () => {
                 'bg-red-100 text-red-700'
               }`}>{notice.type}</span>
               <span className="text-sm text-gray-400">{new Date(notice.published_at).toLocaleDateString('en-ZM', { dateStyle: 'long' })}</span>
-              {notice.is_pinned && <span className="text-xs text-red-500">📌 Pinned</span>}
+              {notice.is_pinned && <span className="inline-flex items-center gap-1 text-xs text-red-500"><BookmarkIcon className="h-3 w-3" /> Pinned</span>}
             </div>
             <h1 className="text-2xl font-bold text-gray-900">{notice.title}</h1>
           </div>

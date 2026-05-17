@@ -718,7 +718,7 @@ export interface VendorNotification {
 }
 
 export interface ProcurementDashboardData {
-  key_metrics: { label: string; value: number; change: number; icon: string }[];
+  key_metrics: { label: string; value: number; change: number }[];
   solicitations_by_status: { status: string; count: number }[];
   upcoming_deadlines: { id: string; title: string; closing_date: string; type: string }[];
   recent_activities: { id: string; description: string; created_at: string; user: string }[];

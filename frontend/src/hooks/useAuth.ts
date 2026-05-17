@@ -16,6 +16,16 @@ export function useLogin() {
       dispatch(setLoading(true));
       try {
         const res = await authApi.login(data);
+
+        // MFA flow returns no tokens yet; caller should switch to MFA step.
+        if ((res as any)?.requires_mfa) {
+          return { success: false, error: 'MFA required' };
+        }
+
+        if (!res?.access || !res?.refresh || !res?.user) {
+          return { success: false, error: 'Login failed: invalid auth response' };
+        }
+
         localStorage.setItem('access_token', res.access);
         localStorage.setItem('refresh_token', res.refresh);
         dispatch(setUser(res.user));

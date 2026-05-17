@@ -6,6 +6,7 @@ import { SearchBar } from '../common/SearchBar';
 import { Pagination } from '../common/Pagination';
 import { LoadingSpinner } from '../common/LoadingSpinner';
 import { Notice } from '../../types';
+import { BookmarkIcon } from '@heroicons/react/outline';
 
 const PAGE_SIZE = 15;
 
@@ -76,7 +77,7 @@ const NoticesList: React.FC = () => {
                     <span className={`px-2 py-0.5 text-xs font-medium rounded ${typeColors[notice.type] || 'bg-gray-100 text-gray-700'}`}>
                       {notice.type}
                     </span>
-                    {notice.is_pinned && <span className="text-xs text-red-500">📌 Pinned</span>}
+                    {notice.is_pinned && <span className="inline-flex items-center gap-1 text-xs text-red-500"><BookmarkIcon className="h-3 w-3" /> Pinned</span>}
                   </div>
                   <h3 className="font-medium text-gray-900">{notice.title}</h3>
                   <p className="text-sm text-gray-500 mt-1 line-clamp-2">{notice.content}</p>

@@ -39,6 +39,8 @@ PERMISSION_MATRIX = {
         'users': ['read'],
     },
     'zpc_member': {
+        'requisitions': ['read', 'approve'],
+        'procurement_planning': ['read', 'approve'],
         'evaluations': ['read', 'approve'],
         'contracts': ['read', 'approve'],
         'reporting': ['read', 'export'],
@@ -57,11 +59,11 @@ PERMISSION_MATRIX = {
     'procurement_officer': {
         'requisitions': ['read'],
         'solicitations': ['create', 'read', 'update'],
-        'bids': ['read'],
+        'bids': ['read', 'update'],
         'evaluations': ['read'],
-        'contracts': ['create', 'read', 'update'],
+        'contracts': ['read', 'approve'],
         'suppliers': ['read'],
-        'procurement_planning': ['read'],
+        'procurement_planning': ['read', 'approve'],
         'method_selection': ['read'],
         'reporting': ['read'],
     },
@@ -73,7 +75,7 @@ PERMISSION_MATRIX = {
     },
     'finance_officer': {
         'finance': ['create', 'read', 'update', 'approve', 'export'],
-        'requisitions': ['read'],
+        'requisitions': ['read', 'approve'],
         'contracts': ['read'],
     },
     'department_head': {
@@ -85,7 +87,7 @@ PERMISSION_MATRIX = {
     },
     'user_dept_staff': {
         'requisitions': ['create', 'read', 'update'],
-        'procurement_planning': ['read'],
+        'procurement_planning': ['create', 'read', 'update'],
     },
     'evaluation_committee_chair': {
         'evaluations': ['read', 'create', 'update', 'approve', 'export'],
@@ -107,6 +109,7 @@ PERMISSION_MATRIX = {
         'bids': ['create', 'read', 'update'],
         'contracts': ['read'],
         'suppliers': ['read'],
+        'finance': ['create', 'read'],
     },
     'auditor': {
         'requisitions': ['read', 'export'],

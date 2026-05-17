@@ -1,6 +1,7 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 import { useAppSelector } from '../../hooks/useRedux';
+import { ClipboardListIcon, OfficeBuildingIcon, TrendingUpIcon } from '@heroicons/react/outline';
 
 const SupplierRelationsDashboard: React.FC = () => {
   const { user } = useAppSelector((s) => s.auth);
@@ -31,13 +32,13 @@ const SupplierRelationsDashboard: React.FC = () => {
         <h2 className="text-lg font-semibold text-gray-900 mb-2">Quick Links</h2>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <Link to="/supplier-relations/vendor-applications" className="flex items-center gap-3 p-3 rounded-lg bg-gray-50 hover:bg-gray-100 text-sm text-gray-700">
-            <span className="text-lg">📋</span> Review Vendor Applications
+            <ClipboardListIcon className="h-5 w-5 text-zammsa-green" /> Review Vendor Applications
           </Link>
           <Link to="/supplier-relations/vendors" className="flex items-center gap-3 p-3 rounded-lg bg-gray-50 hover:bg-gray-100 text-sm text-gray-700">
-            <span className="text-lg">🏢</span> Manage Suppliers
+            <OfficeBuildingIcon className="h-5 w-5 text-zammsa-green" /> Manage Suppliers
           </Link>
           <Link to="/supplier-relations/reports" className="flex items-center gap-3 p-3 rounded-lg bg-gray-50 hover:bg-gray-100 text-sm text-gray-700">
-            <span className="text-lg">📈</span> View Reports
+            <TrendingUpIcon className="h-5 w-5 text-zammsa-green" /> View Reports
           </Link>
         </div>
       </div>

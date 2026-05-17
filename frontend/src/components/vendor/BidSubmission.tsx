@@ -4,6 +4,7 @@ import { useQuery } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import { vendorApi } from '../../api/vendor';
 import { LoadingSpinner } from '../common/LoadingSpinner';
+import { CheckCircleIcon, XCircleIcon, CheckIcon } from '@heroicons/react/outline';
 
 const bidSteps = ['Review Tender', 'Technical Proposal', 'Financial Proposal', 'Bid Security', 'Submit'];
 
@@ -91,9 +92,9 @@ const BidSubmission: React.FC = () => {
             <div className="flex justify-between py-2">
               <span className="text-gray-500">Documents</span>
               <span className="font-medium text-gray-900">
-                Tech: {receipt.documents_uploaded?.technical_proposal ? '✅' : '❌'} |
-                Fin: {receipt.documents_uploaded?.financial_proposal ? '✅' : '❌'} |
-                Security: {receipt.documents_uploaded?.bid_security ? '✅' : '❌'}
+                <span className="inline-flex items-center gap-1">{receipt.documents_uploaded?.technical_proposal ? <CheckCircleIcon className="h-4 w-4 text-green-600" /> : <XCircleIcon className="h-4 w-4 text-red-500" />} Tech</span> |
+                <span className="inline-flex items-center gap-1">{receipt.documents_uploaded?.financial_proposal ? <CheckCircleIcon className="h-4 w-4 text-green-600" /> : <XCircleIcon className="h-4 w-4 text-red-500" />} Fin</span> |
+                <span className="inline-flex items-center gap-1">{receipt.documents_uploaded?.bid_security ? <CheckCircleIcon className="h-4 w-4 text-green-600" /> : <XCircleIcon className="h-4 w-4 text-red-500" />} Security</span>
               </span>
             </div>
           </div>
@@ -120,7 +121,7 @@ const BidSubmission: React.FC = () => {
               i < step ? 'bg-zammsa-green text-white' :
               i === step ? 'bg-zammsa-green text-white ring-2 ring-zammsa-green ring-offset-2' :
               'bg-gray-200 text-gray-500'
-            }`}>{i < step ? '✓' : i + 1}</div>
+            }`}>{i < step ? <CheckIcon className="h-4 w-4" /> : i + 1}</div>
             <span className={`text-xs ml-1.5 ${i === step ? 'text-zammsa-green font-medium' : 'text-gray-400'}`}>{s}</span>
             {i < bidSteps.length - 1 && <div className={`flex-1 h-0.5 mx-2 ${i < step ? 'bg-zammsa-green' : 'bg-gray-200'}`} />}
           </div>
@@ -250,10 +251,10 @@ const BidSubmission: React.FC = () => {
             <h2 className="text-lg font-semibold text-gray-900">Review & Submit</h2>
             <div className="bg-gray-50 rounded-lg p-4 space-y-2 text-sm">
               <p><span className="text-gray-500">Tender:</span> <span className="font-medium">{tender.title}</span></p>
-              <p><span className="text-gray-500">Addenda Acknowledged:</span> {addendaAcknowledged || !tender.addenda?.length ? '✅' : '❌'}</p>
-              <p><span className="text-gray-500">Technical Proposal:</span> {files.technical ? '✅ Uploaded' : '❌ Missing'}</p>
-              <p><span className="text-gray-500">Financial Proposal:</span> {files.financial ? '✅ Uploaded' : '❌ Missing'}</p>
-              <p><span className="text-gray-500">Bid Security:</span> {files.security ? '✅ Uploaded' : '❌ Missing'}</p>
+              <p><span className="text-gray-500">Addenda Acknowledged:</span> <span className="inline-flex items-center gap-1">{addendaAcknowledged || !tender.addenda?.length ? <CheckCircleIcon className="h-4 w-4 text-green-600" /> : <XCircleIcon className="h-4 w-4 text-red-500" />}</span></p>
+              <p><span className="text-gray-500">Technical Proposal:</span> <span className="inline-flex items-center gap-1">{files.technical ? <CheckCircleIcon className="h-4 w-4 text-green-600" /> : <XCircleIcon className="h-4 w-4 text-red-500" />} {files.technical ? 'Uploaded' : 'Missing'}</span></p>
+              <p><span className="text-gray-500">Financial Proposal:</span> <span className="inline-flex items-center gap-1">{files.financial ? <CheckCircleIcon className="h-4 w-4 text-green-600" /> : <XCircleIcon className="h-4 w-4 text-red-500" />} {files.financial ? 'Uploaded' : 'Missing'}</span></p>
+              <p><span className="text-gray-500">Bid Security:</span> <span className="inline-flex items-center gap-1">{files.security ? <CheckCircleIcon className="h-4 w-4 text-green-600" /> : <XCircleIcon className="h-4 w-4 text-red-500" />} {files.security ? 'Uploaded' : 'Missing'}</span></p>
             </div>
 
             <div className="space-y-3">

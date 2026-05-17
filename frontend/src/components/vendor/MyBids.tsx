@@ -8,6 +8,7 @@ import { SearchBar } from '../common/SearchBar';
 import { Pagination } from '../common/Pagination';
 import { LoadingSpinner } from '../common/LoadingSpinner';
 import { ConfirmModal } from '../common/ConfirmModal';
+import { CheckCircleIcon, XCircleIcon } from '@heroicons/react/outline';
 
 const PAGE_SIZE = 10;
 
@@ -113,7 +114,7 @@ const MyBids: React.FC = () => {
                 <div className="flex items-center justify-between pt-3 border-t border-gray-100">
                   <div className="flex gap-4 text-sm text-gray-500">
                     <span>Amount: <strong>{bid.currency} {bid.bid_amount?.toLocaleString()}</strong></span>
-                    {bid.security_verified !== undefined && <span>Security: {bid.security_verified ? '✅' : '❌'}</span>}
+                    {bid.security_verified !== undefined && <span className="inline-flex items-center gap-1">{bid.security_verified ? <CheckCircleIcon className="h-4 w-4 text-green-600" /> : <XCircleIcon className="h-4 w-4 text-red-500" />} Security</span>}
                   </div>
                   <div className="flex gap-2">
                     {canWithdraw && (

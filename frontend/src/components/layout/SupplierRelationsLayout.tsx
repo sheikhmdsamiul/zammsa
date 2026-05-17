@@ -1,6 +1,11 @@
 import React, { useState } from 'react';
 import { Outlet, Link, useLocation } from 'react-router-dom';
 import { useAuth, useLogout } from '../../hooks/useAuth';
+import {
+  ChartBarIcon, ClipboardListIcon, OfficeBuildingIcon, TrendingUpIcon,
+} from '@heroicons/react/outline';
+
+const iconClass = 'h-5 w-5';
 
 const PageLoader = () => (
   <div className="flex items-center justify-center min-h-[60vh]">
@@ -9,10 +14,10 @@ const PageLoader = () => (
 );
 
 const navItems = [
-  { label: 'Dashboard', path: '/supplier-relations', icon: '📊' },
-  { label: 'Vendor Applications', path: '/supplier-relations/vendor-applications', icon: '📋' },
-  { label: 'Vendor Management', path: '/supplier-relations/vendors', icon: '🏢' },
-  { label: 'Reports', path: '/supplier-relations/reports', icon: '📈' },
+  { label: 'Dashboard', path: '/supplier-relations', icon: <ChartBarIcon className={iconClass} /> },
+  { label: 'Supplier Applications', path: '/supplier-relations/vendor-applications', icon: <ClipboardListIcon className={iconClass} /> },
+  { label: 'Supplier Management', path: '/supplier-relations/vendors', icon: <OfficeBuildingIcon className={iconClass} /> },
+  { label: 'Reports', path: '/supplier-relations/reports', icon: <TrendingUpIcon className={iconClass} /> },
 ];
 
 const SupplierRelationsLayout: React.FC = () => {
@@ -23,12 +28,12 @@ const SupplierRelationsLayout: React.FC = () => {
 
   return (
     <div className="min-h-screen flex bg-gray-50">
-      <aside className={`fixed inset-y-0 left-0 z-30 w-64 bg-zammsa-black text-white transform transition-transform lg:translate-x-0 lg:static lg:inset-auto ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
-        <div className="flex items-center gap-2 h-16 px-6 border-b border-gray-700">
-          <div className="w-8 h-8 bg-zammsa-orange rounded-full flex items-center justify-center">
-            <span className="text-white text-sm font-bold">SR</span>
+      <aside className={`fixed inset-y-0 left-0 z-30 w-64 bg-white border-r border-gray-200 transform transition-transform lg:translate-x-0 lg:static lg:inset-auto ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
+        <div className="flex items-center gap-2 h-16 px-6 border-b border-gray-200">
+          <div className="w-8 h-8 bg-zammsa-green rounded-full flex items-center justify-center">
+            <span className="text-white text-sm font-bold">Z</span>
           </div>
-          <span className="font-bold">Supplier Relations</span>
+          <span className="font-bold text-zammsa-green">ZAMMSA</span>
         </div>
         <nav className="mt-4 px-3 space-y-1">
           {navItems.map((item) => (
@@ -37,19 +42,19 @@ const SupplierRelationsLayout: React.FC = () => {
               to={item.path}
               className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors ${
                 location.pathname === item.path || (item.path !== '/supplier-relations' && location.pathname.startsWith(item.path))
-                  ? 'bg-zammsa-orange text-white'
-                  : 'text-gray-300 hover:bg-gray-800'
+                  ? 'bg-zammsa-green text-white'
+                  : 'text-gray-600 hover:bg-gray-100'
               }`}
             >
-              <span>{item.icon}</span>
+              {item.icon}
               {item.label}
             </Link>
           ))}
         </nav>
-        <div className="absolute bottom-0 left-0 right-0 p-4 border-t border-gray-700">
+        <div className="absolute bottom-0 left-0 right-0 p-4 border-t border-gray-200">
           <Link
             to="/dashboard"
-            className="flex items-center gap-2 px-3 py-2 text-sm text-gray-400 hover:text-white transition-colors"
+            className="flex items-center gap-2 px-3 py-2 text-sm text-gray-500 hover:text-zammsa-green transition-colors"
           >
             <span>←</span>
             Back to Dashboard
@@ -67,7 +72,7 @@ const SupplierRelationsLayout: React.FC = () => {
           <div className="flex items-center gap-4 ml-auto">
             <span className="text-sm text-gray-500">Supplier Relationship Manager</span>
             <div className="flex items-center gap-2">
-              <div className="w-8 h-8 bg-zammsa-orange rounded-full flex items-center justify-center">
+              <div className="w-8 h-8 bg-zammsa-green rounded-full flex items-center justify-center">
                 <span className="text-white text-xs font-bold">
                   {user?.full_name?.split(' ').map((n) => n[0]).join('').slice(0, 2).toUpperCase()}
                 </span>

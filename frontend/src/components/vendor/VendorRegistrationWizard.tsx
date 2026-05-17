@@ -1,10 +1,13 @@
 import React, { useState } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import toast from 'react-hot-toast';
+import { suppliersApi } from '../../api/suppliers';
 import { vendorApi } from '../../api/vendor';
 import { LoadingSpinner } from '../common/LoadingSpinner';
+import { CheckIcon } from '@heroicons/react/outline';
 
 const steps = ['Account Info', 'Company Info', 'Contact & CEEC', 'Bank Details', 'Documents'];
 
@@ -174,7 +177,7 @@ const VendorRegistrationWizard: React.FC = () => {
                   i < step ? 'bg-zammsa-green text-white' :
                   i === step ? 'bg-zammsa-green text-white ring-2 ring-zammsa-green ring-offset-2' :
                   'bg-gray-200 text-gray-500'
-                }`}>{i < step ? '✓' : i + 1}</div>
+                }`}>{i < step ? <CheckIcon className="h-4 w-4" /> : i + 1}</div>
                 <span className={`text-xs hidden sm:block ${i === step ? 'text-zammsa-green font-medium' : 'text-gray-400'}`}>{s}</span>
               </div>
               {i < steps.length - 1 && <div className={`flex-1 h-0.5 mx-2 ${i < step ? 'bg-zammsa-green' : 'bg-gray-200'}`} />}

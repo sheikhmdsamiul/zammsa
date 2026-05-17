@@ -39,36 +39,70 @@ The Zambia Medicines and Medical Supplies Agency (ZAMMSA) Procurement Management
 
 ## User Portals
 
-The system has three main portals:
+The system has five portals:
 
-### 1. Public Portal
-Accessible to anyone without authentication. Displays:
-- Public tenders and announcements
-- Supplier directory
-- News and events
-- About information
-
-### 2. Vendor Portal (Supplier)
-For registered suppliers/vendors to:
-- Browse open tenders
-- Submit bids
-- Track bid status
-- View awarded contracts
-- Manage company profile
-
-### 3. Internal Portal (Staff)
-For ZAMMSA employees with role-based access:
-- Dashboard with role-specific widgets
-- Requisition management
-- Solicitation/tender management
-- Bid evaluation
-- Contract management
-- Finance management
-- Reports and analytics
+- `PORTAL 1` Internal Staff Portal (ZAMMSA employees)
+- `PORTAL 2` Supplier Portal (external vendors/companies)
+- `PORTAL 3` Public Portal (general public, read-only)
+- `PORTAL 4` System Admin Panel (IT administrators)
+- `PORTAL 5` Auditor Panel (read-only compliance access)
 
 ---
 
 ## User Roles & Permissions
+
+### All User Roles at a Glance
+
+| Role ID | Role Name | Portal | Level |
+|---|---|---|---|
+| R-01 | User Department Staff | Internal | Entry |
+| R-02 | Department Head | Internal | Mid |
+| R-03 | Procurement Officer | Internal | Mid |
+| R-04 | Procurement Manager | Internal | Mid-Senior |
+| R-05 | Evaluation Committee Member | Internal | Specialized |
+| R-06 | Evaluation Committee Chair | Internal | Specialized |
+| R-07 | Finance Officer | Internal | Mid (MFA) |
+| R-08 | ZPC Member | Internal | Senior (MFA) |
+| R-09 | Director of Procurement | Internal | Senior (MFA) |
+| R-10 | Director General | Internal | Executive (MFA) |
+| R-11 | Supplier User | Supplier | External |
+| R-12 | Contract Manager | Internal | Mid |
+| R-13 | System Administrator | Admin Panel | Technical (MFA) |
+| R-14 | Auditor | Auditor Panel | Read-Only |
+| R-15 | Public Portal Viewer | Public | Anonymous |
+| R-16 | ZPPA Reporting Officer | Internal | Compliance |
+| R-17 | Supplier Relationship Manager | Internal | Mid |
+| R-18 | Budget Controller | Internal | Finance |
+| R-19 | Integration Manager | Internal | Technical |
+
+### Master Permission Matrix
+
+| Feature | R-01 | R-02 | R-03 | R-04 | R-05 | R-06 | R-07 | R-08 | R-09 | R-10 | R-11 | R-12 | R-13 | R-14 |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| Create Requisition | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
+| Approve Requisition (Dept) | ❌ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
+| Approve Requisition (Finance) | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
+| Approve Requisition (DG) | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ | ❌ | ❌ | ❌ | ❌ |
+| Approve Requisition (ZPC) | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
+| Create APP Entry | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
+| Approve APP | ❌ | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ |
+| Create Solicitation | ❌ | ❌ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
+| Approve Solicitation | ❌ | ❌ | ❌ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
+| Submit Bid | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ | ❌ | ❌ | ❌ |
+| Conduct Bid Opening | ❌ | ❌ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
+| Score Bids (Technical) | ❌ | ❌ | ❌ | ❌ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
+| Lead Evaluation / Generate BER | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
+| Approve BER | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
+| Award Contract | ❌ | ❌ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
+| Sign Contract (ZAMMSA side) | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ | ❌ | ❌ | ❌ | ❌ |
+| Sign Contract (Supplier side) | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ | ❌ | ❌ | ❌ |
+| Manage Active Contract | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ | ❌ | ❌ |
+| Submit Invoice | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ | ❌ | ❌ | ❌ |
+| Process Payment | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
+| Manage Budget | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
+| Generate ZPPA Reports | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
+| Manage System / Users | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ | ❌ |
+| View All (Audit / Read-Only) | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ |
 
 ### 1. System Administrator (`system_admin`)
 **Access Level**: Full system access
@@ -255,7 +289,7 @@ For ZAMMSA employees with role-based access:
 ---
 
 ### 14. Supplier User (`supplier_user`)
-**Access Level**: External/Vendor
+**Access Level**: External/Supplier
 
 **Capabilities**:
 - Browse open tenders
@@ -265,12 +299,12 @@ For ZAMMSA employees with role-based access:
 - Manage company profile
 - Submit invoices (if contracted)
 
-**Navigation**: Vendor Portal (Dashboard, Bids, Tenders, Contracts, Profile)
+**Navigation**: Supplier Portal (Dashboard, Bids, Tenders, Contracts, Profile)
 
 ---
 
 ### 15. Supplier Relationship Manager (`supplier_relationship_manager`)
-**Access Level**: Vendor Management
+**Access Level**: Supplier Management
 
 **Capabilities**:
 - Manage supplier database
@@ -279,7 +313,7 @@ For ZAMMSA employees with role-based access:
 - Supplier qualification
 - Blacklist management
 
-**Navigation**: Suppliers, Contracts, Vendor Portal (admin)
+**Navigation**: Suppliers, Contracts, Supplier Portal (admin)
 
 ---
 
@@ -393,7 +427,7 @@ For ZAMMSA employees with role-based access:
 ---
 
 ### 4. Bids Module
-**Purpose**: Manage vendor bid submissions
+**Purpose**: Manage supplier bid submissions
 
 **Features**:
 - View submitted bids
@@ -454,7 +488,7 @@ For ZAMMSA employees with role-based access:
 - Variance reports
 
 #### Invoices
-- Invoice submission (vendors)
+- Invoice submission (suppliers)
 - Invoice verification (finance)
 - Invoice approval workflow
 - Invoice payment processing
@@ -474,7 +508,7 @@ For ZAMMSA employees with role-based access:
 ---
 
 ### 8. Suppliers Module
-**Purpose**: Vendor management
+**Purpose**: Supplier management
 
 **Features**:
 - Supplier registration
@@ -532,7 +566,7 @@ For ZAMMSA employees with role-based access:
 
 ---
 
-### 12. Vendor Portal
+### 12. Supplier Portal
 **Purpose**: Supplier self-service
 
 **Features**:
@@ -559,7 +593,7 @@ For ZAMMSA employees with role-based access:
 6. Procurement Manager creates Solicitations
 7. Director approves Solicitations
 8. Tender Published
-9. Vendors submit Bids
+9. Suppliers submit Bids
 10. Bid Opening
 11. Evaluation Committee evaluates Bids
 12. Evaluation Report approved

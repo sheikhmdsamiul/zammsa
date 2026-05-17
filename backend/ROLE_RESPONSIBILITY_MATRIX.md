@@ -2,6 +2,38 @@
 
 Source of truth: `ZAMMSA_COMPLETE_PORTAL_GUIDE_SSSF.md` (Version 0.2, April 2026)
 
+## Portals in this system
+
+- `PORTAL 1` Internal Staff Portal (ZAMMSA employees)
+- `PORTAL 2` Supplier Portal (external vendors/companies)
+- `PORTAL 3` Public Portal (general public, read-only)
+- `PORTAL 4` System Admin Panel (IT administrators)
+- `PORTAL 5` Auditor Panel (read-only compliance access)
+
+## All user roles at a glance
+
+| Role ID | Role Name | Portal | Level |
+|---|---|---|---|
+| R-01 | User Department Staff | Internal | Entry |
+| R-02 | Department Head | Internal | Mid |
+| R-03 | Procurement Officer | Internal | Mid |
+| R-04 | Procurement Manager | Internal | Mid-Senior |
+| R-05 | Evaluation Committee Member | Internal | Specialized |
+| R-06 | Evaluation Committee Chair | Internal | Specialized |
+| R-07 | Finance Officer | Internal | Mid (MFA) |
+| R-08 | ZPC Member | Internal | Senior (MFA) |
+| R-09 | Director of Procurement | Internal | Senior (MFA) |
+| R-10 | Director General | Internal | Executive (MFA) |
+| R-11 | Supplier User | Supplier | External |
+| R-12 | Contract Manager | Internal | Mid |
+| R-13 | System Administrator | Admin Panel | Technical (MFA) |
+| R-14 | Auditor | Auditor Panel | Read-Only |
+| R-15 | Public Portal Viewer | Public | Anonymous |
+| R-16 | ZPPA Reporting Officer | Internal | Compliance |
+| R-17 | Supplier Relationship Manager | Internal | Mid |
+| R-18 | Budget Controller | Internal | Finance |
+| R-19 | Integration Manager | Internal | Technical |
+
 | Role ID | Role Name | Requisition | APP | Solicitation | Bidding | Evaluation | Contract | Payment | Access Scope |
 |---|---|---|---|---|---|---|---|---|---|
 | R-01 | User Department Staff | Create/submit | Create entries | - | - | - | - | - | Own department only |

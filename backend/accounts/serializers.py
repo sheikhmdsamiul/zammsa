@@ -4,8 +4,21 @@ from django.utils import timezone
 from rest_framework import serializers
 from .models import User, Role, Permission, UserRole, RolePermission, AuditLog, PasswordHistory, MFACode, ConflictOfInterest
 
+ROLE_ALIASES = {
+    'zppa_reporter': 'zppa_reporting_officer',
+}
+
+
+def normalize_role(role: str) -> str:
+    return ROLE_ALIASES.get(role, role)
+
 
 class UserSerializer(serializers.ModelSerializer):
+    role = serializers.SerializerMethodField()
+
+    def get_role(self, obj):
+        return normalize_role(obj.role)
+
     class Meta:
         model = User
         fields = ('id', 'employee_id', 'full_name', 'email', 'phone', 'department',
@@ -46,6 +59,11 @@ class UserUpdateSerializer(serializers.ModelSerializer):
 
 
 class UserListSerializer(serializers.ModelSerializer):
+    role = serializers.SerializerMethodField()
+
+    def get_role(self, obj):
+        return normalize_role(obj.role)
+
     class Meta:
         model = User
         fields = ('id', 'employee_id', 'full_name', 'email', 'phone', 'department',

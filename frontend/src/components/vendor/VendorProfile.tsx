@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import { vendorApi } from '../../api/vendor';
 import { LoadingSpinner } from '../common/LoadingSpinner';
+import { CheckIcon } from '@heroicons/react/outline';
 
 const VendorProfile: React.FC = () => {
   const { data: profile, isLoading, refetch } = useQuery({
@@ -106,7 +107,7 @@ const VendorProfile: React.FC = () => {
                   <div key={doc.id} className="flex items-center justify-between py-2 border-b border-gray-50 last:border-0">
                     <div className="flex items-center gap-2">
                       <span className="text-sm text-gray-700 capitalize">{doc.type.replace(/_/g, ' ')}</span>
-                      {doc.verified && <span className="text-xs text-green-600 font-medium">✓ Verified</span>}
+                      {doc.verified && <span className="inline-flex items-center gap-1 text-xs text-green-600 font-medium"><CheckIcon className="h-3 w-3" /> Verified</span>}
                     </div>
                     <a href={doc.file} target="_blank" rel="noreferrer" className="text-xs text-zammsa-green hover:underline">View</a>
                   </div>

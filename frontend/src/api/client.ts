@@ -18,10 +18,14 @@ api.interceptors.response.use(
   (response) => response,
   async (error) => {
     const original = error.config;
+    const status = error.response?.status;
+    const hasAccessToken = !!localStorage.getItem('access_token');
+    const requestUrl = String(original?.url || '');
 
-    if (error.response?.status === 401 && !original._retry) {
-      original._retry = true;
-      localStorage.clear();
+    // Do not hard-logout users on every unauthorized endpoint.
+    // A role-scoped 401 from one widget should not destroy the whole session.
+    // Only redirect to login when there is no token and request is not the login call itself.
+    if (status === 401 && !hasAccessToken && !requestUrl.includes('/auth/login/')) {
       window.location.href = '/login';
       return Promise.reject(error);
     }
@@ -37,7 +41,7 @@ api.interceptors.response.use(
       message = data;
     }
 
-    if (error.response?.status !== 401) {
+    if (status !== 401) {
       toast.error(message);
     }
 

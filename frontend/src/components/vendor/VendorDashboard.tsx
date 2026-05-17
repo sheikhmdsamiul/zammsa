@@ -4,11 +4,14 @@ import { useQuery } from '@tanstack/react-query';
 import { vendorApi } from '../../api/vendor';
 import { LoadingSpinner } from '../common/LoadingSpinner';
 import { useAuth } from '../../hooks/useAuth';
+import {
+  DocumentTextIcon, ClipboardListIcon, StarIcon, CashIcon,
+} from '@heroicons/react/outline';
 
-const StatCard: React.FC<{ label: string; value: number | string; icon: string; color: string; link: string }> = ({ label, value, icon, color, link }) => (
+const StatCard: React.FC<{ label: string; value: number | string; icon: React.ReactNode; color: string; link: string }> = ({ label, value, icon, color, link }) => (
   <Link to={link} className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 hover:shadow-md transition-shadow">
     <div className="flex items-center justify-between mb-2">
-      <span className="text-2xl">{icon}</span>
+      <span className="text-zammsa-green">{icon}</span>
       <span className={`text-xs font-medium px-2 py-1 rounded-full ${color}`}>{label}</span>
     </div>
     <p className="text-3xl font-bold text-gray-900">{typeof value === 'number' ? value.toLocaleString() : value}</p>
@@ -55,10 +58,10 @@ const VendorDashboard: React.FC = () => {
         <LoadingSpinner size="lg" className="py-12" />
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          <StatCard label="Total Bids" value={stats?.total_bids ?? '--'} icon="📄" color="bg-blue-50 text-blue-600" link="/vendor/bids" />
-          <StatCard label="Active Bids" value={stats?.active_bids ?? '--'} icon="📋" color="bg-green-50 text-green-600" link="/vendor/bids" />
-          <StatCard label="Awarded Contracts" value={stats?.awarded_contracts ?? '--'} icon="🏆" color="bg-purple-50 text-purple-600" link="/vendor/contracts" />
-          <StatCard label="Pending Invoices" value={stats?.pending_invoices ?? '--'} icon="💰" color="bg-orange-50 text-orange-600" link="/vendor/invoices" />
+          <StatCard label="Total Bids" value={stats?.total_bids ?? '--'} icon={<DocumentTextIcon className="h-6 w-6" />} color="bg-blue-50 text-blue-600" link="/vendor/bids" />
+          <StatCard label="Active Bids" value={stats?.active_bids ?? '--'} icon={<ClipboardListIcon className="h-6 w-6" />} color="bg-green-50 text-green-600" link="/vendor/bids" />
+          <StatCard label="Awarded Contracts" value={stats?.awarded_contracts ?? '--'} icon={<StarIcon className="h-6 w-6" />} color="bg-purple-50 text-purple-600" link="/vendor/contracts" />
+          <StatCard label="Pending Invoices" value={stats?.pending_invoices ?? '--'} icon={<CashIcon className="h-6 w-6" />} color="bg-orange-50 text-orange-600" link="/vendor/invoices" />
         </div>
       )}
 

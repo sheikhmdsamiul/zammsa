@@ -21,7 +21,6 @@ export const ROLES = {
 } as const;
 
 export const INTERNAL_PORTAL_ROLES = [
-  ROLES.SYSTEM_ADMIN,
   ROLES.DIRECTOR_PROCUREMENT,
   ROLES.DIRECTOR_GENERAL,
   ROLES.ZPC_MEMBER,
@@ -40,9 +39,20 @@ export const INTERNAL_PORTAL_ROLES = [
   ROLES.INTEGRATION_MANAGER,
 ] as const;
 
-export const VENDOR_PORTAL_ROLES = [ROLES.SUPPLIER_USER] as const;
+export const SUPPLIER_PORTAL_ROLES = [ROLES.SUPPLIER_USER] as const;
+export const ADMIN_PANEL_ROLES = [ROLES.SYSTEM_ADMIN] as const;
+export const AUDITOR_PANEL_ROLES = [ROLES.AUDITOR] as const;
+export const PUBLIC_PORTAL_ROLES = [ROLES.PUBLIC_PORTAL_VIEWER] as const;
 
-export type RoleName = typeof INTERNAL_PORTAL_ROLES[number] | typeof VENDOR_PORTAL_ROLES[number];
+// Backward compatibility for existing imports/usages.
+export const VENDOR_PORTAL_ROLES = SUPPLIER_PORTAL_ROLES;
+
+export type RoleName =
+  | typeof INTERNAL_PORTAL_ROLES[number]
+  | typeof SUPPLIER_PORTAL_ROLES[number]
+  | typeof ADMIN_PANEL_ROLES[number]
+  | typeof AUDITOR_PANEL_ROLES[number]
+  | typeof PUBLIC_PORTAL_ROLES[number];
 
 export const hasAnyRole = (role: string | undefined, allowed: readonly string[]) =>
   !!role && allowed.includes(role);
