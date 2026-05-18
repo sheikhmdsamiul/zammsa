@@ -13,7 +13,7 @@ REQ_STATUS_CHOICES = [
     ('pending_finance', 'Pending Finance Validation'),
     ('pending_dg', 'Pending Director General Approval'),
     ('pending_zpc', 'Pending ZPC Approval'),
-    ('approved', 'Approved'),
+    ('approved', 'Approved for Procurement'),
     ('rejected', 'Rejected'),
     ('amended', 'Amended'),
 ]

@@ -1,5 +1,5 @@
 import api from './client';
-import { AnnualProcurementPlan, APPLineItem, GeneralProcurementNotice, BudgetAllocation, PaginatedResponse, APPDashboardStats, BudgetSummary } from '../types';
+import { AnnualProcurementPlan, APPLineItem, GeneralProcurementNotice, BudgetAllocation, PaginatedResponse, APPDashboardStats, BudgetSummary, ContractProcurementPlan, ProcurementMilestone } from '../types';
 
 export const procurementPlanningApi = {
   dashboard: () =>
@@ -44,8 +44,14 @@ export const procurementPlanningApi = {
   generateGPN: (id: string) =>
     api.post<{ message: string; gpn: GeneralProcurementNotice }>(`/procurement-planning/annual-plans/${id}/generate-gpn/`).then(r => r.data),
 
-  publishAPP: (id: string) =>
-    api.post<{ message: string; status: string }>(`/procurement-planning/annual-plans/${id}/publish/`).then(r => r.data),
+  publishAPP: (id: string, data?: { targets?: string[]; proofs?: Record<string, any> }) =>
+    api.post<{ message: string; status: string; publication_targets: string[]; published_at: string }>(`/procurement-planning/annual-plans/${id}/publish/`, data || {}).then(r => r.data),
+
+  submitToZPPA: (id: string, submissionRef: string) =>
+    api.post<{ message: string; zppa_submitted_at: string; submission_ref: string }>(`/procurement-planning/annual-plans/${id}/zppa-submit/`, { submission_ref: submissionRef }).then(r => r.data),
+
+  getZPPADeadlineAlerts: () =>
+    api.get<{ approaching: any[]; overdue: any[]; total_alerts: number }>('/procurement-planning/annual-plans/zppa-deadline-alerts/').then(r => r.data),
 
   lineItems: {
     list: (params?: Record<string, any>) =>
@@ -67,6 +73,30 @@ export const procurementPlanningApi = {
       api.post<{ message: string; status: string; publication_targets: string[]; published_at: string }>(`/procurement-planning/notices/${id}/publish/`, { targets, proof_urls: proofUrls || [] }).then(r => r.data),
     archive: (id: string) =>
       api.post<{ message: string; status: string }>(`/procurement-planning/notices/${id}/archive/`).then(r => r.data),
+  },
+
+  contractPlans: {
+    list: (params?: Record<string, any>) =>
+      api.get<PaginatedResponse<ContractProcurementPlan>>('/procurement-planning/contract-plans/', { params }).then(r => r.data),
+    create: (data: Partial<ContractProcurementPlan>) =>
+      api.post<ContractProcurementPlan>('/procurement-planning/contract-plans/', data).then(r => r.data),
+    detail: (id: string) =>
+      api.get<ContractProcurementPlan>(`/procurement-planning/contract-plans/${id}/`).then(r => r.data),
+    update: (id: string, data: Partial<ContractProcurementPlan>) =>
+      api.patch<ContractProcurementPlan>(`/procurement-planning/contract-plans/${id}/`, data).then(r => r.data),
+    delete: (id: string) =>
+      api.delete(`/procurement-planning/contract-plans/${id}/`),
+  },
+
+  milestones: {
+    list: (params?: Record<string, any>) =>
+      api.get<PaginatedResponse<ProcurementMilestone>>('/procurement-planning/milestones/', { params }).then(r => r.data),
+    create: (data: Partial<ProcurementMilestone>) =>
+      api.post<ProcurementMilestone>('/procurement-planning/milestones/', data).then(r => r.data),
+    update: (id: string, data: Partial<ProcurementMilestone>) =>
+      api.patch<ProcurementMilestone>(`/procurement-planning/milestones/${id}/`, data).then(r => r.data),
+    delete: (id: string) =>
+      api.delete(`/procurement-planning/milestones/${id}/`),
   },
 };
 

@@ -10,6 +10,7 @@ const PageLoader = () => (
 const navLinks = [
   { label: 'Home', path: '/' },
   { label: 'Tenders', path: '/tenders' },
+  { label: 'GPNs', path: '/gpns' },
   { label: 'News', path: '/news' },
   { label: 'Notices', path: '/notices' },
   { label: 'Events', path: '/events' },

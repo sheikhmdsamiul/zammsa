@@ -8,11 +8,12 @@ import { useAuth } from '../../hooks/useAuth';
 import toast from 'react-hot-toast';
 
 const WORKFLOW_STEPS = [
-  { label: 'Draft / Submitted', statuses: ['submitted', 'pending_finance', 'pending_dg', 'pending_zpc', 'approved'] },
-  { label: 'Dept Head Approval', statuses: ['pending_finance', 'pending_dg', 'pending_zpc', 'approved'] },
-  { label: 'Finance Validation', statuses: ['pending_dg', 'pending_zpc', 'approved'] },
-  { label: 'Director General', statuses: ['pending_zpc', 'approved'] },
-  { label: 'ZPC / Approved', statuses: ['approved'] },
+  { label: 'Draft / Submitted', statuses: ['draft', 'submitted'] },
+  { label: 'Dept Head Approval', statuses: ['submitted', 'pending_finance', 'pending_dg', 'pending_zpc', 'approved'] },
+  { label: 'Finance Validation', statuses: ['pending_finance', 'pending_dg', 'pending_zpc', 'approved'] },
+  { label: 'Director General', statuses: ['pending_dg', 'pending_zpc', 'approved'] },
+  { label: 'ZPC (> K250,000)', statuses: ['pending_zpc', 'approved'] },
+  { label: 'Approved for Procurement', statuses: ['approved'] },
 ];
 
 const RequisitionDetail: React.FC = () => {
@@ -66,10 +67,10 @@ const RequisitionDetail: React.FC = () => {
   const status = req.status || '';
   const estimatedValue = Number(req.estimated_value || req.estimated_total || 0);
 
-  const canSubmit = status === 'draft';
+  const canSubmit = status === 'draft' && role === 'user_dept_staff';
   const canApproveDeptHead = status === 'submitted' && role === 'department_head';
   const canApproveFinance = status === 'pending_finance' && role === 'finance_officer';
-  const canApproveDG = status === 'pending_dg' && role === 'director_general' && estimatedValue <= 250000;
+  const canApproveDG = status === 'pending_dg' && role === 'director_general';
   const canApproveZPC = status === 'pending_zpc' && role === 'zpc_member' && estimatedValue > 250000;
   const canRejectReturn = (status === 'submitted' && role === 'department_head') ||
     (status === 'pending_finance' && role === 'finance_officer') ||
@@ -202,7 +203,9 @@ const RequisitionDetail: React.FC = () => {
                 {canSubmit && <button onClick={() => submitMutation.mutate()} className="w-full px-4 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700">Submit Requisition</button>}
                 {canBudgetValidate && <button onClick={() => budgetValidateMutation.mutate()} className="w-full px-4 py-2 bg-teal-600 text-white rounded-lg text-sm hover:bg-teal-700">Validate Budget & Encumber</button>}
                 {(canApproveDeptHead || canApproveFinance || canApproveDG || canApproveZPC) && (
-                  <button onClick={() => approveMutation.mutate()} className="w-full px-4 py-2 bg-green-600 text-white rounded-lg text-sm hover:bg-green-700">Approve</button>
+                  <button onClick={() => approveMutation.mutate()} className="w-full px-4 py-2 bg-green-600 text-white rounded-lg text-sm hover:bg-green-700">
+                    {canApproveDG && estimatedValue > 250000 ? 'Approve & Forward to ZPC' : 'Approve'}
+                  </button>
                 )}
                 {canRejectReturn && (
                   <>

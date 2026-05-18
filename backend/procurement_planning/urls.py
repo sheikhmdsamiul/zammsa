@@ -14,6 +14,8 @@ urlpatterns = [
     path('annual-plans/<uuid:pk>/consolidate/', views.app_consolidate_view, name='app-consolidate'),
     path('annual-plans/<uuid:pk>/approval-trail/', views.app_approval_trail_view, name='app-approval-trail'),
     path('annual-plans/<uuid:pk>/generate-gpn/', views.gpn_generate_view, name='app-generate-gpn'),
+    path('annual-plans/<uuid:pk>/zppa-submit/', views.app_zppa_submit_view, name='app-zppa-submit'),
+    path('annual-plans/zppa-deadline-alerts/', views.app_zppa_deadline_alerts_view, name='app-zppa-deadline-alerts'),
     path('line-items/', views.APPLineItemListView.as_view(), name='line-items'),
     path('line-items/<uuid:pk>/', views.APPLineItemDetailView.as_view(), name='app-line-item-detail'),
     path('contract-plans/', views.ContractProcurementPlanListView.as_view(), name='cpp-list'),
@@ -24,4 +26,6 @@ urlpatterns = [
     path('notices/<uuid:pk>/', views.GeneralProcurementNoticeDetailView.as_view(), name='gpn-detail'),
     path('notices/<uuid:pk>/publish/', views.gpn_publish_view, name='gpn-publish'),
     path('notices/<uuid:pk>/archive/', views.gpn_archive_view, name='gpn-archive'),
+    path('public/gpns/', views.public_gpn_list_view, name='public-gpn-list'),
+    path('public/gpns/<uuid:pk>/', views.public_gpn_detail_view, name='public-gpn-detail'),
 ]

@@ -8,11 +8,13 @@ import { SearchBar } from '../common/SearchBar';
 import { Pagination } from '../common/Pagination';
 import { LoadingSpinner } from '../common/LoadingSpinner';
 import { ConfirmModal } from '../common/ConfirmModal';
+import { useAuth } from '../../hooks/useAuth';
 import fileSaver from 'file-saver';
 import toast from 'react-hot-toast';
 
 const RequisitionsList: React.FC = () => {
   const navigate = useNavigate();
+  const { user } = useAuth();
   const queryClient = useQueryClient();
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
@@ -62,8 +64,12 @@ const RequisitionsList: React.FC = () => {
     { key: 'created_at', label: 'Created', sortable: true, render: (v: string) => new Date(v).toLocaleDateString() },
     { key: 'actions', label: '', render: (_: any, row: any) => (
       <div className="flex gap-2">
-        <button onClick={(e) => { e.stopPropagation(); navigate(`/requisitions/${row.id}/edit`); }} className="text-blue-600 hover:text-blue-800 text-sm">Edit</button>
-        <button onClick={(e) => { e.stopPropagation(); setDeleteModal({ id: row.id, title: row.title }); }} className="text-red-600 hover:text-red-800 text-sm">Delete</button>
+        {user?.role === 'user_dept_staff' && (
+          <button onClick={(e) => { e.stopPropagation(); navigate(`/requisitions/${row.id}/edit`); }} className="text-blue-600 hover:text-blue-800 text-sm">Edit</button>
+        )}
+        {user?.role === 'user_dept_staff' && (
+          <button onClick={(e) => { e.stopPropagation(); setDeleteModal({ id: row.id, title: row.title }); }} className="text-red-600 hover:text-red-800 text-sm">Delete</button>
+        )}
       </div>
     )},
   ];
@@ -77,7 +83,9 @@ const RequisitionsList: React.FC = () => {
         </div>
         <div className="flex items-center gap-3">
           <button onClick={handleExport} className="text-sm bg-white border border-gray-300 px-3 py-2 rounded-lg hover:bg-gray-50">Export</button>
-          <Link to="/requisitions/create" className="bg-zammsa-green text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-zammsa-green-dark transition-colors">+ New Requisition</Link>
+          {user?.role === 'user_dept_staff' && (
+            <Link to="/requisitions/create" className="bg-zammsa-green text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-zammsa-green-dark transition-colors">+ New Requisition</Link>
+          )}
         </div>
       </div>
 

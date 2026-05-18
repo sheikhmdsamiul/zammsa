@@ -132,6 +132,13 @@ export interface Solicitation {
   evaluation_criteria?: EvaluationCriterion[];
   created_at: string;
   updated_at: string;
+  // Publication tracking
+  publication_targets?: string[];
+  publication_proofs?: Record<string, any>;
+  egp_reference?: string;
+  rejection_reason?: string;
+  rejected_by?: string;
+  rejected_at?: string;
 }
 
 export interface Addendum {
@@ -879,6 +886,18 @@ export interface AnnualProcurementPlan {
   approval_trail?: ApprovalTrailEntry[];
   line_items?: APPLineItem[];
   gpns?: GeneralProcurementNotice[];
+  // GPN publication tracking
+  gpn_published_at?: string;
+  gpn_publication_targets?: string[];
+  gpn_publication_proofs?: Record<string, any>;
+  // ZPPA submission tracking
+  zppa_deadline?: string;
+  zppa_submitted?: boolean;
+  zppa_submitted_at?: string;
+  zppa_submission_ref?: string;
+  zppa_deadline_alerted?: boolean;
+  zppa_status?: 'submitted' | 'not_applicable' | 'overdue' | 'approaching' | 'on_track';
+  zppa_days_remaining?: number;
   created_at: string;
   updated_at?: string;
 }
@@ -932,6 +951,30 @@ export interface APPDashboardStats {
   rejected: number;
   total_value: number;
   consolidated: number;
+}
+
+export interface ContractProcurementPlan {
+  cpp_id: string;
+  requisition: string;
+  requisition_number?: string;
+  procurement_strategy: string;
+  milestones: any[];
+  resource_requirements: Record<string, any>;
+  risk_assessment: Record<string, any>;
+  status: 'draft' | 'active' | 'completed' | 'cancelled';
+  created_by?: string;
+  created_by_name?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ProcurementMilestone {
+  milestone_id: string;
+  cpp: string;
+  milestone_name: string;
+  planned_date: string;
+  actual_date: string | null;
+  variance_days: number | null;
 }
 
  

@@ -22,8 +22,11 @@ export const solicitationsApi = {
   approve: (id: string) =>
     api.post(`/solicitations/${id}/approve/`).then((r) => r.data),
 
-  publish: (id: string) =>
-    api.post(`/solicitations/${id}/publish/`).then((r) => r.data),
+  reject: (id: string, reason: string) =>
+    api.post(`/solicitations/${id}/reject/`, { reason }).then((r) => r.data),
+
+  publish: (id: string, data?: { targets?: string[]; proofs?: Record<string, any> }) =>
+    api.post(`/solicitations/${id}/publish/`, data || {}).then((r) => r.data),
 
   close: (id: string) =>
     api.post(`/solicitations/${id}/close/`).then((r) => r.data),

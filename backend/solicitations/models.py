@@ -38,6 +38,8 @@ class SolicitationTemplate(models.Model):
     method = models.CharField(max_length=50)
     document_type = models.CharField(max_length=50)
     template_content = models.TextField()
+    mandatory_clauses = models.JSONField(default=list, blank=True)  # [{clause_id, clause_text, is_locked}]
+    is_zppa_template = models.BooleanField(default=False)
     version = models.CharField(max_length=20, default='1.0')
     is_active = models.BooleanField(default=True)
 
@@ -66,8 +68,14 @@ class Solicitation(models.Model):
     opening_date = models.DateTimeField(null=True, blank=True)
     status = models.CharField(max_length=50, choices=SOL_STATUS_CHOICES, default='draft')
     published_at = models.DateTimeField(null=True, blank=True)
+    publication_targets = models.JSONField(default=list, blank=True)  # ['zammsa_website', 'egp_portal', 'email_suppliers']
+    publication_proofs = models.JSONField(default=dict, blank=True)  # {target: {url, timestamp, proof_file}}
+    egp_reference = models.CharField(max_length=255, blank=True, default='')
     created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='created_solicitations')
     approved_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='approved_solicitations')
+    rejected_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='rejected_solicitations')
+    rejection_reason = models.TextField(blank=True, default='')
+    rejected_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

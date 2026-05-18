@@ -9,10 +9,17 @@ import toast from 'react-hot-toast';
 
 const WORKFLOW_STEPS = [
   { label: 'Draft', statuses: ['draft'] },
-  { label: 'Pending Approval', statuses: ['pending_approval', 'approved', 'published', 'closed', 'awarded'] },
-  { label: 'Approved', statuses: ['approved', 'published', 'closed', 'awarded'] },
-  { label: 'Published', statuses: ['published', 'closed', 'awarded'] },
-  { label: 'Closed / Awarded', statuses: ['closed', 'awarded'] },
+  { label: 'Pending Approval', statuses: ['pending_approval'] },
+  { label: 'Approved', statuses: ['approved'] },
+  { label: 'Published', statuses: ['published'] },
+  { label: 'Closed', statuses: ['closed'] },
+  { label: 'Awarded', statuses: ['awarded'] },
+];
+
+const PUBLISH_TARGETS = [
+  { key: 'zammsa_website', label: 'ZAMMSA Website' },
+  { key: 'egp_portal', label: 'e-GP Portal (ZPPA)' },
+  { key: 'email_suppliers', label: 'Email Registered Suppliers' },
 ];
 
 const SolicitationDetail: React.FC = () => {
@@ -24,6 +31,9 @@ const SolicitationDetail: React.FC = () => {
   const [addendumReason, setAddendumReason] = useState('');
   const [addendumExtend, setAddendumExtend] = useState('');
   const [showAddendumForm, setShowAddendumForm] = useState(false);
+  const [showRejectModal, setShowRejectModal] = useState(false);
+  const [showPublishModal, setShowPublishModal] = useState(false);
+  const [selectedTargets, setSelectedTargets] = useState<string[]>(['zammsa_website']);
 
   const { data: sol, isLoading } = useQuery({
     queryKey: ['solicitation', id],
@@ -45,9 +55,15 @@ const SolicitationDetail: React.FC = () => {
     onError: (err: any) => toast.error(err.response?.data?.error || 'Approval failed'),
   });
 
+  const rejectMutation = useMutation({
+    mutationFn: () => solicitationsApi.reject(id!, comment || 'No reason provided'),
+    onSuccess: (res) => { invalidate(); setComment(''); setShowRejectModal(false); toast.success(res.message || 'Returned to draft'); },
+    onError: (err: any) => toast.error(err.response?.data?.error || 'Reject failed'),
+  });
+
   const publishMutation = useMutation({
-    mutationFn: () => solicitationsApi.publish(id!),
-    onSuccess: (res) => { invalidate(); toast.success(res.message || 'Published'); },
+    mutationFn: () => solicitationsApi.publish(id!, { targets: selectedTargets }),
+    onSuccess: (res) => { invalidate(); setShowPublishModal(false); toast.success(res.message || 'Published'); },
     onError: (err: any) => toast.error(err.response?.data?.error || 'Publish failed'),
   });
 
@@ -77,11 +93,12 @@ const SolicitationDetail: React.FC = () => {
 
   const canSubmit = status === 'draft' && ['procurement_officer', 'procurement_manager'].includes(role);
   const canApprove = status === 'pending_approval' && ['procurement_manager', 'director_procurement'].includes(role);
-  const canPublish = status === 'approved' && ['procurement_manager', 'director_procurement'].includes(role);
+  const canReject = status === 'pending_approval' && ['procurement_manager', 'director_procurement'].includes(role);
+  const canPublish = status === 'approved' && ['procurement_officer', 'procurement_manager'].includes(role);
   const canClose = status === 'published' && ['procurement_manager', 'procurement_officer'].includes(role);
   const canAddAddendum = ['published', 'pending_approval', 'approved'].includes(status) && ['procurement_manager', 'procurement_officer'].includes(role);
 
-  const showActions = canSubmit || canApprove || canPublish || canClose || canAddAddendum;
+  const showActions = canSubmit || canApprove || canReject || canPublish || canClose || canAddAddendum;
 
   const handleAddAddendum = () => {
     const data: Record<string, any> = { description: addendumDesc, reason: addendumReason };
@@ -111,6 +128,34 @@ const SolicitationDetail: React.FC = () => {
           {(status === 'draft') && <Link to={`/solicitations/${id}/edit`} className="px-4 py-2 text-sm bg-white border border-gray-300 rounded-lg hover:bg-gray-50">Edit</Link>}
         </div>
       </div>
+
+      {sol.rejection_reason && (
+        <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+          <p className="text-sm font-medium text-red-800">Rejection Reason</p>
+          <p className="text-sm text-red-600">{sol.rejection_reason}</p>
+        </div>
+      )}
+
+      {sol.publication_targets && sol.publication_targets.length > 0 && (
+        <div className="bg-white rounded-lg border border-gray-200 p-4">
+          <h2 className="font-semibold text-gray-900 mb-3">Publication Status</h2>
+          <div className="grid grid-cols-3 gap-4">
+            {PUBLISH_TARGETS.map(target => {
+              const isPublished = sol.publication_targets?.includes(target.key);
+              return (
+                <div key={target.key} className={`p-3 rounded-lg border ${isPublished ? 'border-green-200 bg-green-50' : 'border-gray-200 bg-gray-50'}`}>
+                  <p className="text-sm font-medium">{target.label}</p>
+                  <p className={`text-xs mt-1 ${isPublished ? 'text-green-700' : 'text-gray-400'}`}>
+                    {isPublished ? 'Published' : 'Not published'}
+                  </p>
+                </div>
+              );
+            })}
+          </div>
+          {sol.egp_reference && <p className="text-xs text-gray-400 mt-3">e-GP Reference: {sol.egp_reference}</p>}
+          {sol.published_at && <p className="text-xs text-gray-400">Published at: {new Date(sol.published_at).toLocaleString()}</p>}
+        </div>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 space-y-6">
@@ -200,7 +245,10 @@ const SolicitationDetail: React.FC = () => {
               <div className="space-y-3">
                 {canSubmit && <button onClick={() => submitMutation.mutate()} className="w-full px-4 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700">Submit for Approval</button>}
                 {canApprove && <button onClick={() => approveMutation.mutate()} className="w-full px-4 py-2 bg-green-600 text-white rounded-lg text-sm hover:bg-green-700">Approve</button>}
-                {canPublish && <button onClick={() => publishMutation.mutate()} className="w-full px-4 py-2 bg-teal-600 text-white rounded-lg text-sm hover:bg-teal-700">Publish</button>}
+                {canReject && (
+                  <button onClick={() => setShowRejectModal(true)} className="w-full px-4 py-2 border border-red-300 text-red-600 rounded-lg text-sm hover:bg-red-50">Reject / Return to Draft</button>
+                )}
+                {canPublish && <button onClick={() => setShowPublishModal(true)} className="w-full px-4 py-2 bg-teal-600 text-white rounded-lg text-sm hover:bg-teal-700">Publish</button>}
                 {canClose && <button onClick={() => closeMutation.mutate()} className="w-full px-4 py-2 bg-gray-600 text-white rounded-lg text-sm hover:bg-gray-700">Close</button>}
                 {canAddAddendum && !showAddendumForm && (
                   <button onClick={() => setShowAddendumForm(true)} className="w-full px-4 py-2 border border-amber-400 text-amber-700 rounded-lg text-sm hover:bg-amber-50">Issue Addendum</button>
@@ -256,6 +304,52 @@ const SolicitationDetail: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {showRejectModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-30">
+          <div className="bg-white rounded-lg shadow-xl max-w-md w-full p-6">
+            <h3 className="text-lg font-medium">Reject / Return to Draft</h3>
+            <textarea value={comment} onChange={(e) => setComment(e.target.value)} rows={3} placeholder="Enter rejection reason..." className="w-full mt-3 border border-gray-300 rounded-md p-2 text-sm" />
+            <div className="flex justify-end gap-3 mt-4">
+              <button onClick={() => { setShowRejectModal(false); setComment(''); }} className="px-4 py-2 text-sm border border-gray-300 rounded-lg">Cancel</button>
+              <button onClick={() => rejectMutation.mutate()} disabled={!comment || rejectMutation.isPending} className="px-4 py-2 bg-red-600 text-white rounded-lg text-sm disabled:opacity-50">
+                {rejectMutation.isPending ? 'Processing...' : 'Reject'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showPublishModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-30">
+          <div className="bg-white rounded-lg shadow-xl max-w-md w-full p-6">
+            <h3 className="text-lg font-medium">Publish Solicitation</h3>
+            <p className="text-sm text-gray-500 mt-1">Select publication targets</p>
+            <div className="mt-3 space-y-2">
+              {PUBLISH_TARGETS.map(target => (
+                <label key={target.key} className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={selectedTargets.includes(target.key)}
+                    onChange={(e) => {
+                      if (e.target.checked) setSelectedTargets([...selectedTargets, target.key]);
+                      else setSelectedTargets(selectedTargets.filter(t => t !== target.key));
+                    }}
+                    className="rounded border-gray-300"
+                  />
+                  <span className="text-sm">{target.label}</span>
+                </label>
+              ))}
+            </div>
+            <div className="flex justify-end gap-3 mt-4">
+              <button onClick={() => { setShowPublishModal(false); setSelectedTargets(['zammsa_website']); }} className="px-4 py-2 text-sm border border-gray-300 rounded-lg">Cancel</button>
+              <button onClick={() => publishMutation.mutate()} disabled={selectedTargets.length === 0 || publishMutation.isPending} className="px-4 py-2 bg-teal-600 text-white rounded-lg text-sm disabled:opacity-50">
+                {publishMutation.isPending ? 'Publishing...' : 'Publish'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

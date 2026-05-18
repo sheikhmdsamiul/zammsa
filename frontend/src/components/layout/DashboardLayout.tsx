@@ -19,6 +19,8 @@ const PageLoader = () => (
 const navItems = [
   { label: 'Dashboard', path: '/dashboard', icon: <ChartBarIcon className={iconClass} /> },
   { label: 'Procurement Planning', path: '/procurement-planning', icon: <ClipboardListIcon className={iconClass} />, roles: [ROLES.USER_DEPT_STAFF, ROLES.DEPARTMENT_HEAD, ROLES.PROCUREMENT_OFFICER, ROLES.PROCUREMENT_MANAGER, ROLES.FINANCE_OFFICER, ROLES.ZPC_MEMBER, ROLES.DIRECTOR_PROCUREMENT, ROLES.DIRECTOR_GENERAL] },
+  { label: 'GPNs', path: '/procurement-planning/gpns', icon: <DocumentTextIcon className={iconClass} />, roles: [ROLES.PROCUREMENT_OFFICER, ROLES.PROCUREMENT_MANAGER, ROLES.DIRECTOR_PROCUREMENT, ROLES.SYSTEM_ADMIN] },
+  { label: 'CPPs', path: '/procurement-planning/cpp', icon: <DocumentIcon className={iconClass} />, roles: [ROLES.PROCUREMENT_OFFICER, ROLES.PROCUREMENT_MANAGER, ROLES.DIRECTOR_PROCUREMENT, ROLES.SYSTEM_ADMIN] },
   { label: 'Requisitions', path: '/requisitions', icon: <PencilIcon className={iconClass} />, roles: [ROLES.USER_DEPT_STAFF, ROLES.DEPARTMENT_HEAD, ROLES.PROCUREMENT_OFFICER, ROLES.FINANCE_OFFICER, ROLES.DIRECTOR_GENERAL] },
   { label: 'Solicitations', path: '/solicitations', icon: <ClipboardListIcon className={iconClass} />, roles: [ROLES.PROCUREMENT_OFFICER, ROLES.PROCUREMENT_MANAGER, ROLES.DIRECTOR_PROCUREMENT] },
   { label: 'Bid Management', path: '/bids', icon: <DocumentTextIcon className={iconClass} />, roles: [ROLES.PROCUREMENT_OFFICER, ROLES.PROCUREMENT_MANAGER, ROLES.EVALUATION_COMMITTEE_MEMBER, ROLES.EVALUATION_COMMITTEE_CHAIR, ROLES.ZPC_MEMBER, ROLES.DIRECTOR_PROCUREMENT] },

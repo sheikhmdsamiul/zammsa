@@ -51,6 +51,12 @@ const publicApi = {
 
   getBidOpening: (solicitationId: string) =>
     api.get<any>(`/bids/public/openings/${solicitationId}/`).then((r) => r.data),
+
+  listGPNs: (params?: Record<string, any>) =>
+    api.get<any>('/procurement-planning/public/gpns/', { params }).then((r) => r.data),
+
+  getGPN: (id: string) =>
+    api.get<any>(`/procurement-planning/public/gpns/${id}/`).then((r) => r.data),
 };
 
 export default publicApi;

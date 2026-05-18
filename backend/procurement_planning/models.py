@@ -62,6 +62,18 @@ class AnnualProcurementPlan(models.Model):
     zpc_resolution = models.JSONField(default=dict, blank=True)
     approval_trail = models.JSONField(default=list, blank=True)
 
+    # GPN publication tracking
+    gpn_published_at = models.DateTimeField(null=True, blank=True)
+    gpn_publication_targets = models.JSONField(default=list, blank=True)  # ['zammsa_website', 'egp_portal', 'govt_gazette']
+    gpn_publication_proofs = models.JSONField(default=dict, blank=True)  # {target: {url, timestamp, proof_file}}
+
+    # ZPPA submission tracking (must submit within 30 days of approval)
+    zppa_deadline = models.DateTimeField(null=True, blank=True)
+    zppa_submitted = models.BooleanField(default=False)
+    zppa_submitted_at = models.DateTimeField(null=True, blank=True)
+    zppa_submission_ref = models.CharField(max_length=255, blank=True, default='')
+    zppa_deadline_alerted = models.BooleanField(default=False)
+
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

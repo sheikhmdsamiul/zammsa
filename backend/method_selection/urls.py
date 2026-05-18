@@ -10,6 +10,9 @@ urlpatterns = [
     path('overrides/', views.MethodOverrideListView.as_view(), name='override-list'),
     path('justifications/', views.NonOpenJustificationListView.as_view(), name='justification-list'),
     path('justifications/<uuid:pk>/', views.NonOpenJustificationDetailView.as_view(), name='justification-detail'),
+    path('justifications/<uuid:pk>/submit/', views.justification_submit_view, name='justification-submit'),
+    path('justifications/<uuid:pk>/approve/', views.justification_approve_view, name='justification-approve'),
+    path('justifications/<uuid:pk>/reject/', views.justification_reject_view, name='justification-reject'),
     path('preferences/', views.PreferenceSchemeListView.as_view(), name='preference-list'),
     path('preferences/<uuid:pk>/', views.PreferenceSchemeDetailView.as_view(), name='preference-detail'),
 ]

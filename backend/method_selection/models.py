@@ -85,13 +85,18 @@ class MethodOverride(models.Model):
 
 class NonOpenJustification(models.Model):
     justification_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    requisition = models.ForeignKey(Requisition, on_delete=models.CASCADE, related_name='non_open_justifications')
+    requisition = models.ForeignKey(Requisition, on_delete=models.CASCADE, related_name='non_open_justifications', null=True, blank=True)
+    solicitation = models.ForeignKey('solicitations.Solicitation', on_delete=models.CASCADE, related_name='non_open_justifications', null=True, blank=True)
     method = models.CharField(max_length=50, choices=METHOD_CHOICES)
     reason_code = models.CharField(max_length=50, choices=NON_OPEN_CHOICES)
     reason_text = models.TextField()
     supporting_evidence_url = models.URLField(blank=True)
     status = models.CharField(max_length=50, choices=NON_OPEN_STATUS_CHOICES, default='draft')
+    submitted_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='submitted_justifications')
+    submitted_at = models.DateTimeField(null=True, blank=True)
+    approved_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='approved_justifications')
     zpc_approved_at = models.DateTimeField(null=True, blank=True)
+    rejection_reason = models.TextField(blank=True, default='')
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:

@@ -1,17 +1,19 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { procurementPlanningApi } from '../../api/procurement_planning';
 import { GeneralProcurementNotice } from '../../types';
 import { StatusBadge } from '../common/StatusBadge';
 import { LoadingSpinner } from '../common/LoadingSpinner';
 import toast from 'react-hot-toast';
 
-const PUBLISH_TARGETS = ['website', 'e_gp_portal', 'government_gazette'];
+const PUBLISH_TARGETS = ['zammsa_website', 'egp_portal', 'govt_gazette'];
 
 const GPNList: React.FC = () => {
+  const navigate = useNavigate();
   const [gpns, setGpns] = useState<GeneralProcurementNotice[]>([]);
   const [loading, setLoading] = useState(true);
   const [publishModal, setPublishModal] = useState<GeneralProcurementNotice | null>(null);
-  const [selectedTargets, setSelectedTargets] = useState<string[]>(['website']);
+  const [selectedTargets, setSelectedTargets] = useState<string[]>(['zammsa_website']);
   const [proofUrls, setProofUrls] = useState('');
   const [processing, setProcessing] = useState('');
 
@@ -73,7 +75,7 @@ const GPNList: React.FC = () => {
             </thead>
             <tbody className="divide-y divide-gray-200">
               {gpns.map((gpn) => (
-                <tr key={gpn.gpn_id} className="hover:bg-gray-50">
+                <tr key={gpn.gpn_id} onClick={() => navigate(`/procurement-planning/gpns/${gpn.gpn_id}`)} className="hover:bg-gray-50 cursor-pointer">
                   <td className="px-4 py-3 text-sm text-gray-900">{gpn.app}</td>
                   <td className="px-4 py-3"><StatusBadge status={gpn.publication_status} /></td>
                   <td className="px-4 py-3 text-sm">
@@ -82,7 +84,7 @@ const GPNList: React.FC = () => {
                   <td className="px-4 py-3 text-sm text-gray-500">{new Date(gpn.generated_at).toLocaleDateString()}</td>
                   <td className="px-4 py-3 text-sm text-gray-500">{gpn.published_at ? new Date(gpn.published_at).toLocaleDateString() : '-'}</td>
                   <td className="px-4 py-3">
-                    <div className="flex gap-2">
+                    <div className="flex gap-2" onClick={(e) => e.stopPropagation()}>
                       {gpn.publication_status === 'draft' && (
                         <>
                           <button onClick={() => setPublishModal(gpn)} disabled={processing === gpn.gpn_id} className="px-3 py-1.5 text-xs bg-zammsa-green text-white rounded hover:bg-zammsa-green-dark disabled:opacity-50">
@@ -128,7 +130,7 @@ const GPNList: React.FC = () => {
               <textarea value={proofUrls} onChange={(e) => setProofUrls(e.target.value)} rows={3} className="w-full border border-gray-300 rounded-md p-2 text-sm" placeholder="https://..." />
             </div>
             <div className="flex justify-end gap-3 mt-4">
-              <button onClick={() => { setPublishModal(null); setSelectedTargets(['website']); setProofUrls(''); }} className="px-4 py-2 text-sm border border-gray-300 rounded-lg">Cancel</button>
+              <button onClick={() => { setPublishModal(null); setSelectedTargets(['zammsa_website']); setProofUrls(''); }} className="px-4 py-2 text-sm border border-gray-300 rounded-lg">Cancel</button>
               <button onClick={() => handlePublish(publishModal)} disabled={selectedTargets.length === 0 || processing !== ''} className="px-4 py-2 bg-zammsa-green text-white rounded-lg text-sm disabled:opacity-50">
                 {processing ? 'Publishing...' : `Publish to ${selectedTargets.length} channel(s)`}
               </button>

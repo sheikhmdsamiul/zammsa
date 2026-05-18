@@ -3,7 +3,7 @@ from django.db.models import Q, Sum
 from django.utils import timezone
 from rest_framework import generics, filters, status
 from rest_framework.decorators import api_view, permission_classes
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.exceptions import PermissionDenied
 from rest_framework.response import Response
 from rest_framework.pagination import PageNumberPagination
@@ -57,7 +57,7 @@ class BaseView:
     permission_classes = [IsAuthenticated]
 
 
-ALLOWED_APP_CREATORS = ('user_dept_staff', 'department_head', 'procurement_officer', 'system_admin')
+ALLOWED_APP_CREATORS = ('user_dept_staff', 'procurement_officer', 'system_admin')
 
 
 class AnnualProcurementPlanListView(BaseView, generics.ListCreateAPIView):
@@ -109,18 +109,18 @@ SUBMIT_TRANSITIONS = {
 
 APPROVE_TRANSITIONS = {
     'dept_head_review': 'procurement_review',
-    'procurement_review': 'zpc_review',
+    'procurement_review': 'director_review',
     'director_review': 'zpc_review',
     'zpc_review': 'approved',
 }
 
 SUBMIT_ACTOR_ROLES = {
-    'draft': ('user_dept_staff', 'department_head'),
+    'draft': ('user_dept_staff',),
 }
 
 APPROVE_ACTOR_ROLES = {
     'dept_head_review': ('department_head',),
-    'procurement_review': ('director_procurement', 'director_general', 'system_admin'),
+    'procurement_review': ('procurement_officer', 'procurement_manager', 'system_admin'),
     'director_review': ('director_procurement',),
     'zpc_review': ('zpc_member', 'director_general'),
 }
@@ -272,6 +272,12 @@ def app_approve_view(request, pk):
 
     if new_status == 'approved':
         _auto_generate_gpn(app, user)
+        # Set ZPPA submission deadline (30 days from approval)
+        app.zppa_deadline = timezone.now() + timezone.timedelta(days=30)
+        app.zppa_submitted = False
+        app.zppa_submitted_at = None
+        app.zppa_submission_ref = ''
+        app.zppa_deadline_alerted = False
 
     return Response({
         'message': f'APP approved from "{old_status}" to "{new_status}"',
@@ -392,12 +398,38 @@ def app_publish_view(request, pk):
             status=status.HTTP_400_BAD_REQUEST,
         )
 
+    # Track publication targets and proofs
+    targets = request.data.get('targets', ['zammsa_website'])
+    proofs = request.data.get('proofs', {})
+
+    valid_targets = ['zammsa_website', 'egp_portal', 'govt_gazette']
+    for t in targets:
+        if t not in valid_targets:
+            return Response(
+                {'error': f'Invalid publication target: {t}. Valid: {valid_targets}'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
     app.status = 'published'
+    app.gpn_published_at = timezone.now()
+    app.gpn_publication_targets = targets
+    app.gpn_publication_proofs = proofs
     app.save()
+
+    # Also update the associated GPN if it exists
+    gpn = GeneralProcurementNotice.objects.filter(app=app).first()
+    if gpn:
+        gpn.publication_status = 'published'
+        gpn.publication_targets = targets
+        gpn.published_at = timezone.now()
+        gpn.published_by = request.user
+        gpn.save()
 
     return Response({
         'message': 'APP published',
         'status': app.status,
+        'publication_targets': targets,
+        'published_at': app.gpn_published_at.isoformat(),
     })
 
 
@@ -525,6 +557,11 @@ class ContractProcurementPlanListView(BaseView, generics.ListCreateAPIView):
     serializer_class = ContractProcurementPlanSerializer
     ordering = ['-created_at']
 
+    def perform_create(self, serializer):
+        if self.request.user.role not in ('procurement_officer', 'system_admin'):
+            raise PermissionDenied('Only Procurement Officer can create CPPs.')
+        serializer.save(created_by=self.request.user)
+
 
 class ContractProcurementPlanDetailView(generics.RetrieveUpdateDestroyAPIView):
     queryset = ContractProcurementPlan.objects.select_related('requisition', 'created_by').prefetch_related('procurement_milestones').all()
@@ -584,10 +621,10 @@ def gpn_publish_view(request, pk):
     except GeneralProcurementNotice.DoesNotExist:
         return Response({'error': 'GPN not found'}, status=status.HTTP_404_NOT_FOUND)
 
-    targets = request.data.get('targets', ['website'])
+    targets = request.data.get('targets', ['zammsa_website'])
     proof_urls = request.data.get('proof_urls', [])
 
-    valid_targets = ['website', 'e_gp_portal', 'government_gazette']
+    valid_targets = ['zammsa_website', 'egp_portal', 'govt_gazette']
     for t in targets:
         if t not in valid_targets:
             return Response({'error': f'Invalid publication target: {t}. Valid: {valid_targets}'}, status=status.HTTP_400_BAD_REQUEST)
@@ -625,6 +662,61 @@ def gpn_archive_view(request, pk):
 
 
 @api_view(['GET'])
+@permission_classes([AllowAny])
+def public_gpn_list_view(request):
+    """Public endpoint for GPNs published to zammsa_website."""
+    gpns = GeneralProcurementNotice.objects.filter(
+        publication_status='published',
+        publication_targets__contains=['zammsa_website'],
+    ).select_related('app__department', 'app__fiscal_year').order_by('-published_at')
+
+    results = []
+    for gpn in gpns:
+        line_items = gpn.content.get('line_items', [])
+        results.append({
+            'gpn_id': str(gpn.gpn_id),
+            'app_id': str(gpn.app.app_id),
+            'fiscal_year': gpn.content.get('fiscal_year', ''),
+            'department': gpn.content.get('department', ''),
+            'total_estimated_value': gpn.content.get('total_estimated_value', 0),
+            'line_items_count': len(line_items),
+            'publication_targets': gpn.publication_targets,
+            'published_at': gpn.published_at.isoformat() if gpn.published_at else None,
+            'generated_at': gpn.generated_at.isoformat() if gpn.generated_at else None,
+        })
+
+    return Response({'results': results, 'count': len(results)})
+
+
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def public_gpn_detail_view(request, pk):
+    """Public endpoint for a single GPN."""
+    try:
+        gpn = GeneralProcurementNotice.objects.select_related(
+            'app__department', 'app__fiscal_year'
+        ).get(pk=pk, publication_status='published')
+    except GeneralProcurementNotice.DoesNotExist:
+        return Response({'error': 'GPN not found'}, status=status.HTTP_404_NOT_FOUND)
+
+    if 'zammsa_website' not in gpn.publication_targets:
+        return Response({'error': 'GPN not published to public portal'}, status=status.HTTP_404_NOT_FOUND)
+
+    line_items = gpn.content.get('line_items', [])
+    return Response({
+        'gpn_id': str(gpn.gpn_id),
+        'app_id': str(gpn.app.app_id),
+        'fiscal_year': gpn.content.get('fiscal_year', ''),
+        'department': gpn.content.get('department', ''),
+        'total_estimated_value': gpn.content.get('total_estimated_value', 0),
+        'line_items': line_items,
+        'publication_targets': gpn.publication_targets,
+        'published_at': gpn.published_at.isoformat() if gpn.published_at else None,
+        'generated_at': gpn.generated_at.isoformat() if gpn.generated_at else None,
+    })
+
+
+@api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def app_dashboard_view(request):
     stats = {
@@ -655,4 +747,101 @@ def app_approval_trail_view(request, pk):
         'app_id': str(app.app_id),
         'status': app.status,
         'approval_trail': app.approval_trail,
+    })
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def app_zppa_submit_view(request, pk):
+    """Submit approved APP to ZPPA (must be done within 30 days of approval)."""
+    try:
+        app = AnnualProcurementPlan.objects.get(pk=pk)
+    except AnnualProcurementPlan.DoesNotExist:
+        return Response({'error': 'APP not found'}, status=status.HTTP_404_NOT_FOUND)
+
+    if app.status not in ('approved', 'published'):
+        return Response(
+            {'error': 'Only approved or published APPs can be submitted to ZPPA'},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    if app.zppa_submitted:
+        return Response(
+            {'error': 'APP already submitted to ZPPA'},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    submission_ref = request.data.get('submission_ref', '')
+    if not submission_ref:
+        return Response(
+            {'error': 'submission_ref is required'},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    # Check if deadline has passed
+    if app.zppa_deadline and timezone.now() > app.zppa_deadline:
+        return Response(
+            {
+                'error': 'ZPPA submission deadline has passed',
+                'deadline': app.zppa_deadline,
+                'days_overdue': (timezone.now() - app.zppa_deadline).days,
+            },
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    app.zppa_submitted = True
+    app.zppa_submitted_at = timezone.now()
+    app.zppa_submission_ref = submission_ref
+    app.save()
+
+    _record_approval_trail(app, 'zppa_submitted', request.user, {
+        'submission_ref': submission_ref,
+        'deadline': app.zppa_deadline,
+    })
+
+    return Response({
+        'message': 'APP submitted to ZPPA successfully',
+        'zppa_submitted_at': app.zppa_submitted_at.isoformat(),
+        'submission_ref': submission_ref,
+    })
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def app_zppa_deadline_alerts_view(request):
+    """Get list of APPs with approaching or overdue ZPPA deadlines."""
+    now = timezone.now()
+    approaching_deadline = now + timezone.timedelta(days=7)  # Alert 7 days before
+
+    approaching = AnnualProcurementPlan.objects.filter(
+        status__in=['approved', 'published'],
+        zppa_submitted=False,
+        zppa_deadline__isnull=False,
+        zppa_deadline__gt=now,
+        zppa_deadline__lte=approaching_deadline,
+    )
+
+    overdue = AnnualProcurementPlan.objects.filter(
+        status__in=['approved', 'published'],
+        zppa_submitted=False,
+        zppa_deadline__isnull=False,
+        zppa_deadline__lt=now,
+    )
+
+    def serialize_app(app):
+        days_remaining = (app.zppa_deadline - now).days if app.zppa_deadline else None
+        return {
+            'app_id': str(app.app_id),
+            'department_name': app.department.dept_name,
+            'fiscal_year': app.fiscal_year.year_code,
+            'status': app.status,
+            'zppa_deadline': app.zppa_deadline.isoformat() if app.zppa_deadline else None,
+            'days_remaining': days_remaining,
+            'total_estimated_value': float(app.total_estimated_value),
+        }
+
+    return Response({
+        'approaching': [serialize_app(a) for a in approaching],
+        'overdue': [serialize_app(a) for a in overdue],
+        'total_alerts': approaching.count() + overdue.count(),
     })

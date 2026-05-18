@@ -1,10 +1,13 @@
 from django.db.models import Q, Max
 from django.utils import timezone
+from django.core.mail import send_mail
+from django.conf import settings
 from rest_framework import generics, filters, status
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.pagination import PageNumberPagination
+from rest_framework.exceptions import PermissionDenied
 from django_filters.rest_framework import DjangoFilterBackend
 import django_filters
 
@@ -123,7 +126,7 @@ def solicitation_approve_view(request, pk):
         }, status=400)
 
     user_role = request.user.role
-    if user_role not in ('procurement_manager', 'system_admin'):
+    if user_role not in ('procurement_manager', 'director_procurement', 'system_admin'):
         return Response({'error': 'Not authorized to approve'}, status=403)
     if sol.created_by_id and sol.created_by_id == request.user.id:
         return Response({'error': 'Self-approval is not allowed'}, status=403)
@@ -132,6 +135,33 @@ def solicitation_approve_view(request, pk):
     sol.approved_by = request.user
     sol.save()
     return Response({'message': 'Solicitation approved', 'status': sol.status})
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def solicitation_reject_view(request, pk):
+    try:
+        sol = Solicitation.objects.get(pk=pk)
+    except Solicitation.DoesNotExist:
+        return Response({'error': 'Solicitation not found'}, status=404)
+
+    if sol.status != 'pending_approval':
+        return Response({'error': 'Only pending approval solicitations can be rejected'}, status=400)
+
+    user_role = request.user.role
+    if user_role not in ('procurement_manager', 'director_procurement', 'system_admin'):
+        return Response({'error': 'Not authorized to reject'}, status=403)
+
+    reason = request.data.get('reason', '').strip()
+    if not reason:
+        return Response({'error': 'Rejection reason is required'}, status=400)
+
+    sol.status = 'draft'
+    sol.rejected_by = request.user
+    sol.rejection_reason = reason
+    sol.rejected_at = timezone.now()
+    sol.save()
+    return Response({'message': 'Solicitation returned to draft', 'status': sol.status, 'rejection_reason': reason})
 
 
 @api_view(['POST'])
@@ -149,10 +179,103 @@ def solicitation_publish_view(request, pk):
     if user_role not in ('procurement_officer', 'system_admin'):
         return Response({'error': 'Not authorized to publish'}, status=403)
 
+    targets = request.data.get('targets', ['zammsa_website'])
+    proofs = request.data.get('proofs', {})
+
+    valid_targets = ['zammsa_website', 'egp_portal', 'email_suppliers']
+    for t in targets:
+        if t not in valid_targets:
+            return Response(
+                {'error': f'Invalid publication target: {t}. Valid: {valid_targets}'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+    # Check non-open justification if method is not open_tender
+    open_methods = ('open_tender', 'restricted', 'simplified')
+    if sol.method not in open_methods:
+        from method_selection.models import NonOpenJustification
+        has_approved = NonOpenJustification.objects.filter(
+            solicitation=sol,
+            status='zpc_approved',
+        ).exists()
+        if not has_approved:
+            return Response(
+                {'error': f'Non-open method "{sol.method}" requires an approved ZPC justification before publishing'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
     sol.status = 'published'
     sol.published_at = timezone.now()
+    sol.publication_targets = targets
+    sol.publication_proofs = proofs
+
+    # e-GP portal integration stub
+    if 'egp_portal' in targets:
+        try:
+            egp_ref = _publish_to_egp_portal(sol)
+            sol.egp_reference = egp_ref
+            proofs['egp_portal'] = {'reference': egp_ref, 'timestamp': timezone.now().isoformat()}
+        except Exception as e:
+            return Response(
+                {'error': f'e-GP portal integration failed: {str(e)}'},
+                status=status.HTTP_502_BAD_GATEWAY,
+            )
+
+    # Email notification to registered suppliers
+    if 'email_suppliers' in targets:
+        try:
+            _notify_suppliers_of_publication(sol)
+            proofs['email_suppliers'] = {'timestamp': timezone.now().isoformat()}
+        except Exception:
+            pass  # Don't fail publication if email fails
+
     sol.save()
-    return Response({'message': 'Solicitation published to e-GP portal', 'status': sol.status})
+
+    return Response({
+        'message': 'Solicitation published',
+        'status': sol.status,
+        'publication_targets': targets,
+        'published_at': sol.published_at.isoformat(),
+        'egp_reference': sol.egp_reference if 'egp_portal' in targets else None,
+    })
+
+
+def _publish_to_egp_portal(sol):
+    """Stub for e-GP portal API integration."""
+    import hashlib
+    ref = f"EGP-{sol.sol_number}-{hashlib.md5(str(sol.solicitation_id).encode()).hexdigest()[:8].upper()}"
+    return ref
+
+
+def _notify_suppliers_of_publication(sol):
+    """Send email notifications to registered suppliers."""
+    from suppliers.models import Supplier
+    suppliers = Supplier.objects.filter(status='active')
+    if not suppliers.exists():
+        return
+
+    recipient_emails = list(suppliers.values_list('email', flat=True))
+    if not recipient_emails:
+        return
+
+    subject = f'New Solicitation Published: {sol.sol_number} - {sol.title}'
+    body = (
+        f'A new solicitation has been published on the ZAMMSA procurement portal.\n\n'
+        f'Solicitation: {sol.sol_number}\n'
+        f'Title: {sol.title}\n'
+        f'Method: {sol.method}\n'
+        f'Closing Date: {sol.closing_date}\n\n'
+        f'Please log in to the portal to view the full details and submit your bid.\n\n'
+        f'This is an automated notification from the ZAMMSA Procurement System.'
+    )
+
+    send_mail(
+        subject,
+        body,
+        getattr(settings, 'DEFAULT_FROM_EMAIL', 'noreply@zammsa.gov.zm'),
+        recipient_emails,
+        fail_silently=False,
+    )
 
 
 @api_view(['POST'])

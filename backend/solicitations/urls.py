@@ -8,6 +8,7 @@ urlpatterns = [
     path('<uuid:pk>/', views.SolicitationDetailView.as_view(), name='solicitation-detail'),
     path('<uuid:pk>/submit/', views.solicitation_submit_view, name='solicitation-submit'),
     path('<uuid:pk>/approve/', views.solicitation_approve_view, name='solicitation-approve'),
+    path('<uuid:pk>/reject/', views.solicitation_reject_view, name='solicitation-reject'),
     path('<uuid:pk>/publish/', views.solicitation_publish_view, name='solicitation-publish'),
     path('<uuid:pk>/close/', views.solicitation_close_view, name='solicitation-close'),
     path('<uuid:pk>/addendum/', views.solicitation_add_addendum_view, name='solicitation-addendum'),

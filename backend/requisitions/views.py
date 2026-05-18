@@ -68,7 +68,7 @@ class RequisitionListView(BaseView, generics.ListCreateAPIView):
         return RequisitionSerializer
 
     def perform_create(self, serializer):
-        if self.request.user.role not in ('user_dept_staff', 'system_admin'):
+        if self.request.user.role != 'user_dept_staff':
             raise PermissionDenied('Only User Department Staff can create requisitions.')
         serializer.save(requester=self.request.user)
 
@@ -77,6 +77,18 @@ class RequisitionDetailView(generics.RetrieveUpdateDestroyAPIView):
     queryset = Requisition.objects.select_related('department', 'requester').prefetch_related('items', 'approvals').all()
     serializer_class = RequisitionSerializer
     permission_classes = [IsAuthenticated]
+
+    def perform_update(self, serializer):
+        if self.request.user.role != 'user_dept_staff':
+            raise PermissionDenied('Only User Department Staff can edit requisitions.')
+        serializer.save()
+
+    def perform_destroy(self, instance):
+        if self.request.user.role != 'user_dept_staff':
+            raise PermissionDenied('Only User Department Staff can delete requisitions.')
+        if instance.status not in ('draft', 'rejected'):
+            raise PermissionDenied('Only draft or rejected requisitions can be deleted.')
+        instance.delete()
 
 
 def _check_budget_and_encumber(req):
@@ -119,7 +131,7 @@ def requisition_submit_view(request, pk):
 
     if req.status != 'draft':
         return Response({'error': 'Only draft requisitions can be submitted'}, status=400)
-    if req.requester_id != request.user.id and request.user.role != 'system_admin':
+    if req.requester_id != request.user.id:
         return Response({'error': 'Only the requester can submit this requisition'}, status=403)
 
     budget_warnings = _check_budget_and_encumber(req)

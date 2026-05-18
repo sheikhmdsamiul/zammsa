@@ -9,6 +9,14 @@ class SolicitationTemplateSerializer(serializers.ModelSerializer):
         model = SolicitationTemplate
         fields = '__all__'
 
+    def validate_mandatory_clauses(self, value):
+        if not isinstance(value, list):
+            raise serializers.ValidationError('mandatory_clauses must be a list')
+        for clause in value:
+            if not isinstance(clause, dict) or 'clause_id' not in clause or 'clause_text' not in clause:
+                raise serializers.ValidationError('Each clause must have clause_id and clause_text')
+        return value
+
 
 class EvaluationCriterionSerializer(serializers.ModelSerializer):
     id = serializers.UUIDField(source='criterion_id', read_only=True)
@@ -117,6 +125,9 @@ class SolicitationSerializer(serializers.ModelSerializer):
     evaluation_criteria = EvaluationCriterionSerializer(many=True, read_only=True)
     addenda = SolicitationAddendumSerializer(many=True, read_only=True)
     documents = SolicitationDocumentSerializer(many=True, read_only=True)
+    publication_targets = serializers.ListField(child=serializers.CharField(), read_only=True)
+    egp_reference = serializers.CharField(read_only=True)
+    rejection_reason = serializers.CharField(read_only=True)
 
     class Meta:
         model = Solicitation
@@ -166,6 +177,29 @@ class SolicitationSerializer(serializers.ModelSerializer):
 
         if 'sol_number' not in validated_data or not validated_data.get('sol_number'):
             validated_data['sol_number'] = f"SOL-{timezone.now().strftime('%Y%m%d')}-{secrets.token_hex(3).upper()}"
+
+        # Auto-recommend method based on estimated value
+        if 'method' not in validated_data or not validated_data.get('method'):
+            est_value = validated_data.get('estimated_value')
+            if est_value is None and validated_data.get('requisition'):
+                est_value = validated_data['requisition'].estimated_total
+            if est_value is not None:
+                try:
+                    from system_config.models import ThresholdRule
+                    rules = ThresholdRule.objects.filter(
+                        applies_to='procurement', is_active=True,
+                    ).order_by('min_value')
+                    for rule in rules:
+                        if rule.min_value <= est_value:
+                            if rule.max_value is None or est_value <= rule.max_value:
+                                validated_data['method'] = rule.default_method or 'open_tender'
+                                break
+                    if 'method' not in validated_data:
+                        validated_data['method'] = 'open_tender'
+                except Exception:
+                    validated_data['method'] = 'open_tender'
+            else:
+                validated_data['method'] = 'open_tender'
 
         instance = super().create(validated_data)
 

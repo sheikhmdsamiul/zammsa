@@ -84,6 +84,11 @@ const APPList = React.lazy(() => import('./components/procurement-planning/APPLi
 const APPCreate = React.lazy(() => import('./components/procurement-planning/APPCreate'));
 const APPDetail = React.lazy(() => import('./components/procurement-planning/APPDetail'));
 const GPNList = React.lazy(() => import('./components/procurement-planning/GPNList'));
+const GPNDetail = React.lazy(() => import('./components/procurement-planning/GPNDetail'));
+const CPPList = React.lazy(() => import('./components/procurement-planning/CPPList'));
+const CPPCreate = React.lazy(() => import('./components/procurement-planning/CPPCreate'));
+const GPNListPublic = React.lazy(() => import('./components/public/GPNListPublic'));
+const GPNDetailPublic = React.lazy(() => import('./components/public/GPNDetailPublic'));
 
 const AdminDashboard = React.lazy(() => import('./components/admin/AdminDashboard'));
 const UserManagement = React.lazy(() => import('./components/admin/UserManagement'));
@@ -144,6 +149,8 @@ function App() {
                   <Route path="events" element={<EventsList />} />
                   <Route path="faq" element={<FAQ />} />
                   <Route path="contact" element={<Contact />} />
+                  <Route path="gpns" element={<GPNListPublic />} />
+                  <Route path="gpns/:id" element={<GPNDetailPublic />} />
                   <Route path="about" element={<About />} />
                 </Route>
 
@@ -163,12 +170,16 @@ function App() {
                     </ProtectedRoute>
                   } />
                   <Route path="requisitions/create" element={
-                    <ProtectedRoute roles={[ROLES.USER_DEPT_STAFF, ROLES.SYSTEM_ADMIN]}>
+                    <ProtectedRoute roles={[ROLES.USER_DEPT_STAFF]}>
                       <RequisitionCreate />
                     </ProtectedRoute>
                   } />
                   <Route path="requisitions/:id" element={<RequisitionDetail />} />
-                  <Route path="requisitions/:id/edit" element={<RequisitionEdit />} />
+                  <Route path="requisitions/:id/edit" element={
+                    <ProtectedRoute roles={[ROLES.USER_DEPT_STAFF]}>
+                      <RequisitionEdit />
+                    </ProtectedRoute>
+                  } />
                   <Route path="solicitations" element={
                     <ProtectedRoute roles={[ROLES.PROCUREMENT_OFFICER, ROLES.PROCUREMENT_MANAGER, ROLES.DIRECTOR_PROCUREMENT]}>
                       <SolicitationsList />
@@ -266,6 +277,21 @@ function App() {
                   <Route path="procurement-planning/gpns" element={
                     <ProtectedRoute roles={[ROLES.USER_DEPT_STAFF, ROLES.DEPARTMENT_HEAD, ROLES.PROCUREMENT_OFFICER, ROLES.PROCUREMENT_MANAGER, ROLES.FINANCE_OFFICER, ROLES.ZPC_MEMBER, ROLES.DIRECTOR_PROCUREMENT, ROLES.DIRECTOR_GENERAL]}>
                       <GPNList />
+                    </ProtectedRoute>
+                  } />
+                  <Route path="procurement-planning/gpns/:id" element={
+                    <ProtectedRoute roles={[ROLES.USER_DEPT_STAFF, ROLES.DEPARTMENT_HEAD, ROLES.PROCUREMENT_OFFICER, ROLES.PROCUREMENT_MANAGER, ROLES.FINANCE_OFFICER, ROLES.ZPC_MEMBER, ROLES.DIRECTOR_PROCUREMENT, ROLES.DIRECTOR_GENERAL]}>
+                      <GPNDetail />
+                    </ProtectedRoute>
+                  } />
+                  <Route path="procurement-planning/cpp" element={
+                    <ProtectedRoute roles={[ROLES.PROCUREMENT_OFFICER, ROLES.PROCUREMENT_MANAGER, ROLES.DIRECTOR_PROCUREMENT, ROLES.SYSTEM_ADMIN]}>
+                      <CPPList />
+                    </ProtectedRoute>
+                  } />
+                  <Route path="procurement-planning/cpp/create" element={
+                    <ProtectedRoute roles={[ROLES.PROCUREMENT_OFFICER, ROLES.SYSTEM_ADMIN]}>
+                      <CPPCreate />
                     </ProtectedRoute>
                   } />
                 </Route>

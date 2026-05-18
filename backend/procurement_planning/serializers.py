@@ -32,6 +32,7 @@ class APPLineItemSerializer(serializers.ModelSerializer):
 
 class AnnualProcurementPlanSerializer(serializers.ModelSerializer):
     line_items = APPLineItemSerializer(many=True, read_only=True)
+    gpns = serializers.SerializerMethodField()
     department_name = serializers.CharField(source='department.dept_name', read_only=True)
     fiscal_year_code = serializers.CharField(source='fiscal_year.year_code', read_only=True)
     submitted_by_name = serializers.SerializerMethodField()
@@ -39,6 +40,8 @@ class AnnualProcurementPlanSerializer(serializers.ModelSerializer):
     rejected_by_name = serializers.SerializerMethodField()
     consolidated_into_id = serializers.UUIDField(source='consolidated_into.app_id', read_only=True)
     consolidated_from_count = serializers.SerializerMethodField()
+    zppa_days_remaining = serializers.SerializerMethodField()
+    zppa_status = serializers.SerializerMethodField()
 
     class Meta:
         model = AnnualProcurementPlan
@@ -59,6 +62,30 @@ class AnnualProcurementPlanSerializer(serializers.ModelSerializer):
     def get_consolidated_from_count(self, obj):
         return obj.consolidated_from.count()
 
+    def get_gpns(self, obj):
+        gpns = obj.gpns.all()
+        return GeneralProcurementNoticeSerializer(gpns, many=True).data
+
+    def get_zppa_days_remaining(self, obj):
+        if not obj.zppa_deadline or obj.zppa_submitted:
+            return None
+        from django.utils import timezone
+        delta = obj.zppa_deadline - timezone.now()
+        return delta.days
+
+    def get_zppa_status(self, obj):
+        if obj.zppa_submitted:
+            return 'submitted'
+        if not obj.zppa_deadline:
+            return 'not_applicable'
+        from django.utils import timezone
+        delta = obj.zppa_deadline - timezone.now()
+        if delta.days < 0:
+            return 'overdue'
+        elif delta.days <= 7:
+            return 'approaching'
+        return 'on_track'
+
     def validate(self, data):
         if data.get('is_consolidated') and not data.get('consolidated_into'):
             raise serializers.ValidationError('A consolidated APP must specify the target consolidated_into')
@@ -70,6 +97,8 @@ class AnnualProcurementPlanListSerializer(serializers.ModelSerializer):
     fiscal_year_code = serializers.CharField(source='fiscal_year.year_code', read_only=True)
     submitted_by_name = serializers.SerializerMethodField()
     approved_by_name = serializers.SerializerMethodField()
+    zppa_status = serializers.SerializerMethodField()
+    zppa_days_remaining = serializers.SerializerMethodField()
 
     class Meta:
         model = AnnualProcurementPlan
@@ -77,7 +106,8 @@ class AnnualProcurementPlanListSerializer(serializers.ModelSerializer):
             'app_id', 'fiscal_year_code', 'department_name', 'status',
             'total_estimated_value', 'submitted_at', 'approved_at',
             'submitted_by_name', 'approved_by_name', 'rejection_reason',
-            'is_consolidated', 'created_at',
+            'is_consolidated', 'created_at', 'zppa_submitted', 'zppa_status',
+            'zppa_days_remaining',
         )
 
     def get_submitted_by_name(self, obj):
@@ -85,6 +115,26 @@ class AnnualProcurementPlanListSerializer(serializers.ModelSerializer):
 
     def get_approved_by_name(self, obj):
         return obj.approved_by.full_name if obj.approved_by else None
+
+    def get_zppa_status(self, obj):
+        if getattr(obj, 'zppa_submitted', False):
+            return 'submitted'
+        if not getattr(obj, 'zppa_deadline', None):
+            return 'not_applicable'
+        from django.utils import timezone
+        delta = obj.zppa_deadline - timezone.now()
+        if delta.days < 0:
+            return 'overdue'
+        elif delta.days <= 7:
+            return 'approaching'
+        return 'on_track'
+
+    def get_zppa_days_remaining(self, obj):
+        if not getattr(obj, 'zppa_deadline', None) or getattr(obj, 'zppa_submitted', False):
+            return None
+        from django.utils import timezone
+        delta = obj.zppa_deadline - timezone.now()
+        return delta.days
 
 
 class ProcurementMilestoneSerializer(serializers.ModelSerializer):

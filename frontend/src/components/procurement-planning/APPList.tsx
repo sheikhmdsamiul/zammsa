@@ -51,7 +51,7 @@ const APPList: React.FC = () => {
           <h1 className="text-2xl font-bold text-gray-900">Annual Procurement Plans</h1>
           <p className="text-sm text-gray-500">Manage APP submissions through the approval workflow</p>
         </div>
-        {user?.role && ['user_dept_staff', 'department_head', 'procurement_officer', 'system_admin'].includes(user.role) && (
+        {user?.role && ['user_dept_staff', 'procurement_officer', 'system_admin'].includes(user.role) && (
           <button onClick={() => navigate('/procurement-planning/create')} className="px-4 py-2 bg-zammsa-green text-white rounded-lg hover:bg-zammsa-green-dark text-sm font-medium">
             + New APP
           </button>
@@ -91,6 +91,7 @@ const APPList: React.FC = () => {
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
                 <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Total Value</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Submitted</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">ZPPA</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Consolidated</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Created</th>
               </tr>
@@ -103,12 +104,25 @@ const APPList: React.FC = () => {
                   <td className="px-4 py-3"><StatusBadge status={app.status} /></td>
                   <td className="px-4 py-3 text-sm text-right font-medium">ZMW {Number(app.total_estimated_value).toLocaleString()}</td>
                   <td className="px-4 py-3 text-sm text-gray-500">{app.submitted_at ? new Date(app.submitted_at).toLocaleDateString() : '-'}</td>
+                  <td className="px-4 py-3">
+                    {app.zppa_submitted ? (
+                      <span className="text-xs bg-green-100 text-green-800 px-2 py-0.5 rounded-full">Submitted</span>
+                    ) : app.zppa_status === 'overdue' ? (
+                      <span className="text-xs bg-red-100 text-red-800 px-2 py-0.5 rounded-full">Overdue</span>
+                    ) : app.zppa_status === 'approaching' ? (
+                      <span className="text-xs bg-yellow-100 text-yellow-800 px-2 py-0.5 rounded-full">{app.zppa_days_remaining}d left</span>
+                    ) : app.zppa_status === 'on_track' ? (
+                      <span className="text-xs bg-blue-100 text-blue-800 px-2 py-0.5 rounded-full">{app.zppa_days_remaining}d</span>
+                    ) : (
+                      <span className="text-xs text-gray-400">-</span>
+                    )}
+                  </td>
                   <td className="px-4 py-3">{app.is_consolidated ? <StatusBadge status="consolidated" /> : <span className="text-xs text-gray-400">No</span>}</td>
                   <td className="px-4 py-3 text-sm text-gray-400">{new Date(app.created_at).toLocaleDateString()}</td>
                 </tr>
               ))}
               {plans.length === 0 && !loading && (
-                <tr><td colSpan={7} className="px-4 py-8 text-center text-gray-400">No procurement plans found.</td></tr>
+                <tr><td colSpan={8} className="px-4 py-8 text-center text-gray-400">No procurement plans found.</td></tr>
               )}
             </tbody>
           </table>
