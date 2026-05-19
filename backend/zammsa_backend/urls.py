@@ -1,5 +1,7 @@
 from django.contrib import admin
 from django.urls import path, include, re_path
+from django.conf import settings
+from django.conf.urls.static import static
 from django.http import JsonResponse
 from django.db import connections
 from django.core.cache import cache
@@ -63,5 +65,8 @@ urlpatterns = [
     path('api/v1/redoc/', schema_view.with_ui('redoc', cache_timeout=0), name='schema-redoc'),
     re_path(r'^api/v1/', api_404_handler),
 ]
+
+if settings.DEBUG:
+    urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
 
 handler404 = api_404_handler

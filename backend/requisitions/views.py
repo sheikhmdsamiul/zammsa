@@ -36,6 +36,7 @@ class RequisitionFilter(django_filters.FilterSet):
     date_to = django_filters.DateFilter(field_name='created_at', lookup_expr='lte')
     estimated_min = django_filters.NumberFilter(field_name='estimated_total', lookup_expr='gte')
     estimated_max = django_filters.NumberFilter(field_name='estimated_total', lookup_expr='lte')
+    has_approved_cpp = django_filters.BooleanFilter(method='filter_has_approved_cpp')
 
     class Meta:
         model = Requisition
@@ -47,6 +48,11 @@ class RequisitionFilter(django_filters.FilterSet):
             Q(description__icontains=value) |
             Q(department__dept_name__icontains=value)
         )
+
+    def filter_has_approved_cpp(self, queryset, name, value):
+        if value:
+            return queryset.filter(cpp__status='approved').distinct()
+        return queryset
 
 
 class BaseView:
@@ -149,7 +155,7 @@ def requisition_submit_view(request, pk):
             content=spec_data.get('content', {}),
         )
 
-    req.status = 'submitted'
+    req.status = 'pending_dept_head'
     req.submitted_at = timezone.now()
     req.current_approver = None
     req.save()
@@ -164,7 +170,7 @@ def requisition_submit_view(request, pk):
     )
 
     return Response({
-        'message': 'Requisition submitted',
+        'message': 'Requisition submitted and sent for Department Head approval',
         'status': req.status,
         'req_number': req.req_number,
         'budget_validated': req.budget_validated,
@@ -195,9 +201,8 @@ def requisition_budget_validate_view(request, pk):
 
 def _get_flow_for_role(user_role, req):
     if user_role == 'department_head':
-        return {'from': 'submitted', 'to': 'pending_finance', 'level': 'department_head_approval'}
+        return {'from': 'pending_dept_head', 'to': 'pending_finance', 'level': 'department_head_approval'}
     if user_role == 'finance_officer':
-        estimated = float(req.estimated_total)
         return {'from': 'pending_finance', 'to': 'pending_dg', 'level': 'finance_validation'}
     if user_role == 'director_general':
         estimated = float(req.estimated_total)

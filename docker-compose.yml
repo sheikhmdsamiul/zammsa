@@ -4,7 +4,7 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
     env_file:
-      - zammsa_backend/.env
+      - backend/.env
     environment:
       POSTGRES_DB: zammsa_db
       POSTGRES_USER: zammsa_user
@@ -29,14 +29,14 @@ services:
 
   backend:
     build:
-      context: zammsa_backend
+      context: backend
       dockerfile: Dockerfile
     volumes:
       - static_volume:/app/static
       - media_volume:/app/media
       - logs_volume:/app/logs
     env_file:
-      - zammsa_backend/.env
+      - backend/.env
     environment:
       DEBUG: "False"
       DB_HOST: db
@@ -50,14 +50,14 @@ services:
 
   celery_worker:
     build:
-      context: zammsa_backend
+      context: backend
       dockerfile: Dockerfile
     command: celery -A zammsa_backend worker -l info --concurrency=4
     volumes:
       - media_volume:/app/media
       - logs_volume:/app/logs
     env_file:
-      - zammsa_backend/.env
+      - backend/.env
     environment:
       DEBUG: "False"
       DB_HOST: db
@@ -69,13 +69,13 @@ services:
 
   celery_beat:
     build:
-      context: zammsa_backend
+      context: backend
       dockerfile: Dockerfile
     command: celery -A zammsa_backend beat -l info --scheduler django_celery_beat.schedulers:DatabaseScheduler
     volumes:
       - logs_volume:/app/logs
     env_file:
-      - zammsa_backend/.env
+      - backend/.env
     environment:
       DEBUG: "False"
       DB_HOST: db

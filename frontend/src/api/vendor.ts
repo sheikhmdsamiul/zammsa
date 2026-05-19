@@ -23,11 +23,11 @@ export const vendorApi = {
       api.get<VendorRegistration>('/suppliers/applications/').then((r) => r.data),
     update: (data: Partial<VendorRegistration>) =>
       api.patch<VendorRegistration>('/suppliers/applications/', data).then((r) => r.data),
-    uploadDocument: (type: string, file: File) => {
+    uploadDocument: (applicationId: string, type: string, file: File) => {
       const form = new FormData();
-      form.append('type', type);
+      form.append('document_type', type);
       form.append('file', file);
-      return api.post<RegistrationDocument>('/suppliers/application-documents/', form, {
+      return api.post<RegistrationDocument>(`/suppliers/applications/${applicationId}/upload-document/`, form, {
         headers: { 'Content-Type': 'multipart/form-data' },
       }).then((r) => r.data);
     },

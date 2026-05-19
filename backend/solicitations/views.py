@@ -18,6 +18,43 @@ from .serializers import (
     ClarificationRequestSerializer, SolicitationDocumentSerializer,
 )
 
+PROCUREMENT_STAFF_ROLES = ('procurement_officer', 'procurement_manager', 'director_procurement', 'system_admin')
+SOLICITATION_APPROVER_ROLES = ('procurement_manager', 'director_procurement', 'system_admin')
+ROLE_ALIASES = {
+    'procurement manager': 'procurement_manager',
+    'proc manager': 'procurement_manager',
+    'proc. manager': 'procurement_manager',
+    'procurement officer': 'procurement_officer',
+    'proc officer': 'procurement_officer',
+    'proc. officer': 'procurement_officer',
+    'director procurement': 'director_procurement',
+    'director of procurement': 'director_procurement',
+    'system admin': 'system_admin',
+}
+
+
+def _normalize_role(role):
+    if not role:
+        return ''
+    normalized = str(role).strip().lower().replace('-', '_')
+    normalized = '_'.join(normalized.split())
+    return ROLE_ALIASES.get(normalized, normalized)
+
+
+METHOD_ALIASES = {
+    'open': 'open_tender',
+    'open tender': 'open_tender',
+    'opentender': 'open_tender',
+}
+
+
+def _normalize_method(method):
+    if not method:
+        return ''
+    normalized = str(method).strip().lower().replace('-', '_')
+    normalized = '_'.join(normalized.split())
+    return METHOD_ALIASES.get(normalized, normalized)
+
 
 class StandardPagination(PageNumberPagination):
     page_size = 25
@@ -70,9 +107,21 @@ class SolicitationListView(BaseView, generics.ListCreateAPIView):
         return SolicitationSerializer
 
     def perform_create(self, serializer):
-        if self.request.user.role not in ('procurement_officer', 'system_admin'):
+        if _normalize_role(self.request.user.role) not in PROCUREMENT_STAFF_ROLES:
             from rest_framework.exceptions import PermissionDenied
-            raise PermissionDenied('Only Procurement Officer can create solicitations.')
+            raise PermissionDenied('Only authorized procurement staff can create solicitations.')
+        
+        # BR-CPP-01: No solicitation can be published without an approved CPP
+        # Check that the requisition has an approved CPP
+        requisition = serializer.validated_data.get('requisition')
+        if requisition:
+            approved_cpp = requisition.cpp.filter(status='approved').first()
+            if not approved_cpp:
+                raise PermissionDenied(
+                    f'Cannot create solicitation for requisition {requisition.req_number}. '
+                    'An approved Contract Procurement Plan (CPP) is required first.'
+                )
+        
         serializer.save(created_by=self.request.user)
 
 
@@ -99,8 +148,8 @@ def solicitation_submit_view(request, pk):
             'error': f'Evaluation criteria weights must sum to 100% (currently {criteria_sum}%)'
         }, status=400)
 
-    user_role = request.user.role
-    if user_role not in ('procurement_officer', 'system_admin'):
+    user_role = _normalize_role(request.user.role)
+    if user_role not in PROCUREMENT_STAFF_ROLES:
         return Response({'error': 'Not authorized to submit for approval'}, status=403)
 
     sol.status = 'pending_approval'
@@ -125,8 +174,8 @@ def solicitation_approve_view(request, pk):
             'error': f'Evaluation criteria weights must sum to 100% (currently {criteria_sum}%)'
         }, status=400)
 
-    user_role = request.user.role
-    if user_role not in ('procurement_manager', 'director_procurement', 'system_admin'):
+    user_role = _normalize_role(request.user.role)
+    if user_role not in SOLICITATION_APPROVER_ROLES:
         return Response({'error': 'Not authorized to approve'}, status=403)
     if sol.created_by_id and sol.created_by_id == request.user.id:
         return Response({'error': 'Self-approval is not allowed'}, status=403)
@@ -148,8 +197,8 @@ def solicitation_reject_view(request, pk):
     if sol.status != 'pending_approval':
         return Response({'error': 'Only pending approval solicitations can be rejected'}, status=400)
 
-    user_role = request.user.role
-    if user_role not in ('procurement_manager', 'director_procurement', 'system_admin'):
+    user_role = _normalize_role(request.user.role)
+    if user_role not in SOLICITATION_APPROVER_ROLES:
         return Response({'error': 'Not authorized to reject'}, status=403)
 
     reason = request.data.get('reason', '').strip()
@@ -175,9 +224,18 @@ def solicitation_publish_view(request, pk):
     if sol.status != 'approved':
         return Response({'error': 'Only approved solicitations can be published'}, status=400)
 
-    user_role = request.user.role
-    if user_role not in ('procurement_officer', 'system_admin'):
+    user_role = _normalize_role(request.user.role)
+    if user_role not in PROCUREMENT_STAFF_ROLES:
         return Response({'error': 'Not authorized to publish'}, status=403)
+
+    # BR-CPP-01: No solicitation can be published without an approved CPP
+    if sol.requisition:
+        has_approved_cpp = sol.requisition.cpp.filter(status='approved').exists()
+        if not has_approved_cpp:
+            return Response({
+                'error': 'Cannot publish solicitation — the linked requisition has no approved CPP. '
+                         'An approved Contract Procurement Plan (CPP) is required before publication.'
+            }, status=status.HTTP_400_BAD_REQUEST)
 
     targets = request.data.get('targets', ['zammsa_website'])
     proofs = request.data.get('proofs', {})
@@ -192,7 +250,8 @@ def solicitation_publish_view(request, pk):
 
     # Check non-open justification if method is not open_tender
     open_methods = ('open_tender', 'restricted', 'simplified')
-    if sol.method not in open_methods:
+    normalized_method = _normalize_method(sol.method)
+    if normalized_method not in open_methods:
         from method_selection.models import NonOpenJustification
         has_approved = NonOpenJustification.objects.filter(
             solicitation=sol,
@@ -306,7 +365,7 @@ def solicitation_add_addendum_view(request, pk):
     if not description:
         return Response({'error': 'Description is required'}, status=400)
 
-    last_num = sol.addenda.aggregate(m=Max('addendum_number'))['addendum_number__max'] or 0
+    last_num = sol.addenda.aggregate(m=Max('addendum_number'))['m'] or 0
 
     addendum = SolicitationAddendum.objects.create(
         solicitation=sol,

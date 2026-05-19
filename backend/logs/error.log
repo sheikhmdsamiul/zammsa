@@ -5959,3 +5959,1077 @@ LINE 1: ...ion"."status", "sol_solicitation"."published_at", "sol_solic...
                                                              ^
 
 ERROR 2026-05-18 09:27:10,365 basehttp 229637 131713663702720 "GET /api/v1/solicitations/?page=1&page_size=10&search=&ordering=-created_at HTTP/1.1" 500 203820
+ERROR 2026-05-18 13:09:11,894 log 474054 132429267257024 Internal Server Error: /api/v1/procurement-planning/contract-plans/
+Traceback (most recent call last):
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/db/backends/utils.py", line 105, in _execute
+    return self.cursor.execute(sql, params)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+psycopg2.errors.UndefinedColumn: column "cpp_number" of relation "proc_contract_plan" does not exist
+LINE 1: INSERT INTO "proc_contract_plan" ("cpp_id", "cpp_number", "r...
+                                                    ^
+
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/core/handlers/exception.py", line 55, in inner
+    response = get_response(request)
+               ^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/core/handlers/base.py", line 197, in _get_response
+    response = wrapped_callback(request, *callback_args, **callback_kwargs)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/views/decorators/csrf.py", line 65, in _view_wrapper
+    return view_func(request, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/views/generic/base.py", line 104, in view
+    return self.dispatch(request, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/views.py", line 515, in dispatch
+    response = self.handle_exception(exc)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/views.py", line 475, in handle_exception
+    self.raise_uncaught_exception(exc)
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/views.py", line 486, in raise_uncaught_exception
+    raise exc
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/views.py", line 512, in dispatch
+    response = handler(request, *args, **kwargs)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/generics.py", line 246, in post
+    return self.create(request, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/mixins.py", line 19, in create
+    self.perform_create(serializer)
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/procurement_planning/views.py", line 647, in perform_create
+    serializer.save(created_by=self.request.user, **data)
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/serializers.py", line 210, in save
+    self.instance = self.create(validated_data)
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/serializers.py", line 991, in create
+    instance = ModelClass._default_manager.create(**validated_data)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/db/models/manager.py", line 87, in manager_method
+    return getattr(self.get_queryset(), name)(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/db/models/query.py", line 679, in create
+    obj.save(force_insert=True, using=self.db)
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/procurement_planning/models.py", line 187, in save
+    super().save(*args, **kwargs)
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/db/models/base.py", line 892, in save
+    self.save_base(
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/db/models/base.py", line 998, in save_base
+    updated = self._save_table(
+              ^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/db/models/base.py", line 1161, in _save_table
+    results = self._do_insert(
+              ^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/db/models/base.py", line 1202, in _do_insert
+    return manager._insert(
+           ^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/db/models/manager.py", line 87, in manager_method
+    return getattr(self.get_queryset(), name)(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/db/models/query.py", line 1847, in _insert
+    return query.get_compiler(using=using).execute_sql(returning_fields)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/db/models/sql/compiler.py", line 1836, in execute_sql
+    cursor.execute(sql, params)
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/db/backends/utils.py", line 122, in execute
+    return super().execute(sql, params)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/db/backends/utils.py", line 79, in execute
+    return self._execute_with_wrappers(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/db/backends/utils.py", line 92, in _execute_with_wrappers
+    return executor(sql, params, many, context)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/db/backends/utils.py", line 100, in _execute
+    with self.db.wrap_database_errors:
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/db/utils.py", line 91, in __exit__
+    raise dj_exc_value.with_traceback(traceback) from exc_value
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/db/backends/utils.py", line 105, in _execute
+    return self.cursor.execute(sql, params)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+django.db.utils.ProgrammingError: column "cpp_number" of relation "proc_contract_plan" does not exist
+LINE 1: INSERT INTO "proc_contract_plan" ("cpp_id", "cpp_number", "r...
+                                                    ^
+
+ERROR 2026-05-18 13:09:11,907 basehttp 474054 132429267257024 "POST /api/v1/procurement-planning/contract-plans/ HTTP/1.1" 500 264051
+ERROR 2026-05-18 13:09:16,104 log 474054 132429267257024 Internal Server Error: /api/v1/procurement-planning/contract-plans/
+Traceback (most recent call last):
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/db/backends/utils.py", line 105, in _execute
+    return self.cursor.execute(sql, params)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+psycopg2.errors.UndefinedColumn: column "cpp_number" of relation "proc_contract_plan" does not exist
+LINE 1: INSERT INTO "proc_contract_plan" ("cpp_id", "cpp_number", "r...
+                                                    ^
+
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/core/handlers/exception.py", line 55, in inner
+    response = get_response(request)
+               ^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/core/handlers/base.py", line 197, in _get_response
+    response = wrapped_callback(request, *callback_args, **callback_kwargs)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/views/decorators/csrf.py", line 65, in _view_wrapper
+    return view_func(request, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/views/generic/base.py", line 104, in view
+    return self.dispatch(request, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/views.py", line 515, in dispatch
+    response = self.handle_exception(exc)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/views.py", line 475, in handle_exception
+    self.raise_uncaught_exception(exc)
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/views.py", line 486, in raise_uncaught_exception
+    raise exc
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/views.py", line 512, in dispatch
+    response = handler(request, *args, **kwargs)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/generics.py", line 246, in post
+    return self.create(request, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/mixins.py", line 19, in create
+    self.perform_create(serializer)
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/procurement_planning/views.py", line 647, in perform_create
+    serializer.save(created_by=self.request.user, **data)
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/serializers.py", line 210, in save
+    self.instance = self.create(validated_data)
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/serializers.py", line 991, in create
+    instance = ModelClass._default_manager.create(**validated_data)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/db/models/manager.py", line 87, in manager_method
+    return getattr(self.get_queryset(), name)(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/db/models/query.py", line 679, in create
+    obj.save(force_insert=True, using=self.db)
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/procurement_planning/models.py", line 187, in save
+    super().save(*args, **kwargs)
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/db/models/base.py", line 892, in save
+    self.save_base(
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/db/models/base.py", line 998, in save_base
+    updated = self._save_table(
+              ^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/db/models/base.py", line 1161, in _save_table
+    results = self._do_insert(
+              ^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/db/models/base.py", line 1202, in _do_insert
+    return manager._insert(
+           ^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/db/models/manager.py", line 87, in manager_method
+    return getattr(self.get_queryset(), name)(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/db/models/query.py", line 1847, in _insert
+    return query.get_compiler(using=using).execute_sql(returning_fields)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/db/models/sql/compiler.py", line 1836, in execute_sql
+    cursor.execute(sql, params)
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/db/backends/utils.py", line 122, in execute
+    return super().execute(sql, params)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/db/backends/utils.py", line 79, in execute
+    return self._execute_with_wrappers(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/db/backends/utils.py", line 92, in _execute_with_wrappers
+    return executor(sql, params, many, context)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/db/backends/utils.py", line 100, in _execute
+    with self.db.wrap_database_errors:
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/db/utils.py", line 91, in __exit__
+    raise dj_exc_value.with_traceback(traceback) from exc_value
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/db/backends/utils.py", line 105, in _execute
+    return self.cursor.execute(sql, params)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+django.db.utils.ProgrammingError: column "cpp_number" of relation "proc_contract_plan" does not exist
+LINE 1: INSERT INTO "proc_contract_plan" ("cpp_id", "cpp_number", "r...
+                                                    ^
+
+ERROR 2026-05-18 13:09:16,108 basehttp 474054 132429267257024 "POST /api/v1/procurement-planning/contract-plans/ HTTP/1.1" 500 264051
+ERROR 2026-05-18 13:11:29,585 log 474054 132429267257024 Internal Server Error: /api/v1/procurement-planning/contract-plans/
+Traceback (most recent call last):
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/db/backends/utils.py", line 105, in _execute
+    return self.cursor.execute(sql, params)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+psycopg2.errors.UndefinedColumn: column "cpp_number" of relation "proc_contract_plan" does not exist
+LINE 1: INSERT INTO "proc_contract_plan" ("cpp_id", "cpp_number", "r...
+                                                    ^
+
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/core/handlers/exception.py", line 55, in inner
+    response = get_response(request)
+               ^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/core/handlers/base.py", line 197, in _get_response
+    response = wrapped_callback(request, *callback_args, **callback_kwargs)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/views/decorators/csrf.py", line 65, in _view_wrapper
+    return view_func(request, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/views/generic/base.py", line 104, in view
+    return self.dispatch(request, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/views.py", line 515, in dispatch
+    response = self.handle_exception(exc)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/views.py", line 475, in handle_exception
+    self.raise_uncaught_exception(exc)
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/views.py", line 486, in raise_uncaught_exception
+    raise exc
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/views.py", line 512, in dispatch
+    response = handler(request, *args, **kwargs)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/generics.py", line 246, in post
+    return self.create(request, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/mixins.py", line 19, in create
+    self.perform_create(serializer)
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/procurement_planning/views.py", line 647, in perform_create
+    serializer.save(created_by=self.request.user, **data)
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/serializers.py", line 210, in save
+    self.instance = self.create(validated_data)
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/serializers.py", line 991, in create
+    instance = ModelClass._default_manager.create(**validated_data)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/db/models/manager.py", line 87, in manager_method
+    return getattr(self.get_queryset(), name)(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/db/models/query.py", line 679, in create
+    obj.save(force_insert=True, using=self.db)
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/procurement_planning/models.py", line 187, in save
+    super().save(*args, **kwargs)
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/db/models/base.py", line 892, in save
+    self.save_base(
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/db/models/base.py", line 998, in save_base
+    updated = self._save_table(
+              ^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/db/models/base.py", line 1161, in _save_table
+    results = self._do_insert(
+              ^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/db/models/base.py", line 1202, in _do_insert
+    return manager._insert(
+           ^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/db/models/manager.py", line 87, in manager_method
+    return getattr(self.get_queryset(), name)(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/db/models/query.py", line 1847, in _insert
+    return query.get_compiler(using=using).execute_sql(returning_fields)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/db/models/sql/compiler.py", line 1836, in execute_sql
+    cursor.execute(sql, params)
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/db/backends/utils.py", line 122, in execute
+    return super().execute(sql, params)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/db/backends/utils.py", line 79, in execute
+    return self._execute_with_wrappers(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/db/backends/utils.py", line 92, in _execute_with_wrappers
+    return executor(sql, params, many, context)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/db/backends/utils.py", line 100, in _execute
+    with self.db.wrap_database_errors:
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/db/utils.py", line 91, in __exit__
+    raise dj_exc_value.with_traceback(traceback) from exc_value
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/db/backends/utils.py", line 105, in _execute
+    return self.cursor.execute(sql, params)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+django.db.utils.ProgrammingError: column "cpp_number" of relation "proc_contract_plan" does not exist
+LINE 1: INSERT INTO "proc_contract_plan" ("cpp_id", "cpp_number", "r...
+                                                    ^
+
+ERROR 2026-05-18 13:11:29,588 basehttp 474054 132429267257024 "POST /api/v1/procurement-planning/contract-plans/ HTTP/1.1" 500 264077
+ERROR 2026-05-18 13:14:27,463 log 480210 130297085556416 Internal Server Error: /api/v1/procurement-planning/contract-plans/
+Traceback (most recent call last):
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/db/backends/utils.py", line 105, in _execute
+    return self.cursor.execute(sql, params)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+psycopg2.errors.UndefinedColumn: column "cpp_number" of relation "proc_contract_plan" does not exist
+LINE 1: INSERT INTO "proc_contract_plan" ("cpp_id", "cpp_number", "r...
+                                                    ^
+
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/core/handlers/exception.py", line 55, in inner
+    response = get_response(request)
+               ^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/core/handlers/base.py", line 197, in _get_response
+    response = wrapped_callback(request, *callback_args, **callback_kwargs)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/views/decorators/csrf.py", line 65, in _view_wrapper
+    return view_func(request, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/views/generic/base.py", line 104, in view
+    return self.dispatch(request, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/views.py", line 515, in dispatch
+    response = self.handle_exception(exc)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/views.py", line 475, in handle_exception
+    self.raise_uncaught_exception(exc)
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/views.py", line 486, in raise_uncaught_exception
+    raise exc
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/views.py", line 512, in dispatch
+    response = handler(request, *args, **kwargs)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/generics.py", line 246, in post
+    return self.create(request, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/mixins.py", line 19, in create
+    self.perform_create(serializer)
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/procurement_planning/views.py", line 644, in perform_create
+    cpp = serializer.save(created_by=self.request.user)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/serializers.py", line 210, in save
+    self.instance = self.create(validated_data)
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/serializers.py", line 991, in create
+    instance = ModelClass._default_manager.create(**validated_data)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/db/models/manager.py", line 87, in manager_method
+    return getattr(self.get_queryset(), name)(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/db/models/query.py", line 679, in create
+    obj.save(force_insert=True, using=self.db)
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/procurement_planning/models.py", line 187, in save
+    super().save(*args, **kwargs)
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/db/models/base.py", line 892, in save
+    self.save_base(
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/db/models/base.py", line 998, in save_base
+    updated = self._save_table(
+              ^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/db/models/base.py", line 1161, in _save_table
+    results = self._do_insert(
+              ^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/db/models/base.py", line 1202, in _do_insert
+    return manager._insert(
+           ^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/db/models/manager.py", line 87, in manager_method
+    return getattr(self.get_queryset(), name)(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/db/models/query.py", line 1847, in _insert
+    return query.get_compiler(using=using).execute_sql(returning_fields)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/db/models/sql/compiler.py", line 1836, in execute_sql
+    cursor.execute(sql, params)
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/db/backends/utils.py", line 122, in execute
+    return super().execute(sql, params)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/db/backends/utils.py", line 79, in execute
+    return self._execute_with_wrappers(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/db/backends/utils.py", line 92, in _execute_with_wrappers
+    return executor(sql, params, many, context)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/db/backends/utils.py", line 100, in _execute
+    with self.db.wrap_database_errors:
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/db/utils.py", line 91, in __exit__
+    raise dj_exc_value.with_traceback(traceback) from exc_value
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/db/backends/utils.py", line 105, in _execute
+    return self.cursor.execute(sql, params)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+django.db.utils.ProgrammingError: column "cpp_number" of relation "proc_contract_plan" does not exist
+LINE 1: INSERT INTO "proc_contract_plan" ("cpp_id", "cpp_number", "r...
+                                                    ^
+
+ERROR 2026-05-18 13:14:27,470 basehttp 480210 130297085556416 "POST /api/v1/procurement-planning/contract-plans/ HTTP/1.1" 500 269710
+ERROR 2026-05-18 13:14:29,044 log 480210 130297085556416 Internal Server Error: /api/v1/procurement-planning/contract-plans/
+Traceback (most recent call last):
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/db/backends/utils.py", line 105, in _execute
+    return self.cursor.execute(sql, params)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+psycopg2.errors.UndefinedColumn: column "cpp_number" of relation "proc_contract_plan" does not exist
+LINE 1: INSERT INTO "proc_contract_plan" ("cpp_id", "cpp_number", "r...
+                                                    ^
+
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/core/handlers/exception.py", line 55, in inner
+    response = get_response(request)
+               ^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/core/handlers/base.py", line 197, in _get_response
+    response = wrapped_callback(request, *callback_args, **callback_kwargs)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/views/decorators/csrf.py", line 65, in _view_wrapper
+    return view_func(request, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/views/generic/base.py", line 104, in view
+    return self.dispatch(request, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/views.py", line 515, in dispatch
+    response = self.handle_exception(exc)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/views.py", line 475, in handle_exception
+    self.raise_uncaught_exception(exc)
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/views.py", line 486, in raise_uncaught_exception
+    raise exc
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/views.py", line 512, in dispatch
+    response = handler(request, *args, **kwargs)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/generics.py", line 246, in post
+    return self.create(request, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/mixins.py", line 19, in create
+    self.perform_create(serializer)
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/procurement_planning/views.py", line 644, in perform_create
+    cpp = serializer.save(created_by=self.request.user)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/serializers.py", line 210, in save
+    self.instance = self.create(validated_data)
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/serializers.py", line 991, in create
+    instance = ModelClass._default_manager.create(**validated_data)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/db/models/manager.py", line 87, in manager_method
+    return getattr(self.get_queryset(), name)(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/db/models/query.py", line 679, in create
+    obj.save(force_insert=True, using=self.db)
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/procurement_planning/models.py", line 187, in save
+    super().save(*args, **kwargs)
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/db/models/base.py", line 892, in save
+    self.save_base(
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/db/models/base.py", line 998, in save_base
+    updated = self._save_table(
+              ^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/db/models/base.py", line 1161, in _save_table
+    results = self._do_insert(
+              ^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/db/models/base.py", line 1202, in _do_insert
+    return manager._insert(
+           ^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/db/models/manager.py", line 87, in manager_method
+    return getattr(self.get_queryset(), name)(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/db/models/query.py", line 1847, in _insert
+    return query.get_compiler(using=using).execute_sql(returning_fields)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/db/models/sql/compiler.py", line 1836, in execute_sql
+    cursor.execute(sql, params)
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/db/backends/utils.py", line 122, in execute
+    return super().execute(sql, params)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/db/backends/utils.py", line 79, in execute
+    return self._execute_with_wrappers(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/db/backends/utils.py", line 92, in _execute_with_wrappers
+    return executor(sql, params, many, context)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/db/backends/utils.py", line 100, in _execute
+    with self.db.wrap_database_errors:
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/db/utils.py", line 91, in __exit__
+    raise dj_exc_value.with_traceback(traceback) from exc_value
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/db/backends/utils.py", line 105, in _execute
+    return self.cursor.execute(sql, params)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+django.db.utils.ProgrammingError: column "cpp_number" of relation "proc_contract_plan" does not exist
+LINE 1: INSERT INTO "proc_contract_plan" ("cpp_id", "cpp_number", "r...
+                                                    ^
+
+ERROR 2026-05-18 13:14:29,055 basehttp 480210 130297085556416 "POST /api/v1/procurement-planning/contract-plans/ HTTP/1.1" 500 269710
+ERROR 2026-05-18 13:14:42,331 log 482161 140528238720704 Internal Server Error: /api/v1/procurement-planning/contract-plans/
+Traceback (most recent call last):
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/db/backends/utils.py", line 105, in _execute
+    return self.cursor.execute(sql, params)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+psycopg2.errors.UndefinedColumn: column "cpp_number" of relation "proc_contract_plan" does not exist
+LINE 1: INSERT INTO "proc_contract_plan" ("cpp_id", "cpp_number", "r...
+                                                    ^
+
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/core/handlers/exception.py", line 55, in inner
+    response = get_response(request)
+               ^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/core/handlers/base.py", line 197, in _get_response
+    response = wrapped_callback(request, *callback_args, **callback_kwargs)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/views/decorators/csrf.py", line 65, in _view_wrapper
+    return view_func(request, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/views/generic/base.py", line 104, in view
+    return self.dispatch(request, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/views.py", line 515, in dispatch
+    response = self.handle_exception(exc)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/views.py", line 475, in handle_exception
+    self.raise_uncaught_exception(exc)
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/views.py", line 486, in raise_uncaught_exception
+    raise exc
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/views.py", line 512, in dispatch
+    response = handler(request, *args, **kwargs)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/generics.py", line 246, in post
+    return self.create(request, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/mixins.py", line 19, in create
+    self.perform_create(serializer)
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/procurement_planning/views.py", line 644, in perform_create
+    cpp = serializer.save(created_by=self.request.user)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/serializers.py", line 210, in save
+    self.instance = self.create(validated_data)
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/serializers.py", line 991, in create
+    instance = ModelClass._default_manager.create(**validated_data)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/db/models/manager.py", line 87, in manager_method
+    return getattr(self.get_queryset(), name)(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/db/models/query.py", line 679, in create
+    obj.save(force_insert=True, using=self.db)
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/procurement_planning/models.py", line 187, in save
+    super().save(*args, **kwargs)
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/db/models/base.py", line 892, in save
+    self.save_base(
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/db/models/base.py", line 998, in save_base
+    updated = self._save_table(
+              ^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/db/models/base.py", line 1161, in _save_table
+    results = self._do_insert(
+              ^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/db/models/base.py", line 1202, in _do_insert
+    return manager._insert(
+           ^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/db/models/manager.py", line 87, in manager_method
+    return getattr(self.get_queryset(), name)(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/db/models/query.py", line 1847, in _insert
+    return query.get_compiler(using=using).execute_sql(returning_fields)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/db/models/sql/compiler.py", line 1836, in execute_sql
+    cursor.execute(sql, params)
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/db/backends/utils.py", line 122, in execute
+    return super().execute(sql, params)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/db/backends/utils.py", line 79, in execute
+    return self._execute_with_wrappers(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/db/backends/utils.py", line 92, in _execute_with_wrappers
+    return executor(sql, params, many, context)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/db/backends/utils.py", line 100, in _execute
+    with self.db.wrap_database_errors:
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/db/utils.py", line 91, in __exit__
+    raise dj_exc_value.with_traceback(traceback) from exc_value
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/db/backends/utils.py", line 105, in _execute
+    return self.cursor.execute(sql, params)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+django.db.utils.ProgrammingError: column "cpp_number" of relation "proc_contract_plan" does not exist
+LINE 1: INSERT INTO "proc_contract_plan" ("cpp_id", "cpp_number", "r...
+                                                    ^
+
+ERROR 2026-05-18 13:14:42,339 basehttp 482161 140528238720704 "POST /api/v1/procurement-planning/contract-plans/ HTTP/1.1" 500 269710
+ERROR 2026-05-18 13:14:43,334 log 482161 140528238720704 Internal Server Error: /api/v1/procurement-planning/contract-plans/
+Traceback (most recent call last):
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/db/backends/utils.py", line 105, in _execute
+    return self.cursor.execute(sql, params)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+psycopg2.errors.UndefinedColumn: column "cpp_number" of relation "proc_contract_plan" does not exist
+LINE 1: INSERT INTO "proc_contract_plan" ("cpp_id", "cpp_number", "r...
+                                                    ^
+
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/core/handlers/exception.py", line 55, in inner
+    response = get_response(request)
+               ^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/core/handlers/base.py", line 197, in _get_response
+    response = wrapped_callback(request, *callback_args, **callback_kwargs)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/views/decorators/csrf.py", line 65, in _view_wrapper
+    return view_func(request, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/views/generic/base.py", line 104, in view
+    return self.dispatch(request, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/views.py", line 515, in dispatch
+    response = self.handle_exception(exc)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/views.py", line 475, in handle_exception
+    self.raise_uncaught_exception(exc)
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/views.py", line 486, in raise_uncaught_exception
+    raise exc
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/views.py", line 512, in dispatch
+    response = handler(request, *args, **kwargs)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/generics.py", line 246, in post
+    return self.create(request, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/mixins.py", line 19, in create
+    self.perform_create(serializer)
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/procurement_planning/views.py", line 644, in perform_create
+    cpp = serializer.save(created_by=self.request.user)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/serializers.py", line 210, in save
+    self.instance = self.create(validated_data)
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/serializers.py", line 991, in create
+    instance = ModelClass._default_manager.create(**validated_data)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/db/models/manager.py", line 87, in manager_method
+    return getattr(self.get_queryset(), name)(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/db/models/query.py", line 679, in create
+    obj.save(force_insert=True, using=self.db)
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/procurement_planning/models.py", line 187, in save
+    super().save(*args, **kwargs)
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/db/models/base.py", line 892, in save
+    self.save_base(
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/db/models/base.py", line 998, in save_base
+    updated = self._save_table(
+              ^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/db/models/base.py", line 1161, in _save_table
+    results = self._do_insert(
+              ^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/db/models/base.py", line 1202, in _do_insert
+    return manager._insert(
+           ^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/db/models/manager.py", line 87, in manager_method
+    return getattr(self.get_queryset(), name)(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/db/models/query.py", line 1847, in _insert
+    return query.get_compiler(using=using).execute_sql(returning_fields)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/db/models/sql/compiler.py", line 1836, in execute_sql
+    cursor.execute(sql, params)
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/db/backends/utils.py", line 122, in execute
+    return super().execute(sql, params)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/db/backends/utils.py", line 79, in execute
+    return self._execute_with_wrappers(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/db/backends/utils.py", line 92, in _execute_with_wrappers
+    return executor(sql, params, many, context)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/db/backends/utils.py", line 100, in _execute
+    with self.db.wrap_database_errors:
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/db/utils.py", line 91, in __exit__
+    raise dj_exc_value.with_traceback(traceback) from exc_value
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/db/backends/utils.py", line 105, in _execute
+    return self.cursor.execute(sql, params)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+django.db.utils.ProgrammingError: column "cpp_number" of relation "proc_contract_plan" does not exist
+LINE 1: INSERT INTO "proc_contract_plan" ("cpp_id", "cpp_number", "r...
+                                                    ^
+
+ERROR 2026-05-18 13:14:43,337 basehttp 482161 140528238720704 "POST /api/v1/procurement-planning/contract-plans/ HTTP/1.1" 500 269710
+ERROR 2026-05-19 08:21:14,482 log 127398 134332145465024 Internal Server Error: /api/v1/solicitations/fca3c013-253d-4cbc-9415-d9484f119855/addendum/
+Traceback (most recent call last):
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/core/handlers/exception.py", line 55, in inner
+    response = get_response(request)
+               ^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/core/handlers/base.py", line 197, in _get_response
+    response = wrapped_callback(request, *callback_args, **callback_kwargs)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/views/decorators/csrf.py", line 65, in _view_wrapper
+    return view_func(request, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/views/generic/base.py", line 104, in view
+    return self.dispatch(request, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/views.py", line 515, in dispatch
+    response = self.handle_exception(exc)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/views.py", line 475, in handle_exception
+    self.raise_uncaught_exception(exc)
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/views.py", line 486, in raise_uncaught_exception
+    raise exc
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/views.py", line 512, in dispatch
+    response = handler(request, *args, **kwargs)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/decorators.py", line 50, in handler
+    return func(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/solicitations/views.py", line 330, in solicitation_add_addendum_view
+    last_num = sol.addenda.aggregate(m=Max('addendum_number'))['addendum_number__max'] or 0
+               ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^
+KeyError: 'addendum_number__max'
+ERROR 2026-05-19 08:21:14,484 basehttp 127398 134332145465024 "POST /api/v1/solicitations/fca3c013-253d-4cbc-9415-d9484f119855/addendum/ HTTP/1.1" 500 112796
+ERROR 2026-05-19 09:37:50,202 log 232917 126196168988352 Internal Server Error: /api/v1/bids/
+Traceback (most recent call last):
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/core/handlers/exception.py", line 55, in inner
+    response = get_response(request)
+               ^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/core/handlers/base.py", line 197, in _get_response
+    response = wrapped_callback(request, *callback_args, **callback_kwargs)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/views/decorators/csrf.py", line 65, in _view_wrapper
+    return view_func(request, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/views/generic/base.py", line 104, in view
+    return self.dispatch(request, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/views.py", line 515, in dispatch
+    response = self.handle_exception(exc)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/views.py", line 475, in handle_exception
+    self.raise_uncaught_exception(exc)
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/views.py", line 486, in raise_uncaught_exception
+    raise exc
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/views.py", line 512, in dispatch
+    response = handler(request, *args, **kwargs)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/generics.py", line 243, in get
+    return self.list(request, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/mixins.py", line 43, in list
+    return self.get_paginated_response(serializer.data)
+                                       ^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/serializers.py", line 797, in data
+    ret = super().data
+          ^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/serializers.py", line 251, in data
+    self._data = self.to_representation(self.instance)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/serializers.py", line 716, in to_representation
+    self.child.to_representation(item) for item in iterable
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/serializers.py", line 525, in to_representation
+    for field in fields:
+                 ^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/serializers.py", line 386, in _readable_fields
+    for field in self.fields.values():
+                 ^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/utils/functional.py", line 47, in __get__
+    res = instance.__dict__[self.name] = self.func(instance)
+                                         ^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/serializers.py", line 374, in fields
+    for key, value in self.get_fields().items():
+                      ^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/serializers.py", line 1105, in get_fields
+    field_class, field_kwargs = self.build_field(
+                                ^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/serializers.py", line 1251, in build_field
+    return self.build_unknown_field(field_name, model_class)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/serializers.py", line 1369, in build_unknown_field
+    raise ImproperlyConfigured(
+django.core.exceptions.ImproperlyConfigured: Field name `supplier_name` is not valid for model `BidSubmission` in `bids.serializers.BidSubmissionListSerializer`.
+ERROR 2026-05-19 09:37:50,204 basehttp 232917 126196168988352 "GET /api/v1/bids/?page=1&page_size=10 HTTP/1.1" 500 172400
+ERROR 2026-05-19 09:37:51,377 log 232917 126196168988352 Internal Server Error: /api/v1/bids/
+Traceback (most recent call last):
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/core/handlers/exception.py", line 55, in inner
+    response = get_response(request)
+               ^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/core/handlers/base.py", line 197, in _get_response
+    response = wrapped_callback(request, *callback_args, **callback_kwargs)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/views/decorators/csrf.py", line 65, in _view_wrapper
+    return view_func(request, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/views/generic/base.py", line 104, in view
+    return self.dispatch(request, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/views.py", line 515, in dispatch
+    response = self.handle_exception(exc)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/views.py", line 475, in handle_exception
+    self.raise_uncaught_exception(exc)
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/views.py", line 486, in raise_uncaught_exception
+    raise exc
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/views.py", line 512, in dispatch
+    response = handler(request, *args, **kwargs)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/generics.py", line 243, in get
+    return self.list(request, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/mixins.py", line 43, in list
+    return self.get_paginated_response(serializer.data)
+                                       ^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/serializers.py", line 797, in data
+    ret = super().data
+          ^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/serializers.py", line 251, in data
+    self._data = self.to_representation(self.instance)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/serializers.py", line 716, in to_representation
+    self.child.to_representation(item) for item in iterable
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/serializers.py", line 525, in to_representation
+    for field in fields:
+                 ^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/serializers.py", line 386, in _readable_fields
+    for field in self.fields.values():
+                 ^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/utils/functional.py", line 47, in __get__
+    res = instance.__dict__[self.name] = self.func(instance)
+                                         ^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/serializers.py", line 374, in fields
+    for key, value in self.get_fields().items():
+                      ^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/serializers.py", line 1105, in get_fields
+    field_class, field_kwargs = self.build_field(
+                                ^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/serializers.py", line 1251, in build_field
+    return self.build_unknown_field(field_name, model_class)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/serializers.py", line 1369, in build_unknown_field
+    raise ImproperlyConfigured(
+django.core.exceptions.ImproperlyConfigured: Field name `supplier_name` is not valid for model `BidSubmission` in `bids.serializers.BidSubmissionListSerializer`.
+ERROR 2026-05-19 09:37:51,378 basehttp 232917 126196168988352 "GET /api/v1/bids/?page=1&page_size=10 HTTP/1.1" 500 172400
+ERROR 2026-05-19 09:37:54,715 log 232917 126196168988352 Internal Server Error: /api/v1/bids/
+Traceback (most recent call last):
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/core/handlers/exception.py", line 55, in inner
+    response = get_response(request)
+               ^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/core/handlers/base.py", line 197, in _get_response
+    response = wrapped_callback(request, *callback_args, **callback_kwargs)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/views/decorators/csrf.py", line 65, in _view_wrapper
+    return view_func(request, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/views/generic/base.py", line 104, in view
+    return self.dispatch(request, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/views.py", line 515, in dispatch
+    response = self.handle_exception(exc)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/views.py", line 475, in handle_exception
+    self.raise_uncaught_exception(exc)
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/views.py", line 486, in raise_uncaught_exception
+    raise exc
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/views.py", line 512, in dispatch
+    response = handler(request, *args, **kwargs)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/generics.py", line 243, in get
+    return self.list(request, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/mixins.py", line 43, in list
+    return self.get_paginated_response(serializer.data)
+                                       ^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/serializers.py", line 797, in data
+    ret = super().data
+          ^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/serializers.py", line 251, in data
+    self._data = self.to_representation(self.instance)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/serializers.py", line 716, in to_representation
+    self.child.to_representation(item) for item in iterable
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/serializers.py", line 525, in to_representation
+    for field in fields:
+                 ^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/serializers.py", line 386, in _readable_fields
+    for field in self.fields.values():
+                 ^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/utils/functional.py", line 47, in __get__
+    res = instance.__dict__[self.name] = self.func(instance)
+                                         ^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/serializers.py", line 374, in fields
+    for key, value in self.get_fields().items():
+                      ^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/serializers.py", line 1105, in get_fields
+    field_class, field_kwargs = self.build_field(
+                                ^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/serializers.py", line 1251, in build_field
+    return self.build_unknown_field(field_name, model_class)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/serializers.py", line 1369, in build_unknown_field
+    raise ImproperlyConfigured(
+django.core.exceptions.ImproperlyConfigured: Field name `supplier_name` is not valid for model `BidSubmission` in `bids.serializers.BidSubmissionListSerializer`.
+ERROR 2026-05-19 09:37:54,717 basehttp 232917 126196168988352 "GET /api/v1/bids/?page=1&page_size=10 HTTP/1.1" 500 172400
+ERROR 2026-05-19 09:37:55,967 log 232917 126196168988352 Internal Server Error: /api/v1/bids/
+Traceback (most recent call last):
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/core/handlers/exception.py", line 55, in inner
+    response = get_response(request)
+               ^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/core/handlers/base.py", line 197, in _get_response
+    response = wrapped_callback(request, *callback_args, **callback_kwargs)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/views/decorators/csrf.py", line 65, in _view_wrapper
+    return view_func(request, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/views/generic/base.py", line 104, in view
+    return self.dispatch(request, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/views.py", line 515, in dispatch
+    response = self.handle_exception(exc)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/views.py", line 475, in handle_exception
+    self.raise_uncaught_exception(exc)
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/views.py", line 486, in raise_uncaught_exception
+    raise exc
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/views.py", line 512, in dispatch
+    response = handler(request, *args, **kwargs)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/generics.py", line 243, in get
+    return self.list(request, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/mixins.py", line 43, in list
+    return self.get_paginated_response(serializer.data)
+                                       ^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/serializers.py", line 797, in data
+    ret = super().data
+          ^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/serializers.py", line 251, in data
+    self._data = self.to_representation(self.instance)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/serializers.py", line 716, in to_representation
+    self.child.to_representation(item) for item in iterable
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/serializers.py", line 525, in to_representation
+    for field in fields:
+                 ^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/serializers.py", line 386, in _readable_fields
+    for field in self.fields.values():
+                 ^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/utils/functional.py", line 47, in __get__
+    res = instance.__dict__[self.name] = self.func(instance)
+                                         ^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/serializers.py", line 374, in fields
+    for key, value in self.get_fields().items():
+                      ^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/serializers.py", line 1105, in get_fields
+    field_class, field_kwargs = self.build_field(
+                                ^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/serializers.py", line 1251, in build_field
+    return self.build_unknown_field(field_name, model_class)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/serializers.py", line 1369, in build_unknown_field
+    raise ImproperlyConfigured(
+django.core.exceptions.ImproperlyConfigured: Field name `supplier_name` is not valid for model `BidSubmission` in `bids.serializers.BidSubmissionListSerializer`.
+ERROR 2026-05-19 09:37:55,969 basehttp 232917 126196168988352 "GET /api/v1/bids/?page=1&page_size=10 HTTP/1.1" 500 172400
+ERROR 2026-05-19 09:38:02,730 log 232917 126196168988352 Internal Server Error: /api/v1/bids/
+Traceback (most recent call last):
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/core/handlers/exception.py", line 55, in inner
+    response = get_response(request)
+               ^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/core/handlers/base.py", line 197, in _get_response
+    response = wrapped_callback(request, *callback_args, **callback_kwargs)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/views/decorators/csrf.py", line 65, in _view_wrapper
+    return view_func(request, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/views/generic/base.py", line 104, in view
+    return self.dispatch(request, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/views.py", line 515, in dispatch
+    response = self.handle_exception(exc)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/views.py", line 475, in handle_exception
+    self.raise_uncaught_exception(exc)
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/views.py", line 486, in raise_uncaught_exception
+    raise exc
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/views.py", line 512, in dispatch
+    response = handler(request, *args, **kwargs)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/generics.py", line 243, in get
+    return self.list(request, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/mixins.py", line 43, in list
+    return self.get_paginated_response(serializer.data)
+                                       ^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/serializers.py", line 797, in data
+    ret = super().data
+          ^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/serializers.py", line 251, in data
+    self._data = self.to_representation(self.instance)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/serializers.py", line 716, in to_representation
+    self.child.to_representation(item) for item in iterable
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/serializers.py", line 525, in to_representation
+    for field in fields:
+                 ^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/serializers.py", line 386, in _readable_fields
+    for field in self.fields.values():
+                 ^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/utils/functional.py", line 47, in __get__
+    res = instance.__dict__[self.name] = self.func(instance)
+                                         ^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/serializers.py", line 374, in fields
+    for key, value in self.get_fields().items():
+                      ^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/serializers.py", line 1105, in get_fields
+    field_class, field_kwargs = self.build_field(
+                                ^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/serializers.py", line 1251, in build_field
+    return self.build_unknown_field(field_name, model_class)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/serializers.py", line 1369, in build_unknown_field
+    raise ImproperlyConfigured(
+django.core.exceptions.ImproperlyConfigured: Field name `supplier_name` is not valid for model `BidSubmission` in `bids.serializers.BidSubmissionListSerializer`.
+ERROR 2026-05-19 09:38:02,732 basehttp 232917 126196168988352 "GET /api/v1/bids/?page=1&page_size=10 HTTP/1.1" 500 172400
+ERROR 2026-05-19 09:38:03,933 log 232917 126196168988352 Internal Server Error: /api/v1/bids/
+Traceback (most recent call last):
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/core/handlers/exception.py", line 55, in inner
+    response = get_response(request)
+               ^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/core/handlers/base.py", line 197, in _get_response
+    response = wrapped_callback(request, *callback_args, **callback_kwargs)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/views/decorators/csrf.py", line 65, in _view_wrapper
+    return view_func(request, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/views/generic/base.py", line 104, in view
+    return self.dispatch(request, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/views.py", line 515, in dispatch
+    response = self.handle_exception(exc)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/views.py", line 475, in handle_exception
+    self.raise_uncaught_exception(exc)
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/views.py", line 486, in raise_uncaught_exception
+    raise exc
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/views.py", line 512, in dispatch
+    response = handler(request, *args, **kwargs)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/generics.py", line 243, in get
+    return self.list(request, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/mixins.py", line 43, in list
+    return self.get_paginated_response(serializer.data)
+                                       ^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/serializers.py", line 797, in data
+    ret = super().data
+          ^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/serializers.py", line 251, in data
+    self._data = self.to_representation(self.instance)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/serializers.py", line 716, in to_representation
+    self.child.to_representation(item) for item in iterable
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/serializers.py", line 525, in to_representation
+    for field in fields:
+                 ^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/serializers.py", line 386, in _readable_fields
+    for field in self.fields.values():
+                 ^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/utils/functional.py", line 47, in __get__
+    res = instance.__dict__[self.name] = self.func(instance)
+                                         ^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/serializers.py", line 374, in fields
+    for key, value in self.get_fields().items():
+                      ^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/serializers.py", line 1105, in get_fields
+    field_class, field_kwargs = self.build_field(
+                                ^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/serializers.py", line 1251, in build_field
+    return self.build_unknown_field(field_name, model_class)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/serializers.py", line 1369, in build_unknown_field
+    raise ImproperlyConfigured(
+django.core.exceptions.ImproperlyConfigured: Field name `supplier_name` is not valid for model `BidSubmission` in `bids.serializers.BidSubmissionListSerializer`.
+ERROR 2026-05-19 09:38:03,934 basehttp 232917 126196168988352 "GET /api/v1/bids/?page=1&page_size=10 HTTP/1.1" 500 172400

@@ -7,11 +7,13 @@ import { StatusBadge } from '../common/StatusBadge';
 import { SearchBar } from '../common/SearchBar';
 import { Pagination } from '../common/Pagination';
 import { LoadingSpinner } from '../common/LoadingSpinner';
+import { useAuth } from '../../hooks/useAuth';
 import fileSaver from 'file-saver';
 import toast from 'react-hot-toast';
 
 const SolicitationsList: React.FC = () => {
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
   const [search, setSearch] = useState('');
@@ -28,6 +30,7 @@ const SolicitationsList: React.FC = () => {
   };
 
   const typeColors: Record<string, string> = { rfq: 'bg-blue-50 text-blue-600', rfb: 'bg-green-50 text-green-600', rfp: 'bg-purple-50 text-purple-600', rfi: 'bg-orange-50 text-orange-600' };
+  const canCreateSolicitation = user?.role !== 'procurement_manager';
 
   const columns = [
     { key: 'title', label: 'Title', sortable: true, render: (_: any, row: any) => (
@@ -51,7 +54,9 @@ const SolicitationsList: React.FC = () => {
         </div>
         <div className="flex items-center gap-3">
           <button onClick={handleExport} className="text-sm bg-white border border-gray-300 px-3 py-2 rounded-lg hover:bg-gray-50">Export</button>
-          <Link to="/solicitations/create" className="bg-zammsa-green text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-zammsa-green-dark">+ New Solicitation</Link>
+          {canCreateSolicitation && (
+            <Link to="/solicitations/create" className="bg-zammsa-green text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-zammsa-green-dark">+ New Solicitation</Link>
+          )}
         </div>
       </div>
 

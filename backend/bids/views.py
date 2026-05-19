@@ -53,11 +53,25 @@ class BidSubmissionListView(BaseView, generics.ListCreateAPIView):
             return BidSubmissionListSerializer
         return BidSubmissionSerializer
 
+    def get_queryset(self):
+        qs = super().get_queryset()
+        # Supplier users can only see their own bids in vendor portal.
+        if getattr(self.request.user, 'role', '') == 'supplier_user':
+            qs = qs.filter(supplier=self.request.user)
+        return qs
+
 
 class BidSubmissionDetailView(generics.RetrieveUpdateDestroyAPIView):
     queryset = BidSubmission.objects.select_related('solicitation', 'supplier').prefetch_related('bid_documents', 'bid_securities').all()
     serializer_class = BidSubmissionSerializer
     permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        qs = super().get_queryset()
+        # Supplier users can only access their own bid detail.
+        if getattr(self.request.user, 'role', '') == 'supplier_user':
+            qs = qs.filter(supplier=self.request.user)
+        return qs
 
 
 @api_view(['POST'])
@@ -111,6 +125,8 @@ def bid_submit_view(request):
         supplier=request.user,
         submission_id=submission_id,
         receipt_number=receipt_number,
+        bid_price=request.data.get('bid_price') or None,
+        validity_period_days=request.data.get('validity_period_days') or None,
         status='submitted',
         is_late=False,
         submitted_at=now,
@@ -122,6 +138,8 @@ def bid_submit_view(request):
     technical_file = request.FILES.get('technical_proposal')
     financial_file = request.FILES.get('financial_proposal')
     security_file = request.FILES.get('bid_security')
+    zamra_file = request.FILES.get('zamra_registration')
+    supporting_file = request.FILES.get('other_supporting')
 
     if technical_file:
         from django.core.files.storage import default_storage
@@ -150,6 +168,24 @@ def bid_submit_view(request):
             file_path=sec_path,
         )
 
+    if zamra_file:
+        from django.core.files.storage import default_storage
+        zamra_path = default_storage.save(f'bids/{bid.bid_id}/zamra_{zamra_file.name}', zamra_file)
+        BidDocument.objects.create(
+            bid=bid,
+            document_type='other',
+            file_path=zamra_path,
+        )
+
+    if supporting_file:
+        from django.core.files.storage import default_storage
+        supp_path = default_storage.save(f'bids/{bid.bid_id}/supporting_{supporting_file.name}', supporting_file)
+        BidDocument.objects.create(
+            bid=bid,
+            document_type='other',
+            file_path=supp_path,
+        )
+
     return Response({
         'message': 'Bid submitted successfully',
         'receipt_number': receipt_number,
@@ -161,6 +197,8 @@ def bid_submit_view(request):
             'technical_proposal': technical_file is not None,
             'financial_proposal': financial_file is not None,
             'bid_security': security_file is not None,
+            'zamra_registration': zamra_file is not None,
+            'other_supporting': supporting_file is not None,
         },
     })
 

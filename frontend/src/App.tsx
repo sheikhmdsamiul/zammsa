@@ -87,6 +87,8 @@ const GPNList = React.lazy(() => import('./components/procurement-planning/GPNLi
 const GPNDetail = React.lazy(() => import('./components/procurement-planning/GPNDetail'));
 const CPPList = React.lazy(() => import('./components/procurement-planning/CPPList'));
 const CPPCreate = React.lazy(() => import('./components/procurement-planning/CPPCreate'));
+const CPPDetail = React.lazy(() => import('./components/procurement-planning/CPPDetail'));
+const CPPEdit = React.lazy(() => import('./components/procurement-planning/CPPEdit'));
 const GPNListPublic = React.lazy(() => import('./components/public/GPNListPublic'));
 const GPNDetailPublic = React.lazy(() => import('./components/public/GPNDetailPublic'));
 
@@ -285,13 +287,23 @@ function App() {
                     </ProtectedRoute>
                   } />
                   <Route path="procurement-planning/cpp" element={
-                    <ProtectedRoute roles={[ROLES.PROCUREMENT_OFFICER, ROLES.PROCUREMENT_MANAGER, ROLES.DIRECTOR_PROCUREMENT, ROLES.SYSTEM_ADMIN]}>
+                    <ProtectedRoute roles={[ROLES.PROCUREMENT_OFFICER, ROLES.PROCUREMENT_MANAGER, ROLES.DIRECTOR_PROCUREMENT, ROLES.ZPC_MEMBER, ROLES.SYSTEM_ADMIN]}>
                       <CPPList />
                     </ProtectedRoute>
                   } />
                   <Route path="procurement-planning/cpp/create" element={
                     <ProtectedRoute roles={[ROLES.PROCUREMENT_OFFICER, ROLES.SYSTEM_ADMIN]}>
                       <CPPCreate />
+                    </ProtectedRoute>
+                  } />
+                  <Route path="procurement-planning/cpp/:id" element={
+                    <ProtectedRoute roles={[ROLES.PROCUREMENT_OFFICER, ROLES.PROCUREMENT_MANAGER, ROLES.DIRECTOR_PROCUREMENT, ROLES.ZPC_MEMBER, ROLES.SYSTEM_ADMIN]}>
+                      <CPPDetail />
+                    </ProtectedRoute>
+                  } />
+                  <Route path="procurement-planning/cpp/:id/edit" element={
+                    <ProtectedRoute roles={[ROLES.PROCUREMENT_OFFICER, ROLES.SYSTEM_ADMIN]}>
+                      <CPPEdit />
                     </ProtectedRoute>
                   } />
                 </Route>
@@ -309,6 +321,7 @@ function App() {
                   <Route path="open-tenders" element={<OpenTenders />} />
                   <Route path="open-tenders/:id/bid" element={<BidSubmission />} />
                   <Route path="bids" element={<MyBids />} />
+                  <Route path="bids/:id" element={<BidDetail />} />
                   <Route path="contracts" element={<MyContracts />} />
                   <Route path="contracts/:id" element={<VendorContractDetail />} />
                   <Route path="invoices" element={<Invoices />} />

@@ -17,8 +17,8 @@ const SolicitationCreate: React.FC = () => {
   });
 
   const { data: reqsData } = useQuery({
-    queryKey: ['requisitions'],
-    queryFn: () => requisitionsApi.list({ page_size: 200 }),
+    queryKey: ['requisitions', 'approved-cpp'],
+    queryFn: () => requisitionsApi.list({ page_size: 200, status: 'approved', has_approved_cpp: true }),
   });
   const requisitions = reqsData?.results ?? [];
 
@@ -107,13 +107,17 @@ const SolicitationCreate: React.FC = () => {
             <div className="md:col-span-2">
               <label className="block text-sm font-medium text-gray-700 mb-1">Linked Requisition <span className="text-red-500">*</span></label>
               <select value={form.requisition} onChange={(e) => setForm({ ...form, requisition: e.target.value })} required className="w-full border-gray-300 rounded-lg px-3 py-2 focus:ring-zammsa-green focus:border-zammsa-green">
-                <option value="">-- Select Requisition --</option>
+                <option value="">-- Select Requisition with Approved CPP --</option>
+                {requisitions.length === 0 && <option value="" disabled>No approved requisitions with approved CPP found</option>}
                 {requisitions.map((r: any) => (
                   <option key={r.id || r.requisition_id} value={r.id || r.requisition_id}>
                     {r.req_number} - {r.title || r.description} ({r.department_name})
                   </option>
                 ))}
               </select>
+              {requisitions.length === 0 && (
+                <p className="text-xs text-amber-600 mt-1">No requisitions with an approved CPP are available. An approved Contract Procurement Plan (CPP) is required before creating a solicitation.</p>
+              )}
             </div>
           </div>
         </div>

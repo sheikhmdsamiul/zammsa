@@ -1,156 +1,149 @@
 from rest_framework import serializers
-from .models import AnnualProcurementPlan, APPLineItem, ContractProcurementPlan, ProcurementMilestone, GeneralProcurementNotice
+from .models import AnnualProcurementPlan, APPLineItem, ContractProcurementPlan, ProcurementMilestone, GeneralProcurementNotice, CPPRisk
 
 
 class APPLineItemSerializer(serializers.ModelSerializer):
-    budget_available = serializers.SerializerMethodField()
-
     class Meta:
         model = APPLineItem
         fields = '__all__'
         read_only_fields = ('line_item_id',)
 
-    def get_budget_available(self, obj):
-        try:
-            from finance.models import BudgetAllocation
-            dept_code = obj.app.department.budget_code or obj.app.department.dept_code
-            ba = BudgetAllocation.objects.filter(
-                entity_code=dept_code,
-                fiscal_year=obj.app.fiscal_year.year_code,
-            ).first()
-            if ba:
-                return float(ba.available)
-        except Exception:
-            pass
-        return None
-
-    def validate_estimated_value(self, value):
-        if value <= 0:
-            raise serializers.ValidationError('Estimated value must be greater than zero')
-        return value
-
-
-class AnnualProcurementPlanSerializer(serializers.ModelSerializer):
-    line_items = APPLineItemSerializer(many=True, read_only=True)
-    gpns = serializers.SerializerMethodField()
-    department_name = serializers.CharField(source='department.dept_name', read_only=True)
-    fiscal_year_code = serializers.CharField(source='fiscal_year.year_code', read_only=True)
-    submitted_by_name = serializers.SerializerMethodField()
-    approved_by_name = serializers.SerializerMethodField()
-    rejected_by_name = serializers.SerializerMethodField()
-    consolidated_into_id = serializers.UUIDField(source='consolidated_into.app_id', read_only=True)
-    consolidated_from_count = serializers.SerializerMethodField()
-    zppa_days_remaining = serializers.SerializerMethodField()
-    zppa_status = serializers.SerializerMethodField()
-
-    class Meta:
-        model = AnnualProcurementPlan
-        fields = '__all__'
-        read_only_fields = (
-            'app_id', 'submitted_at', 'approved_at', 'rejected_at', 'created_at', 'updated_at',
-        )
-
-    def get_submitted_by_name(self, obj):
-        return obj.submitted_by.full_name if obj.submitted_by else None
-
-    def get_approved_by_name(self, obj):
-        return obj.approved_by.full_name if obj.approved_by else None
-
-    def get_rejected_by_name(self, obj):
-        return obj.rejected_by.full_name if obj.rejected_by else None
-
-    def get_consolidated_from_count(self, obj):
-        return obj.consolidated_from.count()
-
-    def get_gpns(self, obj):
-        gpns = obj.gpns.all()
-        return GeneralProcurementNoticeSerializer(gpns, many=True).data
-
-    def get_zppa_days_remaining(self, obj):
-        if not obj.zppa_deadline or obj.zppa_submitted:
-            return None
-        from django.utils import timezone
-        delta = obj.zppa_deadline - timezone.now()
-        return delta.days
-
-    def get_zppa_status(self, obj):
-        if obj.zppa_submitted:
-            return 'submitted'
-        if not obj.zppa_deadline:
-            return 'not_applicable'
-        from django.utils import timezone
-        delta = obj.zppa_deadline - timezone.now()
-        if delta.days < 0:
-            return 'overdue'
-        elif delta.days <= 7:
-            return 'approaching'
-        return 'on_track'
-
-    def validate(self, data):
-        if data.get('is_consolidated') and not data.get('consolidated_into'):
-            raise serializers.ValidationError('A consolidated APP must specify the target consolidated_into')
-        return data
-
 
 class AnnualProcurementPlanListSerializer(serializers.ModelSerializer):
-    department_name = serializers.CharField(source='department.dept_name', read_only=True)
     fiscal_year_code = serializers.CharField(source='fiscal_year.year_code', read_only=True)
-    submitted_by_name = serializers.SerializerMethodField()
-    approved_by_name = serializers.SerializerMethodField()
-    zppa_status = serializers.SerializerMethodField()
-    zppa_days_remaining = serializers.SerializerMethodField()
+    department_name = serializers.CharField(source='department.dept_name', read_only=True)
+    submitted_by_name = serializers.CharField(source='submitted_by.full_name', read_only=True)
+    approved_by_name = serializers.CharField(source='approved_by.full_name', read_only=True)
+    line_items_count = serializers.SerializerMethodField()
 
     class Meta:
         model = AnnualProcurementPlan
         fields = (
-            'app_id', 'fiscal_year_code', 'department_name', 'status',
-            'total_estimated_value', 'submitted_at', 'approved_at',
-            'submitted_by_name', 'approved_by_name', 'rejection_reason',
-            'is_consolidated', 'created_at', 'zppa_submitted', 'zppa_status',
-            'zppa_days_remaining',
+            'app_id', 'fiscal_year', 'fiscal_year_code', 'department',
+            'department_name', 'status', 'total_estimated_value',
+            'submitted_by_name', 'submitted_at',
+            'approved_by_name', 'approved_at',
+            'line_items_count', 'created_at', 'updated_at',
         )
 
-    def get_submitted_by_name(self, obj):
-        return obj.submitted_by.full_name if obj.submitted_by else None
+    def get_line_items_count(self, obj):
+        return obj.line_items.count()
 
-    def get_approved_by_name(self, obj):
-        return obj.approved_by.full_name if obj.approved_by else None
 
-    def get_zppa_status(self, obj):
-        if getattr(obj, 'zppa_submitted', False):
-            return 'submitted'
-        if not getattr(obj, 'zppa_deadline', None):
-            return 'not_applicable'
-        from django.utils import timezone
-        delta = obj.zppa_deadline - timezone.now()
-        if delta.days < 0:
-            return 'overdue'
-        elif delta.days <= 7:
-            return 'approaching'
-        return 'on_track'
+class AnnualProcurementPlanSerializer(serializers.ModelSerializer):
+    line_items = APPLineItemSerializer(many=True, read_only=True)
+    fiscal_year_code = serializers.CharField(source='fiscal_year.year_code', read_only=True)
+    department_name = serializers.CharField(source='department.dept_name', read_only=True)
+    submitted_by_name = serializers.CharField(source='submitted_by.full_name', read_only=True)
+    approved_by_name = serializers.CharField(source='approved_by.full_name', read_only=True)
+    rejected_by_name = serializers.CharField(source='rejected_by.full_name', read_only=True)
 
-    def get_zppa_days_remaining(self, obj):
-        if not getattr(obj, 'zppa_deadline', None) or getattr(obj, 'zppa_submitted', False):
-            return None
-        from django.utils import timezone
-        delta = obj.zppa_deadline - timezone.now()
-        return delta.days
+    class Meta:
+        model = AnnualProcurementPlan
+        fields = '__all__'
+        read_only_fields = ('app_id', 'created_at', 'updated_at')
+
+
+class CPPRiskSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = CPPRisk
+        fields = '__all__'
+        read_only_fields = ('risk_id', 'created_at')
 
 
 class ProcurementMilestoneSerializer(serializers.ModelSerializer):
     class Meta:
         model = ProcurementMilestone
         fields = '__all__'
-        read_only_fields = ('milestone_id', 'variance_days')
+        read_only_fields = ('milestone_id', 'variance_days', 'variance_flag')
 
 
 class ContractProcurementPlanSerializer(serializers.ModelSerializer):
-    milestones = ProcurementMilestoneSerializer(many=True, read_only=True)
+    milestones = ProcurementMilestoneSerializer(many=True, read_only=True, source='procurement_milestones')
+    risks = CPPRiskSerializer(many=True, read_only=True)
+    requisition_number = serializers.CharField(source='requisition.req_number', read_only=True)
+    requisition_description = serializers.CharField(source='requisition.description', read_only=True)
+    requisition_department = serializers.CharField(source='requisition.department.dept_name', read_only=True)
+    requisition_required_date = serializers.DateField(source='requisition.required_date', read_only=True)
+    requisition_estimated_value = serializers.DecimalField(source='requisition.estimated_total', max_digits=20, decimal_places=2, read_only=True)
+    requisition_delivery_location = serializers.CharField(source='requisition.delivery_location', read_only=True)
+    requisition_encumbrance_ref = serializers.CharField(source='requisition.encumbrance_ref', read_only=True)
+    created_by_name = serializers.CharField(source='created_by.full_name', read_only=True)
+    approved_by_name = serializers.CharField(source='approved_by.full_name', read_only=True)
+    baseline_locked_by_name = serializers.CharField(source='baseline_locked_by.full_name', read_only=True)
+    zpc_approved_by_name = serializers.CharField(source='zpc_approved_by.full_name', read_only=True)
+    override_approved_by_name = serializers.CharField(source='override_approved_by.full_name', read_only=True)
+    overall_risk_display = serializers.SerializerMethodField()
 
     class Meta:
         model = ContractProcurementPlan
         fields = '__all__'
-        read_only_fields = ('cpp_id', 'created_at', 'updated_at')
+        read_only_fields = ('cpp_id', 'cpp_number', 'created_at', 'updated_at', 'completed_at')
+
+    def get_overall_risk_display(self, obj):
+        if obj.overall_risk_level:
+            labels = {'low': 'Low Risk', 'medium': 'Medium Risk', 'high': 'High Risk'}
+            return labels.get(obj.overall_risk_level, obj.overall_risk_level)
+        return None
+
+    def validate(self, data):
+        requisition = data.get('requisition') or (self.instance.requisition if self.instance else None)
+        if requisition and requisition.status != 'approved':
+            raise serializers.ValidationError({
+                'requisition': 'CPP can only be created from an approved requisition. '
+                               f'Current status: "{requisition.status}"'
+            })
+
+        # BR-CPP-09: Multi-year contracts must document future year commitments
+        is_multi_year = data.get('is_multi_year', self.instance.is_multi_year if self.instance else False)
+        multi_year_commitments = data.get('multi_year_commitments',
+                                          self.instance.multi_year_commitments if self.instance else [])
+        if is_multi_year and not multi_year_commitments:
+            raise serializers.ValidationError({
+                'multi_year_commitments': 'Multi-year contracts must have future year budget commitments documented.'
+            })
+        if multi_year_commitments and not isinstance(multi_year_commitments, list):
+            raise serializers.ValidationError({
+                'multi_year_commitments': 'Must be a list of commitment objects.'
+            })
+        for idx, commitment in enumerate(multi_year_commitments or []):
+            if not commitment.get('fiscal_year'):
+                raise serializers.ValidationError({
+                    'multi_year_commitments': f'Commitment #{idx + 1} is missing "fiscal_year".'
+                })
+            if not commitment.get('amount'):
+                raise serializers.ValidationError({
+                    'multi_year_commitments': f'Commitment #{idx + 1} is missing "amount".'
+                })
+
+        return data
+
+
+class ContractProcurementPlanListSerializer(serializers.ModelSerializer):
+    requisition_number = serializers.CharField(source='requisition.req_number', read_only=True)
+    requisition_description = serializers.CharField(source='requisition.description', read_only=True)
+    department_name = serializers.CharField(source='requisition.department.dept_name', read_only=True)
+    created_by_name = serializers.CharField(source='created_by.full_name', read_only=True)
+    milestones_count = serializers.SerializerMethodField()
+    method_display = serializers.SerializerMethodField()
+
+    class Meta:
+        model = ContractProcurementPlan
+        fields = (
+            'cpp_id', 'cpp_number', 'requisition', 'requisition_number',
+            'requisition_description', 'department_name', 'method', 'method_display',
+            'recommended_method', 'method_override', 'zpc_approval_required',
+            'status', 'overall_risk_level', 'estimated_value',
+            'is_baseline_locked', 'created_by_name', 'created_at',
+            'approved_at', 'milestones_count',
+        )
+
+    def get_milestones_count(self, obj):
+        return obj.procurement_milestones.count()
+
+    def get_method_display(self, obj):
+        choices = dict(ContractProcurementPlan.METHOD_CHOICES)
+        return choices.get(obj.method, obj.method)
 
 
 class GeneralProcurementNoticeSerializer(serializers.ModelSerializer):

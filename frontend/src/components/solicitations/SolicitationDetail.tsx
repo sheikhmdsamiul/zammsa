@@ -90,8 +90,13 @@ const SolicitationDetail: React.FC = () => {
 
   const role = user?.role || '';
   const status = sol.status || '';
+  const isRejectedDraft = status === 'draft' && !!sol.rejection_reason;
+  const canEdit = status === 'draft' && role !== 'procurement_manager';
 
-  const canSubmit = status === 'draft' && ['procurement_officer', 'procurement_manager'].includes(role);
+  const canSubmit =
+    status === 'draft' &&
+    ['procurement_officer', 'procurement_manager'].includes(role) &&
+    !(role === 'procurement_manager' && isRejectedDraft);
   const canApprove = status === 'pending_approval' && ['procurement_manager', 'director_procurement'].includes(role);
   const canReject = status === 'pending_approval' && ['procurement_manager', 'director_procurement'].includes(role);
   const canPublish = status === 'approved' && ['procurement_officer', 'procurement_manager'].includes(role);
@@ -125,7 +130,7 @@ const SolicitationDetail: React.FC = () => {
         </div>
         <div className="flex gap-2">
           {canSubmit && <button onClick={() => submitMutation.mutate()} className="px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700">Submit for Approval</button>}
-          {(status === 'draft') && <Link to={`/solicitations/${id}/edit`} className="px-4 py-2 text-sm bg-white border border-gray-300 rounded-lg hover:bg-gray-50">Edit</Link>}
+          {canEdit && <Link to={`/solicitations/${id}/edit`} className="px-4 py-2 text-sm bg-white border border-gray-300 rounded-lg hover:bg-gray-50">Edit</Link>}
         </div>
       </div>
 

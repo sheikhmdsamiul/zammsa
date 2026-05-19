@@ -76,6 +76,13 @@ class Requisition(models.Model):
             return (timezone.now().date() - self.submitted_at.date()).days
         return 0
 
+    def save(self, *args, **kwargs):
+        if not self.req_number:
+            import uuid
+            from datetime import datetime
+            self.req_number = f"REQ-{datetime.now().strftime('%Y%m%d')}-{uuid.uuid4().hex[:6].upper()}"
+        super().save(*args, **kwargs)
+
 
 class RequisitionItem(models.Model):
     item_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)

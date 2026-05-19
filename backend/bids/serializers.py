@@ -5,6 +5,7 @@ from .models import BidSubmission, BidDocument, BidSecurity, BidOpening, BidOpen
 class BidDocumentSerializer(serializers.ModelSerializer):
     id = serializers.UUIDField(source='document_id', read_only=True)
     filename = serializers.SerializerMethodField()
+    file_url = serializers.SerializerMethodField()
 
     class Meta:
         model = BidDocument
@@ -13,6 +14,16 @@ class BidDocumentSerializer(serializers.ModelSerializer):
 
     def get_filename(self, obj):
         return obj.file_path.split('/')[-1] if '/' in obj.file_path else obj.file_path
+
+    def get_file_url(self, obj):
+        if not obj.file_path:
+            return ''
+        request = self.context.get('request')
+        if obj.file_path.startswith('http://') or obj.file_path.startswith('https://'):
+            return obj.file_path
+        if request:
+            return request.build_absolute_uri(f'/media/{obj.file_path}')
+        return f'/media/{obj.file_path}'
 
 
 class BidSecuritySerializer(serializers.ModelSerializer):
@@ -52,6 +63,7 @@ class BidSubmissionSerializer(serializers.ModelSerializer):
 class BidSubmissionListSerializer(serializers.ModelSerializer):
     id = serializers.UUIDField(source='bid_id', read_only=True)
     vendor_name = serializers.CharField(source='supplier.full_name', read_only=True)
+    supplier_name = serializers.CharField(source='supplier.full_name', read_only=True)
     bid_number = serializers.CharField(source='submission_id', read_only=True)
     bid_amount = serializers.DecimalField(source='bid_price', max_digits=20, decimal_places=2, read_only=True, allow_null=True)
 

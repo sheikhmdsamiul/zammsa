@@ -1,6 +1,8 @@
 from decimal import Decimal
+import os
 from django.db.models import Q, Avg
 from django.utils import timezone
+from django.core.files.storage import default_storage
 from rest_framework import generics, filters, status
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated, AllowAny
@@ -248,10 +250,21 @@ def vendor_application_upload_document_view(request, pk):
     except VendorApplication.DoesNotExist:
         return Response({'error': 'Application not found'}, status=404)
 
-    doc_type = request.data.get('document_type', '')
+    doc_type = request.data.get('document_type') or request.data.get('type') or ''
+    uploaded_file = request.FILES.get('file')
     file_path = request.data.get('file_path', '')
+
+    if uploaded_file:
+        # Persist uploaded registration files so reviewers can manually inspect them.
+        safe_name = os.path.basename(uploaded_file.name)
+        stored_path = default_storage.save(
+            f'vendor_applications/{app.application_id}/{safe_name}',
+            uploaded_file,
+        )
+        file_path = default_storage.url(stored_path)
+
     if not doc_type or not file_path:
-        return Response({'error': 'document_type and file_path are required'}, status=400)
+        return Response({'error': 'document_type and file_path/file are required'}, status=400)
 
     doc = VendorApplicationDocument.objects.create(
         application=app,

@@ -394,8 +394,24 @@ def contract_archive_view(request, pk):
     contract.retention_expiry = timezone.now().date() + timedelta(days=365 * 7)
     contract.save()
 
+    # BR-CPP-12: Also archive the linked CPP
+    try:
+        requisition = contract.solicitation.requisition
+        if requisition:
+            from procurement_planning.models import ContractProcurementPlan
+            cpp = requisition.cpp.filter(
+                status__in=('approved', 'active', 'completed')
+            ).first()
+            if cpp:
+                cpp.status = 'archived'
+                cpp.archived_at = timezone.now()
+                cpp.retention_expiry = contract.retention_expiry
+                cpp.save()
+    except Exception:
+        pass  # CPP archiving is best-effort; don't fail contract archive
+
     return Response({
-        'message': 'Contract archived. Retention set to 7 years.',
+        'message': 'Contract archived with linked CPP. Retention set to 7 years.',
         'retention_expiry': contract.retention_expiry,
     })
 

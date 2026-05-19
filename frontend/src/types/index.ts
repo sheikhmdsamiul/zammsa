@@ -164,6 +164,7 @@ export interface Bid {
   vendor: string;
   vendor_name: string;
   bid_number: string;
+  receipt_number?: string;
   status: 'draft' | 'submitted' | 'withdrawn' | 'modified' | 'opened' | 'evaluated';
   bid_amount: number;
   currency: string;
@@ -173,6 +174,9 @@ export interface Bid {
   security_expiry: string;
   security_verified: boolean;
   submission_method: 'online' | 'physical';
+  financial_envelope_encrypted?: boolean;
+  addenda_acknowledged?: boolean;
+  is_late?: boolean;
   documents: Attachment[];
   items: BidItem[];
   submitted_at: string | null;
@@ -954,27 +958,72 @@ export interface APPDashboardStats {
 }
 
 export interface ContractProcurementPlan {
-  cpp_id: string;
-  requisition: string;
-  requisition_number?: string;
-  procurement_strategy: string;
-  milestones: any[];
-  resource_requirements: Record<string, any>;
-  risk_assessment: Record<string, any>;
-  status: 'draft' | 'active' | 'completed' | 'cancelled';
-  created_by?: string;
-  created_by_name?: string;
-  created_at: string;
-  updated_at: string;
-}
+   cpp_id: string;
+   cpp_number?: string;
+   requisition: string;
+   requisition_number?: string;
+   requisition_description?: string;
+   requisition_department?: string;
+   procurement_strategy?: string;
+   method?: 'open_tender' | 'international' | 'limited' | 'simplified' | 'direct';
+   recommended_method?: 'open_tender' | 'international' | 'limited' | 'simplified' | 'direct';
+   method_override?: boolean;
+   override_reason?: string;
+   override_approved_by?: string;
+   override_approved_at?: string;
+   zpc_approval_required?: boolean;
+   zpc_justification?: string;
+   zpc_grounds?: string;
+   zpc_resolution_ref?: string;
+   zpc_approved_at?: string;
+   zpc_approved_by?: string;
+   estimated_value?: number;
+   overall_risk_level?: 'low' | 'medium' | 'high';
+   resource_requirements?: Record<string, any>;
+   risks?: CPPRisk[];
+   milestones?: ProcurementMilestone[];
+   status?: 'draft' | 'pending_zpc' | 'approved' | 'rejected' | 'active' | 'amended' | 'completed' | 'cancelled';
+   created_by?: string;
+   created_by_name?: string;
+   approved_by?: string;
+   approved_by_name?: string;
+   approved_at?: string;
+   rejection_reason?: string;
+   rejected_by?: string;
+   rejected_at?: string;
+   is_baseline_locked?: boolean;
+   baseline_locked_at?: string;
+   baseline_locked_by?: string;
+   baseline_locked_by_name?: string;
+   amendment_version?: number;
+   previous_baseline?: Record<string, any>;
+   created_at: string;
+   updated_at: string;
+   completed_at?: string;
+ }
+
+export interface CPPRisk {
+   risk_id: string;
+   cpp: string;
+   risk_category: 'supply' | 'price' | 'quality' | 'delivery' | 'regulatory' | 'capacity' | 'custom';
+   risk_description: string;
+   likelihood: 'low' | 'medium' | 'high';
+   impact: 'low' | 'medium' | 'high' | 'critical';
+   mitigation_strategy: string;
+   risk_owner?: string;
+   created_at: string;
+ }
 
 export interface ProcurementMilestone {
-  milestone_id: string;
-  cpp: string;
-  milestone_name: string;
-  planned_date: string;
-  actual_date: string | null;
-  variance_days: number | null;
-}
+   milestone_id: string;
+   cpp: string;
+   milestone_name: string;
+   sequence_number: number;
+   planned_date: string;
+   actual_date: string | null;
+   variance_days: number | null;
+   variance_flag?: 'green' | 'yellow' | 'orange' | 'red';
+   is_system_updated?: boolean;
+ }
 
  

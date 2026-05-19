@@ -21,6 +21,17 @@ const VendorApplications: React.FC = () => {
   const [infoMsg, setInfoMsg] = useState('');
   const [showInfo, setShowInfo] = useState(false);
 
+  const resolveDocumentUrl = (rawPath: string) => {
+    if (!rawPath) return '';
+    if (rawPath.startsWith('http://') || rawPath.startsWith('https://')) return rawPath;
+
+    const apiBase = process.env.REACT_APP_API_URL || 'http://localhost:8000/api/v1';
+    const backendOrigin = apiBase.replace(/\/api\/v1\/?$/, '');
+    if (rawPath.startsWith('/')) return `${backendOrigin}${rawPath}`;
+    if (rawPath.startsWith('media/')) return `${backendOrigin}/${rawPath}`;
+    return `${backendOrigin}/media/${rawPath}`;
+  };
+
   const { data, isLoading } = useQuery({
     queryKey: ['vendorApplications', search, statusFilter, page, limit],
     queryFn: () => fetchVendorApplications({ search, status: statusFilter || undefined, page, limit }),
@@ -124,6 +135,16 @@ const VendorApplications: React.FC = () => {
                     <div key={i} className="flex items-center gap-2 text-sm py-1">
                       <span className="text-blue-600">{'\uD83D\uDCCE'}</span>
                       <span className="text-gray-700">{d.document_type || d.filename}</span>
+                      {d.file_path && (
+                        <a
+                          href={resolveDocumentUrl(d.file_path)}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="text-xs text-blue-600 hover:underline ml-2"
+                        >
+                          View
+                        </a>
+                      )}
                     </div>
                   ))}
                   {(!detail?.documents || detail.documents.length === 0) && <p className="text-xs text-gray-400">No documents uploaded</p>}

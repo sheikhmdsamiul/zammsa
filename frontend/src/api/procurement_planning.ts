@@ -1,5 +1,5 @@
 import api from './client';
-import { AnnualProcurementPlan, APPLineItem, GeneralProcurementNotice, BudgetAllocation, PaginatedResponse, APPDashboardStats, BudgetSummary, ContractProcurementPlan, ProcurementMilestone } from '../types';
+import { AnnualProcurementPlan, APPLineItem, GeneralProcurementNotice, BudgetAllocation, PaginatedResponse, APPDashboardStats, BudgetSummary, ContractProcurementPlan, ProcurementMilestone, CPPRisk } from '../types';
 
 export const procurementPlanningApi = {
   dashboard: () =>
@@ -12,7 +12,7 @@ export const procurementPlanningApi = {
     api.get<AnnualProcurementPlan>(`/procurement-planning/annual-plans/${id}/`).then(r => r.data),
 
   create: (data: Partial<AnnualProcurementPlan>) =>
-    api.post<AnnualProcurementPlan>('/procurement-planning/annual-plans/', data).then(r => r.data),
+    api.post<AnnualProcurementPlan>(`/procurement-planning/annual-plans/`, data).then(r => r.data),
 
   update: (id: string, data: Partial<AnnualProcurementPlan>) =>
     api.patch<AnnualProcurementPlan>(`/procurement-planning/annual-plans/${id}/`, data).then(r => r.data),
@@ -21,10 +21,10 @@ export const procurementPlanningApi = {
     api.delete(`/procurement-planning/annual-plans/${id}/`),
 
   submit: (id: string) =>
-    api.post<{ message: string; status: string; approval_trail: any }>(`/procurement-planning/annual-plans/${id}/submit/`).then(r => r.data),
+    api.post<{ message: string; status: string; approval_trail: any[] }>(`/procurement-planning/annual-plans/${id}/submit/`).then(r => r.data),
 
   approve: (id: string, data?: Record<string, any>) =>
-    api.post<{ message: string; status: string; approval_trail: any }>(`/procurement-planning/annual-plans/${id}/approve/`, data || {}).then(r => r.data),
+    api.post<{ message: string; status: string; approval_trail: any[] }>(`/procurement-planning/annual-plans/${id}/approve/`, data || {}).then(r => r.data),
 
   reject: (id: string, reason: string) =>
     api.post<{ message: string; status: string }>(`/procurement-planning/annual-plans/${id}/reject/`, { reason }).then(r => r.data),
@@ -79,24 +79,60 @@ export const procurementPlanningApi = {
     list: (params?: Record<string, any>) =>
       api.get<PaginatedResponse<ContractProcurementPlan>>('/procurement-planning/contract-plans/', { params }).then(r => r.data),
     create: (data: Partial<ContractProcurementPlan>) =>
-      api.post<ContractProcurementPlan>('/procurement-planning/contract-plans/', data).then(r => r.data),
+      api.post<ContractProcurementPlan>(`/procurement-planning/contract-plans/`, data).then(r => r.data),
     detail: (id: string) =>
       api.get<ContractProcurementPlan>(`/procurement-planning/contract-plans/${id}/`).then(r => r.data),
     update: (id: string, data: Partial<ContractProcurementPlan>) =>
       api.patch<ContractProcurementPlan>(`/procurement-planning/contract-plans/${id}/`, data).then(r => r.data),
     delete: (id: string) =>
       api.delete(`/procurement-planning/contract-plans/${id}/`),
+    submit: (id: string) =>
+      api.post<{ message: string; status: string }>(`/procurement-planning/contract-plans/${id}/submit/`).then(r => r.data),
+    approve: (id: string, data?: Record<string, any>) =>
+      api.post<{ message: string; status: string }>(`/procurement-planning/contract-plans/${id}/approve/`, data || {}).then(r => r.data),
+    reject: (id: string, reason: string, returnForRevision?: boolean) =>
+      api.post<{ message: string; status: string }>(`/procurement-planning/contract-plans/${id}/reject/`, { 
+        reason, 
+        return_for_revision: returnForRevision 
+      }).then(r => r.data),
+    return: (id: string, reason: string) =>
+      api.post<{ message: string; status: string }>(`/procurement-planning/contract-plans/${id}/return/`, { reason }).then(r => r.data),
+    lockBaseline: (id: string) =>
+      api.post<{ message: string; is_baseline_locked: boolean; baseline_locked_at: string }>(`/procurement-planning/contract-plans/${id}/lock-baseline/`).then(r => r.data),
+    updateMilestone: (cppId: string, milestoneId: string, data: Partial<ProcurementMilestone>) =>
+      api.post<{ message: string; milestone: ProcurementMilestone }>(`/procurement-planning/contract-plans/${cppId}/update-milestone/${milestoneId}/`, data).then(r => r.data),
+    createAmendment: (id: string, data: Partial<ContractProcurementPlan>) =>
+      api.post<{ message: string; amendment_version: number; status: string }>(`/procurement-planning/contract-plans/${id}/create-amendment/`, data).then(r => r.data),
+    methodOverrideApprove: (id: string, data: { override_reason?: string; new_method?: string }) =>
+      api.post<{ message: string; status: string }>(`/procurement-planning/contract-plans/${id}/method-override-approve/`, data).then(r => r.data),
+    dashboard: () =>
+      api.get<{ total: number; draft: number; pending_zpc: number; approved: number; rejected: number; active: number; completed: number; cancelled: number; baseline_locked: number; total_value: number }>('/procurement-planning/contract-plans/dashboard/').then(r => r.data),
+    varianceAlerts: () =>
+      api.get<{ alerts: any[]; total_alerts: number }>('/procurement-planning/contract-plans/variance-alerts/').then(r => r.data),
+    archive: (id: string) =>
+      api.post<{ message: string; status: string; archived_at: string; retention_expiry: string }>(`/procurement-planning/contract-plans/${id}/archive/`).then(r => r.data),
   },
 
   milestones: {
     list: (params?: Record<string, any>) =>
       api.get<PaginatedResponse<ProcurementMilestone>>('/procurement-planning/milestones/', { params }).then(r => r.data),
     create: (data: Partial<ProcurementMilestone>) =>
-      api.post<ProcurementMilestone>('/procurement-planning/milestones/', data).then(r => r.data),
+      api.post<ProcurementMilestone>(`/procurement-planning/milestones/`, data).then(r => r.data),
     update: (id: string, data: Partial<ProcurementMilestone>) =>
       api.patch<ProcurementMilestone>(`/procurement-planning/milestones/${id}/`, data).then(r => r.data),
     delete: (id: string) =>
       api.delete(`/procurement-planning/milestones/${id}/`),
+  },
+
+  cppRisks: {
+    list: (params?: Record<string, any>) =>
+      api.get<PaginatedResponse<CPPRisk>>(`/procurement-planning/cpp-risks/`, { params }).then(r => r.data),
+    create: (data: Partial<CPPRisk>) =>
+      api.post<CPPRisk>(`/procurement-planning/cpp-risks/`, data).then(r => r.data),
+    update: (id: string, data: Partial<CPPRisk>) =>
+      api.patch<CPPRisk>(`/procurement-planning/cpp-risks/${id}/`, data).then(r => r.data),
+    delete: (id: string) =>
+      api.delete(`/procurement-planning/cpp-risks/${id}/`),
   },
 };
 

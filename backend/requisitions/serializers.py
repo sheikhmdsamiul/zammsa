@@ -1,4 +1,5 @@
 from rest_framework import serializers
+from django.db import models as db_models
 from .models import Requisition, RequisitionItem, Specification, RequisitionApproval, RequisitionVersion, BudgetEncumbrance
 
 
@@ -67,6 +68,16 @@ class RequisitionSerializer(serializers.ModelSerializer):
     def validate(self, data):
         if self.instance is None and not data.get('app_line_item'):
             raise serializers.ValidationError({'app_line_item': 'APP line item is required on create.'})
+
+        app_line_item = data.get('app_line_item')
+        department = data.get('department')
+        if app_line_item and department:
+            app_department = app_line_item.app.department
+            if app_department.pk != department.pk:
+                raise serializers.ValidationError(
+                    f'Department mismatch: requisition is for "{department}" but the APP line item belongs to "{app_department}".'
+                )
+
         return data
 
     class Meta:
@@ -75,8 +86,6 @@ class RequisitionSerializer(serializers.ModelSerializer):
         read_only_fields = ('requisition_id', 'req_number', 'submitted_at', 'approved_at', 'created_at', 'updated_at', 'days_at_current_stage')
 
     def create(self, validated_data):
-        import uuid
-        from datetime import datetime
         from master_data.models import Department, UnitOfMeasure
         from .models import RequisitionItem
         department_value = self.initial_data.get('department')
@@ -89,8 +98,6 @@ class RequisitionSerializer(serializers.ModelSerializer):
                 if dept:
                     validated_data['department'] = dept
         validated_data['requester'] = self.context['request'].user
-        if 'req_number' not in validated_data:
-            validated_data['req_number'] = f"REQ-{datetime.now().strftime('%Y%m%d')}-{uuid.uuid4().hex[:6].upper()}"
         if 'delivery_location' not in validated_data:
             validated_data['delivery_location'] = ''
         req = super().create(validated_data)
@@ -108,6 +115,11 @@ class RequisitionSerializer(serializers.ModelSerializer):
                 unit_of_measure=unit_of_measure,
                 unit_price_estimate=item.get('estimated_unit_cost', 0),
             )
+        req.refresh_from_db()
+        item_total = req.items.aggregate(total=db_models.Sum('total_estimate'))['total'] or 0
+        if item_total:
+            req.estimated_total = item_total
+            req.save(update_fields=['estimated_total'])
         return req
 
     def update(self, instance, validated_data):
@@ -140,6 +152,10 @@ class RequisitionSerializer(serializers.ModelSerializer):
                     unit_price_estimate=item.get('estimated_unit_cost', 0),
                 )
         instance.refresh_from_db()
+        item_total = instance.items.aggregate(total=db_models.Sum('total_estimate'))['total'] or 0
+        if item_total:
+            instance.estimated_total = item_total
+            instance.save(update_fields=['estimated_total'])
         return instance
 
 

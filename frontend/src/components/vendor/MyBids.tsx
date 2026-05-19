@@ -117,6 +117,12 @@ const MyBids: React.FC = () => {
                     {bid.security_verified !== undefined && <span className="inline-flex items-center gap-1">{bid.security_verified ? <CheckCircleIcon className="h-4 w-4 text-green-600" /> : <XCircleIcon className="h-4 w-4 text-red-500" />} Security</span>}
                   </div>
                   <div className="flex gap-2">
+                    <Link
+                      to={`/vendor/bids/${bid.id}`}
+                      className="px-3 py-1.5 text-sm text-zammsa-green border border-zammsa-green rounded-lg hover:bg-green-50"
+                    >
+                      View
+                    </Link>
                     {canWithdraw && (
                       <button onClick={() => setWithdrawId(bid.id)} className="px-3 py-1.5 text-sm text-red-600 border border-red-300 rounded-lg hover:bg-red-50">Withdraw</button>
                     )}

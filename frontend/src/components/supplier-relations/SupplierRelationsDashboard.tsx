@@ -2,9 +2,31 @@ import React from 'react';
 import { Link } from 'react-router-dom';
 import { useAppSelector } from '../../hooks/useRedux';
 import { ClipboardListIcon, OfficeBuildingIcon, TrendingUpIcon } from '@heroicons/react/outline';
+import { useQuery } from '@tanstack/react-query';
+import { fetchVendorApplications, fetchVendors } from '../../api/admin';
 
 const SupplierRelationsDashboard: React.FC = () => {
   const { user } = useAppSelector((s) => s.auth);
+  const { data: pendingApplications, isLoading: pendingLoading } = useQuery({
+    queryKey: ['sr-dashboard-pending-applications'],
+    queryFn: () => fetchVendorApplications({ status: 'submitted', page: 1, limit: 1 }),
+  });
+  const { data: suppliers, isLoading: suppliersLoading } = useQuery({
+    queryKey: ['sr-dashboard-active-suppliers'],
+    queryFn: () => fetchVendors({ status: 'active', page: 1, limit: 1 }),
+  });
+  const { data: approvedApplications, isLoading: approvedLoading } = useQuery({
+    queryKey: ['sr-dashboard-approved-applications'],
+    queryFn: () => fetchVendorApplications({ status: 'approved', page: 1, limit: 1 }),
+  });
+
+  const pendingCount = pendingApplications?.total ?? 0;
+  const supplierCount = suppliers?.total ?? 0;
+  const approvedCount = approvedApplications?.total ?? 0;
+
+  const pendingDisplay = pendingLoading ? '...' : pendingCount.toLocaleString();
+  const supplierDisplay = suppliersLoading ? '...' : supplierCount.toLocaleString();
+  const approvedDisplay = approvedLoading ? '...' : approvedCount.toLocaleString();
 
   return (
     <div className="space-y-6">
@@ -15,16 +37,16 @@ const SupplierRelationsDashboard: React.FC = () => {
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <Link to="/supplier-relations/vendor-applications" className="bg-white rounded-lg shadow p-6 hover:shadow-md transition-shadow">
-          <p className="text-3xl font-bold text-zammsa-green">--</p>
+          <p className="text-3xl font-bold text-zammsa-green">{pendingDisplay}</p>
           <p className="text-sm text-gray-500 mt-1">Pending Applications</p>
         </Link>
         <Link to="/supplier-relations/vendors" className="bg-white rounded-lg shadow p-6 hover:shadow-md transition-shadow">
-          <p className="text-3xl font-bold text-blue-600">--</p>
+          <p className="text-3xl font-bold text-blue-600">{supplierDisplay}</p>
           <p className="text-sm text-gray-500 mt-1">Registered Suppliers</p>
         </Link>
         <div className="bg-white rounded-lg shadow p-6">
-          <p className="text-3xl font-bold text-zammsa-green">--</p>
-          <p className="text-sm text-gray-500 mt-1">Recently Approved</p>
+          <p className="text-3xl font-bold text-zammsa-green">{approvedDisplay}</p>
+          <p className="text-sm text-gray-500 mt-1">Approved Applications</p>
         </div>
       </div>
 

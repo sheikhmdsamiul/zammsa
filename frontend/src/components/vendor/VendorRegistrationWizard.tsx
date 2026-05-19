@@ -126,7 +126,15 @@ const VendorRegistrationWizard: React.FC = () => {
         bank_account_name: bankForm.getValues('bank_account_name') || '',
         bank_branch: bankForm.getValues('bank_branch') || '',
       };
-      await vendorApi.registration.submit(data);
+      const app: any = await vendorApi.registration.submit(data);
+      const applicationId = app?.application_id || app?.id;
+
+      if (applicationId && documents.length > 0) {
+        for (const doc of documents) {
+          await vendorApi.registration.uploadDocument(applicationId, doc.type, doc.file);
+        }
+      }
+
       setSubmitted(true);
     } catch { /* handled by interceptor */ }
     setSubmitting(false);
