@@ -104,6 +104,8 @@ const IntegrationMonitor = React.lazy(() => import('./components/admin/Integrati
 const SystemSettings = React.lazy(() => import('./components/admin/SystemSettings'));
 const DepartmentManagement = React.lazy(() => import('./components/admin/DepartmentManagement'));
 const FiscalYearManagement = React.lazy(() => import('./components/admin/FiscalYearManagement'));
+const CommodityManagement = React.lazy(() => import('./components/admin/CommodityManagement'));
+const BudgetAllocationManagement = React.lazy(() => import('./components/admin/BudgetAllocationManagement'));
 const AdminReports = React.lazy(() => import('./components/admin/Reports'));
 const BackupManagement = React.lazy(() => import('./components/admin/BackupManagement'));
 
@@ -352,6 +354,8 @@ function App() {
                   <Route path="settings" element={<SystemSettings />} />
                   <Route path="departments" element={<DepartmentManagement />} />
                   <Route path="fiscal-years" element={<FiscalYearManagement />} />
+                  <Route path="commodities" element={<CommodityManagement />} />
+                  <Route path="budget-allocations" element={<BudgetAllocationManagement />} />
                   <Route path="reports" element={<AdminReports />} />
                   <Route path="backups" element={<BackupManagement />} />
                 </Route>

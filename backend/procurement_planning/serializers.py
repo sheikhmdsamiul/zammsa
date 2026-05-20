@@ -3,6 +3,11 @@ from .models import AnnualProcurementPlan, APPLineItem, ContractProcurementPlan,
 
 
 class APPLineItemSerializer(serializers.ModelSerializer):
+    funding_source_name = serializers.CharField(source='funding_source.source_name', read_only=True, allow_null=True)
+    commodity_name = serializers.CharField(source='commodity.commodity_name', read_only=True, allow_null=True)
+    commodity_category = serializers.CharField(source='commodity.category', read_only=True, allow_null=True)
+    procurement_type_display = serializers.CharField(source='get_procurement_type_display', read_only=True)
+
     class Meta:
         model = APPLineItem
         fields = '__all__'
@@ -34,6 +39,7 @@ class AnnualProcurementPlanSerializer(serializers.ModelSerializer):
     line_items = APPLineItemSerializer(many=True, read_only=True)
     fiscal_year_code = serializers.CharField(source='fiscal_year.year_code', read_only=True)
     department_name = serializers.CharField(source='department.dept_name', read_only=True)
+    department_code = serializers.CharField(source='department.dept_code', read_only=True)
     submitted_by_name = serializers.CharField(source='submitted_by.full_name', read_only=True)
     approved_by_name = serializers.CharField(source='approved_by.full_name', read_only=True)
     rejected_by_name = serializers.CharField(source='rejected_by.full_name', read_only=True)

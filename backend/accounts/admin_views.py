@@ -645,3 +645,140 @@ def admin_restore_backup(request, pk):
 @permission_classes([IsAuthenticated])
 def admin_update_backup_schedule(request):
     return Response({'message': 'Schedule updated'})
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def admin_commodities(request):
+    try:
+        from master_data.models import Commodity
+        qs = Commodity.objects.select_related('unit_of_measure').all()
+        data = [{
+            'id': str(c.commodity_id),
+            'commodity_code': c.commodity_code,
+            'commodity_name': c.commodity_name,
+            'category': c.category,
+            'sub_category': c.sub_category,
+            'unit_of_measure': str(c.unit_of_measure_id) if c.unit_of_measure_id else None,
+            'uom_name': c.unit_of_measure.uom_name if c.unit_of_measure else '',
+            'is_active': c.is_active,
+        } for c in qs]
+        return Response(data)
+    except Exception:
+        return Response([])
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def admin_create_commodity(request):
+    try:
+        from master_data.models import Commodity
+        commodity_code = request.data.get('commodity_code', '').strip()
+        if not commodity_code:
+            return Response({'error': 'commodity_code is required'}, status=400)
+        Commodity.objects.create(
+            commodity_code=commodity_code,
+            commodity_name=request.data.get('commodity_name', '').strip(),
+            category=request.data.get('category', '').strip(),
+            sub_category=request.data.get('sub_category', '').strip(),
+            is_active=request.data.get('is_active', True),
+        )
+        return Response({'message': 'Created'})
+    except Exception as e:
+        return Response({'error': str(e)}, status=400)
+
+
+@api_view(['PUT'])
+@permission_classes([IsAuthenticated])
+def admin_update_commodity(request, pk):
+    try:
+        from master_data.models import Commodity
+        c = Commodity.objects.get(pk=pk)
+        if 'commodity_code' in request.data:
+            c.commodity_code = request.data['commodity_code']
+        if 'commodity_name' in request.data:
+            c.commodity_name = request.data['commodity_name']
+        if 'category' in request.data:
+            c.category = request.data['category']
+        if 'sub_category' in request.data:
+            c.sub_category = request.data['sub_category']
+        if 'is_active' in request.data:
+            c.is_active = request.data['is_active']
+        c.save()
+        return Response({'message': 'Updated'})
+    except Exception as e:
+        return Response({'error': str(e)}, status=400)
+
+
+@api_view(['DELETE'])
+@permission_classes([IsAuthenticated])
+def admin_delete_commodity(request, pk):
+    try:
+        from master_data.models import Commodity
+        c = Commodity.objects.get(pk=pk)
+        c.is_active = False
+        c.save()
+        return Response(status=204)
+    except Exception as e:
+        return Response({'error': str(e)}, status=400)
+
+
+@api_view(['GET', 'POST'])
+@permission_classes([IsAuthenticated])
+def admin_budget_allocations(request):
+    try:
+        from finance.models import BudgetAllocation
+        from master_data.models import Department
+
+        if request.method == 'POST':
+            entity_code = request.data.get('entity_code', '').strip()
+            fiscal_year = request.data.get('fiscal_year', '').strip()
+            allocated = request.data.get('allocated_amount', 0)
+            if not entity_code or not fiscal_year:
+                return Response({'error': 'entity_code and fiscal_year are required'}, status=400)
+            ba, created = BudgetAllocation.objects.update_or_create(
+                entity_code=entity_code,
+                fiscal_year=fiscal_year,
+                defaults={
+                    'allocated_amount': allocated,
+                    'entity_name': Department.objects.filter(dept_code=entity_code).values_list('dept_name', flat=True).first() or '',
+                    'sync_source': 'manual',
+                }
+            )
+            return Response({'message': 'Created' if created else 'Updated', 'id': str(ba.allocation_id)})
+
+        depts = {d.dept_code: d.dept_name for d in Department.objects.all()}
+        qs = BudgetAllocation.objects.all().order_by('-fiscal_year', 'entity_code')
+        data = [{
+            'id': str(a.allocation_id),
+            'entity_code': a.entity_code,
+            'entity_name': depts.get(a.entity_code, a.entity_name),
+            'fiscal_year': a.fiscal_year,
+            'allocated_amount': float(a.allocated_amount),
+            'encumbered_amount': float(a.encumbered_amount),
+            'expended_amount': float(a.expended_amount),
+            'available': float(a.available),
+            'sync_source': a.sync_source,
+            'last_synced_at': a.last_synced_at.isoformat() if a.last_synced_at else None,
+        } for a in qs]
+        return Response(data)
+    except Exception as e:
+        return Response({'error': str(e)}, status=400)
+
+
+@api_view(['PUT'])
+@permission_classes([IsAuthenticated])
+def admin_update_budget_allocation(request, pk):
+    try:
+        from finance.models import BudgetAllocation
+        ba = BudgetAllocation.objects.get(pk=pk)
+        if 'allocated_amount' in request.data:
+            ba.allocated_amount = request.data['allocated_amount']
+            ba.sync_source = 'manual'
+            ba.save()
+            return Response({'message': 'Updated', 'available': float(ba.available)})
+        return Response({'error': 'allocated_amount required'}, status=400)
+    except BudgetAllocation.DoesNotExist:
+        return Response({'error': 'Not found'}, status=404)
+    except Exception as e:
+        return Response({'error': str(e)}, status=400)

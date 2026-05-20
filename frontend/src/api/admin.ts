@@ -3,6 +3,7 @@ import type {
   AdminDashboardData, Role, User, VendorApplication, SystemHealthData,
   AuditLogEntry, GovernanceSetting, ChangeRequest, IntegrationConfig,
   SystemSetting, Department, FiscalYear, BackupRecord, ScheduledReport,
+  Commodity,
 } from '../types';
 
 const BASE = 'admin';
@@ -183,3 +184,24 @@ export const restoreBackup = (id: string): Promise<void> =>
 
 export const updateBackupSchedule = (config: any): Promise<void> =>
   apiClient.put(`${BASE}/backups/schedule/`, config).then((r) => r.data);
+
+export const fetchCommodities = (): Promise<Commodity[]> =>
+  apiClient.get(`${BASE}/commodities/`).then((r) => r.data);
+
+export const createCommodity = (data: Partial<Commodity>): Promise<void> =>
+  apiClient.post(`${BASE}/commodities/create/`, data).then((r) => r.data);
+
+export const updateCommodity = (id: string, data: Partial<Commodity>): Promise<void> =>
+  apiClient.put(`${BASE}/commodities/${id}/`, data).then((r) => r.data);
+
+export const deleteCommodity = (id: string): Promise<void> =>
+  apiClient.delete(`${BASE}/commodities/${id}/delete/`).then((r) => r.data);
+
+export const fetchBudgetAllocations = (): Promise<any[]> =>
+  apiClient.get(`${BASE}/budget-allocations/`).then((r) => r.data);
+
+export const createBudgetAllocation = (data: { entity_code: string; fiscal_year: string; allocated_amount: number }): Promise<any> =>
+  apiClient.post(`${BASE}/budget-allocations/`, data).then((r) => r.data);
+
+export const updateBudgetAllocation = (id: string, data: { allocated_amount: number }): Promise<any> =>
+  apiClient.put(`${BASE}/budget-allocations/${id}/`, data).then((r) => r.data);

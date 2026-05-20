@@ -87,6 +87,11 @@ class RequisitionDetailView(generics.RetrieveUpdateDestroyAPIView):
     def perform_update(self, serializer):
         if self.request.user.role != 'user_dept_staff':
             raise PermissionDenied('Only User Department Staff can edit requisitions.')
+        instance = self.get_object()
+        if instance.requester_id != self.request.user.id:
+            raise PermissionDenied('You can only edit requisitions you created.')
+        if instance.status not in ('draft', 'rejected', 'amended'):
+            raise PermissionDenied('Only draft, rejected, or amended requisitions can be edited.')
         serializer.save()
 
     def perform_destroy(self, instance):
@@ -114,11 +119,13 @@ def _check_budget_and_encumber(req):
                     'shortfall': float(req.estimated_total) - float(ba.available),
                 })
             else:
-                BudgetEncumbrance.objects.create(
-                    requisition=req,
-                    amount=req.estimated_total,
-                    status='active',
-                )
+                # Keep a single active encumbrance per requisition to avoid duplicate holds.
+                if not BudgetEncumbrance.objects.filter(requisition=req, status='active').exists():
+                    BudgetEncumbrance.objects.create(
+                        requisition=req,
+                        amount=req.estimated_total,
+                        status='active',
+                    )
                 req.budget_validated = True
                 req.encumbrance_ref = f"ENC-{req.req_number}"
                 req.save(update_fields=['budget_validated', 'encumbrance_ref'])
@@ -239,8 +246,12 @@ def _advance_requisition(req, user, decision, comments):
         BudgetEncumbrance.objects.filter(requisition=req, status='active').update(status='released', released_at=timezone.now())
     else:
         req.status = flow['to']
-        if req.status in ('pending_dg', 'pending_zpc'):
-            budget_warnings = _check_budget_and_encumber(req)
+        if req.status == 'pending_dg':
+            # Finance stage confirms budget hold; keep it idempotent.
+            _check_budget_and_encumber(req)
+        if req.status == 'approved':
+            req.approved_at = timezone.now()
+            req.current_approver = None
 
     req.save()
 

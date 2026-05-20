@@ -54,4 +54,10 @@ urlpatterns = [
     path('backups/create/', admin_views.admin_create_backup, name='admin-backup-create'),
     path('backups/<uuid:pk>/restore/', admin_views.admin_restore_backup, name='admin-backup-restore'),
     path('backups/schedule/', admin_views.admin_update_backup_schedule, name='admin-backup-schedule'),
+    path('commodities/', admin_views.admin_commodities, name='admin-commodities'),
+    path('commodities/create/', admin_views.admin_create_commodity, name='admin-commodity-create'),
+    path('commodities/<uuid:pk>/', admin_views.admin_update_commodity, name='admin-commodity-update'),
+    path('commodities/<uuid:pk>/delete/', admin_views.admin_delete_commodity, name='admin-commodity-delete'),
+    path('budget-allocations/', admin_views.admin_budget_allocations, name='admin-budget-allocations'),
+    path('budget-allocations/<uuid:pk>/', admin_views.admin_update_budget_allocation, name='admin-budget-allocation-update'),
 ]

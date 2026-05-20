@@ -4,7 +4,7 @@ import { useAuth, useLogout } from '../../hooks/useAuth';
 import {
   ChartBarIcon, UserGroupIcon, LockClosedIcon, ClipboardListIcon,
   OfficeBuildingIcon, HeartIcon, AdjustmentsIcon, LinkIcon,
-  CogIcon, CalendarIcon, TrendingUpIcon, SaveIcon,
+  CogIcon, CalendarIcon, TrendingUpIcon, SaveIcon, CubeIcon, CurrencyDollarIcon,
 } from '@heroicons/react/outline';
 
 const iconClass = 'h-5 w-5';
@@ -28,6 +28,8 @@ const navItems = [
   { label: 'System Settings', path: '/admin/settings', icon: <CogIcon className={iconClass} /> },
   { label: 'Departments', path: '/admin/departments', icon: <OfficeBuildingIcon className={iconClass} /> },
   { label: 'Fiscal Years', path: '/admin/fiscal-years', icon: <CalendarIcon className={iconClass} /> },
+  { label: 'Commodities', path: '/admin/commodities', icon: <CubeIcon className={iconClass} /> },
+  { label: 'Budget Allocations', path: '/admin/budget-allocations', icon: <CurrencyDollarIcon className={iconClass} /> },
   { label: 'Reports', path: '/admin/reports', icon: <TrendingUpIcon className={iconClass} /> },
   { label: 'Backup Management', path: '/admin/backups', icon: <SaveIcon className={iconClass} /> },
 ];

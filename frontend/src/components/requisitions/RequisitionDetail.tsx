@@ -8,8 +8,8 @@ import { useAuth } from '../../hooks/useAuth';
 import toast from 'react-hot-toast';
 
 const WORKFLOW_STEPS = [
-  { label: 'Draft / Submitted', statuses: ['draft', 'submitted'] },
-  { label: 'Dept Head Approval', statuses: ['submitted', 'pending_finance', 'pending_dg', 'pending_zpc', 'approved'] },
+  { label: 'Draft / Submitted', statuses: ['draft', 'submitted', 'pending_dept_head'] },
+  { label: 'Dept Head Approval', statuses: ['pending_dept_head', 'pending_finance', 'pending_dg', 'pending_zpc', 'approved'] },
   { label: 'Finance Validation', statuses: ['pending_finance', 'pending_dg', 'pending_zpc', 'approved'] },
   { label: 'Director General', statuses: ['pending_dg', 'pending_zpc', 'approved'] },
   { label: 'ZPC (> K250,000)', statuses: ['pending_zpc', 'approved'] },
@@ -68,11 +68,11 @@ const RequisitionDetail: React.FC = () => {
   const estimatedValue = Number(req.estimated_value || req.estimated_total || 0);
 
   const canSubmit = status === 'draft' && role === 'user_dept_staff';
-  const canApproveDeptHead = status === 'submitted' && role === 'department_head';
+  const canApproveDeptHead = status === 'pending_dept_head' && role === 'department_head';
   const canApproveFinance = status === 'pending_finance' && role === 'finance_officer';
   const canApproveDG = status === 'pending_dg' && role === 'director_general';
   const canApproveZPC = status === 'pending_zpc' && role === 'zpc_member' && estimatedValue > 250000;
-  const canRejectReturn = (status === 'submitted' && role === 'department_head') ||
+  const canRejectReturn = (status === 'pending_dept_head' && role === 'department_head') ||
     (status === 'pending_finance' && role === 'finance_officer') ||
     (status === 'pending_dg' && role === 'director_general') ||
     (status === 'pending_zpc' && role === 'zpc_member');

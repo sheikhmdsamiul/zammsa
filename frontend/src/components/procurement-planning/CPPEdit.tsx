@@ -9,6 +9,7 @@ import { useAuth } from '../../hooks/useAuth';
 interface RequisitionOption {
   requisition_id: string;
   req_number: string;
+  title: string;
   description: string;
   estimated_total: number;
   status: string;
@@ -94,6 +95,7 @@ const CPPEdit: React.FC = () => {
       setRequisitions((res.results || []).map(r => ({
         requisition_id: r.requisition_id || '',
         req_number: r.req_number || '',
+        title: r.title || r.description || '',
         description: r.description || '',
         estimated_total: Number(r.estimated_total) || 0,
         status: r.status || '',
@@ -337,7 +339,7 @@ const CPPEdit: React.FC = () => {
                 <option value="">-- Select Requisition --</option>
                 {requisitions.map(r => (
                   <option key={r.requisition_id} value={r.requisition_id}>
-                    {r.req_number} — {r.description} (K{r.estimated_total.toLocaleString()})
+                    {r.req_number} — {r.title || r.description} (K{r.estimated_total.toLocaleString()})
                   </option>
                 ))}
               </select>
@@ -345,7 +347,7 @@ const CPPEdit: React.FC = () => {
                 <div className="mt-4 p-4 bg-gray-50 rounded-lg">
                   <div className="grid grid-cols-2 gap-2 text-sm">
                     <div><span className="text-gray-500 block">Requisition #</span>{selectedRequisitionData.req_number}</div>
-                    <div><span className="text-gray-500 block">Description</span>{selectedRequisitionData.description}</div>
+                    <div><span className="text-gray-500 block">Title</span>{selectedRequisitionData.title || selectedRequisitionData.description}</div>
                     <div><span className="text-gray-500 block">Est. Value</span>K{selectedRequisitionData.estimated_total.toLocaleString()}</div>
                     <div><span className="text-gray-500 block">Status</span>{selectedRequisitionData.status}</div>
                   </div>

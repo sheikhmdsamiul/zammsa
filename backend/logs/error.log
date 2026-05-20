@@ -7033,3 +7033,115 @@ Traceback (most recent call last):
     raise ImproperlyConfigured(
 django.core.exceptions.ImproperlyConfigured: Field name `supplier_name` is not valid for model `BidSubmission` in `bids.serializers.BidSubmissionListSerializer`.
 ERROR 2026-05-19 09:38:03,934 basehttp 232917 126196168988352 "GET /api/v1/bids/?page=1&page_size=10 HTTP/1.1" 500 172400
+ERROR 2026-05-19 13:32:34,633 log 442648 129394237707968 Internal Server Error: /api/v1/requisitions/4a6031e6-08c2-40ab-9cb4-22023c6125c5/
+Traceback (most recent call last):
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/core/handlers/exception.py", line 55, in inner
+    response = get_response(request)
+               ^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/core/handlers/base.py", line 197, in _get_response
+    response = wrapped_callback(request, *callback_args, **callback_kwargs)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/views/decorators/csrf.py", line 65, in _view_wrapper
+    return view_func(request, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/views/generic/base.py", line 104, in view
+    return self.dispatch(request, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/views.py", line 515, in dispatch
+    response = self.handle_exception(exc)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/views.py", line 475, in handle_exception
+    self.raise_uncaught_exception(exc)
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/views.py", line 486, in raise_uncaught_exception
+    raise exc
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/views.py", line 512, in dispatch
+    response = handler(request, *args, **kwargs)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/generics.py", line 292, in patch
+    return self.partial_update(request, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/mixins.py", line 82, in partial_update
+    return self.update(request, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/mixins.py", line 68, in update
+    self.perform_update(serializer)
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/requisitions/views.py", line 90, in perform_update
+    serializer.save()
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/serializers.py", line 205, in save
+    self.instance = self.update(self.instance, validated_data)
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/requisitions/serializers.py", line 146, in update
+    RequisitionItem.objects.create(
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/db/models/manager.py", line 87, in manager_method
+    return getattr(self.get_queryset(), name)(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/db/models/query.py", line 679, in create
+    obj.save(force_insert=True, using=self.db)
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/requisitions/models.py", line 105, in save
+    self.total_estimate = self.quantity * self.unit_price_estimate
+                          ~~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~~
+TypeError: can't multiply sequence by non-int of type 'str'
+ERROR 2026-05-19 13:32:34,637 basehttp 442648 129394237707968 "PATCH /api/v1/requisitions/4a6031e6-08c2-40ab-9cb4-22023c6125c5/ HTTP/1.1" 500 169087
+ERROR 2026-05-19 13:32:36,683 log 442648 129394237707968 Internal Server Error: /api/v1/requisitions/4a6031e6-08c2-40ab-9cb4-22023c6125c5/
+Traceback (most recent call last):
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/core/handlers/exception.py", line 55, in inner
+    response = get_response(request)
+               ^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/core/handlers/base.py", line 197, in _get_response
+    response = wrapped_callback(request, *callback_args, **callback_kwargs)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/views/decorators/csrf.py", line 65, in _view_wrapper
+    return view_func(request, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/views/generic/base.py", line 104, in view
+    return self.dispatch(request, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/views.py", line 515, in dispatch
+    response = self.handle_exception(exc)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/views.py", line 475, in handle_exception
+    self.raise_uncaught_exception(exc)
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/views.py", line 486, in raise_uncaught_exception
+    raise exc
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/views.py", line 512, in dispatch
+    response = handler(request, *args, **kwargs)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/generics.py", line 292, in patch
+    return self.partial_update(request, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/mixins.py", line 82, in partial_update
+    return self.update(request, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/mixins.py", line 68, in update
+    self.perform_update(serializer)
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/requisitions/views.py", line 90, in perform_update
+    serializer.save()
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/rest_framework/serializers.py", line 205, in save
+    self.instance = self.update(self.instance, validated_data)
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/requisitions/serializers.py", line 146, in update
+    RequisitionItem.objects.create(
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/db/models/manager.py", line 87, in manager_method
+    return getattr(self.get_queryset(), name)(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/db/models/query.py", line 679, in create
+    obj.save(force_insert=True, using=self.db)
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/requisitions/models.py", line 105, in save
+    self.total_estimate = self.quantity * self.unit_price_estimate
+                          ~~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~~
+TypeError: can't multiply sequence by non-int of type 'str'
+ERROR 2026-05-19 13:32:36,685 basehttp 442648 129394237707968 "PATCH /api/v1/requisitions/4a6031e6-08c2-40ab-9cb4-22023c6125c5/ HTTP/1.1" 500 169087
+ERROR 2026-05-20 09:04:11,868 exception 704519 124354630220672 Invalid HTTP_HOST header: 'testserver'. You may need to add 'testserver' to ALLOWED_HOSTS.
+Traceback (most recent call last):
+  File "/home/sheikh-samiul/.pyenv/versions/3.12.8/lib/python3.12/site-packages/django/core/handlers/exception.py", line 55, in inner
+    response = get_response(request)
+               ^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/.pyenv/versions/3.12.8/lib/python3.12/site-packages/django/utils/deprecation.py", line 128, in __call__
+    response = self.process_request(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/.pyenv/versions/3.12.8/lib/python3.12/site-packages/django/middleware/common.py", line 48, in process_request
+    host = request.get_host()
+           ^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/.pyenv/versions/3.12.8/lib/python3.12/site-packages/django/http/request.py", line 151, in get_host
+    raise DisallowedHost(msg)
+django.core.exceptions.DisallowedHost: Invalid HTTP_HOST header: 'testserver'. You may need to add 'testserver' to ALLOWED_HOSTS.

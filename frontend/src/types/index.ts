@@ -852,6 +852,11 @@ export interface FiscalYear {
   total_budget: number; total_spent: number; status: string;
 }
 
+export interface Commodity {
+  id: string; commodity_code: string; commodity_name: string; category: string;
+  sub_category: string; unit_of_measure: string | null; uom_name: string; is_active: boolean;
+}
+
 export interface BackupRecord {
   id: string; filename: string; size: string; type: string; status: string; created_at: string;
   created_by: string; checksum: string; downloaded: boolean;
@@ -868,6 +873,7 @@ export interface AnnualProcurementPlan {
   fiscal_year_code?: string;
   department: string;
   department_name?: string;
+  department_code?: string;
   status: string;
   total_estimated_value: number;
   submitted_by?: string;
@@ -919,13 +925,44 @@ export interface APPLineItem {
   line_item_id?: string;
   app?: string;
   description: string;
+  procurement_type?: 'goods' | 'works' | 'services';
+  procurement_type_display?: string;
   estimated_value: number;
   recommended_method?: string;
   planned_issue_date?: string;
   planned_award_date?: string;
   funding_source?: string;
+  funding_source_name?: string;
   commodity?: string;
+  commodity_name?: string;
+  commodity_category?: string;
+  is_citizen_reserved?: boolean;
   budget_available?: number;
+}
+
+export interface FundingSourceOption {
+  source_id: string;
+  source_code: string;
+  source_name: string;
+  type: string;
+  budget_reference: string;
+  is_active: boolean;
+}
+
+export interface CommodityOption {
+  commodity_id: string;
+  commodity_code: string;
+  commodity_name: string;
+  category: string;
+  sub_category: string;
+  is_active: boolean;
+}
+
+export interface UnitOfMeasure {
+  uom_id: string;
+  uom_code: string;
+  uom_name: string;
+  category: string;
 }
 
 export interface GeneralProcurementNotice {

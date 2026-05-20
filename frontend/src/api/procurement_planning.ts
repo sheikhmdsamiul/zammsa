@@ -1,5 +1,5 @@
 import api from './client';
-import { AnnualProcurementPlan, APPLineItem, GeneralProcurementNotice, BudgetAllocation, PaginatedResponse, APPDashboardStats, BudgetSummary, ContractProcurementPlan, ProcurementMilestone, CPPRisk } from '../types';
+import { AnnualProcurementPlan, APPLineItem, GeneralProcurementNotice, BudgetAllocation, PaginatedResponse, APPDashboardStats, BudgetSummary, ContractProcurementPlan, ProcurementMilestone, CPPRisk, FundingSourceOption, CommodityOption } from '../types';
 
 export const procurementPlanningApi = {
   dashboard: () =>
@@ -53,6 +53,9 @@ export const procurementPlanningApi = {
   getZPPADeadlineAlerts: () =>
     api.get<{ approaching: any[]; overdue: any[]; total_alerts: number }>('/procurement-planning/annual-plans/zppa-deadline-alerts/').then(r => r.data),
 
+  bulkCreateLineItems: (appId: string, items: Partial<APPLineItem>[]) =>
+    api.post<{ message: string; created: APPLineItem[]; errors: string[]; total_estimated_value: number }>(`/procurement-planning/annual-plans/${appId}/bulk-line-items/`, { items }).then(r => r.data),
+
   lineItems: {
     list: (params?: Record<string, any>) =>
       api.get<PaginatedResponse<APPLineItem>>('/procurement-planning/line-items/', { params }).then(r => r.data),
@@ -69,6 +72,8 @@ export const procurementPlanningApi = {
       api.get<PaginatedResponse<GeneralProcurementNotice>>('/procurement-planning/notices/', { params }).then(r => r.data),
     detail: (id: string) =>
       api.get<GeneralProcurementNotice>(`/procurement-planning/notices/${id}/`).then(r => r.data),
+    update: (id: string, data: Partial<GeneralProcurementNotice>) =>
+      api.patch<GeneralProcurementNotice>(`/procurement-planning/notices/${id}/`, data).then(r => r.data),
     publish: (id: string, targets: string[], proofUrls?: string[]) =>
       api.post<{ message: string; status: string; publication_targets: string[]; published_at: string }>(`/procurement-planning/notices/${id}/publish/`, { targets, proof_urls: proofUrls || [] }).then(r => r.data),
     archive: (id: string) =>
@@ -177,4 +182,8 @@ export const masterDataApi = {
     api.get<{ results: MasterDepartment[] }>('/master-data/departments/', { params }).then(r => r.data),
   fiscalYears: (params?: Record<string, any>) =>
     api.get<{ results: MasterFiscalYear[] }>('/master-data/fiscal-years/', { params }).then(r => r.data),
+  fundingSources: (params?: Record<string, any>) =>
+    api.get<{ results: FundingSourceOption[] }>('/master-data/funding-sources/', { params }).then(r => r.data),
+  commodities: (params?: Record<string, any>) =>
+    api.get<{ results: CommodityOption[] }>('/master-data/commodities/', { params }).then(r => r.data),
 };

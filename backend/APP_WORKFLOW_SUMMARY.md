@@ -5,7 +5,7 @@ This file is synchronized with `backend/ZAMMSA_COMPLETE_PORTAL_GUIDE_SSSF.md` an
 ## 1) End-to-End Procurement Lifecycle
 
 1. Planning: APP creation -> department approval -> procurement review -> director approval -> ZPC approval -> GPN publication.
-2. Requisition: create -> budget validation -> dept head -> finance -> DG/ZPC threshold route -> approved for procurement.
+2. Requisition: create + submit (R-01) -> Dept Head (R-02) -> Finance confirms budget hold (R-07) -> DG (R-10) -> if value > K250,000 then ZPC (R-08) -> approved for procurement -> Procurement Officer (R-03) notified.
 3. Solicitation: create CPP + solicitation -> procurement manager approval -> publication to public portal/e-GP.
 4. Bidding: suppliers submit -> closing lock -> public bid opening by procurement officer.
 5. Evaluation: EC formed -> COI declarations -> technical scoring -> financial evaluation -> BER -> ZPC approval.

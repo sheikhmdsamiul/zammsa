@@ -6,6 +6,7 @@ urlpatterns = [
     path('annual-plans/dashboard/', views.app_dashboard_view, name='app-dashboard'),
     path('annual-plans/<uuid:pk>/', views.AnnualProcurementPlanDetailView.as_view(), name='app-detail'),
     path('annual-plans/<uuid:pk>/submit/', views.app_submit_view, name='app-submit'),
+    path('annual-plans/<uuid:pk>/bulk-line-items/', views.app_bulk_line_items_view, name='app-bulk-line-items'),
     path('annual-plans/<uuid:pk>/approve/', views.app_approve_view, name='app-approve'),
     path('annual-plans/<uuid:pk>/reject/', views.app_reject_view, name='app-reject'),
     path('annual-plans/<uuid:pk>/return/', views.app_return_view, name='app-return'),

@@ -93,16 +93,25 @@ class AnnualProcurementPlan(models.Model):
         return f'APP {self.fiscal_year.year_code} - {self.department.dept_name}'
 
 
+PROCUREMENT_TYPE_CHOICES = [
+    ('goods', 'Goods'),
+    ('works', 'Works'),
+    ('services', 'Services'),
+]
+
+
 class APPLineItem(models.Model):
     line_item_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     app = models.ForeignKey(AnnualProcurementPlan, on_delete=models.CASCADE, related_name='line_items')
     description = models.CharField(max_length=500)
+    procurement_type = models.CharField(max_length=50, choices=PROCUREMENT_TYPE_CHOICES, default='goods')
     estimated_value = models.DecimalField(max_digits=20, decimal_places=2)
     recommended_method = models.CharField(max_length=50, blank=True)
     planned_issue_date = models.DateField(null=True, blank=True)
     planned_award_date = models.DateField(null=True, blank=True)
     funding_source = models.ForeignKey(FundingSource, on_delete=models.SET_NULL, null=True, blank=True)
     commodity = models.ForeignKey(Commodity, on_delete=models.SET_NULL, null=True, blank=True)
+    is_citizen_reserved = models.BooleanField(default=True)
 
     class Meta:
         db_table = 'proc_app_line_item'

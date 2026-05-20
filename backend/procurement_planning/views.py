@@ -72,6 +72,18 @@ class AnnualProcurementPlanListView(BaseView, generics.ListCreateAPIView):
             return AnnualProcurementPlanListSerializer
         return AnnualProcurementPlanSerializer
 
+    def create(self, request, *args, **kwargs):
+        fiscal_year = request.data.get('fiscal_year')
+        department = request.data.get('department')
+        if fiscal_year and department:
+            existing = AnnualProcurementPlan.objects.filter(
+                fiscal_year_id=fiscal_year, department_id=department, status='draft'
+            ).first()
+            if existing:
+                serializer = self.get_serializer(existing)
+                return Response(serializer.data)
+        return super().create(request, *args, **kwargs)
+
     def perform_create(self, serializer):
         if self.request.user.role not in ALLOWED_APP_CREATORS:
             raise PermissionDenied('Only User Department Staff or Department Head can create an APP')
@@ -102,21 +114,33 @@ APP_CURRENT_STAGE_ROLES = {
     'procurement_review': 'procurement_officer',
     'director_review': 'director_procurement',
     'zpc_review': 'zpc_member',
+    # Backward compatibility for legacy APPs created before staged flow update.
+    'pending_zpc': 'director_procurement',
 }
 
 APP_SUBMIT_TRANSITIONS = {
-    'draft': 'pending_zpc',
+    'draft': 'dept_head_review',
 }
 
 APP_APPROVE_TRANSITIONS = {
+    'dept_head_review': 'procurement_review',
+    'procurement_review': 'director_review',
+    'director_review': 'zpc_review',
+    'zpc_review': 'approved',
+    # Backward compatibility for legacy APPs.
     'pending_zpc': 'approved',
 }
 
 APP_SUBMIT_ACTOR_ROLES = {
-    'draft': ('procurement_officer',),
+    'draft': ('user_dept_staff', 'system_admin'),
 }
 
 APP_APPROVE_ACTOR_ROLES = {
+    'dept_head_review': ('department_head', 'system_admin'),
+    'procurement_review': ('procurement_officer', 'system_admin'),
+    'director_review': ('director_procurement', 'system_admin'),
+    'zpc_review': ('zpc_member', 'system_admin'),
+    # Backward compatibility for legacy APPs.
     'pending_zpc': ('director_procurement', 'zpc_member', 'system_admin'),
 }
 
@@ -520,16 +544,52 @@ def _auto_generate_gpn(app, user):
             'description': item.description,
             'estimated_value': float(item.estimated_value),
             'recommended_method': item.recommended_method or _recommend_method(float(item.estimated_value))[0],
+            'procurement_type': item.procurement_type,
+            'procurement_type_display': item.get_procurement_type_display(),
             'planned_issue_date': str(item.planned_issue_date) if item.planned_issue_date else None,
             'planned_award_date': str(item.planned_award_date) if item.planned_award_date else None,
+            'funding_source': item.funding_source.source_name if item.funding_source else None,
+            'commodity_name': item.commodity.commodity_name if item.commodity else None,
+            'commodity_category': item.commodity.category if item.commodity else None,
+            'is_citizen_reserved': item.is_citizen_reserved,
         })
 
+    dept_code = app.department.dept_code
+    year_code = app.fiscal_year.year_code
+    seq = GeneralProcurementNotice.objects.filter(
+        app__department=app.department,
+        app__fiscal_year=app.fiscal_year,
+    ).count() + 1
+    gpn_ref = f'GPN-{year_code}-{dept_code}-{seq:03d}'
+
+    # Calculate ZPPA deadline (30 days from approval)
+    zppa_deadline = None
+    if app.approved_at:
+        zppa_deadline = (app.approved_at + timezone.timedelta(days=30)).isoformat()
+
     content = {
-        'fiscal_year': app.fiscal_year.year_code,
+        'gpn_reference': gpn_ref,
+        'fiscal_year': year_code,
         'department': app.department.dept_name,
+        'department_code': dept_code,
         'total_estimated_value': float(app.total_estimated_value),
         'generated_at': timezone.now().isoformat(),
         'line_items': line_items_data,
+        'zpc_approved_at': app.approved_at.isoformat() if app.approved_at else None,
+        'zppa_deadline': zppa_deadline,
+        'issuing_authority': 'ZAMMSA \u2014 Zambia Medicines and Medical Supplies Agency',
+        'contact_name': 'Director of Procurement',
+        'contact_email': 'procurement@zammsa.gov.zm',
+        'contact_phone': '+260 211 123456',
+        'contact_address': 'Plot 1, Government Road, Lusaka',
+        'notice_heading': f'GENERAL PROCUREMENT NOTICE \u2014 ZAMMSA ANNUAL PROCUREMENT PLAN {year_code}',
+        'notice_body': (
+            f'The Zambia Medicines and Medical Supplies Agency (ZAMMSA) intends to procure the following '
+            f'goods and services during the financial year {year_code} and invites eligible suppliers to '
+            f'register their interest.\n\n'
+            f'Eligible suppliers are encouraged to register on the ZAMMSA Supplier Portal at: '
+            f'https://portal.zammsa.gov.zm/suppliers'
+        ),
     }
 
     gpn = GeneralProcurementNotice.objects.create(
@@ -723,6 +783,62 @@ class APPLineItemDetailView(generics.RetrieveUpdateDestroyAPIView):
         app = item.app
         new_total = app.line_items.aggregate(total=Sum('estimated_value'))['total'] or 0
         AnnualProcurementPlan.objects.filter(pk=app.pk).update(total_estimated_value=new_total)
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def app_bulk_line_items_view(request, pk):
+    try:
+        app = AnnualProcurementPlan.objects.get(pk=pk)
+    except AnnualProcurementPlan.DoesNotExist:
+        return Response({'error': 'APP not found'}, status=status.HTTP_404_NOT_FOUND)
+
+    if app.status != 'draft':
+        return Response({'error': 'Line items can only be added to draft APPs'}, status=status.HTTP_400_BAD_REQUEST)
+
+    items = request.data.get('items', [])
+    if not items or not isinstance(items, list):
+        return Response({'error': 'Provide "items" as a list of line item objects'}, status=status.HTTP_400_BAD_REQUEST)
+
+    created = []
+    errors = []
+    for idx, item_data in enumerate(items):
+        description = item_data.get('description', '').strip()
+        if not description:
+            errors.append(f'Item #{idx + 1}: description is required')
+            continue
+        estimated_value = item_data.get('estimated_value', 0)
+        try:
+            estimated_value = float(estimated_value)
+        except (ValueError, TypeError):
+            errors.append(f'Item #{idx + 1}: invalid estimated_value')
+            continue
+
+        line_item = APPLineItem.objects.create(
+            app=app,
+            description=description,
+            procurement_type=item_data.get('procurement_type', 'goods'),
+            estimated_value=estimated_value,
+            planned_issue_date=item_data.get('planned_issue_date') or None,
+            planned_award_date=item_data.get('planned_award_date') or None,
+            funding_source_id=item_data.get('funding_source') or None,
+            commodity_id=item_data.get('commodity') or None,
+            is_citizen_reserved=item_data.get('is_citizen_reserved', True),
+        )
+        method, rationale = _recommend_method(float(line_item.estimated_value))
+        line_item.recommended_method = method
+        line_item.save(update_fields=['recommended_method'])
+        created.append(APPLineItemSerializer(line_item).data)
+
+    new_total = app.line_items.aggregate(total=Sum('estimated_value'))['total'] or 0
+    AnnualProcurementPlan.objects.filter(pk=app.pk).update(total_estimated_value=new_total)
+
+    return Response({
+        'message': f'{len(created)} line item(s) created',
+        'created': created,
+        'errors': errors,
+        'total_estimated_value': float(new_total),
+    }, status=status.HTTP_201_CREATED)
 
 
 class ContractProcurementPlanListView(BaseView, generics.ListCreateAPIView):
