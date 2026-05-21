@@ -101,57 +101,112 @@ const RequisitionDetail: React.FC = () => {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 space-y-6">
           <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
-            <h2 className="text-lg font-semibold text-gray-900 mb-4">Details</h2>
-            <dl className="grid grid-cols-2 gap-4 text-sm">
-              <div><dt className="text-gray-500">Department</dt><dd className="font-medium text-gray-900">{req.department_name || req.department}</dd></div>
-              <div><dt className="text-gray-500">Priority</dt><dd className="font-medium">{req.priority || 'N/A'}</dd></div>
-              <div><dt className="text-gray-500">Estimated Value</dt><dd className="font-medium">ZMW {estimatedValue.toLocaleString()}</dd></div>
-              <div><dt className="text-gray-500">Date Required</dt><dd className="font-medium">{(() => { const d = req.date_required || req.required_date; return d ? new Date(d).toLocaleDateString() : '-'; })()}</dd></div>
-              <div><dt className="text-gray-500">Created By</dt><dd className="font-medium">{req.requester_name || req.created_by}</dd></div>
-              <div><dt className="text-gray-500">Budget Validated</dt><dd className="font-medium">{req.budget_validated ? <span className="text-green-600">Yes</span> : <span className="text-yellow-600">No</span>}</dd></div>
-              {req.encumbrance_ref && <div><dt className="text-gray-500">Encumbrance Ref</dt><dd className="font-medium text-xs">{req.encumbrance_ref}</dd></div>}
+            <h2 className="text-lg font-semibold text-gray-900 mb-4">Requisition Details</h2>
+            <dl className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+              <div><dt className="text-gray-500">Requisition Number</dt><dd className="font-medium text-gray-900">{req.req_number || '-'}</dd></div>
+              <div><dt className="text-gray-500">Department</dt><dd className="font-medium text-gray-900">{req.department_name || req.department || '-'}</dd></div>
+              <div><dt className="text-gray-500">Priority</dt><dd className="font-medium">{req.priority ? <span className={`px-2 py-0.5 rounded text-xs ${req.priority === 'urgent' ? 'bg-red-100 text-red-700' : req.priority === 'high' ? 'bg-orange-100 text-orange-700' : req.priority === 'medium' ? 'bg-yellow-100 text-yellow-700' : 'bg-gray-100 text-gray-700'}`}>{req.priority}</span> : 'N/A'}</dd></div>
+              <div><dt className="text-gray-500">Procurement Type</dt><dd className="font-medium capitalize">{req.procurement_method || 'N/A'}</dd></div>
+              <div><dt className="text-gray-500">Estimated Value</dt><dd className="font-medium text-lg text-zammsa-green">ZMW {estimatedValue.toLocaleString()}</dd></div>
+              <div><dt className="text-gray-500">Date Required</dt><dd className="font-medium">{(() => { const d = req.date_required || req.required_date; return d ? new Date(d).toLocaleDateString('en-ZM', { year: 'numeric', month: 'short', day: 'numeric' }) : '-'; })()}</dd></div>
+              <div><dt className="text-gray-500">Delivery Location</dt><dd className="font-medium">{req.delivery_location || '-'}</dd></div>
+              <div><dt className="text-gray-500">Created By</dt><dd className="font-medium">{req.requester_name || req.created_by || '-'}</dd></div>
+              <div><dt className="text-gray-500">Budget Validated</dt><dd className="font-medium">{req.budget_validated ? <span className="text-green-600 flex items-center gap-1"><svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd"/></svg> Yes</span> : <span className="text-yellow-600">Pending</span>}</dd></div>
+              {req.encumbrance_ref && <div><dt className="text-gray-500">Encumbrance Reference</dt><dd className="font-medium text-xs font-mono bg-gray-50 px-2 py-1 rounded inline-block">{req.encumbrance_ref}</dd></div>}
+              {req.app_line_item_ref && <div><dt className="text-gray-500">APP Line Item</dt><dd className="font-medium text-sm">{req.app_line_item_ref}</dd></div>}
+              <div><dt className="text-gray-500">Created</dt><dd className="font-medium text-xs">{req.created_at ? new Date(req.created_at).toLocaleString('en-ZM') : '-'}</dd></div>
+              <div><dt className="text-gray-500">Last Updated</dt><dd className="font-medium text-xs">{req.updated_at ? new Date(req.updated_at).toLocaleString('en-ZM') : '-'}</dd></div>
             </dl>
-            {req.description && <p className="mt-4 text-sm text-gray-700">{req.description}</p>}
+            {req.description && (
+              <div className="mt-6 pt-4 border-t border-gray-200">
+                <dt className="text-gray-500 text-sm font-medium mb-2">Description / Justification</dt>
+                <p className="text-sm text-gray-700 bg-gray-50 p-3 rounded-lg">{req.description}</p>
+              </div>
+            )}
+            {req.notes && (
+              <div className="mt-4 pt-4 border-t border-gray-200">
+                <dt className="text-gray-500 text-sm font-medium mb-2">Additional Notes</dt>
+                <p className="text-sm text-gray-700 bg-gray-50 p-3 rounded-lg whitespace-pre-wrap">{req.notes}</p>
+              </div>
+            )}
           </div>
 
           {req.specifications && req.specifications.length > 0 && (
             <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
-              <h2 className="text-lg font-semibold text-gray-900 mb-4">Specifications</h2>
-              {req.specifications.map((spec: any, i: number) => (
-                <div key={spec.id || i} className="mb-3 p-3 bg-gray-50 rounded-lg">
-                  <p className="text-xs text-gray-500 uppercase font-medium">{spec.specification_type}</p>
-                  <pre className="text-sm mt-1 whitespace-pre-wrap">{typeof spec.content === 'string' ? spec.content : JSON.stringify(spec.content, null, 2)}</pre>
-                </div>
-              ))}
+              <h2 className="text-lg font-semibold text-gray-900 mb-4">Technical Specifications</h2>
+              <div className="space-y-4">
+                {req.specifications.map((spec: any, i: number) => (
+                  <div key={spec.id || i} className="border border-gray-200 rounded-lg overflow-hidden">
+                    <div className="bg-gray-50 px-4 py-2 border-b border-gray-200">
+                      <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">{spec.specification_type || `Specification ${i + 1}`}</p>
+                    </div>
+                    <div className="p-4">
+                      {typeof spec.content === 'string' ? (
+                        <p className="text-sm text-gray-700 whitespace-pre-wrap">{spec.content}</p>
+                      ) : (
+                        <dl className="grid grid-cols-1 gap-2 text-sm">
+                          {Object.entries(spec.content || {}).map(([key, value]) => (
+                            <div key={key} className="flex">
+                              <dt className="w-40 text-gray-500 capitalize">{key.replace(/_/g, ' ')}:</dt>
+                              <dd className="text-gray-900">{String(value)}</dd>
+                            </div>
+                          ))}
+                        </dl>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
             </div>
           )}
 
           <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
-            <h2 className="text-lg font-semibold text-gray-900 mb-4">Items ({req.items?.length || 0})</h2>
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-lg font-semibold text-gray-900">Line Items ({req.items?.length || 0})</h2>
+              <span className="text-sm font-medium text-zammsa-green">Total: ZMW {estimatedValue.toLocaleString()}</span>
+            </div>
             <div className="overflow-x-auto">
               <table className="min-w-full divide-y divide-gray-200 text-sm">
                 <thead className="bg-gray-50">
                   <tr>
+                    <th className="px-3 py-2 text-left font-medium text-gray-500">#</th>
                     <th className="px-3 py-2 text-left font-medium text-gray-500">Code</th>
                     <th className="px-3 py-2 text-left font-medium text-gray-500">Description</th>
-                    <th className="px-3 py-2 text-right font-medium text-gray-500">Qty</th>
-                    <th className="px-3 py-2 text-right font-medium text-gray-500">Unit</th>
+                    <th className="px-3 py-2 text-center font-medium text-gray-500">Qty</th>
+                    <th className="px-3 py-2 text-center font-medium text-gray-500">Unit</th>
                     <th className="px-3 py-2 text-right font-medium text-gray-500">Unit Cost</th>
                     <th className="px-3 py-2 text-right font-medium text-gray-500">Total</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
-                  {req.items?.map((item: any) => (
-                    <tr key={item.id || item.item_id}>
-                      <td className="px-3 py-2">{item.item_code}</td>
-                      <td className="px-3 py-2">{item.description}</td>
-                      <td className="px-3 py-2 text-right">{item.quantity}</td>
-                      <td className="px-3 py-2 text-right">{item.unit || item.uom_name}</td>
-                      <td className="px-3 py-2 text-right">ZMW {Number(item.estimated_unit_cost || item.unit_price_estimate).toLocaleString()}</td>
-                      <td className="px-3 py-2 text-right font-medium">ZMW {Number(item.total_estimate || (item.quantity * (item.estimated_unit_cost || item.unit_price_estimate))).toLocaleString()}</td>
+                  {req.items?.map((item: any, idx: number) => {
+                    const lineTotal = Number(item.total_estimate || (item.quantity * (item.estimated_unit_cost || item.unit_price_estimate || 0)));
+                    return (
+                      <tr key={item.id || item.item_id} className="hover:bg-gray-50">
+                        <td className="px-3 py-2 text-gray-400">{idx + 1}</td>
+                        <td className="px-3 py-2 font-mono text-xs">{item.item_code || '-'}</td>
+                        <td className="px-3 py-2 font-medium text-gray-900">{item.description || '-'}</td>
+                        <td className="px-3 py-2 text-center">{item.quantity}</td>
+                        <td className="px-3 py-2 text-center text-gray-500">{item.unit || item.uom_name || '-'}</td>
+                        <td className="px-3 py-2 text-right text-gray-500">ZMW {Number(item.estimated_unit_cost || item.unit_price_estimate || 0).toLocaleString()}</td>
+                        <td className="px-3 py-2 text-right font-medium text-zammsa-green">ZMW {lineTotal.toLocaleString()}</td>
+                      </tr>
+                    );
+                  })}
+                  {(!req.items || req.items.length === 0) && (
+                    <tr>
+                      <td colSpan={7} className="px-3 py-6 text-center text-gray-400 text-sm">No line items</td>
                     </tr>
-                  ))}
+                  )}
                 </tbody>
+                {req.items && req.items.length > 0 && (
+                  <tfoot className="bg-gray-50 font-semibold">
+                    <tr>
+                      <td colSpan={6} className="px-3 py-2 text-right">Grand Total:</td>
+                      <td className="px-3 py-2 text-right text-zammsa-green">ZMW {estimatedValue.toLocaleString()}</td>
+                    </tr>
+                  </tfoot>
+                )}
               </table>
             </div>
           </div>

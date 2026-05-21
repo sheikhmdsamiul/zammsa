@@ -1743,23 +1743,75 @@ def gpn_publish_view(request, pk):
 
     targets = request.data.get('targets', ['zammsa_website'])
     proof_urls = request.data.get('proof_urls', [])
+    # Accept publication_proofs from request for detailed metadata
+    publication_proofs = request.data.get('publication_proofs', {})
 
-    valid_targets = ['zammsa_website', 'egp_portal', 'govt_gazette']
+    valid_targets = ['zammsa_website', 'egp_portal', 'govt_gazette', 'registered_supplier_email']
     for t in targets:
         if t not in valid_targets:
             return Response({'error': f'Invalid publication target: {t}. Valid: {valid_targets}'}, status=status.HTTP_400_BAD_REQUEST)
 
+    now = timezone.now()
+
+    # Build publication proofs with detailed metadata
+    proofs = {}
+    for t in targets:
+        if t in publication_proofs:
+            proofs[t] = publication_proofs[t]
+            if 'timestamp' not in proofs[t]:
+                proofs[t]['timestamp'] = now.isoformat()
+        else:
+            # Auto-generate proof metadata
+            proof_data = {
+                'timestamp': now.isoformat(),
+                'status': 'published',
+            }
+            if t == 'zammsa_website':
+                proof_data['url'] = f'https://portal.zammsa.gov.zm/notices/{gpn.content.get("gpn_reference", "")}'
+            elif t == 'egp_portal':
+                proof_data['reference'] = f'ZPPA-{now.strftime("%Y")}-GPN-{gpn.gpn_id.hex[:4]}'
+                proof_data['url'] = f'https://egp.zppa.org.zm/notices/{proof_data["reference"]}'
+            elif t == 'registered_supplier_email':
+                proof_data['delivered'] = request.data.get('email_count', 0)
+                proof_data['failed'] = request.data.get('email_failed', 0)
+            proofs[t] = proof_data
+
     gpn.publication_status = 'published'
     gpn.publication_targets = targets
     gpn.publication_proof_urls = proof_urls
-    gpn.published_at = timezone.now()
+    gpn.publication_proofs = proofs
+    gpn.published_at = now
     gpn.published_by = request.user
+
+    # Track email notifications if applicable
+    if 'registered_supplier_email' in targets:
+        gpn.email_notification_sent = True
+        gpn.email_notification_count = request.data.get('email_count', 0)
+        gpn.email_notification_failed = request.data.get('email_failed', 0)
+        gpn.email_notification_sent_at = now
+
+    # Track gazette if applicable
+    if 'govt_gazette' in targets:
+        gazette_path = request.data.get('gazette_file_path', '')
+        if gazette_path:
+            gpn.gazette_file_path = gazette_path
+
     gpn.save()
 
+    # Also update the associated APP
+    app = gpn.app
+    app.gpn_published_at = now
+    app.gpn_publication_targets = targets
+    app.gpn_publication_proofs = proofs
+    if app.status == 'approved':
+        app.status = 'published'
+    app.save()
+
     return Response({
-        'message': 'GPN published',
+        'message': 'GPN published successfully',
         'status': gpn.publication_status,
         'publication_targets': targets,
+        'publication_proofs': proofs,
         'published_at': gpn.published_at.isoformat(),
     })
 

@@ -41,10 +41,15 @@ const RequisitionCreate: React.FC = () => {
     queryKey: ['commoditiesForReq'],
     queryFn: () => masterDataApi.commodities({ is_active: true, page_size: 200 }),
   });
+  const { data: departmentsData } = useQuery({
+    queryKey: ['departmentsForReq'],
+    queryFn: () => masterDataApi.departments({ is_active: true, page_size: 200 }),
+  });
 
   const lineItems = lineItemsData?.results ?? [];
   const fundingSources = fundingSourcesData?.results ?? [];
   const commodities = commoditiesData?.results ?? [];
+  const departments = departmentsData?.results ?? [];
 
   const addItem = () => setItems([...items, { item_code: '', description: '', quantity: 1, unit: 'Box', estimated_unit_cost: 0, commodity: '', zamra_required: true }]);
   const removeItem = (i: number) => setItems(items.filter((_, idx) => idx !== i));
@@ -207,7 +212,14 @@ const RequisitionCreate: React.FC = () => {
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Department *</label>
-              <input value={form.department} readOnly className="w-full border-gray-300 rounded-lg px-3 py-2 bg-gray-50" />
+              <select value={form.department} onChange={(e) => setForm({ ...form, department: e.target.value })} className="w-full border-gray-300 rounded-lg px-3 py-2">
+                <option value="">Select department...</option>
+                {departments.map((dept: any) => (
+                  <option key={dept.dept_id || dept.id} value={dept.dept_id || dept.id}>
+                    {dept.dept_name} {dept.dept_code ? ` (${dept.dept_code})` : ''}
+                  </option>
+                ))}
+              </select>
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Required Delivery Date *</label>

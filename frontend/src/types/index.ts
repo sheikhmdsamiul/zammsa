@@ -975,9 +975,27 @@ export interface GeneralProcurementNotice {
   publication_status: 'draft' | 'published' | 'archived';
   publication_targets?: string[];
   publication_proof_urls?: string[];
+  // Enhanced publication proofs with detailed metadata
+  publication_proofs?: Record<string, {
+    url?: string;
+    timestamp: string;
+    reference?: string;
+    delivered?: number;
+    failed?: number;
+    status: string;
+  }>;
   published_at?: string;
   published_by?: string;
   published_by_name?: string;
+  // Email notification tracking
+  email_notification_sent?: boolean;
+  email_notification_count?: number;
+  email_notification_failed?: number;
+  email_notification_sent_at?: string;
+  // Gazette file tracking
+  gazette_file_path?: string;
+  gazette_submitted?: boolean;
+  gazette_submitted_at?: string;
 }
 
 export interface APPDashboardStats {

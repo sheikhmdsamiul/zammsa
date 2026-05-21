@@ -74,8 +74,17 @@ export const procurementPlanningApi = {
       api.get<GeneralProcurementNotice>(`/procurement-planning/notices/${id}/`).then(r => r.data),
     update: (id: string, data: Partial<GeneralProcurementNotice>) =>
       api.patch<GeneralProcurementNotice>(`/procurement-planning/notices/${id}/`, data).then(r => r.data),
-    publish: (id: string, targets: string[], proofUrls?: string[]) =>
-      api.post<{ message: string; status: string; publication_targets: string[]; published_at: string }>(`/procurement-planning/notices/${id}/publish/`, { targets, proof_urls: proofUrls || [] }).then(r => r.data),
+    publish: (id: string, targets: string[], proofUrls?: string[], publicationProofs?: Record<string, any>, emailStats?: { count: number; failed: number }) =>
+      api.post<{ message: string; status: string; publication_targets: string[]; publication_proofs: Record<string, any>; published_at: string }>(
+        `/procurement-planning/notices/${id}/publish/`, 
+        { 
+          targets, 
+          proof_urls: proofUrls || [],
+          publication_proofs: publicationProofs || {},
+          email_count: emailStats?.count || 0,
+          email_failed: emailStats?.failed || 0,
+        }
+      ).then(r => r.data),
     archive: (id: string) =>
       api.post<{ message: string; status: string }>(`/procurement-planning/notices/${id}/archive/`).then(r => r.data),
   },

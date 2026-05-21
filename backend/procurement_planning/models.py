@@ -292,8 +292,20 @@ class GeneralProcurementNotice(models.Model):
     publication_status = models.CharField(max_length=50, choices=GPN_STATUS_CHOICES, default='draft')
     publication_targets = models.JSONField(default=list, blank=True)
     publication_proof_urls = models.JSONField(default=list, blank=True)
+    # Enhanced publication proofs with detailed metadata
+    # Format: { target_key: { url: string, timestamp: string, reference?: string, delivered?: number, failed?: number, status: string } }
+    publication_proofs = models.JSONField(default=dict, blank=True)
     published_at = models.DateTimeField(null=True, blank=True)
     published_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='published_gpns')
+    # Email notification tracking
+    email_notification_sent = models.BooleanField(default=False)
+    email_notification_count = models.IntegerField(default=0)
+    email_notification_failed = models.IntegerField(default=0)
+    email_notification_sent_at = models.DateTimeField(null=True, blank=True)
+    # Gazette file tracking
+    gazette_file_path = models.CharField(max_length=500, blank=True, default='')
+    gazette_submitted = models.BooleanField(default=False)
+    gazette_submitted_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:
         db_table = 'proc_gpn'

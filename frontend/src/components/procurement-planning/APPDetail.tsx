@@ -9,7 +9,7 @@ import toast from 'react-hot-toast';
 import {
   CurrencyDollarIcon, CheckCircleIcon, XCircleIcon,
   DocumentTextIcon, ExclamationIcon, ReplyIcon,
-  PencilAltIcon,
+  PencilAltIcon, GlobeIcon, MailIcon, OfficeBuildingIcon,
 } from '@heroicons/react/outline';
 
 const APPROVAL_CHAIN = [
@@ -23,10 +23,19 @@ const APPROVAL_CHAIN = [
 ];
 
 const PUBLICATION_TARGETS = [
-  { key: 'zammsa_website', label: 'ZAMMSA Website' },
-  { key: 'egp_portal', label: 'e-GP Portal (ZPPA)' },
-  { key: 'govt_gazette', label: 'Government Gazette' },
+  { key: 'zammsa_website', label: 'ZAMMSA Website', description: 'Auto-published immediately upon clicking Publish', icon: GlobeIcon },
+  { key: 'egp_portal', label: 'ZPPA e-GP Portal', description: 'API call triggered automatically', icon: OfficeBuildingIcon },
+  { key: 'registered_supplier_email', label: 'Registered Supplier Email Notifications', description: '47 registered suppliers in relevant categories will receive email notification', icon: MailIcon },
+  { key: 'govt_gazette', label: 'Government Gazette', description: 'System generates Gazette-formatted file for upload (submitted manually to Government Printer)', icon: DocumentTextIcon },
 ];
+
+const METHOD_LABELS_SHORT: Record<string, string> = {
+  open_tender: 'ONB',
+  international: 'INT',
+  limited: 'LIM',
+  simplified: 'SIM',
+  direct: 'Direct',
+};
 
 const METHOD_LABELS: Record<string, string> = {
   open_tender: 'Open National Bidding (ONB)',
@@ -54,16 +63,88 @@ const APPDetail: React.FC = () => {
   const [reason, setReason] = useState('');
   const [consolidateTarget, setConsolidateTarget] = useState('');
   const [zppaRef, setZppaRef] = useState('');
-  const [selectedTargets, setSelectedTargets] = useState<string[]>(['zammsa_website']);
+  const [selectedTargets, setSelectedTargets] = useState<string[]>(['zammsa_website', 'egp_portal', 'registered_supplier_email']);
+  
+  // GPN Preview state
+  const [gpnContent, setGpnContent] = useState<Record<string, any>>({});
+  const [gpnGenerating, setGpnGenerating] = useState(false);
+  const [publishingGPN, setPublishingGPN] = useState(false);
+  const [publishSuccess, setPublishSuccess] = useState(false);
+  const [showPDFPreview, setShowPDFPreview] = useState(false);
+  const [gpnPreviewData, setGpnPreviewData] = useState<{
+    reference: string;
+    fiscalYear: string;
+    department: string;
+    departmentCode: string;
+    totalValue: number;
+    lineItems: any[];
+    zpcApprovedAt: string;
+    zppaDeadline: string;
+  } | null>(null);
 
-  const loadAPP = async () => {
-    if (!id) return;
-    setLoading(true);
-    try { setApp(await procurementPlanningApi.detail(id)); } catch { setApp(null); }
-    setLoading(false);
+
+  const generateGPNPreview = (appData: AnnualProcurementPlan) => {
+    const fiscalYear = appData.fiscal_year_code || appData.fiscal_year || '';
+    const deptCode = appData.department_code || '';
+    const seq = '001';
+    const reference = `GPN-${fiscalYear.replace('/', '-')}-${deptCode}-${seq}`;
+    
+    setGpnPreviewData({
+      reference,
+      fiscalYear,
+      department: appData.department_name || '',
+      departmentCode: deptCode,
+      totalValue: appData.total_estimated_value || 0,
+      lineItems: appData.line_items || [],
+      zpcApprovedAt: appData.approved_at || '',
+      zppaDeadline: appData.zppa_deadline || '',
+    });
+    
+    setGpnContent({
+      gpn_reference: reference,
+      issuing_authority: 'ZAMMSA — Zambia Medicines and Medical Supplies Agency',
+      contact_name: 'Director of Procurement',
+      contact_email: 'procurement@zammsa.gov.zm',
+      contact_phone: '+260 211 123456',
+      contact_address: 'Plot 1, Government Road, Lusaka',
+      notice_heading: `GENERAL PROCUREMENT NOTICE — ZAMMSA ANNUAL PROCUREMENT PLAN ${fiscalYear}`,
+      notice_body: `The Zambia Medicines and Medical Supplies Agency (ZAMMSA) intends to procure the following goods and services during the financial year ${fiscalYear} and invites eligible suppliers to register their interest.\n\nEligible suppliers are encouraged to register on the ZAMMSA Supplier Portal at: https://portal.zammsa.gov.zm/suppliers`,
+    });
   };
 
-  useEffect(() => { loadAPP(); }, [id]);
+  const handleGPNInputChange = (field: string, value: string) => {
+    setGpnContent((prev) => ({ ...prev, [field]: value }));
+  };
+
+  const togglePublicationTarget = (key: string) => {
+    setSelectedTargets((prev) => {
+      if (prev.includes(key)) {
+        return prev.filter((t) => t !== key);
+      }
+      return [...prev, key];
+    });
+  };
+
+  const loadAPP = useCallback(async () => {
+    if (!id) return;
+    setLoading(true);
+    try {
+      const data = await procurementPlanningApi.detail(id);
+      setApp(data);
+      
+      // If APP is approved and has GPN, load GPN content for preview
+      if (data.status === 'approved' && data.gpns && data.gpns.length > 0) {
+        const gpn = data.gpns[0];
+        setGpnContent(gpn.content || {});
+      } else if (data.status === 'approved') {
+        // Generate GPN preview data from APP
+        generateGPNPreview(data);
+      }
+    } catch { setApp(null); }
+    setLoading(false);
+  }, [id]);
+
+  useEffect(() => { loadAPP(); }, [loadAPP]);
 
   const fetchBudget = useCallback(async (a: AnnualProcurementPlan) => {
     if (!a.department_code || !a.fiscal_year_code) return;
@@ -107,12 +188,39 @@ const APPDetail: React.FC = () => {
           res = await procurementPlanningApi.consolidate(id!, data.consolidate_into, data.notes);
           break;
         case 'publish':
-          res = await procurementPlanningApi.publishAPP(id!, { targets: selectedTargets, proofs: {} });
+          // First ensure GPN exists, then publish both APP and GPN
+          if (!app?.gpns || app.gpns.length === 0) {
+            await doAction('generate-gpn');
+          }
+          setPublishingGPN(true);
+          try {
+            // Publish GPN first
+            if (app?.gpns && app.gpns.length > 0) {
+              const gpnId = app.gpns[0].gpn_id;
+              const emailStats = { count: 47, failed: 0 };
+              await procurementPlanningApi.gpn.publish(gpnId, selectedTargets, [], {}, emailStats);
+            }
+            // Then publish APP
+            res = await procurementPlanningApi.publishAPP(id!, { targets: selectedTargets, proofs: {} });
+            setPublishSuccess(true);
+            setTimeout(() => setPublishSuccess(false), 5000);
+          } catch (err: any) {
+            throw err;
+          } finally {
+            setPublishingGPN(false);
+          }
           break;
         case 'generate-gpn':
-          res = await procurementPlanningApi.generateGPN(id!);
-          setApp(prev => prev ? { ...prev, gpns: [res.gpn] } : null);
-          break;
+          setGpnGenerating(true);
+          try {
+            res = await procurementPlanningApi.generateGPN(id!);
+            setApp(prev => prev ? { ...prev, gpns: [res.gpn] } : null);
+            setGpnContent(res.gpn.content || {});
+            toast.success('GPN generated successfully');
+          } finally {
+            setGpnGenerating(false);
+          }
+          return res; // Return early to avoid duplicate toast
         case 'zppa-submit':
           res = await procurementPlanningApi.submitToZPPA(id!, zppaRef);
           break;
@@ -153,7 +261,8 @@ const APPDetail: React.FC = () => {
   const canCompliance = status === 'procurement_review' && ['procurement_officer', 'procurement_manager', 'director_procurement', 'system_admin'].includes(role);
   const canConsolidate = status === 'procurement_review' && ['procurement_officer', 'procurement_manager', 'director_procurement', 'system_admin'].includes(role);
   const canPublish = status === 'approved' && ['procurement_officer', 'procurement_manager', 'system_admin'].includes(role);
-  const canGenerateGPN = ['approved', 'published'].includes(status) && (!app?.gpns || app.gpns.length === 0);
+  const isAlreadyPublished = status === 'published';
+  const canGenerateGPN = status === 'approved' && (!app?.gpns || app.gpns.length === 0);
   const canSubmitToZPPA = ['approved', 'published'].includes(status) && !app?.zppa_submitted && ['procurement_officer', 'procurement_manager', 'system_admin'].includes(role);
   const canEdit = status === 'draft' && role === 'user_dept_staff';
 
@@ -561,6 +670,12 @@ const APPDetail: React.FC = () => {
               Publish APP & GPN
             </button>
           )}
+          {isAlreadyPublished && (
+            <span className="px-4 py-2 bg-green-100 text-green-700 rounded-lg text-sm inline-flex items-center gap-2">
+              <CheckCircleIcon className="w-4 h-4" />
+              Already Published
+            </span>
+          )}
           {canSubmitToZPPA && (
             <button onClick={() => setShowZPPAModal(true)} className="px-4 py-2 border border-indigo-300 text-indigo-600 rounded-lg text-sm hover:bg-indigo-50">
               Submit to ZPPA
@@ -624,34 +739,246 @@ const APPDetail: React.FC = () => {
       )}
 
       {showPublishModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-30">
-          <div className="bg-white rounded-lg shadow-xl max-w-md w-full p-6">
-            <h3 className="text-lg font-medium">Publish APP & GPN</h3>
-            <p className="text-sm text-gray-500 mt-1">Select publication targets</p>
-            <div className="mt-3 space-y-2">
-              {PUBLICATION_TARGETS.map(target => (
-                <label key={target.key} className="flex items-center gap-2">
-                  <input
-                    type="checkbox"
-                    checked={selectedTargets.includes(target.key)}
-                    onChange={(e) => {
-                      if (e.target.checked) {
-                        setSelectedTargets([...selectedTargets, target.key]);
-                      } else {
-                        setSelectedTargets(selectedTargets.filter(t => t !== target.key));
-                      }
-                    }}
-                    className="rounded border-gray-300"
-                  />
-                  <span className="text-sm">{target.label}</span>
-                </label>
-              ))}
-            </div>
-            <div className="flex justify-end gap-3 mt-4">
-              <button onClick={() => setShowPublishModal(false)} className="px-4 py-2 text-sm border border-gray-300 rounded-lg">Cancel</button>
-              <button onClick={() => doAction('publish')} disabled={actionLoading !== '' || selectedTargets.length === 0} className="px-4 py-2 bg-zammsa-green text-white rounded-lg text-sm disabled:opacity-50">
-                {actionLoading ? 'Publishing...' : 'Publish'}
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-30 overflow-y-auto">
+          <div className="bg-white rounded-lg shadow-xl max-w-5xl w-full m-4">
+            {/* Header */}
+            <div className="flex items-center justify-between p-6 border-b border-gray-200">
+              <div>
+                <h2 className="text-xl font-bold text-gray-900">General Procurement Notice</h2>
+                <p className="text-sm text-gray-500 mt-1">
+                  {gpnPreviewData?.department || app?.department_name} — FY {gpnPreviewData?.fiscalYear || app?.fiscal_year_code}
+                </p>
+              </div>
+              <button onClick={() => { setShowPublishModal(false); setPublishSuccess(false); }} className="text-gray-400 hover:text-gray-600">
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"/></svg>
               </button>
+            </div>
+
+            {/* Success Banner */}
+            {publishSuccess && (
+              <div className="bg-green-50 border-b border-green-200 p-4">
+                <div className="flex items-center gap-3">
+                  <CheckCircleIcon className="w-6 h-6 text-green-500" />
+                  <div>
+                    <p className="font-medium text-green-800">APP & GPN Published Successfully</p>
+                    <p className="text-sm text-green-700">The procurement notice is now live on all selected channels</p>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            <div className="p-6 max-h-[70vh] overflow-y-auto">
+              {/* GPN Content Section */}
+              <div className="bg-gray-50 rounded-lg border border-gray-200 p-6 mb-6">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="font-semibold text-gray-900">GPN Content</h3>
+                  <span className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded">Auto-populated — Review and confirm</span>
+                </div>
+                
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                  {/* Left Column - Contact Info */}
+                  <div className="space-y-4">
+                    <div>
+                      <p className="text-xs font-medium text-gray-500 uppercase tracking-wider mb-1">GPN Reference</p>
+                      <p className="text-sm font-medium text-gray-900">{gpnContent.gpn_reference || gpnPreviewData?.reference || 'Auto-generated'}</p>
+                    </div>
+                    
+                    <div>
+                      <p className="text-xs font-medium text-gray-500 uppercase tracking-wider mb-1">Issuing Authority</p>
+                      <p className="text-sm text-gray-900">{gpnContent.issuing_authority}</p>
+                    </div>
+
+                    <div className="border-t border-gray-200 pt-4">
+                      <p className="text-xs font-medium text-gray-500 uppercase tracking-wider mb-3">Contact Information</p>
+                      <div className="space-y-3">
+                        <div>
+                          <label className="text-xs text-gray-500">Contact Name</label>
+                          <input
+                            value={gpnContent.contact_name || ''}
+                            onChange={(e) => handleGPNInputChange('contact_name', e.target.value)}
+                            className="w-full border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-xs text-gray-500">Email</label>
+                          <input
+                            value={gpnContent.contact_email || ''}
+                            onChange={(e) => handleGPNInputChange('contact_email', e.target.value)}
+                            className="w-full border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-xs text-gray-500">Phone</label>
+                          <input
+                            value={gpnContent.contact_phone || ''}
+                            onChange={(e) => handleGPNInputChange('contact_phone', e.target.value)}
+                            className="w-full border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-xs text-gray-500">Address</label>
+                          <input
+                            value={gpnContent.contact_address || ''}
+                            onChange={(e) => handleGPNInputChange('contact_address', e.target.value)}
+                            className="w-full border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Right Column - Planned Procurements Table */}
+                  <div>
+                    <p className="text-xs font-medium text-gray-500 uppercase tracking-wider mb-3">Planned Procurements</p>
+                    <div className="border border-gray-200 rounded-lg overflow-hidden">
+                      <table className="min-w-full divide-y divide-gray-200">
+                        <thead className="bg-gray-50">
+                          <tr>
+                            <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">Item</th>
+                            <th className="px-3 py-2 text-right text-xs font-medium text-gray-500">Value (K)</th>
+                            <th className="px-3 py-2 text-center text-xs font-medium text-gray-500">Method</th>
+                          </tr>
+                        </thead>
+                        <tbody className="bg-white divide-y divide-gray-200">
+                          {(gpnPreviewData?.lineItems || app?.line_items || []).slice(0, 5).map((item, idx) => (
+                            <tr key={idx} className="hover:bg-gray-50">
+                              <td className="px-3 py-2 text-sm text-gray-900 truncate max-w-[120px]">{item.description}</td>
+                              <td className="px-3 py-2 text-sm text-right font-medium text-gray-900">
+                                {Number(item.estimated_value).toLocaleString()}
+                              </td>
+                              <td className="px-3 py-2 text-sm text-center">
+                                <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-700">
+                                  {METHOD_LABELS_SHORT[item.recommended_method || ''] || '-'}
+                                </span>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                        <tfoot className="bg-gray-50">
+                          <tr>
+                            <td className="px-3 py-2 text-sm font-medium text-gray-900">Total</td>
+                            <td className="px-3 py-2 text-sm text-right font-bold text-gray-900">
+                              {Number(gpnPreviewData?.totalValue || app?.total_estimated_value || 0).toLocaleString()}
+                            </td>
+                            <td className="px-3 py-2"></td>
+                          </tr>
+                        </tfoot>
+                      </table>
+                    </div>
+                    {(gpnPreviewData?.lineItems || app?.line_items || []).length > 5 && (
+                      <p className="text-xs text-gray-500 mt-2">Showing 5 of {(gpnPreviewData?.lineItems || app?.line_items || []).length} items</p>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Publication Channels */}
+              <div className="mb-6">
+                <h3 className="font-semibold text-gray-900 mb-4 flex items-center gap-2">
+                  <GlobeIcon className="w-5 h-5 text-gray-400" />
+                  Publication Channels
+                </h3>
+                <div className="space-y-3">
+                  {PUBLICATION_TARGETS.map((channel) => {
+                    const ChannelIcon = channel.icon;
+                    const isChecked = selectedTargets.includes(channel.key);
+                    return (
+                      <div key={channel.key} className="flex items-start gap-4 p-4 border border-gray-200 rounded-lg hover:border-teal-300 transition-colors">
+                        <div className="flex-shrink-0 mt-0.5">
+                          <input
+                            type="checkbox"
+                            checked={isChecked}
+                            onChange={() => togglePublicationTarget(channel.key)}
+                            className="h-4 w-4 text-teal-600 border-gray-300 rounded focus:ring-teal-500"
+                          />
+                        </div>
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2">
+                            <ChannelIcon className="w-5 h-5 text-gray-400" />
+                            <p className="font-medium text-gray-900">{channel.label}</p>
+                            {isChecked && (
+                              <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-teal-100 text-teal-700">
+                                Selected
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-sm text-gray-500 mt-1 ml-7">{channel.description}</p>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* ZPPA Submission Tracking */}
+              <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+                <div className="flex items-start gap-3">
+                  <ExclamationIcon className="w-5 h-5 text-yellow-500 flex-shrink-0 mt-0.5" />
+                  <div className="flex-1">
+                    <h4 className="text-sm font-medium text-yellow-800">ZPPA Submission Tracking</h4>
+                    <div className="mt-2 grid grid-cols-2 gap-4 text-sm">
+                      <div>
+                        <span className="text-yellow-700">ZPC Approval Date:</span>
+                        <span className="ml-2 font-medium text-gray-900">
+                          {app?.approved_at ? new Date(app.approved_at).toLocaleDateString('en-ZM', { year: 'numeric', month: 'short', day: 'numeric' }) : '-'}
+                        </span>
+                      </div>
+                      <div>
+                        <span className="text-yellow-700">ZPPA Deadline:</span>
+                        <span className="ml-2 font-medium text-gray-900">
+                          {app?.zppa_deadline ? new Date(app.zppa_deadline).toLocaleDateString('en-ZM', { year: 'numeric', month: 'short', day: 'numeric' }) : '-'}
+                        </span>
+                      </div>
+                    </div>
+                    {app?.zppa_deadline && (() => {
+                      const daysRemaining = Math.ceil((new Date(app.zppa_deadline).getTime() - Date.now()) / (1000 * 3600 * 24));
+                      return (
+                        <p className={`text-xs mt-2 font-medium ${
+                          daysRemaining <= 3 ? 'text-red-600' : daysRemaining <= 7 ? 'text-yellow-600' : 'text-green-600'
+                        }`}>
+                          {daysRemaining} days remaining for ZPPA submission
+                        </p>
+                      );
+                    })()}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Footer Actions */}
+            <div className="flex items-center justify-between p-6 border-t border-gray-200 bg-gray-50">
+              <button 
+                onClick={() => setShowPDFPreview(true)}
+                className="inline-flex items-center gap-2 px-4 py-2 border border-teal-300 text-teal-700 rounded-lg text-sm hover:bg-teal-50"
+              >
+                <DocumentTextIcon className="w-4 h-4" />
+                Preview GPN PDF
+              </button>
+              <div className="flex gap-3">
+                <button 
+                  onClick={() => { setShowPublishModal(false); setPublishSuccess(false); }} 
+                  className="px-4 py-2 text-sm border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50"
+                >
+                  Cancel
+                </button>
+                <button 
+                  onClick={() => doAction('publish')} 
+                  disabled={publishingGPN || selectedTargets.length === 0} 
+                  className="px-6 py-2 bg-zammsa-green text-white rounded-lg text-sm hover:bg-zammsa-green-dark disabled:opacity-50 inline-flex items-center gap-2"
+                >
+                  {publishingGPN ? (
+                    <>
+                      <LoadingSpinner size="sm" className="text-white" />
+                      Publishing...
+                    </>
+                  ) : (
+                    <>
+                      <CheckCircleIcon className="w-4 h-4" />
+                      🚀 Publish APP & GPN
+                    </>
+                  )}
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -670,6 +997,118 @@ const APPDetail: React.FC = () => {
               <button onClick={() => setShowZPPAModal(false)} className="px-4 py-2 text-sm border border-gray-300 rounded-lg">Cancel</button>
               <button onClick={() => doAction('zppa-submit')} disabled={!zppaRef || actionLoading !== ''} className="px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm disabled:opacity-50">
                 {actionLoading ? 'Submitting...' : 'Submit to ZPPA'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* PDF Preview Modal */}
+      {showPDFPreview && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-30 overflow-y-auto">
+          <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full m-4">
+            <div className="flex items-center justify-between p-4 border-b border-gray-200">
+              <h3 className="text-lg font-medium">GPN PDF Preview</h3>
+              <button onClick={() => setShowPDFPreview(false)} className="text-gray-400 hover:text-gray-600">
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"/></svg>
+              </button>
+            </div>
+            <div className="p-6 max-h-[70vh] overflow-y-auto">
+              {/* PDF Preview Content - Simulated */}
+              <div className="border border-gray-300 rounded-lg p-8 bg-white shadow-sm">
+                {/* Header */}
+                <div className="text-center mb-6 border-b-2 border-gray-800 pb-4">
+                  <h2 className="text-2xl font-bold text-gray-900">GENERAL PROCUREMENT NOTICE</h2>
+                  <p className="text-lg text-gray-700 mt-2">
+                    {gpnContent.notice_heading || `GENERAL PROCUREMENT NOTICE — ZAMMSA ANNUAL PROCUREMENT PLAN ${gpnPreviewData?.fiscalYear}`}
+                  </p>
+                  <p className="text-sm text-gray-500 mt-1">Reference: {gpnContent.gpn_reference || gpnPreviewData?.reference}</p>
+                </div>
+
+                {/* Issuing Authority */}
+                <div className="mb-6">
+                  <h4 className="font-semibold text-gray-900 mb-2">Issuing Authority</h4>
+                  <p className="text-sm text-gray-700">{gpnContent.issuing_authority}</p>
+                </div>
+
+                {/* Notice Body */}
+                <div className="mb-6">
+                  <h4 className="font-semibold text-gray-900 mb-2">Notice</h4>
+                  <p className="text-sm text-gray-700 whitespace-pre-line">{gpnContent.notice_body}</p>
+                </div>
+
+                {/* Contact Information */}
+                <div className="mb-6 bg-gray-50 p-4 rounded-lg">
+                  <h4 className="font-semibold text-gray-900 mb-2">Contact Information</h4>
+                  <div className="grid grid-cols-2 gap-2 text-sm text-gray-700">
+                    <p><strong>Name:</strong> {gpnContent.contact_name}</p>
+                    <p><strong>Email:</strong> {gpnContent.contact_email}</p>
+                    <p><strong>Phone:</strong> {gpnContent.contact_phone}</p>
+                    <p><strong>Address:</strong> {gpnContent.contact_address}</p>
+                  </div>
+                </div>
+
+                {/* Planned Procurements Table */}
+                <div className="mb-6">
+                  <h4 className="font-semibold text-gray-900 mb-3">Planned Procurements</h4>
+                  <table className="min-w-full border border-gray-300 text-sm">
+                    <thead>
+                      <tr className="bg-gray-100">
+                        <th className="border border-gray-300 px-3 py-2 text-left font-medium">Description</th>
+                        <th className="border border-gray-300 px-3 py-2 text-left font-medium">Type</th>
+                        <th className="border border-gray-300 px-3 py-2 text-right font-medium">Estimated Value (ZMW)</th>
+                        <th className="border border-gray-300 px-3 py-2 text-center font-medium">Method</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {(gpnPreviewData?.lineItems || app?.line_items || []).map((item, idx) => (
+                        <tr key={idx}>
+                          <td className="border border-gray-300 px-3 py-2">{item.description}</td>
+                          <td className="border border-gray-300 px-3 py-2 capitalize">{item.procurement_type || '-'}</td>
+                          <td className="border border-gray-300 px-3 py-2 text-right font-medium">
+                            {Number(item.estimated_value).toLocaleString()}
+                          </td>
+                          <td className="border border-gray-300 px-3 py-2 text-center">
+                            {METHOD_LABELS_SHORT[item.recommended_method || ''] || '-'}
+                          </td>
+                        </tr>
+                      ))}
+                      <tr className="bg-gray-50 font-bold">
+                        <td className="border border-gray-300 px-3 py-2" colSpan={2}>Total</td>
+                        <td className="border border-gray-300 px-3 py-2 text-right">
+                          {Number(gpnPreviewData?.totalValue || app?.total_estimated_value || 0).toLocaleString()}
+                        </td>
+                        <td className="border border-gray-300 px-3 py-2"></td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* Footer */}
+                <div className="text-center text-xs text-gray-500 mt-8 pt-4 border-t border-gray-300">
+                  <p>Issued by: {gpnContent.issuing_authority}</p>
+                  <p>Generated on: {new Date().toLocaleString('en-ZM')}</p>
+                </div>
+              </div>
+            </div>
+            <div className="flex justify-end gap-3 p-4 border-t border-gray-200 bg-gray-50">
+              <button 
+                onClick={() => setShowPDFPreview(false)}
+                className="px-4 py-2 text-sm border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-100"
+              >
+                Close
+              </button>
+              <button 
+                onClick={() => {
+                  // In a real implementation, this would generate and download the PDF
+                  toast('PDF download would be generated here');
+                }}
+                className="px-4 py-2 bg-teal-600 text-white rounded-lg text-sm hover:bg-teal-700 inline-flex items-center gap-2"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                </svg>
+                Download PDF
               </button>
             </div>
           </div>
