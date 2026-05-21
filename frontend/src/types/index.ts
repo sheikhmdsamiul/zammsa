@@ -905,9 +905,11 @@ export interface AnnualProcurementPlan {
   zppa_submitted?: boolean;
   zppa_submitted_at?: string;
   zppa_submission_ref?: string;
+  zppa_reference?: string;
   zppa_deadline_alerted?: boolean;
   zppa_status?: 'submitted' | 'not_applicable' | 'overdue' | 'approaching' | 'on_track';
   zppa_days_remaining?: number;
+  created_by_name?: string;
   created_at: string;
   updated_at?: string;
 }

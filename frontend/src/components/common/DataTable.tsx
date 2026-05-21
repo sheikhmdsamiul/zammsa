@@ -28,64 +28,90 @@ export const DataTable: React.FC<Props> = ({
   };
 
   return (
-    <div className="overflow-x-auto">
-      <table className="min-w-full divide-y divide-gray-200">
-        <thead className="bg-gray-50">
-          <tr>
-            {onSelect && <th className="w-10 px-3 py-3" />}
-            {columns.map((col) => (
-              <th
-                key={col.key}
-                onClick={() => col.sortable && onSort?.(col.key)}
-                className={`px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider ${
-                  col.sortable ? 'cursor-pointer hover:bg-gray-100' : ''
-                }`}
-              >
-                <span className="flex items-center gap-1">
-                  {col.label}
-                  {col.sortable && sortKey === col.key && (
-                    <span>{sortDir === 'asc' ? '↑' : '↓'}</span>
-                  )}
-                </span>
-              </th>
-            ))}
-          </tr>
-        </thead>
-        <tbody className="bg-white divide-y divide-gray-200">
-          {loading ? (
-            <tr><td colSpan={columns.length + (onSelect ? 1 : 0)} className="text-center py-8">Loading...</td></tr>
-          ) : data.length === 0 ? (
-            <tr><td colSpan={columns.length + (onSelect ? 1 : 0)} className="text-center py-8 text-gray-500">No data</td></tr>
-          ) : (
-            data.map((row, i) => (
-              <tr
-                key={row.id || i}
-                onClick={() => onRowClick?.(row)}
-                className={`hover:bg-gray-50 ${onRowClick ? 'cursor-pointer' : ''}`}
-              >
-                {onSelect && (
-                  <td className="px-3 py-4">
-                    <input
-                      type="checkbox"
-                      checked={selectedIds?.includes(row.id)}
-                      onChange={() => onSelect(row.id)}
-                      className="rounded border-gray-300"
-                    />
-                  </td>
-                )}
-                {columns.map((col) => {
-                  const rendered = col.render ? col.render(row[col.key], row) : row[col.key];
-                  return (
-                    <td key={col.key} className="px-4 py-4 text-sm text-gray-900 whitespace-nowrap">
-                      {sanitizeCellValue(rendered)}
-                    </td>
-                  );
-                })}
+    <div className="overflow-hidden bg-white border border-gray-100 rounded-2xl shadow-sm">
+      <div className="overflow-x-auto">
+        <table className="min-w-full divide-y divide-gray-100">
+          <thead>
+            <tr className="bg-gray-50/50">
+              {onSelect && (
+                <th className="w-12 px-6 py-4">
+                  <span className="sr-only">Select</span>
+                </th>
+              )}
+              {columns.map((col) => (
+                <th
+                  key={col.key}
+                  onClick={() => col.sortable && onSort?.(col.key)}
+                  className={`px-6 py-4 text-left text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] ${
+                    col.sortable ? 'cursor-pointer hover:text-gray-900 transition-colors' : ''
+                  }`}
+                >
+                  <div className="flex items-center gap-1.5">
+                    {col.label}
+                    {col.sortable && (
+                      <div className="flex flex-col shrink-0">
+                        <span className={`leading-[0.5] ${sortKey === col.key && sortDir === 'asc' ? 'text-zammsa-green' : 'opacity-30'}`}>▴</span>
+                        <span className={`leading-[0.5] ${sortKey === col.key && sortDir === 'desc' ? 'text-zammsa-green' : 'opacity-30'}`}>▾</span>
+                      </div>
+                    )}
+                  </div>
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-gray-50 bg-white">
+            {loading ? (
+              <tr>
+                <td colSpan={columns.length + (onSelect ? 1 : 0)} className="px-6 py-12">
+                  <div className="flex flex-col items-center justify-center gap-3">
+                    <div className="w-8 h-8 border-4 border-zammsa-green border-t-transparent rounded-full animate-spin" />
+                    <span className="text-sm font-bold text-gray-400 uppercase tracking-widest">Loading Data...</span>
+                  </div>
+                </td>
               </tr>
-            ))
-          )}
-        </tbody>
-      </table>
+            ) : data.length === 0 ? (
+              <tr>
+                <td colSpan={columns.length + (onSelect ? 1 : 0)} className="px-6 py-12 text-center">
+                  <div className="flex flex-col items-center justify-center gap-2">
+                    <span className="text-3xl opacity-20">📂</span>
+                    <p className="text-sm font-bold text-gray-400 uppercase tracking-widest">No records found</p>
+                  </div>
+                </td>
+              </tr>
+            ) : (
+              data.map((row, i) => (
+                <tr
+                  key={row.id || i}
+                  onClick={() => onRowClick?.(row)}
+                  className={`group transition-colors ${onRowClick ? 'cursor-pointer hover:bg-gray-50/80' : 'hover:bg-gray-50/30'}`}
+                >
+                  {onSelect && (
+                    <td className="px-6 py-4">
+                      <input
+                        type="checkbox"
+                        checked={selectedIds?.includes(row.id)}
+                        onChange={(e) => {
+                          e.stopPropagation();
+                          onSelect(row.id);
+                        }}
+                        className="w-4 h-4 rounded-md border-gray-300 text-zammsa-green focus:ring-zammsa-green transition-all"
+                      />
+                    </td>
+                  )}
+                  {columns.map((col) => {
+                    const rendered = col.render ? col.render(row[col.key], row) : row[col.key];
+                    return (
+                      <td key={col.key} className="px-6 py-4 text-sm font-medium text-gray-700 whitespace-nowrap group-hover:text-gray-900 transition-colors">
+                        {sanitizeCellValue(rendered)}
+                      </td>
+                    );
+                  })}
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 };

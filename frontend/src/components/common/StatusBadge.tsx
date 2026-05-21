@@ -1,24 +1,24 @@
 import React from 'react';
 
-const statusColors: Record<string, string> = {
-  draft: 'bg-gray-100 text-gray-800',
-  submitted: 'bg-blue-100 text-blue-800',
-  pending_dept_head: 'bg-yellow-100 text-yellow-800',
-  pending_finance: 'bg-yellow-100 text-yellow-800',
-  pending_dg: 'bg-yellow-100 text-yellow-800',
-  pending_zpc: 'bg-yellow-100 text-yellow-800',
-  approved: 'bg-green-100 text-green-800',
-  rejected: 'bg-red-100 text-red-800',
-  active: 'bg-green-100 text-green-800',
-  completed: 'bg-blue-100 text-blue-800',
-  terminated: 'bg-red-100 text-red-800',
-  cancelled: 'bg-gray-100 text-gray-800',
-  published: 'bg-green-100 text-green-800',
-  closed: 'bg-gray-100 text-gray-800',
-  awarded: 'bg-purple-100 text-purple-800',
-  pending: 'bg-yellow-100 text-yellow-800',
-  verified: 'bg-green-100 text-green-800',
-  failed: 'bg-red-100 text-red-800',
+const statusStyles: Record<string, { bg: string; text: string; dot: string }> = {
+  draft: { bg: 'bg-gray-100', text: 'text-gray-700', dot: 'bg-gray-400' },
+  submitted: { bg: 'bg-blue-50', text: 'text-blue-700', dot: 'bg-blue-400' },
+  pending_dept_head: { bg: 'bg-amber-50', text: 'text-amber-700', dot: 'bg-amber-400' },
+  pending_finance: { bg: 'bg-amber-50', text: 'text-amber-700', dot: 'bg-amber-400' },
+  pending_dg: { bg: 'bg-amber-50', text: 'text-amber-700', dot: 'bg-amber-400' },
+  pending_zpc: { bg: 'bg-amber-50', text: 'text-amber-700', dot: 'bg-amber-400' },
+  approved: { bg: 'bg-emerald-50', text: 'text-emerald-700', dot: 'bg-emerald-400' },
+  rejected: { bg: 'bg-rose-50', text: 'text-rose-700', dot: 'bg-rose-400' },
+  active: { bg: 'bg-emerald-50', text: 'text-emerald-700', dot: 'bg-emerald-400' },
+  completed: { bg: 'bg-sky-50', text: 'text-sky-700', dot: 'bg-sky-400' },
+  terminated: { bg: 'bg-rose-50', text: 'text-rose-700', dot: 'bg-rose-400' },
+  cancelled: { bg: 'bg-gray-100', text: 'text-gray-700', dot: 'bg-gray-400' },
+  published: { bg: 'bg-indigo-50', text: 'text-indigo-700', dot: 'bg-indigo-400' },
+  closed: { bg: 'bg-gray-100', text: 'text-gray-700', dot: 'bg-gray-400' },
+  awarded: { bg: 'bg-purple-50', text: 'text-purple-700', dot: 'bg-purple-400' },
+  pending: { bg: 'bg-amber-50', text: 'text-amber-700', dot: 'bg-amber-400' },
+  verified: { bg: 'bg-emerald-50', text: 'text-emerald-700', dot: 'bg-emerald-400' },
+  failed: { bg: 'bg-rose-50', text: 'text-rose-700', dot: 'bg-rose-400' },
 };
 
 interface Props {
@@ -26,12 +26,15 @@ interface Props {
   className?: string;
 }
 
-export const StatusBadge: React.FC<Props> = ({ status, className = '' }) => (
-  <span
-    className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-      statusColors[status] || 'bg-gray-100 text-gray-800'
-    } ${className}`}
-  >
-    {status.replace(/_/g, ' ').replace(/\b\w/g, (l) => l.toUpperCase())}
-  </span>
-);
+export const StatusBadge: React.FC<Props> = ({ status, className = '' }) => {
+  const style = statusStyles[status] || statusStyles.draft;
+  
+  return (
+    <span
+      className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold tracking-wide ${style.bg} ${style.text} ${className}`}
+    >
+      <span className={`w-1.5 h-1.5 rounded-full ${style.dot}`} />
+      {status.replace(/_/g, ' ').replace(/\b\w/g, (l) => l.toUpperCase())}
+    </span>
+  );
+};

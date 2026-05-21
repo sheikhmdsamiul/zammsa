@@ -11,6 +11,12 @@ export const procurementPlanningApi = {
   detail: (id: string) =>
     api.get<AnnualProcurementPlan>(`/procurement-planning/annual-plans/${id}/`).then(r => r.data),
 
+  get: (id: string) =>
+    api.get<AnnualProcurementPlan>(`/procurement-planning/annual-plans/${id}/`).then(r => r.data),
+
+  publish: (id: string, data?: Record<string, any>) =>
+    api.post<{ message: string; status: string }>(`/procurement-planning/annual-plans/${id}/publish/`, data || {}).then(r => r.data),
+
   create: (data: Partial<AnnualProcurementPlan>) =>
     api.post<AnnualProcurementPlan>(`/procurement-planning/annual-plans/`, data).then(r => r.data),
 

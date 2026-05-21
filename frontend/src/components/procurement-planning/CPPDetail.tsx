@@ -1,31 +1,37 @@
 import React, { useEffect, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, Link } from 'react-router-dom';
 import { procurementPlanningApi } from '../../api/procurement_planning';
 import { ContractProcurementPlan } from '../../types';
 import { LoadingSpinner } from '../common/LoadingSpinner';
 import { StatusBadge } from '../common/StatusBadge';
+import { PageHeader } from '../common/PageHeader';
+import { StatCard } from '../common/StatCard';
 import { useAuth } from '../../hooks/useAuth';
 import toast from 'react-hot-toast';
+import { 
+  ArrowLeftIcon, CheckIcon, XIcon, PencilIcon, 
+  LightningBoltIcon, ClipboardListIcon, CashIcon, 
+  ClockIcon, ShieldCheckIcon, DocumentTextIcon,
+  ExclamationIcon, ChatAlt2Icon, DatabaseIcon
+} from '@heroicons/react/outline';
 
 const CPP_WORKFLOW_STAGES = [
-  { key: 'draft', label: 'Draft', note: 'Prepared by Procurement Officer' },
-  { key: 'pending_zpc', label: 'Pending ZPC', note: 'Awaiting ZPC/Director review' },
-  { key: 'approved', label: 'Approved', note: 'Procurement may commence' },
-  { key: 'rejected', label: 'Rejected', note: 'Returned for revision' },
-  { key: 'active', label: 'Active', note: 'Solicitation/procurement ongoing' },
-  { key: 'completed', label: 'Completed', note: 'Procurement closed successfully' },
-  { key: 'cancelled', label: 'Cancelled', note: 'CPP was cancelled' },
+  { key: 'draft', label: 'Drafting' },
+  { key: 'pending_zpc', label: 'ZPC Review' },
+  { key: 'approved', label: 'Approved' },
+  { key: 'active', label: 'In Force' },
+  { key: 'completed', label: 'Closed' },
 ] as const;
 
 const METHOD_LABELS: Record<string, string> = {
-  open_tender: 'Open National Bidding (Open Tender)',
-  international: 'International Bidding',
+  open_tender: 'Open National Bidding',
+  international: 'Open International Bidding',
   limited: 'Limited Bidding',
   simplified: 'Simplified Bidding',
   direct: 'Direct Procurement',
 };
 
-const CPPDetail: React.FC = () => {
+export default function CPPDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { user } = useAuth();
@@ -35,59 +41,28 @@ const CPPDetail: React.FC = () => {
   const [showReject, setShowReject] = useState(false);
   const [reason, setReason] = useState('');
 
-  useEffect(() => {
-    const load = async () => {
-      if (!id) return;
-      setLoading(true);
-      try {
-        const res = await procurementPlanningApi.contractPlans.detail(id);
-        setCpp(res);
-      } catch {
-        setCpp(null);
-      }
-      setLoading(false);
-    };
-    load();
-  }, [id]);
-
-  const loadCPP = async () => {
+  const loadData = async () => {
     if (!id) return;
     setLoading(true);
     try {
       const res = await procurementPlanningApi.contractPlans.detail(id);
       setCpp(res);
     } catch {
-      setCpp(null);
+      toast.error('Failed to load strategy details');
     }
     setLoading(false);
   };
+
+  useEffect(() => { loadData(); }, [id]);
 
   const approveCPP = async () => {
     if (!id) return;
     setActionLoading('approve');
     try {
-      const res = await procurementPlanningApi.contractPlans.approve(id);
-      toast.success(res.message || 'CPP approved');
-      await loadCPP();
-    } catch (err: any) {
-      toast.error(err.response?.data?.error || 'Approval failed');
-    }
-    setActionLoading('');
-  };
-
-  const approveOverrideCPP = async () => {
-    if (!id) return;
-    setActionLoading('approveOverride');
-    try {
-      const res = await procurementPlanningApi.contractPlans.methodOverrideApprove(id, {
-        override_reason: cpp?.override_reason || '',
-        new_method: cpp?.method || '',
-      });
-      toast.success(res.message || 'Override approved');
-      await loadCPP();
-    } catch (err: any) {
-      toast.error(err.response?.data?.error || 'Override approval failed');
-    }
+      await procurementPlanningApi.contractPlans.approve(id);
+      toast.success('Strategy approved');
+      loadData();
+    } catch (err: any) { toast.error(err.response?.data?.error || 'Approval failed'); }
     setActionLoading('');
   };
 
@@ -95,14 +70,10 @@ const CPPDetail: React.FC = () => {
     if (!id) return;
     setActionLoading('submit');
     try {
-      const res = await procurementPlanningApi.contractPlans.submit(id);
-      toast.success(res.message || 'CPP submitted to ZPC');
-      await loadCPP();
-    } catch (err: any) {
-      const data = err.response?.data;
-      const msg = data?.details?.length ? data.details.join('; ') : (data?.error || 'Submit failed');
-      toast.error(msg);
-    }
+      await procurementPlanningApi.contractPlans.submit(id);
+      toast.success('Submitted to ZPC registry');
+      loadData();
+    } catch (err: any) { toast.error(err.response?.data?.error || 'Submission failed'); }
     setActionLoading('');
   };
 
@@ -110,260 +81,229 @@ const CPPDetail: React.FC = () => {
     if (!id || !reason.trim()) return;
     setActionLoading('reject');
     try {
-      const res = await procurementPlanningApi.contractPlans.reject(id, reason.trim(), returnForRevision);
-      toast.success(res.message || 'CPP processed');
+      await procurementPlanningApi.contractPlans.reject(id, reason.trim(), returnForRevision);
+      toast.success('Decision recorded');
       setShowReject(false);
       setReason('');
-      await loadCPP();
-    } catch (err: any) {
-      toast.error(err.response?.data?.error || 'Rejection failed');
-    }
+      loadData();
+    } catch (err: any) { toast.error(err.response?.data?.error || 'Action failed'); }
     setActionLoading('');
   };
 
-  if (loading) return <div className="p-12"><LoadingSpinner size="lg" /></div>;
-  if (!cpp) return <div className="p-12 text-center text-gray-500">CPP not found</div>;
-  const isOpenMethod = ['open_tender', 'international'].includes((cpp.method || '') as string);
-  const methodLabel = cpp.method ? (METHOD_LABELS[cpp.method] || cpp.method.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())) : '-';
-  const recommendedLabel = cpp.recommended_method ? (METHOD_LABELS[cpp.recommended_method] || cpp.recommended_method.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())) : '-';
-  const createdAt = cpp.created_at ? new Date(cpp.created_at).toLocaleString() : '-';
-  const approvedAt = cpp.approved_at ? new Date(cpp.approved_at).toLocaleString() : '-';
-  const currentStatus = cpp.status || 'draft';
-  const currentStageIndex = CPP_WORKFLOW_STAGES.findIndex(s => s.key === currentStatus);
-  const currentStage = CPP_WORKFLOW_STAGES.find(s => s.key === currentStatus);
-  const canZPCAction = currentStatus === 'pending_zpc' && ['zpc_member', 'director_procurement', 'system_admin'].includes(user?.role || '');
-  const canSubmitToZPC = currentStatus === 'draft'
-    && ['procurement_officer', 'system_admin'].includes(user?.role || '');
-  const canApproveOverride = currentStatus === 'draft' && cpp.method_override
-    && ['director_procurement', 'system_admin'].includes(user?.role || '');
+  if (loading) return <LoadingSpinner className="py-24" />;
+  if (!cpp) return <div className="text-center py-24 text-gray-500 font-bold uppercase tracking-widest">Strategy not found</div>;
+
+  const status = cpp.status || 'draft';
+  const role = user?.role || '';
+  const canZPCAction = status === 'pending_zpc' && ['zpc_member', 'director_procurement', 'system_admin'].includes(role);
+  const canSubmitToZPC = status === 'draft' && ['procurement_officer', 'system_admin'].includes(role);
 
   return (
-    <div className="max-w-5xl mx-auto space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <div className="flex items-center gap-3">
-            <h1 className="text-2xl font-bold text-gray-900">CPP Detail</h1>
-            <StatusBadge status={cpp.status || 'draft'} />
+    <div className="pb-12 max-w-7xl mx-auto">
+      <PageHeader 
+        title={`Procurement Strategy: ${cpp.requisition_number || '---'}`}
+        description={`CPP Reference ID: ${cpp.cpp_id.slice(0, 8)}`}
+        breadcrumbs={[
+          { label: 'Planning', path: '/procurement-planning' },
+          { label: 'Strategies', path: '/procurement-planning/cpp' },
+          { label: 'View Strategy' }
+        ]}
+        actions={
+          <div className="flex items-center gap-2">
+            <Link to="/procurement-planning/cpp" className="p-2.5 bg-white border border-gray-200 rounded-xl text-gray-400 hover:text-gray-900 transition-all">
+               <ArrowLeftIcon className="w-5 h-5" />
+            </Link>
+            <StatusBadge status={status} className="py-2 px-4 shadow-sm" />
           </div>
-          <p className="text-sm text-gray-500">{cpp.cpp_number || cpp.cpp_id}</p>
-        </div>
-        <button onClick={() => navigate('/procurement-planning/cpp')} className="text-sm text-gray-500 hover:text-gray-700">&larr; Back to List</button>
-      </div>
+        }
+      />
 
-      {cpp.status === 'approved' && isOpenMethod && (
-        <div className="rounded-lg border border-green-200 bg-green-50 p-4">
-          <p className="font-semibold text-green-900">Approved — Procurement May Commence</p>
-          <p className="text-sm text-green-800 mt-1">Open method selected. No ZPC justification required.</p>
-        </div>
-      )}
+      <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
+        <div className="lg:col-span-3 space-y-8">
+          {/* Summary Cards */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+             <StatCard 
+               label="Current Strategy"
+               value={METHOD_LABELS[cpp.method || '']?.split(' ')[0] || 'TBD'}
+               icon={<LightningBoltIcon className="w-6 h-6" />}
+               color="blue"
+               description={METHOD_LABELS[cpp.method || ''] || 'Awaiting definition'}
+             />
+             <StatCard 
+               label="Milestones"
+               value={cpp.milestones?.length || 0}
+               icon={<ClipboardListIcon className="w-6 h-6" />}
+               color="orange"
+               description="Critical path steps"
+             />
+              <StatCard 
+                label="Risk Rating"
+                value={cpp.risks?.length ? 'LOGGED' : 'NONE'}
+                icon={<ExclamationIcon className="w-6 h-6" />}
+                color={cpp.risks?.length ? 'red' : 'green'}
+                description={`${cpp.risks?.length || 0} items identified`}
+              />
+          </div>
 
-      <div className="bg-white rounded-lg border border-gray-200 p-4">
-        <h2 className="font-semibold text-gray-900 mb-3">Approval Workflow Status</h2>
-        <div className="mb-3 flex items-center gap-2 text-sm">
-          <span className="text-gray-500">Current Stage:</span>
-          <StatusBadge status={currentStatus} />
-          <span className="text-gray-700">{currentStage?.note || 'Workflow status recorded'}</span>
-        </div>
-        <div className="flex items-center gap-2 overflow-x-auto">
-          {CPP_WORKFLOW_STAGES.map((stage, idx) => {
-            const done = currentStageIndex >= idx && currentStageIndex !== -1;
-            const active = stage.key === currentStatus;
-            return (
-              <React.Fragment key={stage.key}>
-                {idx > 0 && <div className={`w-6 h-0.5 flex-shrink-0 ${done ? 'bg-zammsa-green' : 'bg-gray-300'}`} />}
-                <div className={`px-3 py-1.5 rounded-full text-xs whitespace-nowrap ${
-                  active ? 'bg-zammsa-green text-white' : done ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-500'
-                }`}>
-                  {stage.label}
+          {/* Primary Details */}
+          <div className="bg-white rounded-3xl border border-gray-100 shadow-sm p-8">
+             <h2 className="text-sm font-black text-gray-400 uppercase tracking-[0.2em] mb-8">Strategy Overview</h2>
+             <div className="grid grid-cols-1 md:grid-cols-2 gap-y-8 gap-x-12">
+                <div className="flex items-start gap-4">
+                   <div className="w-10 h-10 rounded-xl bg-gray-50 flex items-center justify-center shrink-0"><DocumentTextIcon className="w-5 h-5 text-gray-400"/></div>
+                   <div><p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Requisition Ref</p><p className="text-sm font-bold text-gray-900">{cpp.requisition_number || cpp.requisition}</p></div>
                 </div>
-              </React.Fragment>
-            );
-          })}
+                <div className="flex items-start gap-4">
+                   <div className="w-10 h-10 rounded-xl bg-gray-50 flex items-center justify-center shrink-0"><DatabaseIcon className="w-5 h-5 text-gray-400"/></div>
+                   <div><p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Method Recommendation</p><p className="text-sm font-bold text-gray-900 capitalize">{METHOD_LABELS[cpp.recommended_method || ''] || 'N/A'}</p></div>
+                </div>
+                <div className="flex items-start gap-4">
+                   <div className="w-10 h-10 rounded-xl bg-gray-50 flex items-center justify-center shrink-0"><ShieldCheckIcon className="w-5 h-5 text-gray-400"/></div>
+                   <div><p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Method Override</p><p className="text-sm font-bold text-gray-900">{cpp.method_override ? 'YES (ZPC ACTION)' : 'NO'}</p></div>
+                </div>
+                <div className="flex items-start gap-4">
+                   <div className="w-10 h-10 rounded-xl bg-gray-50 flex items-center justify-center shrink-0"><ClockIcon className="w-5 h-5 text-gray-400"/></div>
+                   <div><p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Planning Date</p><p className="text-sm font-bold text-gray-900">{new Date(cpp.created_at).toLocaleDateString('en-GB')}</p></div>
+                </div>
+             </div>
+             {cpp.override_reason && (
+                <div className="mt-12 pt-8 border-t border-gray-50">
+                   <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-3">Justification for Method Choice</h3>
+                   <p className="text-sm text-gray-700 leading-relaxed font-medium bg-gray-50/50 p-6 rounded-2xl italic">"{cpp.override_reason}"</p>
+                </div>
+             )}
+          </div>
+
+          {/* Milestones Table */}
+          <div className="bg-white rounded-3xl border border-gray-100 shadow-sm overflow-hidden">
+             <div className="p-8 border-b border-gray-50">
+                <h2 className="text-sm font-black text-gray-400 uppercase tracking-[0.2em]">Strategy Milestones</h2>
+             </div>
+             <div className="overflow-x-auto">
+                <table className="min-w-full divide-y divide-gray-50">
+                   <thead className="bg-gray-50/30">
+                      <tr>
+                         <th className="px-8 py-4 text-left text-[10px] font-black text-gray-400 uppercase tracking-widest">Milestone Activity</th>
+                         <th className="px-8 py-4 text-center text-[10px] font-black text-gray-400 uppercase tracking-widest">Planned Date</th>
+                         <th className="px-8 py-4 text-center text-[10px] font-black text-gray-400 uppercase tracking-widest">Actual Date</th>
+                         <th className="px-8 py-4 text-right text-[10px] font-black text-gray-400 uppercase tracking-widest">Status</th>
+                      </tr>
+                   </thead>
+                   <tbody className="divide-y divide-gray-50">
+                      {cpp.milestones?.map((m: any, i: number) => (
+                         <tr key={i} className="hover:bg-gray-50/50 transition-colors">
+                            <td className="px-8 py-5">
+                               <p className="text-sm font-bold text-gray-800">{m.activity || m.milestone_type}</p>
+                            </td>
+                            <td className="px-8 py-5 text-center text-sm font-medium text-gray-500">
+                               {m.planned_date ? new Date(m.planned_date).toLocaleDateString('en-GB') : '-'}
+                            </td>
+                            <td className="px-8 py-5 text-center text-sm font-medium text-emerald-600">
+                               {m.actual_date ? new Date(m.actual_date).toLocaleDateString('en-GB') : <span className="text-gray-300">Pending</span>}
+                            </td>
+                            <td className="px-8 py-5 text-right">
+                               <span className={`text-[10px] font-black uppercase px-2.5 py-1 rounded-lg ${
+                                  m.actual_date ? 'bg-emerald-50 text-emerald-600' : 'bg-gray-100 text-gray-400'
+                               }`}>
+                                  {m.actual_date ? 'COMPLETED' : 'PLANNED'}
+                               </span>
+                            </td>
+                         </tr>
+                      ))}
+                      {(!cpp.milestones || cpp.milestones.length === 0) && (
+                         <tr><td colSpan={4} className="px-8 py-12 text-center text-gray-400 italic text-sm">No milestones defined for this strategy.</td></tr>
+                      )}
+                   </tbody>
+                </table>
+             </div>
+          </div>
         </div>
-        {canSubmitToZPC && (
-          <div className="mt-4">
-            <button
-              onClick={submitToZPC}
-              disabled={actionLoading !== ''}
-              className="px-4 py-2 bg-amber-600 text-white rounded-lg text-sm disabled:opacity-50"
-            >
-              {actionLoading === 'submit' ? 'Submitting...' : 'Submit CPP'}
-            </button>
-            {isOpenMethod && (
-              <span className="ml-2 text-xs text-green-700">Open method — will auto-approve on submit</span>
-            )}
-          </div>
-        )}
-        {canApproveOverride && (
-          <div className="mt-4">
-            <button
-              onClick={approveOverrideCPP}
-              disabled={actionLoading !== ''}
-              className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm disabled:opacity-50"
-            >
-              {actionLoading === 'approveOverride' ? 'Approving...' : 'Approve Method Override (R-09)'}
-            </button>
-          </div>
-        )}
-        {!canSubmitToZPC && currentStatus === 'draft' && !canApproveOverride && !cpp.method_override && ['procurement_officer', 'system_admin'].includes(user?.role || '') && isOpenMethod && (
-          <p className="mt-4 text-sm text-green-700">
-            Selected method is Open Tender. Submit to auto-approve.
-          </p>
-        )}
-        {canZPCAction && (
-          <div className="mt-4 flex items-center gap-2">
-            <button onClick={approveCPP} disabled={actionLoading !== ''} className="px-4 py-2 bg-zammsa-green text-white rounded-lg text-sm disabled:opacity-50">
-              {actionLoading === 'approve' ? 'Approving...' : 'Approve CPP'}
-            </button>
-            <button onClick={() => setShowReject(true)} disabled={actionLoading !== ''} className="px-4 py-2 border border-red-300 text-red-600 rounded-lg text-sm disabled:opacity-50">
-              Reject / Return
-            </button>
-          </div>
-        )}
+
+        {/* Sidebar */}
+        <div className="space-y-8">
+           {/* Workflow Tracking */}
+           <div className="bg-white rounded-3xl border border-gray-100 shadow-sm p-8">
+              <h2 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-8">Process Status</h2>
+              <div className="space-y-8 relative before:absolute before:inset-0 before:ml-1.5 before:h-full before:w-0.5 before:bg-gray-100">
+                 {CPP_WORKFLOW_STAGES.map((step, i) => {
+                    const isCurrent = status === step.key;
+                    const stageIdx = CPP_WORKFLOW_STAGES.findIndex(s => s.key === status);
+                    const isDone = stageIdx > i;
+
+                    return (
+                       <div key={i} className="relative flex items-center gap-4">
+                          <div className={`w-3 h-3 rounded-full z-10 ring-4 ring-white ${
+                             isDone ? 'bg-emerald-500 shadow-lg shadow-emerald-100' : isCurrent ? 'bg-amber-500 animate-pulse shadow-lg shadow-amber-100' : 'bg-gray-200'
+                          }`} />
+                          <span className={`text-xs font-bold uppercase tracking-widest ${
+                             isDone ? 'text-gray-400' : isCurrent ? 'text-amber-600' : 'text-gray-300'
+                          }`}>
+                             {step.label}
+                          </span>
+                       </div>
+                    );
+                 })}
+              </div>
+           </div>
+
+           {/* Operations */}
+           {(canSubmitToZPC || canZPCAction) && (
+              <div className="bg-white rounded-3xl border border-gray-100 shadow-sm p-8">
+                 <h2 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-6">Decision Actions</h2>
+                 <div className="space-y-3">
+                    {canSubmitToZPC && (
+                       <button onClick={submitToZPC} disabled={actionLoading !== ''} className="w-full py-4 bg-amber-600 text-white rounded-2xl text-xs font-black uppercase tracking-widest shadow-lg shadow-amber-100 hover:bg-amber-700 transition-all disabled:opacity-50">Registry Submit</button>
+                    )}
+                    {canZPCAction && (
+                       <>
+                          <button onClick={approveCPP} disabled={actionLoading !== ''} className="w-full py-4 bg-zammsa-green text-white rounded-2xl text-xs font-black uppercase tracking-widest shadow-lg shadow-zammsa-green/20 hover:bg-zammsa-green-dark transition-all disabled:opacity-50">Confirm Strategy</button>
+                          <button onClick={() => setShowReject(true)} disabled={actionLoading !== ''} className="w-full py-4 bg-rose-600 text-white rounded-2xl text-xs font-black uppercase tracking-widest shadow-lg shadow-rose-100 hover:bg-rose-700 transition-all disabled:opacity-50">Reject / Return</button>
+                       </>
+                    )}
+                 </div>
+              </div>
+           )}
+
+           {/* History / Decisions */}
+           <div className="bg-white rounded-3xl border border-gray-100 shadow-sm p-8 text-center">
+              <ChatAlt2Icon className="w-8 h-8 text-gray-100 mx-auto mb-3" />
+              <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Internal Discussion</p>
+              <p className="text-xs text-gray-400 mt-1">Comments and decision logs for this strategy will appear here.</p>
+           </div>
+        </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-4">
-        <div className="bg-white p-4 rounded-lg border border-gray-200">
-          <p className="text-xs text-gray-500">Requisition</p>
-          <p className="text-sm font-medium">{cpp.requisition_number || cpp.requisition}</p>
-        </div>
-        <div className="bg-white p-4 rounded-lg border border-gray-200">
-          <p className="text-xs text-gray-500">Department</p>
-          <p className="text-sm font-medium">{cpp.requisition_department || '-'}</p>
-        </div>
-        <div className="bg-white p-4 rounded-lg border border-gray-200">
-          <p className="text-xs text-gray-500">Estimated Value</p>
-          <p className="text-sm font-medium">ZMW {Number(cpp.estimated_value || 0).toLocaleString()}</p>
-        </div>
-        <div className="bg-white p-4 rounded-lg border border-gray-200">
-          <p className="text-xs text-gray-500">Overall Risk</p>
-          <p className="text-sm font-medium">{(cpp.overall_risk_level || '-').toString().toUpperCase()}</p>
-        </div>
-        <div className="bg-white p-4 rounded-lg border border-gray-200">
-          <p className="text-xs text-gray-500">ZPC Justification</p>
-          <p className="text-sm font-medium">{isOpenMethod ? 'Not Required' : (cpp.zpc_approval_required ? 'Required' : 'Not Required')}</p>
-        </div>
-        <div className="bg-white p-4 rounded-lg border border-gray-200">
-          <p className="text-xs text-gray-500">Baseline Schedule</p>
-          <p className="text-sm font-medium">{cpp.is_baseline_locked ? 'Locked' : 'Not Locked'}</p>
-        </div>
-        <div className="bg-white p-4 rounded-lg border border-gray-200">
-          <p className="text-xs text-gray-500">Created At</p>
-          <p className="text-sm font-medium">{createdAt}</p>
-        </div>
-        <div className="bg-white p-4 rounded-lg border border-gray-200">
-          <p className="text-xs text-gray-500">Approved At</p>
-          <p className="text-sm font-medium">{approvedAt}</p>
-        </div>
-      </div>
-
-      <div className="bg-white rounded-lg border border-gray-200 p-4">
-        <h2 className="font-semibold text-gray-900 mb-3">Method Decision</h2>
-        <div className="grid grid-cols-2 gap-4 text-sm">
-          <div><span className="text-gray-500 block">System Recommendation</span>{recommendedLabel}</div>
-          <div><span className="text-gray-500 block">Selected Method</span>{methodLabel}</div>
-          <div><span className="text-gray-500 block">Method Override</span>{cpp.method_override ? 'Yes' : 'No'}</div>
-          <div><span className="text-gray-500 block">Override Reason</span>{cpp.override_reason || '-'}</div>
-        </div>
-      </div>
-
-      <div className="bg-white rounded-lg border border-gray-200 p-4">
-        <h2 className="font-semibold text-gray-900 mb-3">Milestones</h2>
-        {(cpp.milestones || []).length > 0 ? (
-          <div className="overflow-x-auto">
-            <table className="min-w-full text-sm">
-              <thead>
-                <tr className="text-left text-gray-500 border-b">
-                  <th className="py-2 pr-3">#</th>
-                  <th className="py-2 pr-3">Milestone</th>
-                  <th className="py-2 pr-3">Planned Date</th>
-                  <th className="py-2 pr-3">Actual Date</th>
-                  <th className="py-2">Variance</th>
-                </tr>
-              </thead>
-              <tbody>
-                {(cpp.milestones || []).map((m) => (
-                  <tr key={m.milestone_id} className="border-b last:border-b-0">
-                    <td className="py-2 pr-3">{m.sequence_number}</td>
-                    <td className="py-2 pr-3">{m.milestone_name}</td>
-                    <td className="py-2 pr-3">{m.planned_date}</td>
-                    <td className="py-2 pr-3">{m.actual_date || '-'}</td>
-                    <td className="py-2">{m.variance_days ?? '-'}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        ) : <p className="text-sm text-gray-400">No milestones</p>}
-      </div>
-
-      <div className="bg-white rounded-lg border border-gray-200 p-4">
-        <h2 className="font-semibold text-gray-900 mb-3">Risks</h2>
-        {(cpp.risks || []).length > 0 ? (
-          <div className="overflow-x-auto">
-            <table className="min-w-full text-sm">
-              <thead>
-                <tr className="text-left text-gray-500 border-b">
-                  <th className="py-2 pr-3">Category</th>
-                  <th className="py-2 pr-3">Risk</th>
-                  <th className="py-2 pr-3">Likelihood</th>
-                  <th className="py-2 pr-3">Impact</th>
-                  <th className="py-2">Mitigation</th>
-                </tr>
-              </thead>
-              <tbody>
-                {(cpp.risks || []).map((r) => (
-                  <tr key={r.risk_id} className="border-b last:border-b-0">
-                    <td className="py-2 pr-3 capitalize">{r.risk_category}</td>
-                    <td className="py-2 pr-3">{r.risk_description}</td>
-                    <td className="py-2 pr-3 capitalize">{r.likelihood}</td>
-                    <td className="py-2 pr-3 capitalize">{r.impact}</td>
-                    <td className="py-2">{r.mitigation_strategy || '-'}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        ) : <p className="text-sm text-gray-400">No risks</p>}
-      </div>
-
+      {/* Reject Modal */}
       {showReject && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-30">
-          <div className="bg-white rounded-lg shadow-xl max-w-md w-full p-6">
-            <h3 className="text-lg font-medium">Return / Reject CPP</h3>
-            <p className="text-sm text-gray-500 mt-1">Provide reason for this decision.</p>
-            <textarea
-              value={reason}
-              onChange={(e) => setReason(e.target.value)}
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 mt-4 text-sm h-28"
-              placeholder="Reason..."
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/60 backdrop-blur-sm p-6">
+          <div className="bg-white rounded-[32px] shadow-2xl max-w-md w-full p-10 border border-white/20 transform animate-in zoom-in-95 duration-300">
+            <div className="w-16 h-16 rounded-2xl bg-rose-100 text-rose-600 flex items-center justify-center mb-8">
+               <XIcon className="w-8 h-8" />
+            </div>
+            <h3 className="text-2xl font-black text-gray-900 tracking-tight">Strategy Decision</h3>
+            <p className="text-sm font-medium text-gray-500 mt-2 mb-8">Provide a clear reason for rejecting or returning this strategy to the procurement officer.</p>
+            
+            <textarea 
+               value={reason} 
+               onChange={(e) => setReason(e.target.value)} 
+               rows={4} 
+               placeholder="Decision details..." 
+               className="w-full bg-gray-50 border border-gray-100 rounded-2xl p-5 text-sm outline-none focus:ring-4 focus:ring-rose-500/5 transition-all" 
             />
-            <div className="flex justify-end gap-2 mt-4">
-              <button onClick={() => { setShowReject(false); setReason(''); }} className="px-4 py-2 border border-gray-300 rounded-lg text-sm">Cancel</button>
-              <button
-                onClick={() => rejectCPP(false)}
-                disabled={!reason.trim() || actionLoading !== ''}
-                className="px-4 py-2 bg-red-600 text-white rounded-lg text-sm disabled:opacity-50"
-              >
-                {actionLoading === 'reject' ? 'Submitting...' : 'Final Reject'}
-              </button>
-              <button
+            
+            <div className="flex gap-4 mt-10">
+              <button onClick={() => { setShowReject(false); setReason(''); }} className="flex-1 py-4 text-sm font-bold text-gray-400 bg-gray-50 rounded-2xl hover:bg-gray-100 transition-all uppercase tracking-widest">Cancel</button>
+              <button 
                 onClick={() => rejectCPP(true)}
-                disabled={!reason.trim() || actionLoading !== ''}
-                className="px-4 py-2 bg-yellow-600 text-white rounded-lg text-sm disabled:opacity-50"
+                disabled={!reason.trim() || actionLoading !== ''} 
+                className="flex-1 py-4 bg-rose-600 text-white rounded-2xl text-sm font-black uppercase tracking-widest shadow-lg shadow-rose-100 hover:bg-rose-700 disabled:opacity-50 transition-all"
               >
-                {actionLoading === 'reject' ? 'Submitting...' : 'Return for Revision'}
+                 Confirm
               </button>
             </div>
-            <p className="text-xs text-gray-500 mt-2">
-              <strong>Return for Revision:</strong> R-03 revises and resubmits.<br />
-              <strong>Final Reject:</strong> Permanently reject this plan.
-            </p>
           </div>
         </div>
       )}
     </div>
   );
-};
-
-export default CPPDetail;
+}

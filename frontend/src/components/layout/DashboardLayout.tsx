@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
-import { Outlet, Link, useLocation } from 'react-router-dom';
+import { Outlet, useLocation } from 'react-router-dom';
 import { useAuth, useLogout } from '../../hooks/useAuth';
 import { ROLES } from '../../config/rbac';
+import Sidebar, { NavItem } from './Sidebar';
 import {
   ChartBarIcon, CashIcon, ClipboardListIcon,
   PencilIcon, DocumentTextIcon, DocumentDuplicateIcon,
@@ -16,7 +17,7 @@ const PageLoader = () => (
   </div>
 );
 
-const navItems = [
+const navItems: NavItem[] = [
   { label: 'Dashboard', path: '/dashboard', icon: <ChartBarIcon className={iconClass} /> },
   { label: 'Procurement Planning', path: '/procurement-planning', icon: <ClipboardListIcon className={iconClass} />, roles: [ROLES.USER_DEPT_STAFF, ROLES.DEPARTMENT_HEAD, ROLES.PROCUREMENT_OFFICER, ROLES.PROCUREMENT_MANAGER, ROLES.FINANCE_OFFICER, ROLES.ZPC_MEMBER, ROLES.DIRECTOR_PROCUREMENT, ROLES.DIRECTOR_GENERAL] },
   { label: 'GPNs', path: '/procurement-planning/gpns', icon: <DocumentTextIcon className={iconClass} />, roles: [ROLES.PROCUREMENT_OFFICER, ROLES.PROCUREMENT_MANAGER, ROLES.DIRECTOR_PROCUREMENT, ROLES.SYSTEM_ADMIN] },
@@ -29,69 +30,84 @@ const navItems = [
   { label: 'Finance & Payments', path: '/finance', icon: <CashIcon className={iconClass} />, roles: [ROLES.FINANCE_OFFICER, ROLES.BUDGET_CONTROLLER, ROLES.DIRECTOR_GENERAL, ROLES.CONTRACT_MANAGER] },
   { label: 'Suppliers', path: '/suppliers', icon: <OfficeBuildingIcon className={iconClass} />, roles: [ROLES.SUPPLIER_RELATIONSHIP_MANAGER] },
   { label: 'Reports & Analytics', path: '/reports', icon: <TrendingUpIcon className={iconClass} />, roles: [ROLES.PROCUREMENT_MANAGER, ROLES.FINANCE_OFFICER, ROLES.ZPC_MEMBER, ROLES.DIRECTOR_PROCUREMENT, ROLES.DIRECTOR_GENERAL, ROLES.ZPPA_REPORTING_OFFICER, ROLES.BUDGET_CONTROLLER] },
-] as Array<{ label: string; path: string; icon: React.ReactNode; roles?: string[] }>;
+];
 
 const DashboardLayout: React.FC = () => {
   const { user } = useAuth();
   const logout = useLogout();
-  const location = useLocation();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const normalizedRole = user?.role === 'zppa_reporter' ? 'zppa_reporting_officer' : user?.role;
   const visibleNav = navItems.filter((item) => !item.roles || (normalizedRole && item.roles.includes(normalizedRole)));
 
+  const sidebarFooter = (
+    <div className="flex items-center gap-3 px-2 py-1">
+      <div className="w-10 h-10 bg-zammsa-green rounded-xl flex items-center justify-center shadow-lg shadow-zammsa-green/20 shrink-0">
+        <span className="text-white text-sm font-bold">
+          {user?.full_name?.split(' ').map((n) => n[0]).join('').slice(0, 2).toUpperCase()}
+        </span>
+      </div>
+      <div className="flex-1 min-w-0">
+        <p className="text-sm font-bold text-white truncate">{user?.full_name}</p>
+        <p className="text-[10px] text-gray-500 font-medium uppercase tracking-wider truncate">
+          {user?.role?.replace(/_/g, ' ')}
+        </p>
+      </div>
+      <button 
+        onClick={logout}
+        className="p-2 text-gray-500 hover:text-red-500 transition-colors"
+        title="Logout"
+      >
+        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+        </svg>
+      </button>
+    </div>
+  );
+
   return (
     <div className="min-h-screen flex bg-gray-50">
-      <aside className={`fixed inset-y-0 left-0 z-30 w-64 bg-white border-r border-gray-200 transform transition-transform lg:translate-x-0 lg:static lg:inset-auto ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
-        <div className="flex items-center gap-2 h-16 px-6 border-b border-gray-200">
-          <div className="w-8 h-8 bg-zammsa-green rounded-full flex items-center justify-center">
-            <span className="text-white text-sm font-bold">Z</span>
-          </div>
-          <span className="font-bold text-zammsa-green">ZAMMSA</span>
-        </div>
-        <nav className="mt-4 px-3 space-y-1 overflow-y-auto max-h-[calc(100vh-4rem)]">
-          {visibleNav.map((item) => (
-            <Link
-              key={item.path}
-              to={item.path}
-              className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors ${
-                location.pathname.startsWith(item.path)
-                  ? 'bg-zammsa-green text-white'
-                  : 'text-gray-600 hover:bg-gray-100'
-              }`}
-            >
-              {item.icon}
-              {item.label}
-            </Link>
-          ))}
-        </nav>
-      </aside>
+      <Sidebar 
+        navItems={visibleNav}
+        isOpen={sidebarOpen}
+        onClose={() => setSidebarOpen(false)}
+        accentColor="zammsa-green"
+        footer={sidebarFooter}
+      />
 
       <div className="flex-1 flex flex-col min-w-0">
-        <header className="bg-white border-b border-gray-200 h-16 flex items-center justify-between px-6 sticky top-0 z-20">
-          <button className="lg:hidden text-gray-500" onClick={() => setSidebarOpen(!sidebarOpen)}>
+        <header className="bg-white/80 backdrop-blur-md border-b border-gray-200 h-20 flex items-center justify-between px-8 sticky top-0 z-20">
+          <button className="lg:hidden p-2 -ml-2 text-gray-500 hover:bg-gray-100 rounded-lg transition-colors" onClick={() => setSidebarOpen(true)}>
             <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
             </svg>
           </button>
-          <div className="flex items-center gap-4 ml-auto">
-            <span className="text-sm text-gray-500">{user?.department}</span>
-            <div className="flex items-center gap-2">
-              <div className="w-8 h-8 bg-zammsa-green rounded-full flex items-center justify-center">
-                <span className="text-white text-xs font-bold">
-                  {user?.full_name?.split(' ').map((n) => n[0]).join('').slice(0, 2).toUpperCase()}
-                </span>
-              </div>
-              <div className="text-sm">
-                <p className="font-medium text-gray-700">{user?.full_name}</p>
-                <p className="text-gray-400 text-xs">{user?.role?.replace(/_/g, ' ')}</p>
-              </div>
-            </div>
-            <button onClick={logout} className="text-sm text-gray-500 hover:text-red-600 ml-4">
-              Logout
+          
+          <div className="flex flex-col">
+            <h1 className="text-lg font-bold text-gray-900">ZAMMSA PMS</h1>
+            <p className="text-xs text-gray-500 font-medium">{user?.department || 'Internal Portal'}</p>
+          </div>
+
+          <div className="flex items-center gap-4">
+            <button className="p-2 text-gray-400 hover:text-zammsa-green hover:bg-zammsa-green/5 rounded-xl transition-all">
+              <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+              </svg>
             </button>
+            <div className="h-8 w-px bg-gray-200 mx-2" />
+            <div className="flex items-center gap-3">
+               <div className="text-right hidden sm:block">
+                  <p className="text-sm font-bold text-gray-900 leading-none">{user?.full_name}</p>
+                  <p className="text-[10px] text-gray-500 font-bold uppercase tracking-tighter">{user?.role?.replace(/_/g, ' ')}</p>
+               </div>
+               <div className="w-10 h-10 bg-gray-100 rounded-xl border border-gray-200 flex items-center justify-center overflow-hidden">
+                  <span className="text-zammsa-green font-bold text-sm">
+                    {user?.full_name?.split(' ').map((n) => n[0]).join('').slice(0, 2).toUpperCase()}
+                  </span>
+               </div>
+            </div>
           </div>
         </header>
-        <main className="flex-1 p-6 overflow-auto">
+        <main className="flex-1 p-8 overflow-auto">
           <React.Suspense fallback={<PageLoader />}>
             <Outlet />
           </React.Suspense>

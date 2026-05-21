@@ -3,11 +3,18 @@ import { useQuery } from '@tanstack/react-query';
 import { fetchAdminDashboard } from '../../api/admin';
 import { LoadingSpinner } from '../common/LoadingSpinner';
 import { useAppSelector } from '../../hooks/useRedux';
+import { PageHeader } from '../common/PageHeader';
+import { StatCard } from '../common/StatCard';
+import { 
+  ChipIcon, DatabaseIcon, ServerIcon, ShieldCheckIcon,
+  UsersIcon, LinkIcon, ClipboardListIcon, CogIcon,
+  ClockIcon, RefreshIcon
+} from '@heroicons/react/outline';
 
 const statusColor = (s: string) => {
-  if (s === 'healthy' || s === 'active' || s === 'online') return 'bg-green-500';
-  if (s === 'warning' || s === 'degraded') return 'bg-yellow-500';
-  return 'bg-red-500';
+  if (s === 'healthy' || s === 'active' || s === 'online') return 'bg-emerald-500';
+  if (s === 'warning' || s === 'degraded') return 'bg-amber-500';
+  return 'bg-rose-500';
 };
 
 const AdminDashboard: React.FC = () => {
@@ -21,125 +28,183 @@ const AdminDashboard: React.FC = () => {
   if (isLoading) return <LoadingSpinner />;
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">Admin Dashboard</h1>
-          <p className="text-sm text-gray-500">Welcome back, {user?.full_name}</p>
-        </div>
-        <span className="text-xs text-gray-400 bg-white px-3 py-1 rounded-full shadow">Auto-refreshing every 30s</span>
-      </div>
-
-      {/* System Health */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-        {data?.system_health && Object.entries(data.system_health).map(([k, v]) => (
-          <div key={k} className="bg-white rounded-lg shadow p-4">
-            <p className="text-xs text-gray-500 uppercase tracking-wider">{k.replace('_', ' ')}</p>
-            <p className="mt-1 text-xl font-bold text-gray-900">
-              {typeof v === 'number' && k !== 'db_connections' ? `${v}%` : v}
-            </p>
-            {typeof v === 'number' && k !== 'db_connections' && (
-              <div className="mt-2 w-full bg-gray-200 rounded-full h-2">
-                <div className={`h-2 rounded-full ${v > 80 ? 'bg-red-500' : v > 60 ? 'bg-yellow-500' : 'bg-zammsa-green'}`} style={{ width: `${v}%` }} />
-              </div>
-            )}
+    <div className="pb-12">
+      <PageHeader 
+        title="Admin Control Center"
+        description="Monitor system health, integrations, and administrative tasks."
+        actions={
+          <div className="flex items-center gap-2">
+            <button className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 rounded-xl shadow-sm text-xs font-bold text-gray-500 hover:text-zammsa-orange transition-colors">
+              <RefreshIcon className="w-4 h-4" />
+              <span>Force Refresh</span>
+            </button>
+            <div className="px-3 py-1 bg-zammsa-orange/10 border border-zammsa-orange/20 rounded-lg">
+               <span className="text-[10px] font-black text-zammsa-orange uppercase tracking-widest">LIVE STATUS</span>
+            </div>
           </div>
-        ))}
+        }
+      />
+
+      <h2 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-4 ml-1">System Health</h2>
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+        {data?.system_health && (
+          <>
+            <StatCard 
+              label="CPU Usage"
+              value={`${data.system_health.cpu}%`}
+              icon={<ChipIcon className="w-6 h-6" />}
+              color={data.system_health.cpu > 80 ? 'red' : data.system_health.cpu > 50 ? 'orange' : 'blue'}
+              description="Server processor load"
+            />
+            <StatCard 
+              label="Memory Usage"
+              value={`${data.system_health.memory}%`}
+              icon={<ServerIcon className="w-6 h-6" />}
+              color={data.system_health.memory > 80 ? 'red' : 'purple'}
+              description="System RAM utilization"
+            />
+            <StatCard 
+              label="Disk Usage"
+              value={`${data.system_health.disk}%`}
+              icon={<DatabaseIcon className="w-6 h-6" />}
+              color={data.system_health.disk > 80 ? 'red' : 'green'}
+              description="Storage capacity used"
+            />
+            <StatCard 
+              label="DB Connections"
+              value={data.system_health.db_connections}
+              icon={<ShieldCheckIcon className="w-6 h-6" />}
+              color="blue"
+              description="Active database pool"
+            />
+          </>
+        )}
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* User Stats */}
-        <div className="bg-white rounded-lg shadow p-5">
-          <h2 className="text-lg font-semibold text-gray-900 mb-4">User Statistics</h2>
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-8">
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
+          <div className="flex items-center justify-between mb-6">
+            <h2 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">User Base</h2>
+            <UsersIcon className="w-5 h-5 text-gray-200" />
+          </div>
           {data?.user_stats && (
             <div className="grid grid-cols-2 gap-4">
               {Object.entries(data.user_stats).map(([k, v]) => (
-                <div key={k} className="text-center p-3 rounded-lg bg-gray-50">
-                  <p className={`text-2xl font-bold ${k === 'suspended' ? 'text-red-600' : k === 'pending' ? 'text-yellow-600' : 'text-zammsa-green'}`}>{v}</p>
-                  <p className="text-xs text-gray-500 capitalize">{k.replace('_', ' ')}</p>
+                <div key={k} className="p-4 rounded-2xl bg-gray-50/50 border border-gray-100/50 group hover:bg-white hover:shadow-md transition-all duration-300">
+                  <p className={`text-2xl font-black mb-1 ${
+                    k === 'suspended' ? 'text-rose-600' : k === 'pending' ? 'text-amber-600' : 'text-emerald-600'
+                  }`}>{v}</p>
+                  <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">{k.replace('_', ' ')}</p>
                 </div>
               ))}
             </div>
           )}
+          <button className="w-full mt-6 py-3 rounded-xl border border-dashed border-gray-200 text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] hover:border-zammsa-orange hover:text-zammsa-orange transition-all">Manage All Users</button>
         </div>
 
-        {/* Integration Health */}
-        <div className="bg-white rounded-lg shadow p-5">
-          <h2 className="text-lg font-semibold text-gray-900 mb-4">Integration Health</h2>
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
+          <div className="flex items-center justify-between mb-6">
+            <h2 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">External APIs</h2>
+            <LinkIcon className="w-5 h-5 text-gray-200" />
+          </div>
           {data?.integrations && data.integrations.length > 0 ? (
-            <div className="space-y-3">
+            <div className="space-y-4">
               {data.integrations.map((i) => (
-                <div key={i.name} className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <span className={`w-2 h-2 rounded-full ${statusColor(i.status)}`} />
-                    <span className="text-sm text-gray-700">{i.name}</span>
+                <div key={i.name} className="flex items-center justify-between p-3 rounded-xl hover:bg-gray-50 transition-colors">
+                  <div className="flex items-center gap-3">
+                    <div className={`w-2 h-2 rounded-full animate-pulse ${statusColor(i.status)}`} />
+                    <span className="text-sm font-bold text-gray-700">{i.name}</span>
                   </div>
-                  <span className="text-xs text-gray-400">{new Date(i.last_checked).toLocaleString()}</span>
+                  <span className="text-[10px] font-bold text-gray-400 uppercase tracking-tighter">
+                     {new Date(i.last_checked).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                  </span>
                 </div>
               ))}
             </div>
-          ) : <p className="text-gray-400 text-sm text-center py-8">No integrations</p>}
+          ) : <div className="text-center py-12 text-gray-400 italic text-xs">No integrations monitored</div>}
         </div>
 
-        {/* Pending Approvals */}
-        <div className="bg-white rounded-lg shadow p-5">
-          <h2 className="text-lg font-semibold text-gray-900 mb-4">Pending Approvals</h2>
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
+          <div className="flex items-center justify-between mb-6">
+            <h2 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">Queue Summary</h2>
+            <ClipboardListIcon className="w-5 h-5 text-gray-200" />
+          </div>
           {data?.pending_approvals_summary && data.pending_approvals_summary.length > 0 ? (
-            <div className="space-y-3">
+            <div className="space-y-4">
               {data.pending_approvals_summary.map((a) => (
-                <div key={a.type} className="flex items-center justify-between">
-                  <span className="text-sm text-gray-700">{a.type}</span>
-                  <span className="bg-zammsa-orange text-white text-xs font-bold px-2 py-0.5 rounded-full">{a.count}</span>
+                <div key={a.type} className="flex items-center justify-between p-3 rounded-xl bg-gray-50/50">
+                  <span className="text-sm font-medium text-gray-700">{a.type}</span>
+                  <span className="bg-zammsa-orange text-white text-[10px] font-black px-2.5 py-1 rounded-lg shadow-sm shadow-zammsa-orange/20">{a.count}</span>
                 </div>
               ))}
             </div>
-          ) : <p className="text-gray-400 text-sm text-center py-8">No pending approvals</p>}
+          ) : <div className="text-center py-12 text-gray-400 italic text-xs">Queue is empty</div>}
         </div>
       </div>
 
-      {/* Scheduled Jobs */}
-      <div className="bg-white rounded-lg shadow p-5">
-        <h2 className="text-lg font-semibold text-gray-900 mb-4">Scheduled Jobs</h2>
+      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 overflow-hidden mb-8">
+        <div className="flex items-center justify-between mb-6">
+          <h2 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">Automated Tasks</h2>
+          <CogIcon className="w-5 h-5 text-gray-200" />
+        </div>
         {data?.scheduled_jobs && data.scheduled_jobs.length > 0 ? (
-          <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-200 text-sm">
-              <thead className="bg-gray-50">
+          <div className="overflow-x-auto -mx-6">
+            <table className="min-w-full divide-y divide-gray-50">
+              <thead className="bg-gray-50/50">
                 <tr>
-                  <th className="px-4 py-3 text-left font-medium text-gray-500">Job</th>
-                  <th className="px-4 py-3 text-center font-medium text-gray-500">Status</th>
-                  <th className="px-4 py-3 text-right font-medium text-gray-500">Last Run</th>
-                  <th className="px-4 py-3 text-right font-medium text-gray-500">Next Run</th>
+                  <th className="px-6 py-4 text-left text-[10px] font-black text-gray-400 uppercase tracking-widest">Job Name</th>
+                  <th className="px-6 py-4 text-center text-[10px] font-black text-gray-400 uppercase tracking-widest">Status</th>
+                  <th className="px-6 py-4 text-right text-[10px] font-black text-gray-400 uppercase tracking-widest">Last Run</th>
+                  <th className="px-6 py-4 text-right text-[10px] font-black text-gray-400 uppercase tracking-widest">Next Run</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-100">
+              <tbody className="divide-y divide-gray-50">
                 {data.scheduled_jobs.map((j) => (
-                  <tr key={j.name} className="hover:bg-gray-50">
-                    <td className="px-4 py-3 font-medium text-gray-900">{j.name}</td>
-                    <td className="px-4 py-3 text-center">
-                      <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${j.status === 'running' ? 'bg-green-100 text-green-700' : j.status === 'failed' ? 'bg-red-100 text-red-700' : 'bg-gray-100 text-gray-700'}`}>{j.status}</span>
+                  <tr key={j.name} className="hover:bg-gray-50/50 transition-colors">
+                    <td className="px-6 py-4 text-sm font-bold text-gray-800">{j.name}</td>
+                    <td className="px-6 py-4 text-center">
+                      <span className={`text-[10px] font-black uppercase px-2.5 py-1 rounded-lg ${
+                        j.status === 'running' ? 'bg-emerald-50 text-emerald-600' : 
+                        j.status === 'failed' ? 'bg-rose-50 text-rose-600' : 'bg-gray-100 text-gray-600'
+                      }`}>
+                        {j.status}
+                      </span>
                     </td>
-                    <td className="px-4 py-3 text-right text-gray-500">{j.last_run ? new Date(j.last_run).toLocaleString() : '-'}</td>
-                    <td className="px-4 py-3 text-right text-gray-500">{j.next_run ? new Date(j.next_run).toLocaleString() : '-'}</td>
+                    <td className="px-6 py-4 text-right text-xs font-medium text-gray-500">{j.last_run ? new Date(j.last_run).toLocaleString('en-GB') : '-'}</td>
+                    <td className="px-6 py-4 text-right text-xs font-medium text-gray-400 italic">{j.next_run ? new Date(j.next_run).toLocaleString('en-GB') : '-'}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
-        ) : <p className="text-gray-400 text-sm text-center py-8">No scheduled jobs</p>}
+        ) : <p className="text-gray-400 text-sm text-center py-12">No scheduled jobs found</p>}
       </div>
 
-      {/* Recent Audit Logs */}
-      <div className="bg-white rounded-lg shadow p-5">
-        <h2 className="text-lg font-semibold text-gray-900 mb-4">Recent Audit Logs</h2>
+      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
+        <div className="flex items-center justify-between mb-6">
+          <h2 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">Security Audit Log</h2>
+          <button className="text-[10px] font-black text-zammsa-orange uppercase tracking-widest hover:underline">Full Log</button>
+        </div>
         {data?.recent_audit_logs && data.recent_audit_logs.length > 0 ? (
-          <div className="space-y-2">
+          <div className="space-y-4">
             {data.recent_audit_logs.slice(0, 5).map((l) => (
-              <div key={l.id} className="flex items-center gap-3 text-sm pb-2 border-b border-gray-100 last:border-0">
-                <span className={`w-2 h-2 rounded-full ${l.action === 'create' ? 'bg-green-500' : l.action === 'update' ? 'bg-blue-500' : l.action === 'delete' ? 'bg-red-500' : 'bg-gray-500'}`} />
-                <span className="font-medium text-gray-900">{l.user}</span>
-                <span className="text-gray-500">{l.action}</span>
-                <span className="text-gray-600">{l.resource}</span>
-                <span className="ml-auto text-xs text-gray-400">{new Date(l.timestamp).toLocaleString()}</span>
+              <div key={l.id} className="flex items-center gap-4 p-3 rounded-xl border border-transparent hover:border-gray-100 hover:bg-gray-50 transition-all group">
+                <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-white shrink-0 shadow-lg group-hover:scale-110 transition-transform ${
+                  l.action === 'create' ? 'bg-emerald-500 shadow-emerald-100' : 
+                  l.action === 'update' ? 'bg-sky-500 shadow-sky-100' : 
+                  l.action === 'delete' ? 'bg-rose-500 shadow-rose-100' : 'bg-gray-500 shadow-gray-100'
+                }`}>
+                  <span className="text-xs font-black uppercase tracking-tighter">{l.action.slice(0, 3)}</span>
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-bold text-gray-800">
+                    {l.user} <span className="font-medium text-gray-400 uppercase text-[10px] tracking-widest mx-1">PERFORMED</span> {l.action} <span className="font-medium text-gray-400 uppercase text-[10px] tracking-widest mx-1">ON</span> {l.resource}
+                  </p>
+                  <div className="flex items-center gap-2 mt-1">
+                    <ClockIcon className="w-3 h-3 text-gray-300" />
+                    <span className="text-[10px] font-bold text-gray-400">{new Date(l.timestamp).toLocaleString('en-GB')}</span>
+                  </div>
+                </div>
               </div>
             ))}
           </div>

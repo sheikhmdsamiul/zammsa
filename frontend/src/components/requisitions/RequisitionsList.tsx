@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { requisitionsApi } from '../../api/requisitions';
 import { DataTable } from '../common/DataTable';
@@ -8,11 +8,16 @@ import { SearchBar } from '../common/SearchBar';
 import { Pagination } from '../common/Pagination';
 import { LoadingSpinner } from '../common/LoadingSpinner';
 import { ConfirmModal } from '../common/ConfirmModal';
+import { PageHeader } from '../common/PageHeader';
 import { useAuth } from '../../hooks/useAuth';
+import { 
+  PlusIcon, DownloadIcon, TrashIcon, PencilAltIcon, 
+  SearchIcon, FilterIcon 
+} from '@heroicons/react/outline';
 import fileSaver from 'file-saver';
 import toast from 'react-hot-toast';
 
-const RequisitionsList: React.FC = () => {
+export default function RequisitionsList() {
   const navigate = useNavigate();
   const { user } = useAuth();
   const queryClient = useQueryClient();
@@ -32,16 +37,19 @@ const RequisitionsList: React.FC = () => {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['requisitions'] });
       setDeleteModal(null);
-      toast.success('Requisition deleted');
+      toast.success('Requisition deleted successfully');
     },
   });
 
   const handleExport = async () => {
+    const loadingToast = toast.loading('Preparing export...');
     try {
       const blob = await requisitionsApi.export({ search, ordering: sortKey });
-      fileSaver.saveAs(blob, 'requisitions_export.xlsx');
-      toast.success('Exported successfully');
-    } catch { toast.error('Export failed'); }
+      fileSaver.saveAs(blob, 'ZAMMSA_Requisitions.xlsx');
+      toast.success('Exported successfully', { id: loadingToast });
+    } catch { 
+      toast.error('Export failed', { id: loadingToast }); 
+    }
   };
 
   const safeNumber = (value: unknown, fallback = 0): number => {
@@ -50,62 +58,135 @@ const RequisitionsList: React.FC = () => {
   };
 
   const columns = [
-    { key: 'title', label: 'Title', sortable: true, render: (_: any, row: any) => (
-      <Link to={`/requisitions/${row.id}`} className="text-zammsa-green hover:underline font-medium">{row.title}</Link>
-    )},
-    { key: 'department', label: 'Department', sortable: true },
-    { key: 'priority', label: 'Priority', render: (v: string) => (
-      <span className={`text-xs font-medium px-2 py-1 rounded-full ${v === 'urgent' ? 'bg-red-50 text-red-600' : v === 'high' ? 'bg-orange-50 text-orange-600' : v === 'medium' ? 'bg-yellow-50 text-yellow-600' : 'bg-green-50 text-green-600'}`}>
-        {v?.charAt(0).toUpperCase() + v?.slice(1)}
-      </span>
-    )},
-    { key: 'estimated_value', label: 'Value', render: (v: number) => safeNumber(v).toLocaleString() },
-    { key: 'status', label: 'Status', render: (v: string) => <StatusBadge status={v} /> },
-    { key: 'created_at', label: 'Created', sortable: true, render: (v: string) => new Date(v).toLocaleDateString() },
-    { key: 'actions', label: '', render: (_: any, row: any) => (
-      <div className="flex gap-2">
-        {user?.role === 'user_dept_staff' && (
-          <button onClick={(e) => { e.stopPropagation(); navigate(`/requisitions/${row.id}/edit`); }} className="text-blue-600 hover:text-blue-800 text-sm">Edit</button>
-        )}
-        {user?.role === 'user_dept_staff' && (
-          <button onClick={(e) => { e.stopPropagation(); setDeleteModal({ id: row.id, title: row.title }); }} className="text-red-600 hover:text-red-800 text-sm">Delete</button>
-        )}
-      </div>
-    )},
+    { 
+      key: 'req_number', 
+      label: 'Req #', 
+      render: (v: string) => <span className="font-black text-gray-400 text-xs">{v || '---'}</span>
+    },
+    { 
+      key: 'title', 
+      label: 'Requisition Title', 
+      sortable: true, 
+      render: (v: string, row: any) => (
+        <div className="flex flex-col">
+           <span className="font-bold text-gray-900">{v}</span>
+           <span className="text-[10px] font-bold text-gray-400 uppercase tracking-tighter">{row.department}</span>
+        </div>
+      )
+    },
+    { 
+      key: 'priority', 
+      label: 'Priority', 
+      render: (v: string) => (
+        <span className={`text-[10px] font-black uppercase px-2.5 py-1 rounded-lg ${
+          v === 'urgent' ? 'bg-rose-50 text-rose-600' : 
+          v === 'high' ? 'bg-amber-50 text-amber-600' : 
+          'bg-emerald-50 text-emerald-600'
+        }`}>
+          {v}
+        </span>
+      )
+    },
+    { 
+      key: 'estimated_value', 
+      label: 'Est. Value', 
+      render: (v: number) => <span className="font-black text-gray-900">ZMW {safeNumber(v).toLocaleString()}</span>
+    },
+    { 
+      key: 'status', 
+      label: 'Status', 
+      render: (v: string) => <StatusBadge status={v} /> 
+    },
+    { 
+      key: 'created_at', 
+      label: 'Date Created', 
+      sortable: true, 
+      render: (v: string) => <span className="text-gray-500">{new Date(v).toLocaleDateString('en-GB')}</span>
+    },
+    { 
+      key: 'actions', 
+      label: 'Actions', 
+      render: (_: any, row: any) => (
+        <div className="flex items-center gap-1">
+          {user?.role === 'user_dept_staff' && (
+            <button 
+              onClick={(e) => { e.stopPropagation(); navigate(`/requisitions/${row.id}/edit`); }} 
+              className="p-2 text-gray-400 hover:text-blue-600 transition-colors"
+              title="Edit Requisition"
+            >
+               <PencilAltIcon className="w-4 h-4" />
+            </button>
+          )}
+          {user?.role === 'user_dept_staff' && (
+            <button 
+              onClick={(e) => { e.stopPropagation(); setDeleteModal({ id: row.id, title: row.title }); }} 
+              className="p-2 text-gray-400 hover:text-rose-600 transition-colors"
+              title="Delete"
+            >
+               <TrashIcon className="w-4 h-4" />
+            </button>
+          )}
+        </div>
+      )
+    },
   ];
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">Requisitions</h1>
-          <p className="text-sm text-gray-500 mt-1">Manage procurement requisitions</p>
+    <div className="pb-12">
+      <PageHeader 
+        title="Requisitions"
+        description="Track and manage internal procurement requests and approvals."
+        actions={
+          <div className="flex items-center gap-2">
+            <button 
+              onClick={handleExport}
+              className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 rounded-xl shadow-sm text-xs font-bold text-gray-500 hover:text-zammsa-green transition-all"
+            >
+              <DownloadIcon className="w-4 h-4" />
+              <span className="hidden sm:inline uppercase tracking-widest">Export List</span>
+            </button>
+            {user?.role === 'user_dept_staff' && (
+              <button 
+                onClick={() => navigate('/requisitions/create')}
+                className="flex items-center gap-2 px-4 py-2 bg-zammsa-green text-white rounded-xl shadow-lg shadow-zammsa-green/20 text-xs font-bold uppercase tracking-widest hover:bg-zammsa-green-dark transition-all"
+              >
+                <PlusIcon className="w-4 h-4" />
+                <span>New Request</span>
+              </button>
+            )}
+          </div>
+        }
+      />
+
+      <div className="flex flex-col sm:flex-row gap-4 mb-8">
+        <div className="relative flex-1 max-w-md">
+           <SearchIcon className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-300" />
+           <input 
+             type="text"
+             value={search}
+             onChange={(e) => setSearch(e.target.value)}
+             placeholder="Search by title or req number..."
+             className="w-full pl-12 pr-4 py-3 bg-white border border-gray-100 rounded-2xl text-sm font-medium focus:ring-4 focus:ring-zammsa-green/5 focus:border-zammsa-green outline-none transition-all placeholder:text-gray-300"
+           />
         </div>
-        <div className="flex items-center gap-3">
-          <button onClick={handleExport} className="text-sm bg-white border border-gray-300 px-3 py-2 rounded-lg hover:bg-gray-50">Export</button>
-          {user?.role === 'user_dept_staff' && (
-            <Link to="/requisitions/create" className="bg-zammsa-green text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-zammsa-green-dark transition-colors">+ New Requisition</Link>
-          )}
-        </div>
+        <button className="flex items-center gap-2 px-6 py-3 bg-white border border-gray-100 rounded-2xl text-xs font-bold text-gray-400 uppercase tracking-widest hover:text-gray-600 hover:border-gray-200 transition-all">
+           <FilterIcon className="w-4 h-4" />
+           <span>Advanced Filters</span>
+        </button>
       </div>
 
-      <div className="bg-white rounded-xl shadow-sm border border-gray-100">
-        <div className="p-4 border-b border-gray-100">
-          <SearchBar value={search} onChange={setSearch} placeholder="Search requisitions..." />
-        </div>
+      <DataTable
+        columns={columns}
+        data={data?.results || []}
+        loading={isLoading}
+        sortKey={sortKey.replace('-', '')}
+        sortDir={sortKey.startsWith('-') ? 'desc' : 'asc'}
+        onSort={(key) => setSortKey(sortKey === key ? `-${key}` : key)}
+        onRowClick={(row) => navigate(`/requisitions/${row.id}`)}
+      />
 
-        {isLoading ? <LoadingSpinner className="py-12" /> : (
-          <DataTable
-            columns={columns}
-            data={data?.results || []}
-            sortKey={sortKey.replace('-', '')}
-            sortDir={sortKey.startsWith('-') ? 'desc' : 'asc'}
-            onSort={(key) => setSortKey(sortKey === key ? `-${key}` : key)}
-            onRowClick={(row) => navigate(`/requisitions/${row.id}`)}
-          />
-        )}
-
-        {data && (
+      {data && (
+        <div className="mt-8">
           <Pagination
             currentPage={page}
             totalPages={Math.max(1, Math.ceil(safeNumber(data.count) / pageSize))}
@@ -114,8 +195,8 @@ const RequisitionsList: React.FC = () => {
             onPageChange={setPage}
             onPageSizeChange={(s) => { setPageSize(s); setPage(1); }}
           />
-        )}
-      </div>
+        </div>
+      )}
 
       <ConfirmModal
         open={!!deleteModal}
@@ -123,11 +204,9 @@ const RequisitionsList: React.FC = () => {
         onConfirm={() => deleteModal && deleteMutation.mutate(deleteModal.id)}
         title="Delete Requisition"
         message={`Are you sure you want to delete "${deleteModal?.title}"? This action cannot be undone.`}
-        confirmText="Delete"
+        confirmText="Delete Requisition"
         loading={deleteMutation.isPending}
       />
     </div>
   );
-};
-
-export default RequisitionsList;
+}

@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
-import { Outlet, Link, useLocation } from 'react-router-dom';
+import { Outlet, Link } from 'react-router-dom';
 import { useAuth, useLogout } from '../../hooks/useAuth';
+import Sidebar, { NavItem } from './Sidebar';
 import {
   ChartBarIcon, UserGroupIcon, LockClosedIcon, ClipboardListIcon,
   OfficeBuildingIcon, HeartIcon, AdjustmentsIcon, LinkIcon,
@@ -15,7 +16,7 @@ const PageLoader = () => (
   </div>
 );
 
-const navItems = [
+const navItems: NavItem[] = [
   { label: 'Dashboard', path: '/admin', icon: <ChartBarIcon className={iconClass} /> },
   { label: 'User Management', path: '/admin/users', icon: <UserGroupIcon className={iconClass} /> },
   { label: 'Role Management', path: '/admin/roles', icon: <LockClosedIcon className={iconClass} /> },
@@ -37,68 +38,75 @@ const navItems = [
 const AdminLayout: React.FC = () => {
   const { user } = useAuth();
   const logout = useLogout();
-  const location = useLocation();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+
+  const sidebarFooter = (
+    <div className="space-y-4">
+      <Link
+        to="/dashboard"
+        className="flex items-center gap-2 px-3 py-2 text-xs font-bold uppercase tracking-widest text-gray-500 hover:text-white transition-colors"
+      >
+        <span>←</span>
+        Internal Portal
+      </Link>
+      <div className="flex items-center gap-3 px-2 py-1">
+        <div className="w-10 h-10 bg-zammsa-orange rounded-xl flex items-center justify-center shadow-lg shadow-zammsa-orange/20 shrink-0">
+          <span className="text-white text-sm font-bold">
+            {user?.full_name?.split(' ').map((n) => n[0]).join('').slice(0, 2).toUpperCase()}
+          </span>
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="text-sm font-bold text-white truncate">{user?.full_name}</p>
+          <p className="text-[10px] text-gray-500 font-medium uppercase tracking-wider truncate">Administrator</p>
+        </div>
+        <button onClick={logout} className="p-2 text-gray-500 hover:text-red-500 transition-colors">
+          <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+          </svg>
+        </button>
+      </div>
+    </div>
+  );
 
   return (
     <div className="min-h-screen flex bg-gray-50">
-      <aside className={`fixed inset-y-0 left-0 z-30 w-64 bg-zammsa-black text-white transform transition-transform lg:translate-x-0 lg:static lg:inset-auto ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
-        <div className="flex items-center gap-2 h-16 px-6 border-b border-gray-700">
-          <div className="w-8 h-8 bg-zammsa-orange rounded-full flex items-center justify-center">
-            <span className="text-white text-sm font-bold">A</span>
-          </div>
-          <span className="font-bold">Admin Panel</span>
-        </div>
-        <nav className="mt-4 px-3 space-y-1">
-          {navItems.map((item) => (
-            <Link
-              key={item.path}
-              to={item.path}
-              className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors ${
-                location.pathname === item.path || (item.path !== '/admin' && location.pathname.startsWith(item.path))
-                  ? 'bg-zammsa-orange text-white'
-                  : 'text-gray-300 hover:bg-gray-800'
-              }`}
-            >
-              {item.icon}
-              {item.label}
-            </Link>
-          ))}
-        </nav>
-        <div className="absolute bottom-0 left-0 right-0 p-4 border-t border-gray-700">
-          <Link
-            to="/dashboard"
-            className="flex items-center gap-2 px-3 py-2 text-sm text-gray-400 hover:text-white transition-colors"
-          >
-            <span>←</span>
-            Back to Dashboard
-          </Link>
-        </div>
-      </aside>
+      <Sidebar 
+        navItems={navItems}
+        isOpen={sidebarOpen}
+        onClose={() => setSidebarOpen(false)}
+        brandName="Admin Panel"
+        accentColor="zammsa-orange"
+        footer={sidebarFooter}
+      />
 
       <div className="flex-1 flex flex-col min-w-0">
-        <header className="bg-white border-b border-gray-200 h-16 flex items-center justify-between px-6 sticky top-0 z-20">
-          <button className="lg:hidden text-gray-500" onClick={() => setSidebarOpen(!sidebarOpen)}>
+        <header className="bg-white/80 backdrop-blur-md border-b border-gray-200 h-20 flex items-center justify-between px-8 sticky top-0 z-20">
+          <button className="lg:hidden p-2 -ml-2 text-gray-500 hover:bg-gray-100 rounded-lg transition-colors" onClick={() => setSidebarOpen(true)}>
             <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
             </svg>
           </button>
-          <div className="flex items-center gap-4 ml-auto">
-            <span className="text-sm text-gray-500">Administrator</span>
-            <div className="flex items-center gap-2">
-              <div className="w-8 h-8 bg-zammsa-orange rounded-full flex items-center justify-center">
-                <span className="text-white text-xs font-bold">
-                  {user?.full_name?.split(' ').map((n) => n[0]).join('').slice(0, 2).toUpperCase()}
-                </span>
-              </div>
-              <span className="text-sm font-medium text-gray-700">{user?.full_name}</span>
+          
+          <div className="flex flex-col">
+            <h1 className="text-lg font-bold text-gray-900">System Control</h1>
+            <p className="text-xs text-gray-500 font-medium">Administrator Portal</p>
+          </div>
+
+          <div className="flex items-center gap-4">
+             <div className="flex items-center gap-3">
+               <div className="text-right hidden sm:block">
+                  <p className="text-sm font-bold text-gray-900 leading-none">{user?.full_name}</p>
+                  <p className="text-[10px] text-gray-500 font-bold uppercase tracking-tighter">System Admin</p>
+               </div>
+               <div className="w-10 h-10 bg-gray-100 rounded-xl border border-gray-200 flex items-center justify-center overflow-hidden">
+                  <span className="text-zammsa-orange font-bold text-sm">
+                    {user?.full_name?.split(' ').map((n) => n[0]).join('').slice(0, 2).toUpperCase()}
+                  </span>
+               </div>
             </div>
-            <button onClick={logout} className="text-sm text-gray-500 hover:text-red-600 ml-4">
-              Logout
-            </button>
           </div>
         </header>
-        <main className="flex-1 p-6 overflow-auto">
+        <main className="flex-1 p-8 overflow-auto">
           <React.Suspense fallback={<PageLoader />}>
             <Outlet />
           </React.Suspense>
