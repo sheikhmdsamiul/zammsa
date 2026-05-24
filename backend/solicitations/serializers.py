@@ -118,6 +118,7 @@ class SolicitationSerializer(serializers.ModelSerializer):
     issue_date = serializers.SerializerMethodField()
     department = serializers.SerializerMethodField()
     department_name = serializers.SerializerMethodField()
+
     opening_date = serializers.DateTimeField(required=False)
     requisition = serializers.PrimaryKeyRelatedField(required=True, queryset=Requisition.objects.all())
     document_sets = SolicitationDocumentSerializer(many=True, source='documents', read_only=True)
@@ -128,6 +129,10 @@ class SolicitationSerializer(serializers.ModelSerializer):
     publication_targets = serializers.ListField(child=serializers.CharField(), read_only=True)
     egp_reference = serializers.CharField(read_only=True)
     rejection_reason = serializers.CharField(read_only=True)
+    created_by = serializers.SerializerMethodField()
+    approved_by = serializers.SerializerMethodField()
+    rejected_by = serializers.SerializerMethodField()
+    non_open_justifications = serializers.SerializerMethodField()
 
     class Meta:
         model = Solicitation
@@ -158,6 +163,55 @@ class SolicitationSerializer(serializers.ModelSerializer):
     def get_department_name(self, obj):
         return self.get_department(obj)
 
+    def get_created_by(self, obj):
+        if obj.created_by:
+            return {'full_name': obj.created_by.full_name or f"{obj.created_by.first_name} {obj.created_by.last_name}".strip(), 'email': obj.created_by.email}
+        return None
+
+    def get_approved_by(self, obj):
+        if obj.approved_by:
+            return {'full_name': obj.approved_by.full_name or f"{obj.approved_by.first_name} {obj.approved_by.last_name}".strip(), 'email': obj.approved_by.email}
+        return None
+
+    def get_rejected_by(self, obj):
+        if obj.rejected_by:
+            return {'full_name': obj.rejected_by.full_name or f"{obj.rejected_by.first_name} {obj.rejected_by.last_name}".strip(), 'email': obj.rejected_by.email}
+        return None
+
+    def get_non_open_justifications(self, obj):
+        from method_selection.models import NonOpenJustification
+        justs = NonOpenJustification.objects.filter(solicitation=obj)
+        return [{
+            'id': str(j.justification_id),
+            'method': j.method,
+            'reason_code': j.reason_code,
+            'reason_text': j.reason_text,
+            'status': j.status,
+            'submitted_by': j.submitted_by.full_name if j.submitted_by else None,
+            'approved_by': j.approved_by.full_name if j.approved_by else None,
+            'zpc_approved_at': j.zpc_approved_at.isoformat() if j.zpc_approved_at else None,
+            'rejection_reason': j.rejection_reason,
+            'created_at': j.created_at.isoformat(),
+        } for j in justs]
+
+    EXTRA_FIELDS = [
+        'submission_format', 'bid_validity_days', 'pre_bid_date', 'pre_bid_venue',
+        'citizen_preference', 'bid_security_required', 'bid_security_type',
+        'bid_security_rate', 'contact_person', 'contact_phone', 'contact_email',
+        'minimum_technical_threshold', 'document_fee_enabled', 'document_fee_amount',
+    ]
+
+    @staticmethod
+    def resolve_department(value):
+        if not value:
+            return None
+        try:
+            from uuid import UUID
+            UUID(value)
+            return Department.objects.filter(pk=value).first()
+        except (ValueError, TypeError):
+            return Department.objects.filter(dept_name=value).first()
+
     def create(self, validated_data):
         from django.utils import timezone
         import secrets
@@ -169,11 +223,22 @@ class SolicitationSerializer(serializers.ModelSerializer):
         if procurement_method and 'method' not in validated_data:
             validated_data['method'] = procurement_method
 
-        dept_name = self.initial_data.get('department')
-        if dept_name and 'department' not in validated_data:
-            dept = Department.objects.filter(dept_name=dept_name).first()
+        dept_val = self.initial_data.get('department') or validated_data.pop('department', None)
+        if dept_val and 'department' not in validated_data:
+            dept = self.resolve_department(dept_val)
             if dept:
                 validated_data['department'] = dept
+
+        # Persist extra fields not on the model
+        for field in self.EXTRA_FIELDS:
+            val = self.initial_data.get(field)
+            if val is not None:
+                validated_data[field] = val
+
+        # Persist publication_channels as publication_targets
+        channels = self.initial_data.get('publication_channels')
+        if channels:
+            validated_data['publication_targets'] = channels
 
         if 'sol_number' not in validated_data or not validated_data.get('sol_number'):
             validated_data['sol_number'] = f"SOL-{timezone.now().strftime('%Y%m%d')}-{secrets.token_hex(3).upper()}"
@@ -203,7 +268,29 @@ class SolicitationSerializer(serializers.ModelSerializer):
 
         instance = super().create(validated_data)
 
+        # Create evaluation criteria from technical_criteria and mandatory_criteria
         from .models import SolicitationTemplate, SolicitationDocument
+        technical_criteria = self.initial_data.get('technical_criteria', [])
+        for i, tc in enumerate(technical_criteria):
+            EvaluationCriterion.objects.create(
+                solicitation=instance,
+                criterion_name=tc.get('criterion_name', ''),
+                criterion_type='technical',
+                weight=tc.get('weight', 0),
+                minimum_threshold=tc.get('max_score', 100),
+                order_index=i,
+            )
+
+        mandatory_criteria = self.initial_data.get('mandatory_criteria', [])
+        for i, mc in enumerate(mandatory_criteria):
+            EvaluationCriterion.objects.create(
+                solicitation=instance,
+                criterion_name=mc.get('name', ''),
+                criterion_type='mandatory',
+                weight=0,
+                order_index=len(technical_criteria) + i,
+            )
+
         template = SolicitationTemplate.objects.filter(
             method__iexact=instance.method,
             is_active=True,
@@ -226,10 +313,19 @@ class SolicitationSerializer(serializers.ModelSerializer):
         if procurement_method:
             validated_data['method'] = procurement_method
 
-        dept_name = self.initial_data.get('department')
-        if dept_name:
-            dept = Department.objects.filter(dept_name=dept_name).first()
+        dept_val = self.initial_data.get('department')
+        if dept_val:
+            dept = self.resolve_department(dept_val)
             if dept:
                 validated_data['department'] = dept
+
+        for field in self.EXTRA_FIELDS:
+            val = self.initial_data.get(field)
+            if val is not None:
+                validated_data[field] = val
+
+        channels = self.initial_data.get('publication_channels')
+        if channels:
+            validated_data['publication_targets'] = channels
 
         return super().update(instance, validated_data)

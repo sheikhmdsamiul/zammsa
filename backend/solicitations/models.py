@@ -68,8 +68,8 @@ class Solicitation(models.Model):
     opening_date = models.DateTimeField(null=True, blank=True)
     status = models.CharField(max_length=50, choices=SOL_STATUS_CHOICES, default='draft')
     published_at = models.DateTimeField(null=True, blank=True)
-    publication_targets = models.JSONField(default=list, blank=True)  # ['zammsa_website', 'egp_portal', 'email_suppliers']
-    publication_proofs = models.JSONField(default=dict, blank=True)  # {target: {url, timestamp, proof_file}}
+    publication_targets = models.JSONField(default=list, blank=True)
+    publication_proofs = models.JSONField(default=dict, blank=True)
     egp_reference = models.CharField(max_length=255, blank=True, default='')
     created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='created_solicitations')
     approved_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='approved_solicitations')
@@ -78,6 +78,22 @@ class Solicitation(models.Model):
     rejected_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+
+    # Fields added for complete solicitation detail
+    submission_format = models.CharField(max_length=10, choices=[('single', 'Single Envelope'), ('two', 'Two Envelope')], default='single')
+    bid_validity_days = models.IntegerField(default=90)
+    pre_bid_date = models.DateField(null=True, blank=True)
+    pre_bid_venue = models.CharField(max_length=255, blank=True, default='')
+    citizen_preference = models.BooleanField(default=True)
+    bid_security_required = models.BooleanField(default=True)
+    bid_security_type = models.CharField(max_length=50, blank=True, default='bank_guarantee')
+    bid_security_rate = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True)
+    contact_person = models.CharField(max_length=255, blank=True, default='')
+    contact_phone = models.CharField(max_length=50, blank=True, default='')
+    contact_email = models.EmailField(max_length=255, blank=True, default='')
+    minimum_technical_threshold = models.IntegerField(null=True, blank=True)
+    document_fee_enabled = models.BooleanField(default=False)
+    document_fee_amount = models.DecimalField(max_digits=15, decimal_places=2, null=True, blank=True)
 
     class Meta:
         db_table = 'sol_solicitation'

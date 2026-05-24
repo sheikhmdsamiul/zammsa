@@ -5,6 +5,9 @@ import { procurementPlanningApi } from '../../api/procurement_planning';
 import { requisitionsApi } from '../../api/requisitions';
 import { ContractProcurementPlan, ProcurementMilestone, CPPRisk } from '../../types';
 import { useAuth } from '../../hooks/useAuth';
+import {
+  CheckCircleIcon, ChevronLeftIcon, ChevronRightIcon,
+} from '@heroicons/react/outline';
 
 interface RequisitionOption {
   requisition_id: string;
@@ -633,19 +636,19 @@ const CPPEdit: React.FC = () => {
               <h4 className="font-medium text-yellow-900 text-sm">Validation Checklist</h4>
               <ul className="mt-2 space-y-1 text-sm text-gray-700">
                 <li className="flex items-center gap-2">
-                  <span className="text-green-500">✓</span> Requirement: Requisition selected
+                  <CheckCircleIcon className="w-4 h-4 text-green-500" /> Requirement: Requisition selected
                 </li>
                 <li className="flex items-center gap-2">
-                  <span className="text-green-500">✓</span> Requirement: Procurement method determined
+                  <CheckCircleIcon className="w-4 h-4 text-green-500" /> Requirement: Procurement method determined
                 </li>
                 <li className="flex items-center gap-2">
-                  <span className="text-green-500">✓</span> Requirement: At least one milestone defined
+                  <CheckCircleIcon className="w-4 h-4 text-green-500" /> Requirement: At least one milestone defined
                 </li>
                 <li className="flex items-center gap-2">
-                  <span className="text-green-500">✓</span> Requirement: Resource requirements specified
+                  <CheckCircleIcon className="w-4 h-4 text-green-500" /> Requirement: Resource requirements specified
                 </li>
                 <li className="flex items-center gap-2">
-                  <span className="text-green-500">✓</span> Requirement: At least one risk identified
+                  <CheckCircleIcon className="w-4 h-4 text-green-500" /> Requirement: At least one risk identified
                 </li>
               </ul>
             </div>
@@ -662,7 +665,7 @@ const CPPEdit: React.FC = () => {
             currentStep === 0 ? 'border-gray-300 text-gray-400 cursor-not-allowed' : 'border-gray-300 hover:bg-gray-50'
           }`}
         >
-          ← Previous
+          <span className="inline-flex items-center gap-1"><ChevronLeftIcon className="w-4 h-4" /> Previous</span>
         </button>
         <div className="flex gap-3">
           {currentStep === CPPSteps.length - 1 ? (
@@ -678,7 +681,7 @@ const CPPEdit: React.FC = () => {
               onClick={nextStep}
               className="px-6 py-2 bg-zammsa-green text-white rounded-lg text-sm font-medium hover:bg-zammsa-green-dark"
             >
-              Next →
+              <span className="inline-flex items-center gap-1">Next <ChevronRightIcon className="w-4 h-4" /></span>
             </button>
           )}
         </div>

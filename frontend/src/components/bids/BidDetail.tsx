@@ -6,6 +6,26 @@ import { StatusBadge } from '../common/StatusBadge';
 import { LoadingSpinner } from '../common/LoadingSpinner';
 import { useAuth } from '../../hooks/useAuth';
 import toast from 'react-hot-toast';
+import {
+  CheckCircleIcon, XCircleIcon, DocumentTextIcon,
+  PaperClipIcon, ClockIcon, ShieldCheckIcon,
+  ArrowLeftIcon,
+} from '@heroicons/react/outline';
+
+function fmtDate(d: string | undefined | null): string {
+  if (!d) return '---';
+  try { return new Date(d).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }); }
+  catch { return d; }
+}
+
+function fmtDateTime(d: string | undefined | null): string {
+  if (!d) return '---';
+  try {
+    return new Date(d).toLocaleString('en-GB', {
+      day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit',
+    });
+  } catch { return d; }
+}
 
 const BidDetail: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -23,9 +43,10 @@ const BidDetail: React.FC = () => {
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['bid', id] }); toast.success('Security verification updated'); },
   });
 
-  if (isLoading) return <LoadingSpinner className="py-12" />;
-  if (!bid) return <p className="text-center text-gray-500 py-12">Bid not found</p>;
+  if (isLoading) return <LoadingSpinner className="py-20" />;
+  if (!bid) return <p className="text-center text-gray-500 py-20">Bid not found</p>;
 
+  const isSupplier = user?.role === 'supplier_user';
   const resolveDocumentUrl = (doc: any) => {
     if (doc?.file_url) return doc.file_url;
     const rawPath = doc?.file_path || '';
@@ -39,126 +60,250 @@ const BidDetail: React.FC = () => {
   };
 
   return (
-    <div className="max-w-4xl mx-auto space-y-6">
-      {user?.role === 'supplier_user' && (
-        <div>
-          <Link to="/vendor/bids" className="text-sm text-zammsa-green hover:underline">← Back to My Bids</Link>
-        </div>
-      )}
+    <div className="max-w-6xl mx-auto space-y-6">
+      {/* Back link */}
+      <Link
+        to={isSupplier ? '/vendor/bids' : '/bids'}
+        className="inline-flex items-center gap-1.5 text-sm font-bold text-zammsa-green hover:underline"
+      >
+        <ArrowLeftIcon className="w-4 h-4" /> Back to {isSupplier ? 'My Bids' : 'Bids'}
+      </Link>
 
-      <div className="flex items-center justify-between">
-        <div>
-          <div className="flex items-center gap-3">
-            <h1 className="text-2xl font-bold text-gray-900">Bid #{bid.bid_number}</h1>
-            <StatusBadge status={bid.status} />
+      {/* Header */}
+      <div className="bg-white rounded-3xl border border-gray-200 shadow-sm p-6">
+        <div className="flex items-start justify-between">
+          <div>
+            <div className="flex items-center gap-3 flex-wrap mb-1">
+              <h1 className="text-xl font-black text-gray-900">Bid {bid.bid_number}</h1>
+              <StatusBadge status={bid.status} />
+              {bid.is_late && (
+                <span className="text-[10px] font-bold px-2.5 py-1 rounded-full bg-red-50 text-red-600 border border-red-200 uppercase tracking-wider">Late</span>
+              )}
+            </div>
+            <p className="text-sm font-semibold text-gray-500 mt-1 flex items-center gap-1.5">
+              <DocumentTextIcon className="w-4 h-4 text-gray-400" />
+              {bid.solicitation_title || `Solicitation #${bid.solicitation}`}
+              {bid.solicitation_number && <span className="text-gray-400">({bid.solicitation_number})</span>}
+            </p>
+            <p className="text-xs font-semibold text-gray-400 mt-0.5">
+              Submitted by {bid.vendor_name}
+              {bid.submitted_at && <> &middot; {fmtDateTime(bid.submitted_at)}</>}
+            </p>
           </div>
-          <p className="text-sm text-gray-500 mt-1">Submitted by {bid.vendor_name}</p>
+          <div className="shrink-0 text-right">
+            <p className="text-2xl font-black text-zammsa-green">{bid.currency} {bid.bid_amount?.toLocaleString()}</p>
+            <p className="text-xs font-bold text-gray-400">Bid Amount</p>
+          </div>
         </div>
-        <div className="flex gap-2">
-          {user?.role === 'procurement_officer' && !bid.security_verified && (
-            <button onClick={() => verifyMutation.mutate(true)} className="px-4 py-2 bg-green-600 text-white rounded-lg text-sm">Verify Security</button>
-          )}
-        </div>
-      </div>
-
-      <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
-        <h2 className="text-lg font-semibold text-gray-900 mb-4">Submission Summary</h2>
-        <dl className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
-          <div><dt className="text-gray-500">Submission ID</dt><dd className="font-medium">{bid.bid_number || '-'}</dd></div>
-          <div><dt className="text-gray-500">Receipt Number</dt><dd className="font-medium">{bid.receipt_number || '-'}</dd></div>
-          <div><dt className="text-gray-500">Submitted At</dt><dd className="font-medium">{bid.submitted_at ? new Date(bid.submitted_at).toLocaleString() : '-'}</dd></div>
-          <div><dt className="text-gray-500">Opened At</dt><dd className="font-medium">{bid.opened_at ? new Date(bid.opened_at).toLocaleString() : '-'}</dd></div>
-          <div><dt className="text-gray-500">Bid Amount</dt><dd className="font-medium">{bid.bid_amount?.toLocaleString()} {bid.currency}</dd></div>
-          <div><dt className="text-gray-500">Submission Method</dt><dd className="font-medium capitalize">{bid.submission_method || '-'}</dd></div>
-        </dl>
+        {user?.role === 'procurement_officer' && !bid.security_verified && (
+          <div className="mt-4 pt-4 border-t border-gray-100 flex gap-2">
+            <button onClick={() => verifyMutation.mutate(true)} className="inline-flex items-center gap-1.5 px-4 py-2.5 text-sm font-bold text-white bg-emerald-600 rounded-xl hover:bg-emerald-700 transition-colors">
+              <ShieldCheckIcon className="w-4 h-4" /> Verify Security
+            </button>
+          </div>
+        )}
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Left column */}
         <div className="lg:col-span-2 space-y-6">
-          <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
-            <h2 className="text-lg font-semibold text-gray-900 mb-4">Bid Details</h2>
-            <dl className="grid grid-cols-2 gap-4 text-sm">
-              <div><dt className="text-gray-500">Validity Period</dt><dd className="font-medium">{bid.validity_period_days} days</dd></div>
-              <div><dt className="text-gray-500">Financial Envelope</dt><dd className="font-medium">{bid.financial_envelope_encrypted ? 'Encrypted' : 'Not encrypted'}</dd></div>
-              <div><dt className="text-gray-500">Addenda Acknowledged</dt><dd className="font-medium">{bid.addenda_acknowledged ? 'Yes' : 'No'}</dd></div>
-              <div><dt className="text-gray-500">Late Submission</dt><dd className="font-medium">{bid.is_late ? 'Yes' : 'No'}</dd></div>
-            </dl>
-          </div>
+          {/* Solicitation Information */}
+          {bid.solicitation_title && (
+            <div className="bg-white rounded-3xl border border-gray-200 shadow-sm p-6">
+              <h2 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-4">Solicitation Information</h2>
+              <div className="grid grid-cols-2 gap-x-6 gap-y-4 text-sm">
+                <div className="p-3 bg-gray-50 rounded-2xl">
+                  <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Title</p>
+                  <p className="text-sm font-bold text-gray-900 mt-0.5">{bid.solicitation_title}</p>
+                </div>
+                <div className="p-3 bg-gray-50 rounded-2xl">
+                  <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Number</p>
+                  <p className="text-sm font-bold text-gray-900 mt-0.5">{bid.solicitation_number || '---'}</p>
+                </div>
+                <div className="p-3 bg-gray-50 rounded-2xl">
+                  <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Type</p>
+                  <p className="text-sm font-bold text-gray-900 mt-0.5 capitalize">{bid.solicitation_type || '---'}</p>
+                </div>
+                <div className="p-3 bg-gray-50 rounded-2xl">
+                  <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Closing Date</p>
+                  <p className="text-sm font-bold text-gray-900 mt-0.5">{fmtDateTime(bid.closing_date)}</p>
+                </div>
+              </div>
+            </div>
+          )}
 
-          {!!bid.items?.length && (
-          <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
-            <h2 className="text-lg font-semibold text-gray-900 mb-4">Items</h2>
-            <div className="overflow-x-auto">
-              <table className="min-w-full divide-y divide-gray-200 text-sm">
-                <thead className="bg-gray-50">
-                  <tr>
-                    <th className="px-3 py-2 text-left font-medium text-gray-500">Code</th>
-                    <th className="px-3 py-2 text-left font-medium text-gray-500">Description</th>
-                    <th className="px-3 py-2 text-right font-medium text-gray-500">Qty</th>
-                    <th className="px-3 py-2 text-right font-medium text-gray-500">Unit Price</th>
-                    <th className="px-3 py-2 text-right font-medium text-gray-500">Total</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-100">
-                  {bid.items?.map((item: any) => (
-                    <tr key={item.id}>
-                      <td className="px-3 py-2">{item.item_code}</td>
-                      <td className="px-3 py-2">{item.description}</td>
-                      <td className="px-3 py-2 text-right">{item.quantity}</td>
-                      <td className="px-3 py-2 text-right">{item.unit_price?.toLocaleString()}</td>
-                      <td className="px-3 py-2 text-right font-medium">{item.total_price?.toLocaleString()}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+          {/* Submission Summary */}
+          <div className="bg-white rounded-3xl border border-gray-200 shadow-sm p-6">
+            <h2 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-4">Submission Summary</h2>
+            <div className="grid grid-cols-2 gap-x-6 gap-y-4 text-sm">
+              <div className="p-3 bg-gray-50 rounded-2xl">
+                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Submission ID</p>
+                <p className="text-sm font-bold text-gray-900 mt-0.5">{bid.bid_number || '-'}</p>
+              </div>
+              <div className="p-3 bg-gray-50 rounded-2xl">
+                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Receipt Number</p>
+                <p className="text-sm font-bold text-gray-900 mt-0.5">{bid.receipt_number || '-'}</p>
+              </div>
+              <div className="p-3 bg-gray-50 rounded-2xl">
+                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Submitted At</p>
+                <p className="text-sm font-bold text-gray-900 mt-0.5">{fmtDateTime(bid.submitted_at)}</p>
+              </div>
+              <div className="p-3 bg-gray-50 rounded-2xl">
+                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Opened At</p>
+                <p className="text-sm font-bold text-gray-900 mt-0.5">{fmtDateTime(bid.opened_at)}</p>
+              </div>
+              <div className="p-3 bg-gray-50 rounded-2xl">
+                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Submission Timestamp</p>
+                <p className="text-sm font-bold text-gray-900 mt-0.5">{fmtDateTime(bid.submission_timestamp)}</p>
+              </div>
+              <div className="p-3 bg-gray-50 rounded-2xl">
+                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Submission Method</p>
+                <p className="text-sm font-bold text-gray-900 mt-0.5 capitalize">{bid.submission_method || '-'}</p>
+              </div>
+              <div className="p-3 bg-gray-50 rounded-2xl">
+                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Bid Amount</p>
+                <p className="text-sm font-bold text-zammsa-green mt-0.5">{bid.currency} {bid.bid_amount?.toLocaleString()}</p>
+              </div>
+              <div className="p-3 bg-gray-50 rounded-2xl">
+                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Validity Period</p>
+                <p className="text-sm font-bold text-gray-900 mt-0.5">{bid.validity_period_days} days</p>
+              </div>
+              <div className="p-3 bg-gray-50 rounded-2xl">
+                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Financial Envelope</p>
+                <p className="text-sm font-bold text-gray-900 mt-0.5">{bid.financial_envelope_encrypted ? 'Encrypted' : 'Not encrypted'}</p>
+              </div>
+              <div className="p-3 bg-gray-50 rounded-2xl">
+                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Addenda Acknowledged</p>
+                <p className="text-sm font-bold text-gray-900 mt-0.5">{bid.addenda_acknowledged ? 'Yes' : 'No'}</p>
+              </div>
+              <div className="p-3 bg-gray-50 rounded-2xl">
+                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Addenda Acknowledged At</p>
+                <p className="text-sm font-bold text-gray-900 mt-0.5">{fmtDateTime(bid.addenda_acknowledged_at)}</p>
+              </div>
+              <div className="p-3 bg-gray-50 rounded-2xl">
+                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Late Submission</p>
+                <p className="text-sm font-bold text-gray-900 mt-0.5">{bid.is_late ? 'Yes' : 'No'}</p>
+              </div>
             </div>
           </div>
+
+          {/* Bid Items */}
+          {!!bid.items?.length && (
+            <div className="bg-white rounded-3xl border border-gray-200 shadow-sm p-6">
+              <h2 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-4">Bid Items</h2>
+              <div className="overflow-x-auto">
+                <table className="min-w-full text-sm">
+                  <thead>
+                    <tr className="bg-gray-50 rounded-2xl">
+                      <th className="text-left px-3 py-2 text-[10px] font-black text-gray-400 uppercase tracking-widest">Code</th>
+                      <th className="text-left px-3 py-2 text-[10px] font-black text-gray-400 uppercase tracking-widest">Description</th>
+                      <th className="text-right px-3 py-2 text-[10px] font-black text-gray-400 uppercase tracking-widest">Qty</th>
+                      <th className="text-right px-3 py-2 text-[10px] font-black text-gray-400 uppercase tracking-widest">Unit Price</th>
+                      <th className="text-right px-3 py-2 text-[10px] font-black text-gray-400 uppercase tracking-widest">Total</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100">
+                    {bid.items?.map((item: any) => (
+                      <tr key={item.id}>
+                        <td className="px-3 py-3 text-sm font-semibold text-gray-900">{item.item_code}</td>
+                        <td className="px-3 py-3 text-sm text-gray-700">{item.description}</td>
+                        <td className="px-3 py-3 text-sm text-right font-semibold">{item.quantity}</td>
+                        <td className="px-3 py-3 text-sm text-right font-semibold">{item.unit_price?.toLocaleString()}</td>
+                        <td className="px-3 py-3 text-sm text-right font-bold text-gray-900">{item.total_price?.toLocaleString()}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
           )}
+
+          {/* Document URLs */}
+          <div className="bg-white rounded-3xl border border-gray-200 shadow-sm p-6">
+            <h2 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-4">Document References</h2>
+            <div className="grid grid-cols-2 gap-x-6 gap-y-4 text-sm">
+              <div className="p-3 bg-gray-50 rounded-2xl">
+                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Technical Document URL</p>
+                <p className="text-sm font-bold text-gray-900 mt-0.5 break-all">{bid.technical_doc_url || '---'}</p>
+              </div>
+              <div className="p-3 bg-gray-50 rounded-2xl">
+                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Financial Document URL</p>
+                <p className="text-sm font-bold text-gray-900 mt-0.5 break-all">{bid.financial_doc_url || '---'}</p>
+              </div>
+            </div>
+          </div>
         </div>
 
+        {/* Right column */}
         <div className="space-y-6">
-          <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
-            <h2 className="text-lg font-semibold text-gray-900 mb-4">Bid Security</h2>
-            <dl className="space-y-3 text-sm">
-              <div className="flex justify-between"><span className="text-gray-500">Amount</span><span className="font-medium">{bid.security_amount?.toLocaleString()}</span></div>
-              <div className="flex justify-between"><span className="text-gray-500">Type</span><span className="font-medium capitalize">{bid.security_type?.replace(/_/g, ' ')}</span></div>
-              <div className="flex justify-between"><span className="text-gray-500">Expiry</span><span className="font-medium">{bid.security_expiry ? new Date(bid.security_expiry).toLocaleDateString() : '-'}</span></div>
-              <div className="flex justify-between"><span className="text-gray-500">Verified</span>
-                <span className={`font-medium ${bid.security_verified ? 'text-green-600' : 'text-yellow-600'}`}>{bid.security_verified ? 'Yes' : 'No'}</span>
+          {/* Bid Security */}
+          <div className="bg-white rounded-3xl border border-gray-200 shadow-sm p-6">
+            <h2 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-4">Bid Security</h2>
+            <div className="space-y-3">
+              <div className="p-3 bg-gray-50 rounded-2xl">
+                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Amount</p>
+                <p className="text-sm font-bold text-gray-900 mt-0.5">{bid.security_amount?.toLocaleString() || '---'}</p>
               </div>
-            </dl>
+              <div className="p-3 bg-gray-50 rounded-2xl">
+                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Type</p>
+                <p className="text-sm font-bold text-gray-900 mt-0.5 capitalize">{bid.security_type?.replace(/_/g, ' ') || '---'}</p>
+              </div>
+              <div className="p-3 bg-gray-50 rounded-2xl">
+                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Expiry</p>
+                <p className="text-sm font-bold text-gray-900 mt-0.5">{fmtDate(bid.security_expiry)}</p>
+              </div>
+              <div className="p-3 bg-gray-50 rounded-2xl">
+                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Verified</p>
+                <p className={`text-sm font-bold mt-0.5 flex items-center gap-1 ${bid.security_verified ? 'text-emerald-600' : 'text-yellow-600'}`}>
+                  {bid.security_verified ? <CheckCircleIcon className="w-4 h-4" /> : <ClockIcon className="w-4 h-4" />}
+                  {bid.security_verified ? 'Verified' : 'Pending'}
+                </p>
+              </div>
+            </div>
           </div>
 
+          {/* Documents */}
           {bid.documents?.length > 0 && (
-            <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
-              <h2 className="text-lg font-semibold text-gray-900 mb-4">Documents</h2>
+            <div className="bg-white rounded-3xl border border-gray-200 shadow-sm p-6">
+              <h2 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-4">Uploaded Documents</h2>
               <div className="space-y-2">
                 {bid.documents.map((doc: any) => (
-                  <div key={doc.id} className="text-sm p-2 hover:bg-gray-50 rounded border border-gray-100">
+                  <div key={doc.id} className="p-3 bg-gray-50 rounded-2xl border border-gray-100">
                     <div className="flex items-center justify-between">
-                      <span className="font-medium text-gray-900">{doc.filename}</span>
+                      <div className="flex items-center gap-2 min-w-0">
+                        <PaperClipIcon className="w-4 h-4 text-gray-400 shrink-0" />
+                        <span className="text-sm font-semibold text-gray-900 truncate">{doc.filename}</span>
+                      </div>
                       {resolveDocumentUrl(doc) ? (
-                        <a
-                          href={resolveDocumentUrl(doc)}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="text-zammsa-green hover:underline"
-                        >
-                          View
-                        </a>
+                        <a href={resolveDocumentUrl(doc)} target="_blank" rel="noreferrer" className="text-[10px] font-bold text-zammsa-green uppercase hover:underline shrink-0 ml-2">View</a>
                       ) : (
-                        <span className="text-gray-400">Unavailable</span>
+                        <span className="text-[10px] font-bold text-gray-400 uppercase shrink-0 ml-2">N/A</span>
                       )}
                     </div>
-                    <div className="mt-1 text-xs text-gray-500 flex items-center justify-between">
-                      <span>Type: {(doc.document_type || 'other').replace(/_/g, ' ')}</span>
-                      <span>Uploaded: {doc.uploaded_at ? new Date(doc.uploaded_at).toLocaleDateString() : '-'}</span>
+                    <div className="mt-1.5 flex items-center gap-3 text-[10px] font-semibold text-gray-400">
+                      <span className="capitalize">{(doc.document_type || 'other').replace(/_/g, ' ')}</span>
+                      {doc.uploaded_at && <span>{fmtDate(doc.uploaded_at)}</span>}
                     </div>
                   </div>
                 ))}
               </div>
             </div>
           )}
+
+          {/* Record Timeline */}
+          <div className="bg-white rounded-3xl border border-gray-200 shadow-sm p-6">
+            <h2 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-4">Record Timeline</h2>
+            <div className="space-y-3">
+              <div className="p-3 bg-gray-50 rounded-2xl">
+                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Created</p>
+                <p className="text-sm font-bold text-gray-900 mt-0.5">{fmtDateTime(bid.created_at)}</p>
+              </div>
+              <div className="p-3 bg-gray-50 rounded-2xl">
+                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Last Updated</p>
+                <p className="text-sm font-bold text-gray-900 mt-0.5">{fmtDateTime(bid.updated_at)}</p>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     </div>

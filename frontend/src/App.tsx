@@ -35,6 +35,7 @@ const About = React.lazy(() => import('./components/public/About'));
 const VendorLayout = React.lazy(() => import('./components/layout/VendorLayout'));
 const VendorDashboard = React.lazy(() => import('./components/vendor/VendorDashboard'));
 const OpenTenders = React.lazy(() => import('./components/vendor/OpenTenders'));
+const VendorTenderDetail = React.lazy(() => import('./components/vendor/VendorTenderDetail'));
 const BidSubmission = React.lazy(() => import('./components/vendor/BidSubmission'));
 const MyBids = React.lazy(() => import('./components/vendor/MyBids'));
 const MyContracts = React.lazy(() => import('./components/vendor/MyContracts'));
@@ -57,6 +58,7 @@ const RequisitionEdit = React.lazy(() => import('./components/requisitions/Requi
 const SolicitationsList = React.lazy(() => import('./components/solicitations/SolicitationsList'));
 const SolicitationCreate = React.lazy(() => import('./components/solicitations/SolicitationCreate'));
 const SolicitationDetail = React.lazy(() => import('./components/solicitations/SolicitationDetail'));
+const SolicitationEdit = React.lazy(() => import('./components/solicitations/SolicitationEdit'));
 
 const BidsList = React.lazy(() => import('./components/bids/BidsList'));
 const BidDetail = React.lazy(() => import('./components/bids/BidDetail'));
@@ -195,6 +197,11 @@ function App() {
                     </ProtectedRoute>
                   } />
                   <Route path="solicitations/:id" element={<SolicitationDetail />} />
+                  <Route path="solicitations/:id/edit" element={
+                    <ProtectedRoute roles={[ROLES.PROCUREMENT_OFFICER, ROLES.PROCUREMENT_MANAGER, ROLES.SYSTEM_ADMIN]}>
+                      <SolicitationEdit />
+                    </ProtectedRoute>
+                  } />
                   <Route path="bids" element={
                     <ProtectedRoute roles={[ROLES.PROCUREMENT_OFFICER, ROLES.PROCUREMENT_MANAGER, ROLES.EVALUATION_COMMITTEE_MEMBER, ROLES.EVALUATION_COMMITTEE_CHAIR, ROLES.ZPC_MEMBER, ROLES.DIRECTOR_PROCUREMENT]}>
                       <BidsList />
@@ -322,6 +329,7 @@ function App() {
                   <Route path="dashboard" element={<VendorDashboard />} />
                   <Route path="open-tenders" element={<OpenTenders />} />
                   <Route path="open-tenders/:id/bid" element={<BidSubmission />} />
+                  <Route path="open-tenders/:id" element={<VendorTenderDetail />} />
                   <Route path="bids" element={<MyBids />} />
                   <Route path="bids/:id" element={<BidDetail />} />
                   <Route path="contracts" element={<MyContracts />} />

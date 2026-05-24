@@ -193,7 +193,7 @@ export default function CPPDetail() {
                       {cpp.milestones?.map((m: any, i: number) => (
                          <tr key={i} className="hover:bg-gray-50/50 transition-colors">
                             <td className="px-8 py-5">
-                               <p className="text-sm font-bold text-gray-800">{m.activity || m.milestone_type}</p>
+                               <p className="text-sm font-bold text-gray-800">{m.milestone_name || m.activity || m.milestone_type}</p>
                             </td>
                             <td className="px-8 py-5 text-center text-sm font-medium text-gray-500">
                                {m.planned_date ? new Date(m.planned_date).toLocaleDateString('en-GB') : '-'}

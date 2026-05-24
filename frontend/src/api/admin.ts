@@ -138,7 +138,7 @@ export const testEmail = (config: any): Promise<void> =>
   apiClient.post(`${BASE}/system-settings/test-email/`, config).then((r) => r.data);
 
 export const fetchDepartments = (): Promise<Department[]> =>
-  apiClient.get(`${BASE}/departments/`).then((r) => r.data);
+  apiClient.get(`${BASE}/departments/`, { params: { page_size: 200 } }).then((r) => r.data?.results ?? r.data);
 
 export const createDepartment = (data: Partial<Department>): Promise<Department> =>
   apiClient.post(`${BASE}/departments/create/`, data).then((r) => r.data);

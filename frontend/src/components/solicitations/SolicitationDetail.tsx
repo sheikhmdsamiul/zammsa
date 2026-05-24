@@ -6,14 +6,19 @@ import { StatusBadge } from '../common/StatusBadge';
 import { LoadingSpinner } from '../common/LoadingSpinner';
 import { useAuth } from '../../hooks/useAuth';
 import toast from 'react-hot-toast';
+import {
+  CheckCircleIcon, XCircleIcon, InformationCircleIcon,
+  ClockIcon, ShieldCheckIcon, LockClosedIcon,
+  DocumentTextIcon, UserCircleIcon, PaperClipIcon,
+} from '@heroicons/react/outline';
 
 const WORKFLOW_STEPS = [
-  { label: 'Draft', statuses: ['draft'] },
-  { label: 'Pending Approval', statuses: ['pending_approval'] },
-  { label: 'Approved', statuses: ['approved'] },
-  { label: 'Published', statuses: ['published'] },
-  { label: 'Closed', statuses: ['closed'] },
-  { label: 'Awarded', statuses: ['awarded'] },
+  { label: 'Draft', statuses: ['draft'], getPerson: (sol: any) => sol.created_by?.full_name ? `by ${sol.created_by.full_name}` : null },
+  { label: 'Pending Approval', statuses: ['pending_approval'], getPerson: (_: any) => '→ Procurement Manager / Director' },
+  { label: 'Approved', statuses: ['approved'], getPerson: (sol: any) => sol.approved_by?.full_name ? `by ${sol.approved_by.full_name}` : null },
+  { label: 'Published', statuses: ['published'], getPerson: () => null },
+  { label: 'Closed', statuses: ['closed'], getPerson: () => null },
+  { label: 'Awarded', statuses: ['awarded'], getPerson: () => null },
 ];
 
 const PUBLISH_TARGETS = [
@@ -21,6 +26,34 @@ const PUBLISH_TARGETS = [
   { key: 'egp_portal', label: 'e-GP Portal (ZPPA)' },
   { key: 'email_suppliers', label: 'Email Registered Suppliers' },
 ];
+
+const TYPE_LABELS: Record<string, string> = {
+  rfb: 'ITB — Invitation to Bid',
+  rfp: 'RFP — Request for Proposals',
+  rfq: 'RFQ — Request for Quotations',
+  rfi: 'RFI — Request for Information',
+};
+
+function fmtDate(d: string | undefined): string {
+  if (!d) return '---';
+  try {
+    return new Date(d).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+  } catch {
+    return String(d);
+  }
+}
+
+function fmtDateTime(d: string | undefined): string {
+  if (!d) return '---';
+  try {
+    return new Date(d).toLocaleString('en-GB', {
+      day: '2-digit', month: 'short', year: 'numeric',
+      hour: '2-digit', minute: '2-digit',
+    });
+  } catch {
+    return String(d);
+  }
+}
 
 const SolicitationDetail: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -34,6 +67,7 @@ const SolicitationDetail: React.FC = () => {
   const [showRejectModal, setShowRejectModal] = useState(false);
   const [showPublishModal, setShowPublishModal] = useState(false);
   const [selectedTargets, setSelectedTargets] = useState<string[]>(['zammsa_website']);
+  const [showClarifyForm, setShowClarifyForm] = useState(false);
 
   const { data: sol, isLoading } = useQuery({
     queryKey: ['solicitation', id],
@@ -81,7 +115,7 @@ const SolicitationDetail: React.FC = () => {
 
   const clarificationMutation = useMutation({
     mutationFn: (q: string) => solicitationsApi.submitClarification(id!, { question: q }),
-    onSuccess: () => { setComment(''); invalidate(); toast.success('Question submitted'); },
+    onSuccess: () => { setComment(''); setShowClarifyForm(false); invalidate(); toast.success('Question submitted'); },
     onError: (err: any) => toast.error(err.response?.data?.error || 'Question failed'),
   });
 
@@ -105,6 +139,8 @@ const SolicitationDetail: React.FC = () => {
 
   const showActions = canSubmit || canApprove || canReject || canPublish || canClose || canAddAddendum;
 
+  const currentWorkflowIdx = WORKFLOW_STEPS.findIndex(s => s.statuses.includes(status));
+
   const handleAddAddendum = () => {
     const data: Record<string, any> = { description: addendumDesc, reason: addendumReason };
     if (addendumExtend) data.extend_closing_days = parseInt(addendumExtend, 10);
@@ -116,41 +152,95 @@ const SolicitationDetail: React.FC = () => {
   };
 
   return (
-    <div className="max-w-5xl mx-auto space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <div className="flex items-center gap-3">
-            <h1 className="text-2xl font-bold text-gray-900">{sol.title}</h1>
-            <span className="text-xs font-medium px-2 py-1 rounded-full bg-blue-50 text-blue-600">{sol.type?.toUpperCase()}</span>
-            <StatusBadge status={status} />
+    <div className="max-w-6xl mx-auto space-y-6">
+      {/* Header */}
+      <div className="bg-white rounded-3xl border border-gray-200 shadow-sm p-6">
+        <div className="flex items-start justify-between">
+          <div className="flex-1">
+            <div className="flex items-center gap-3 flex-wrap">
+              <h1 className="text-xl font-black text-gray-900">{sol.title}</h1>
+              <span className="text-[10px] font-bold px-2.5 py-1 rounded-full bg-blue-50 text-blue-700 border border-blue-200 uppercase tracking-wider">
+                {TYPE_LABELS[sol.type] || sol.type?.toUpperCase()}
+              </span>
+              <StatusBadge status={status} />
+            </div>
+            <p className="text-sm font-semibold text-gray-500 mt-1.5 flex items-center gap-2">
+              {sol.sol_number && <><DocumentTextIcon className="w-4 h-4 text-gray-400" /> {sol.sol_number} &middot;</>}
+              <UserCircleIcon className="w-4 h-4 text-gray-400" /> {sol.department_name || sol.department}
+            </p>
           </div>
-          <p className="text-sm text-gray-500 mt-1">
-            {sol.sol_number} &middot; {sol.department_name || sol.department}
-          </p>
+          <div className="flex gap-2 shrink-0">
+            {canEdit && (
+              <Link to={`/solicitations/${id}/edit`} className="inline-flex items-center gap-1.5 px-4 py-2.5 text-sm font-bold text-gray-600 bg-white border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors">
+                Edit
+              </Link>
+            )}
+          </div>
         </div>
-        <div className="flex gap-2">
-          {canSubmit && <button onClick={() => submitMutation.mutate()} className="px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700">Submit for Approval</button>}
-          {canEdit && <Link to={`/solicitations/${id}/edit`} className="px-4 py-2 text-sm bg-white border border-gray-300 rounded-lg hover:bg-gray-50">Edit</Link>}
-        </div>
+
+        {/* Action buttons row */}
+        {showActions && (
+          <div className="flex flex-wrap gap-2 mt-4 pt-4 border-t border-gray-100">
+            {canSubmit && (
+              <button onClick={() => submitMutation.mutate()} disabled={submitMutation.isPending} className="inline-flex items-center gap-1.5 px-4 py-2.5 text-sm font-bold text-white bg-zammsa-green rounded-xl hover:bg-zammsa-green/90 transition-colors disabled:opacity-50">
+                <ShieldCheckIcon className="w-4 h-4" /> {submitMutation.isPending ? 'Submitting...' : 'Submit for Approval'}
+              </button>
+            )}
+            {canApprove && (
+              <button onClick={() => approveMutation.mutate()} disabled={approveMutation.isPending} className="inline-flex items-center gap-1.5 px-4 py-2.5 text-sm font-bold text-white bg-emerald-600 rounded-xl hover:bg-emerald-700 transition-colors disabled:opacity-50">
+                <CheckCircleIcon className="w-4 h-4" /> {approveMutation.isPending ? 'Approving...' : 'Approve'}
+              </button>
+            )}
+            {canReject && (
+              <button onClick={() => setShowRejectModal(true)} className="inline-flex items-center gap-1.5 px-4 py-2.5 text-sm font-bold text-rose-600 bg-white border border-rose-200 rounded-xl hover:bg-rose-50 transition-colors">
+                <XCircleIcon className="w-4 h-4" /> Reject / Return to Draft
+              </button>
+            )}
+            {canPublish && (
+              <button onClick={() => setShowPublishModal(true)} className="inline-flex items-center gap-1.5 px-4 py-2.5 text-sm font-bold text-white bg-teal-600 rounded-xl hover:bg-teal-700 transition-colors">
+                <ShieldCheckIcon className="w-4 h-4" /> Publish
+              </button>
+            )}
+            {canClose && (
+              <button onClick={() => closeMutation.mutate()} disabled={closeMutation.isPending} className="inline-flex items-center gap-1.5 px-4 py-2.5 text-sm font-bold text-white bg-gray-600 rounded-xl hover:bg-gray-700 transition-colors disabled:opacity-50">
+                <LockClosedIcon className="w-4 h-4" /> {closeMutation.isPending ? 'Closing...' : 'Close'}
+              </button>
+            )}
+            {canAddAddendum && !showAddendumForm && (
+              <button onClick={() => setShowAddendumForm(true)} className="inline-flex items-center gap-1.5 px-4 py-2.5 text-sm font-bold text-amber-700 bg-white border border-amber-300 rounded-xl hover:bg-amber-50 transition-colors">
+                <InformationCircleIcon className="w-4 h-4" /> Issue Addendum
+              </button>
+            )}
+          </div>
+        )}
       </div>
 
+      {/* Rejection banner */}
       {sol.rejection_reason && (
-        <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-          <p className="text-sm font-medium text-red-800">Rejection Reason</p>
-          <p className="text-sm text-red-600">{sol.rejection_reason}</p>
+        <div className="bg-rose-50 border border-rose-200 rounded-3xl p-5 flex items-start gap-3">
+          <XCircleIcon className="w-5 h-5 text-rose-500 shrink-0 mt-0.5" />
+          <div>
+            <p className="text-sm font-bold text-rose-800">Rejection Reason</p>
+            <p className="text-sm text-rose-700 mt-0.5">{sol.rejection_reason}</p>
+            {sol.rejected_at && <p className="text-xs text-rose-500 mt-1">{fmtDateTime(sol.rejected_at)}</p>}
+          </div>
         </div>
       )}
 
+      {/* Publication Status */}
       {sol.publication_targets && sol.publication_targets.length > 0 && (
-        <div className="bg-white rounded-lg border border-gray-200 p-4">
-          <h2 className="font-semibold text-gray-900 mb-3">Publication Status</h2>
-          <div className="grid grid-cols-3 gap-4">
+        <div className="bg-white rounded-3xl border border-gray-200 shadow-sm p-6">
+          <h2 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-4">Publication Status</h2>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             {PUBLISH_TARGETS.map(target => {
               const isPublished = sol.publication_targets?.includes(target.key);
               return (
-                <div key={target.key} className={`p-3 rounded-lg border ${isPublished ? 'border-green-200 bg-green-50' : 'border-gray-200 bg-gray-50'}`}>
-                  <p className="text-sm font-medium">{target.label}</p>
-                  <p className={`text-xs mt-1 ${isPublished ? 'text-green-700' : 'text-gray-400'}`}>
+                <div key={target.key} className={`p-4 rounded-2xl border-2 ${isPublished ? 'border-emerald-200 bg-emerald-50' : 'border-gray-100 bg-gray-50'}`}>
+                  <div className="flex items-center gap-2 mb-1">
+                    {isPublished ? <CheckCircleIcon className="w-4 h-4 text-emerald-600" /> : <ClockIcon className="w-4 h-4 text-gray-400" />}
+                    <p className="text-sm font-bold text-gray-900">{target.label}</p>
+                  </div>
+                  <p className={`text-xs font-semibold ${isPublished ? 'text-emerald-700' : 'text-gray-400'}`}>
                     {isPublished ? 'Published' : 'Not published'}
                   </p>
                 </div>
@@ -158,71 +248,196 @@ const SolicitationDetail: React.FC = () => {
             })}
           </div>
           {sol.egp_reference && <p className="text-xs text-gray-400 mt-3">e-GP Reference: {sol.egp_reference}</p>}
-          {sol.published_at && <p className="text-xs text-gray-400">Published at: {new Date(sol.published_at).toLocaleString()}</p>}
+          {sol.published_at && <p className="text-xs text-gray-400">Published: {fmtDateTime(sol.published_at)}</p>}
         </div>
       )}
 
+      {/* Main content */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Left column */}
         <div className="lg:col-span-2 space-y-6">
-          <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
-            <h2 className="text-lg font-semibold text-gray-900 mb-4">Details</h2>
-            <dl className="grid grid-cols-2 gap-4 text-sm">
-              <div><dt className="text-gray-500">Procurement Method</dt><dd className="font-medium">{sol.procurement_method?.replace(/_/g, ' ')}</dd></div>
-              <div><dt className="text-gray-500">Estimated Value</dt><dd className="font-medium">{sol.estimated_value?.toLocaleString()} {sol.currency}</dd></div>
-              <div><dt className="text-gray-500">Budget Code</dt><dd className="font-medium">{sol.budget_code || '-'}</dd></div>
-              <div><dt className="text-gray-500">Issue Date</dt><dd className="font-medium">{sol.issue_date ? new Date(sol.issue_date).toLocaleDateString() : '-'}</dd></div>
-              <div><dt className="text-gray-500">Closing Date</dt><dd className="font-medium">{sol.closing_date ? new Date(sol.closing_date).toLocaleString() : '-'}</dd></div>
-              <div><dt className="text-gray-500">Opening Date</dt><dd className="font-medium">{sol.opening_date ? new Date(sol.opening_date).toLocaleString() : '-'}</dd></div>
-              {sol.published_at && <div><dt className="text-gray-500">Published At</dt><dd className="font-medium">{new Date(sol.published_at).toLocaleString()}</dd></div>}
-            </dl>
-            {sol.description && <p className="mt-4 text-sm text-gray-700">{sol.description}</p>}
+          {/* Details */}
+          <div className="bg-white rounded-3xl border border-gray-200 shadow-sm p-6">
+            <h2 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-5">Solicitation Details</h2>
+            <div className="grid grid-cols-2 gap-x-6 gap-y-4 text-sm">
+              <div className="p-3 bg-gray-50 rounded-2xl">
+                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Procurement Method</p>
+                <p className="text-sm font-bold text-gray-900 mt-0.5 capitalize">{sol.procurement_method?.replace(/_/g, ' ') || '---'}</p>
+              </div>
+              <div className="p-3 bg-gray-50 rounded-2xl">
+                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Estimated Value</p>
+                <p className="text-sm font-bold text-gray-900 mt-0.5">K {sol.estimated_value?.toLocaleString()} {sol.currency}</p>
+              </div>
+              <div className="p-3 bg-gray-50 rounded-2xl">
+                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Budget Code</p>
+                <p className="text-sm font-bold text-gray-900 mt-0.5">{sol.budget_code || '-'}</p>
+              </div>
+              <div className="p-3 bg-gray-50 rounded-2xl">
+                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Submission Format</p>
+                <p className="text-sm font-bold text-gray-900 mt-0.5 capitalize">{sol.submission_format === 'two' ? 'Two Envelope' : sol.submission_format === 'single' ? 'Single Envelope' : '---'}</p>
+              </div>
+              <div className="p-3 bg-gray-50 rounded-2xl">
+                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Issue Date</p>
+                <p className="text-sm font-bold text-gray-900 mt-0.5">{fmtDate(sol.issue_date)}</p>
+              </div>
+              <div className="p-3 bg-gray-50 rounded-2xl">
+                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Closing Date</p>
+                <p className="text-sm font-bold text-gray-900 mt-0.5">{fmtDateTime(sol.closing_date)}</p>
+              </div>
+              <div className="p-3 bg-gray-50 rounded-2xl">
+                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Opening Date</p>
+                <p className="text-sm font-bold text-gray-900 mt-0.5">{fmtDateTime(sol.opening_date)}</p>
+              </div>
+              <div className="p-3 bg-gray-50 rounded-2xl">
+                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Bid Validity</p>
+                <p className="text-sm font-bold text-gray-900 mt-0.5">{sol.bid_validity_days ? `${sol.bid_validity_days} days` : '---'}</p>
+              </div>
+              <div className="p-3 bg-gray-50 rounded-2xl">
+                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Citizen Preference</p>
+                <p className="text-sm font-bold text-gray-900 mt-0.5">{sol.citizen_preference ? 'Yes — margins apply' : 'No'}</p>
+              </div>
+              <div className="p-3 bg-gray-50 rounded-2xl">
+                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Min. Technical Threshold</p>
+                <p className="text-sm font-bold text-gray-900 mt-0.5">{sol.minimum_technical_threshold ? `${sol.minimum_technical_threshold} points` : '---'}</p>
+              </div>
+              {sol.pre_bid_date && (
+                <div className="p-3 bg-gray-50 rounded-2xl">
+                  <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Pre-Bid Conference</p>
+                  <p className="text-sm font-bold text-gray-900 mt-0.5">{fmtDate(sol.pre_bid_date)}{sol.pre_bid_venue ? ` — ${sol.pre_bid_venue}` : ''}</p>
+                </div>
+              )}
+              <div className="p-3 bg-gray-50 rounded-2xl">
+                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Doc. Fee</p>
+                <p className="text-sm font-bold text-gray-900 mt-0.5">{sol.document_fee_enabled ? `K${sol.document_fee_amount} per set` : 'Free'}</p>
+              </div>
+              <div className="p-3 bg-gray-50 rounded-2xl">
+                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Created</p>
+                <p className="text-sm font-bold text-gray-900 mt-0.5">{fmtDateTime(sol.created_at)}</p>
+              </div>
+              <div className="p-3 bg-gray-50 rounded-2xl">
+                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Last Updated</p>
+                <p className="text-sm font-bold text-gray-900 mt-0.5">{fmtDateTime(sol.updated_at)}</p>
+              </div>
+              {sol.published_at && (
+                <div className="p-3 bg-gray-50 rounded-2xl">
+                  <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Published At</p>
+                  <p className="text-sm font-bold text-gray-900 mt-0.5">{fmtDateTime(sol.published_at)}</p>
+                </div>
+              )}
+            </div>
+            {sol.description && (
+              <div className="mt-4 p-4 bg-gray-50 rounded-2xl">
+                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5">Description</p>
+                <p className="text-sm font-semibold text-gray-700">{sol.description}</p>
+              </div>
+            )}
           </div>
 
+          {/* Bid Security */}
+          <div className="bg-white rounded-3xl border border-gray-200 shadow-sm p-6">
+            <h2 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-4">Bid Security</h2>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="p-3 bg-gray-50 rounded-2xl">
+                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Required</p>
+                <p className="text-sm font-bold text-gray-900 mt-0.5">{sol.bid_security_required ? 'Yes' : 'No'}</p>
+              </div>
+              {sol.bid_security_required && (
+                <>
+                  <div className="p-3 bg-gray-50 rounded-2xl">
+                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Type</p>
+                    <p className="text-sm font-bold text-gray-900 mt-0.5 capitalize">{sol.bid_security_type?.replace(/_/g, ' ') || '---'}</p>
+                  </div>
+                  {sol.bid_security_rate && (
+                    <div className="p-3 bg-gray-50 rounded-2xl">
+                      <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Rate</p>
+                      <p className="text-sm font-bold text-gray-900 mt-0.5">{sol.bid_security_rate}% of bid value</p>
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+          </div>
+
+          {/* Contact Information */}
+          <div className="bg-white rounded-3xl border border-gray-200 shadow-sm p-6">
+            <h2 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-4">Contact Information</h2>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="p-3 bg-gray-50 rounded-2xl">
+                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Contact Person</p>
+                <p className="text-sm font-bold text-gray-900 mt-0.5">{sol.contact_person || '---'}</p>
+              </div>
+              <div className="p-3 bg-gray-50 rounded-2xl">
+                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Phone</p>
+                <p className="text-sm font-bold text-gray-900 mt-0.5">{sol.contact_phone || '---'}</p>
+              </div>
+              <div className="p-3 bg-gray-50 rounded-2xl">
+                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Email</p>
+                <p className="text-sm font-bold text-gray-900 mt-0.5">{sol.contact_email || '---'}</p>
+              </div>
+            </div>
+          </div>
+
+          {/* Evaluation Criteria */}
           {sol.evaluation_criteria && sol.evaluation_criteria.length > 0 && (
-            <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
-              <h2 className="text-lg font-semibold text-gray-900 mb-4">Evaluation Criteria</h2>
+            <div className="bg-white rounded-3xl border border-gray-200 shadow-sm p-6">
+              <h2 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-4">Evaluation Criteria</h2>
               <div className="space-y-2">
                 {sol.evaluation_criteria.map((c: any) => (
-                  <div key={c.criterion_id || c.id} className="flex items-center justify-between p-2 bg-gray-50 rounded text-sm">
-                    <div>
-                      <span className="font-medium text-gray-900">{c.criterion_name}</span>
-                      <span className="ml-2 text-xs text-gray-500 uppercase">({c.criterion_type})</span>
+                  <div key={c.criterion_id || c.id} className="flex items-center justify-between p-4 bg-gray-50 rounded-2xl border border-gray-100">
+                    <div className="flex items-center gap-2">
+                      <CheckCircleIcon className="w-4 h-4 text-zammsa-green" />
+                      <div>
+                        <span className="text-sm font-bold text-gray-900">{c.criterion_name}</span>
+                        {c.criterion_type && <span className="ml-2 text-[10px] font-bold text-gray-400 uppercase">({c.criterion_type})</span>}
+                      </div>
                     </div>
-                    <span className="font-semibold text-zammsa-green">{c.weight}%</span>
+                    <span className="text-sm font-black text-zammsa-green">{c.weight}%</span>
                   </div>
                 ))}
-                <p className="text-xs text-gray-500 text-right">Total: {sol.evaluation_criteria.reduce((s: number, c: any) => s + Number(c.weight), 0)}%</p>
+                <div className="flex justify-end pt-2">
+                  <p className="text-xs font-bold text-gray-500">
+                    Total: {sol.evaluation_criteria.reduce((s: number, c: any) => s + Number(c.weight), 0)}%
+                  </p>
+                </div>
               </div>
             </div>
           )}
 
+          {/* Clarifications */}
           {sol.clarification_responses?.length > 0 && (
-            <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
-              <h2 className="text-lg font-semibold text-gray-900 mb-4">Clarifications</h2>
+            <div className="bg-white rounded-3xl border border-gray-200 shadow-sm p-6">
+              <h2 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-4">Clarifications</h2>
               <div className="space-y-3">
                 {sol.clarification_responses.map((c: any) => (
-                  <div key={c.id} className="p-3 bg-gray-50 rounded-lg">
-                    <p className="text-sm font-medium text-gray-900">Q: {c.question}</p>
-                    {c.answer ? (
-                      <p className="text-sm text-gray-600 mt-1">A: {c.answer}</p>
-                    ) : (
-                      <p className="text-xs text-yellow-600 mt-1">Awaiting answer</p>
-                    )}
-                    <p className="text-xs text-gray-400 mt-1">{new Date(c.asked_at).toLocaleDateString()}</p>
+                  <div key={c.id} className="p-4 bg-gray-50 rounded-2xl border border-gray-100">
+                    <div className="flex items-start gap-2">
+                      <InformationCircleIcon className="w-4 h-4 text-blue-500 shrink-0 mt-0.5" />
+                      <div>
+                        <p className="text-sm font-bold text-gray-900">Q: {c.question}</p>
+                        {c.answer ? (
+                          <p className="text-sm text-gray-600 mt-1">A: {c.answer}</p>
+                        ) : (
+                          <p className="text-xs font-bold text-yellow-600 mt-1">Awaiting answer</p>
+                        )}
+                        <p className="text-xs text-gray-400 mt-1">{fmtDate(c.asked_at)}</p>
+                      </div>
+                    </div>
                   </div>
                 ))}
               </div>
             </div>
           )}
 
+          {/* Documents */}
           {sol.document_sets?.length > 0 && (
-            <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
-              <h2 className="text-lg font-semibold text-gray-900 mb-4">Documents</h2>
+            <div className="bg-white rounded-3xl border border-gray-200 shadow-sm p-6">
+              <h2 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-4">Documents</h2>
               <div className="space-y-2">
                 {sol.document_sets.map((doc: any) => (
-                  <div key={doc.id} className="flex items-center gap-3 p-2 hover:bg-gray-50 rounded">
-                    <span className="text-sm text-gray-900">{doc.filename}</span>
-                    <button className="ml-auto text-sm text-zammsa-green hover:underline">Download</button>
+                  <div key={doc.id} className="flex items-center gap-3 p-3 bg-gray-50 rounded-2xl border border-gray-100">
+                    <PaperClipIcon className="w-4 h-4 text-gray-400" />
+                    <span className="text-sm font-semibold text-gray-700 flex-1">{doc.filename || doc.name || 'Document'}</span>
+                    <button className="text-xs font-bold text-zammsa-green hover:underline">Download</button>
                   </div>
                 ))}
               </div>
@@ -230,94 +445,140 @@ const SolicitationDetail: React.FC = () => {
           )}
         </div>
 
+        {/* Right column */}
         <div className="space-y-6">
-          <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
-            <h2 className="text-lg font-semibold text-gray-900 mb-4">Workflow</h2>
-            <div className="space-y-3 text-sm">
-              {WORKFLOW_STEPS.map((step, i) => (
-                <div key={i} className="flex items-center gap-2">
-                  <div className={`w-3 h-3 rounded-full ${step.statuses.includes(status) ? 'bg-green-500' : status === 'cancelled' ? 'bg-red-500' : 'bg-gray-300'}`} />
-                  <span className={step.statuses.includes(status) ? 'text-gray-900 font-medium' : 'text-gray-400'}>{step.label}</span>
+          {/* Workflow */}
+          <div className="bg-white rounded-3xl border border-gray-200 shadow-sm p-6">
+            <h2 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-5">Workflow</h2>
+            <div className="relative">
+              {WORKFLOW_STEPS.map((step, i) => {
+                const isActive = step.statuses.includes(status);
+                const isPast = currentWorkflowIdx > i;
+                const isCancelled = status === 'cancelled';
+                const person = step.getPerson(sol);
+                return (
+                  <div key={i} className="flex items-start gap-3 pb-5 last:pb-0 relative">
+                    {i < WORKFLOW_STEPS.length - 1 && (
+                      <div className={`absolute left-3.5 top-8 w-0.5 h-5 ${isPast ? 'bg-zammsa-green' : 'bg-gray-200'}`} />
+                    )}
+                    <div className={`w-7 h-7 rounded-full flex items-center justify-center shrink-0 ${
+                      isPast ? 'bg-zammsa-green' :
+                      isActive ? 'bg-zammsa-green ring-4 ring-zammsa-green/20' :
+                      isCancelled ? 'bg-red-500' :
+                      'bg-gray-100'
+                    }`}>
+                      {isPast ? (
+                        <CheckCircleIcon className="w-4 h-4 text-white" />
+                      ) : isActive ? (
+                        <div className="w-2.5 h-2.5 bg-white rounded-full" />
+                      ) : (
+                        <div className="w-2.5 h-2.5 bg-gray-300 rounded-full" />
+                      )}
+                    </div>
+                    <div className="pt-1">
+                      <p className={`text-sm font-bold ${isActive || isPast ? 'text-gray-900' : 'text-gray-400'}`}>{step.label}</p>
+                      {person && (
+                        <p className={`text-[11px] font-semibold mt-0.5 ${isActive ? 'text-zammsa-green' : 'text-gray-400'}`}>{person}</p>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+              {status === 'cancelled' && (
+                <div className="mt-3 p-3 bg-rose-50 border border-rose-200 rounded-2xl">
+                  <p className="text-xs font-bold text-rose-700">This solicitation has been cancelled.</p>
                 </div>
-              ))}
+              )}
             </div>
-            {status === 'cancelled' && <p className="mt-3 text-xs text-red-600">This solicitation has been cancelled.</p>}
           </div>
 
-          {showActions && (
-            <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
-              <h2 className="text-lg font-semibold text-gray-900 mb-4">Actions</h2>
-              <div className="space-y-3">
-                {canSubmit && <button onClick={() => submitMutation.mutate()} className="w-full px-4 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700">Submit for Approval</button>}
-                {canApprove && <button onClick={() => approveMutation.mutate()} className="w-full px-4 py-2 bg-green-600 text-white rounded-lg text-sm hover:bg-green-700">Approve</button>}
-                {canReject && (
-                  <button onClick={() => setShowRejectModal(true)} className="w-full px-4 py-2 border border-red-300 text-red-600 rounded-lg text-sm hover:bg-red-50">Reject / Return to Draft</button>
-                )}
-                {canPublish && <button onClick={() => setShowPublishModal(true)} className="w-full px-4 py-2 bg-teal-600 text-white rounded-lg text-sm hover:bg-teal-700">Publish</button>}
-                {canClose && <button onClick={() => closeMutation.mutate()} className="w-full px-4 py-2 bg-gray-600 text-white rounded-lg text-sm hover:bg-gray-700">Close</button>}
-                {canAddAddendum && !showAddendumForm && (
-                  <button onClick={() => setShowAddendumForm(true)} className="w-full px-4 py-2 border border-amber-400 text-amber-700 rounded-lg text-sm hover:bg-amber-50">Issue Addendum</button>
-                )}
-              </div>
-            </div>
-          )}
-
+          {/* Addendum Form */}
           {showAddendumForm && canAddAddendum && (
-            <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
-              <h2 className="text-lg font-semibold text-gray-900 mb-4">New Addendum</h2>
+            <div className="bg-white rounded-3xl border border-gray-200 shadow-sm p-6">
+              <h2 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-4">New Addendum</h2>
               <div className="space-y-3">
                 <div>
-                  <label className="block text-xs font-medium text-gray-600 mb-1">Description *</label>
-                  <textarea rows={2} value={addendumDesc} onChange={(e) => setAddendumDesc(e.target.value)} className="w-full border-gray-300 rounded-lg px-3 py-2 text-sm" />
+                  <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1 block ml-1">Description *</label>
+                  <textarea rows={2} value={addendumDesc} onChange={(e) => setAddendumDesc(e.target.value)} className="w-full bg-white border border-gray-200 rounded-xl px-4 py-3 text-sm font-semibold text-gray-700 outline-none focus:ring-2 focus:ring-zammsa-green/20" />
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-gray-600 mb-1">Reason</label>
-                  <input type="text" value={addendumReason} onChange={(e) => setAddendumReason(e.target.value)} className="w-full border-gray-300 rounded-lg px-3 py-2 text-sm" />
+                  <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1 block ml-1">Reason</label>
+                  <input type="text" value={addendumReason} onChange={(e) => setAddendumReason(e.target.value)} className="w-full bg-white border border-gray-200 rounded-xl px-4 py-3 text-sm font-semibold text-gray-700 outline-none focus:ring-2 focus:ring-zammsa-green/20" />
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-gray-600 mb-1">Extend Closing (days)</label>
-                  <input type="number" min={1} value={addendumExtend} onChange={(e) => setAddendumExtend(e.target.value)} className="w-full border-gray-300 rounded-lg px-3 py-2 text-sm" />
+                  <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1 block ml-1">Extend Closing (days)</label>
+                  <input type="number" min={1} value={addendumExtend} onChange={(e) => setAddendumExtend(e.target.value)} className="w-full bg-white border border-gray-200 rounded-xl px-4 py-3 text-sm font-semibold text-gray-700 outline-none focus:ring-2 focus:ring-zammsa-green/20" />
                 </div>
-                <div className="flex gap-2">
-                  <button onClick={handleAddAddendum} disabled={!addendumDesc || addendumMutation.isPending} className="flex-1 px-4 py-2 bg-amber-600 text-white rounded-lg text-sm hover:bg-amber-700 disabled:opacity-50">Issue</button>
-                  <button onClick={() => setShowAddendumForm(false)} className="px-4 py-2 border border-gray-300 rounded-lg text-sm hover:bg-gray-50">Cancel</button>
+                <div className="flex gap-2 pt-2">
+                  <button onClick={handleAddAddendum} disabled={!addendumDesc || addendumMutation.isPending} className="flex-1 px-4 py-2.5 text-sm font-bold text-white bg-amber-600 rounded-xl hover:bg-amber-700 transition-colors disabled:opacity-50">
+                    {addendumMutation.isPending ? 'Issuing...' : 'Issue Addendum'}
+                  </button>
+                  <button onClick={() => setShowAddendumForm(false)} className="px-4 py-2.5 text-sm font-bold text-gray-600 bg-white border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors">
+                    Cancel
+                  </button>
                 </div>
               </div>
             </div>
           )}
 
+          {/* Addenda List */}
           {sol.addenda && sol.addenda.length > 0 && (
-            <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
-              <h2 className="text-lg font-semibold text-gray-900 mb-4">Addenda</h2>
-              <div className="space-y-2">
+            <div className="bg-white rounded-3xl border border-gray-200 shadow-sm p-6">
+              <h2 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-4">Addenda</h2>
+              <div className="space-y-3">
                 {sol.addenda.map((a: any) => (
-                  <div key={a.id || a.addendum_id} className="text-sm">
-                    <p className="font-medium text-gray-900">Addendum #{a.number || a.addendum_number}</p>
-                    <p className="text-gray-600">{a.description}</p>
-                    {a.extended_closing_date && <p className="text-xs text-amber-600">Extended to {new Date(a.extended_closing_date).toLocaleString()}</p>}
-                    <p className="text-xs text-gray-400">{new Date(a.created_at || a.issued_at).toLocaleDateString()}</p>
+                  <div key={a.id || a.addendum_id} className="p-4 bg-gray-50 rounded-2xl border border-gray-100">
+                    <div className="flex items-center gap-2 mb-1">
+                      <InformationCircleIcon className="w-4 h-4 text-amber-500" />
+                      <p className="text-sm font-bold text-gray-900">Addendum #{a.number || a.addendum_number}</p>
+                    </div>
+                    <p className="text-sm text-gray-600">{a.description}</p>
+                    {a.extended_closing_date && (
+                      <p className="text-xs font-bold text-amber-600 mt-1">Extended to {fmtDateTime(a.extended_closing_date)}</p>
+                    )}
+                    <p className="text-xs text-gray-400 mt-1">{fmtDate(a.created_at || a.issued_at)}</p>
                   </div>
                 ))}
               </div>
             </div>
           )}
 
-          <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
-            <h2 className="text-lg font-semibold text-gray-900 mb-4">Ask a Question</h2>
-            <textarea rows={2} value={comment} onChange={(e) => setComment(e.target.value)} placeholder="Enter your question..." className="w-full border-gray-300 rounded-lg px-3 py-2 text-sm" />
-            <button onClick={handleClarify} disabled={!comment || clarificationMutation.isPending} className="mt-2 w-full px-4 py-2 bg-zammsa-green text-white rounded-lg text-sm hover:bg-zammsa-green-dark disabled:opacity-50">Submit Question</button>
+          {/* Ask a Question */}
+          <div className="bg-white rounded-3xl border border-gray-200 shadow-sm p-6">
+            <h2 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-4">Ask a Question</h2>
+            {showClarifyForm ? (
+              <div className="space-y-3">
+                <textarea rows={2} value={comment} onChange={(e) => setComment(e.target.value)} placeholder="Enter your question about this solicitation..." className="w-full bg-white border border-gray-200 rounded-xl px-4 py-3 text-sm font-semibold text-gray-700 outline-none focus:ring-2 focus:ring-zammsa-green/20" />
+                <div className="flex gap-2">
+                  <button onClick={handleClarify} disabled={!comment || clarificationMutation.isPending} className="flex-1 px-4 py-2.5 text-sm font-bold text-white bg-zammsa-green rounded-xl hover:bg-zammsa-green/90 transition-colors disabled:opacity-50">
+                    {clarificationMutation.isPending ? 'Submitting...' : 'Submit Question'}
+                  </button>
+                  <button onClick={() => { setShowClarifyForm(false); setComment(''); }} className="px-4 py-2.5 text-sm font-bold text-gray-600 bg-white border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors">
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <button onClick={() => setShowClarifyForm(true)} className="w-full px-4 py-2.5 text-sm font-bold text-gray-600 bg-white border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors text-center">
+                Ask a Question
+              </button>
+            )}
           </div>
         </div>
       </div>
 
+      {/* Reject Modal */}
       {showRejectModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-30">
-          <div className="bg-white rounded-lg shadow-xl max-w-md w-full p-6">
-            <h3 className="text-lg font-medium">Reject / Return to Draft</h3>
-            <textarea value={comment} onChange={(e) => setComment(e.target.value)} rows={3} placeholder="Enter rejection reason..." className="w-full mt-3 border border-gray-300 rounded-md p-2 text-sm" />
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30">
+          <div className="bg-white rounded-3xl shadow-xl max-w-md w-full p-6 border border-gray-200">
+            <h3 className="text-lg font-black text-gray-900">Reject / Return to Draft</h3>
+            <p className="text-sm text-gray-500 mt-1">Provide a reason for rejection</p>
+            <textarea value={comment} onChange={(e) => setComment(e.target.value)} rows={3} placeholder="Enter rejection reason..." className="w-full mt-3 bg-white border border-gray-200 rounded-xl px-4 py-3 text-sm font-semibold text-gray-700 outline-none focus:ring-2 focus:ring-rose-500/20" />
             <div className="flex justify-end gap-3 mt-4">
-              <button onClick={() => { setShowRejectModal(false); setComment(''); }} className="px-4 py-2 text-sm border border-gray-300 rounded-lg">Cancel</button>
-              <button onClick={() => rejectMutation.mutate()} disabled={!comment || rejectMutation.isPending} className="px-4 py-2 bg-red-600 text-white rounded-lg text-sm disabled:opacity-50">
+              <button onClick={() => { setShowRejectModal(false); setComment(''); }} className="px-4 py-2.5 text-sm font-bold text-gray-600 bg-white border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors">
+                Cancel
+              </button>
+              <button onClick={() => rejectMutation.mutate()} disabled={!comment || rejectMutation.isPending} className="px-4 py-2.5 text-sm font-bold text-white bg-rose-600 rounded-xl hover:bg-rose-700 transition-colors disabled:opacity-50">
                 {rejectMutation.isPending ? 'Processing...' : 'Reject'}
               </button>
             </div>
@@ -325,14 +586,15 @@ const SolicitationDetail: React.FC = () => {
         </div>
       )}
 
+      {/* Publish Modal */}
       {showPublishModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-30">
-          <div className="bg-white rounded-lg shadow-xl max-w-md w-full p-6">
-            <h3 className="text-lg font-medium">Publish Solicitation</h3>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30">
+          <div className="bg-white rounded-3xl shadow-xl max-w-md w-full p-6 border border-gray-200">
+            <h3 className="text-lg font-black text-gray-900">Publish Solicitation</h3>
             <p className="text-sm text-gray-500 mt-1">Select publication targets</p>
-            <div className="mt-3 space-y-2">
+            <div className="mt-4 space-y-3">
               {PUBLISH_TARGETS.map(target => (
-                <label key={target.key} className="flex items-center gap-2">
+                <label key={target.key} className={`flex items-center gap-3 p-4 rounded-2xl cursor-pointer border-2 transition-all ${selectedTargets.includes(target.key) ? 'border-zammsa-green bg-zammsa-green/5' : 'border-gray-100 bg-gray-50'}`}>
                   <input
                     type="checkbox"
                     checked={selectedTargets.includes(target.key)}
@@ -340,15 +602,17 @@ const SolicitationDetail: React.FC = () => {
                       if (e.target.checked) setSelectedTargets([...selectedTargets, target.key]);
                       else setSelectedTargets(selectedTargets.filter(t => t !== target.key));
                     }}
-                    className="rounded border-gray-300"
+                    className="text-zammsa-green focus:ring-zammsa-green rounded"
                   />
-                  <span className="text-sm">{target.label}</span>
+                  <span className="text-sm font-bold text-gray-900">{target.label}</span>
                 </label>
               ))}
             </div>
             <div className="flex justify-end gap-3 mt-4">
-              <button onClick={() => { setShowPublishModal(false); setSelectedTargets(['zammsa_website']); }} className="px-4 py-2 text-sm border border-gray-300 rounded-lg">Cancel</button>
-              <button onClick={() => publishMutation.mutate()} disabled={selectedTargets.length === 0 || publishMutation.isPending} className="px-4 py-2 bg-teal-600 text-white rounded-lg text-sm disabled:opacity-50">
+              <button onClick={() => { setShowPublishModal(false); setSelectedTargets(['zammsa_website']); }} className="px-4 py-2.5 text-sm font-bold text-gray-600 bg-white border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors">
+                Cancel
+              </button>
+              <button onClick={() => publishMutation.mutate()} disabled={selectedTargets.length === 0 || publishMutation.isPending} className="px-4 py-2.5 text-sm font-bold text-white bg-teal-600 rounded-xl hover:bg-teal-700 transition-colors disabled:opacity-50">
                 {publishMutation.isPending ? 'Publishing...' : 'Publish'}
               </button>
             </div>

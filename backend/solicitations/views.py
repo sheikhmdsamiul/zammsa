@@ -45,6 +45,9 @@ METHOD_ALIASES = {
     'open': 'open_tender',
     'open tender': 'open_tender',
     'opentender': 'open_tender',
+    'rfb': 'open_tender',
+    'rfq': 'simplified',
+    'rfp': 'proposal',
 }
 
 

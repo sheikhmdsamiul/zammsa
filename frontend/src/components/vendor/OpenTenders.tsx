@@ -78,13 +78,21 @@ const OpenTenders: React.FC = () => {
                     <span>Closes: {new Date(tender.closing_date).toLocaleDateString()}</span>
                     <span>Opens: {new Date(tender.opening_date).toLocaleDateString()}</span>
                   </div>
-                  <Link
-                    to={`/vendor/open-tenders/${tender.id}/bid`}
-                    className={`px-4 py-2 text-sm rounded-lg transition-colors ${isExpired ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : 'bg-zammsa-green text-white hover:bg-zammsa-green-dark'}`}
-                    onClick={(e) => { if (isExpired) e.preventDefault(); }}
-                  >
-                    {isExpired ? 'Closed' : 'Submit Bid'}
-                  </Link>
+                  <div className="flex items-center gap-2">
+                    <Link
+                      to={`/vendor/open-tenders/${tender.id}`}
+                      className="px-4 py-2 text-sm font-semibold text-gray-600 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
+                    >
+                      View Details
+                    </Link>
+                    <Link
+                      to={`/vendor/open-tenders/${tender.id}/bid`}
+                      className={`px-4 py-2 text-sm font-semibold rounded-lg transition-colors ${isExpired ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : 'bg-zammsa-green text-white hover:bg-zammsa-green-dark'}`}
+                      onClick={(e) => { if (isExpired) e.preventDefault(); }}
+                    >
+                      {isExpired ? 'Closed' : 'Submit Bid'}
+                    </Link>
+                  </div>
                 </div>
               </div>
             );

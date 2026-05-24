@@ -139,6 +139,21 @@ export interface Solicitation {
   rejection_reason?: string;
   rejected_by?: string;
   rejected_at?: string;
+  // Extended solicitation detail fields
+  submission_format?: 'single' | 'two';
+  bid_validity_days?: number;
+  pre_bid_date?: string;
+  pre_bid_venue?: string;
+  citizen_preference?: boolean;
+  bid_security_required?: boolean;
+  bid_security_type?: string;
+  bid_security_rate?: number;
+  contact_person?: string;
+  contact_phone?: string;
+  contact_email?: string;
+  minimum_technical_threshold?: number;
+  document_fee_enabled?: boolean;
+  document_fee_amount?: number;
 }
 
 export interface Addendum {
@@ -176,13 +191,21 @@ export interface Bid {
   submission_method: 'online' | 'physical';
   financial_envelope_encrypted?: boolean;
   addenda_acknowledged?: boolean;
+  addenda_acknowledged_at?: string;
   is_late?: boolean;
+  technical_doc_url?: string;
+  financial_doc_url?: string;
+  submission_timestamp?: string;
   documents: Attachment[];
   items: BidItem[];
   submitted_at: string | null;
   opened_at: string | null;
   created_at: string;
   updated_at: string;
+  solicitation_title?: string;
+  solicitation_number?: string;
+  solicitation_type?: string;
+  closing_date?: string;
 }
 
 export interface BidItem {
@@ -658,6 +681,7 @@ export interface VendorRegistration {
   id: string;
   user: string;
   company_name: string;
+  email: string;
   registration_number: string;
   tax_id: string;
   business_type: string;
@@ -1081,6 +1105,10 @@ export interface ProcurementMilestone {
    variance_days: number | null;
    variance_flag?: 'green' | 'yellow' | 'orange' | 'red';
    is_system_updated?: boolean;
+   time?: string;
+   note?: string;
+   constraintNote?: string;
+   validationBadges?: string[];
  }
 
  

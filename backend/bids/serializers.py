@@ -45,6 +45,10 @@ class BidSubmissionSerializer(serializers.ModelSerializer):
     bid_securities = BidSecuritySerializer(many=True, read_only=True)
     documents = BidDocumentSerializer(many=True, source='bid_documents', read_only=True)
     supplier_name = serializers.CharField(source='supplier.full_name', read_only=True)
+    solicitation_title = serializers.CharField(source='solicitation.title', read_only=True)
+    solicitation_number = serializers.CharField(source='solicitation.sol_number', read_only=True)
+    solicitation_type = serializers.CharField(source='solicitation.method', read_only=True)
+    closing_date = serializers.DateTimeField(source='solicitation.closing_date', read_only=True)
 
     class Meta:
         model = BidSubmission
@@ -66,10 +70,14 @@ class BidSubmissionListSerializer(serializers.ModelSerializer):
     supplier_name = serializers.CharField(source='supplier.full_name', read_only=True)
     bid_number = serializers.CharField(source='submission_id', read_only=True)
     bid_amount = serializers.DecimalField(source='bid_price', max_digits=20, decimal_places=2, read_only=True, allow_null=True)
+    solicitation_title = serializers.CharField(source='solicitation.title', read_only=True)
+    solicitation_number = serializers.CharField(source='solicitation.sol_number', read_only=True)
+    solicitation_type = serializers.CharField(source='solicitation.method', read_only=True)
+    closing_date = serializers.DateTimeField(source='solicitation.closing_date', read_only=True)
 
     class Meta:
         model = BidSubmission
-        fields = ('id', 'bid_id', 'submission_id', 'receipt_number', 'bid_number', 'vendor_name', 'supplier_name', 'bid_price', 'bid_amount', 'currency', 'status', 'is_late', 'financial_envelope_encrypted', 'addenda_acknowledged', 'submitted_at')
+        fields = ('id', 'bid_id', 'submission_id', 'receipt_number', 'bid_number', 'vendor_name', 'supplier_name', 'bid_price', 'bid_amount', 'currency', 'status', 'is_late', 'financial_envelope_encrypted', 'addenda_acknowledged', 'submitted_at', 'solicitation_title', 'solicitation_number', 'solicitation_type', 'closing_date')
 
 
 class BidOpeningDetailSerializer(serializers.ModelSerializer):

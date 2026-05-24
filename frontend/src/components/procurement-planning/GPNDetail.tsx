@@ -742,7 +742,7 @@ const GPNDetail: React.FC = () => {
               ) : (
                 <>
                   <CheckCircleIcon className="w-4 h-4" />
-                  🚀 Publish GPN
+                  Publish GPN
                 </>
               )}
             </button>
