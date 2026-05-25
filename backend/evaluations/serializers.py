@@ -36,9 +36,27 @@ class EvaluationCommitteeSerializer(serializers.ModelSerializer):
         return 0
 
     def validate_members(self, value):
-        if not isinstance(value, list) or len(value) < 3:
-            raise serializers.ValidationError('Committee must have at least 3 members.')
+        if not isinstance(value, list):
+            raise serializers.ValidationError('Members must be a list.')
         return value
+
+    def validate(self, attrs):
+        members = attrs.get('members', [])
+        def _to_id(val):
+            if val is None:
+                return ''
+            if hasattr(val, 'pk'):
+                return str(val.pk)
+            return str(val)
+        chairperson_id = _to_id(attrs.get('chairperson'))
+        secretary_id = _to_id(attrs.get('secretary'))
+        all_members = list({_to_id(m) for m in members} | {chairperson_id, secretary_id} - {''})
+        if len(all_members) < 3:
+            raise serializers.ValidationError(
+                'Committee must have at least 3 unique members (including chairperson and secretary).'
+            )
+        attrs['members'] = all_members
+        return attrs
 
 
 class PreliminaryExamSerializer(serializers.ModelSerializer):

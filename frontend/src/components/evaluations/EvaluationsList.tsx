@@ -1,22 +1,60 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { evaluationsApi } from '../../api/evaluations';
+import { solicitationsApi } from '../../api/solicitations';
+import { usersApi } from '../../api/endpoints';
 import { DataTable } from '../common/DataTable';
 import { StatusBadge } from '../common/StatusBadge';
 import { SearchBar } from '../common/SearchBar';
 import { Pagination } from '../common/Pagination';
 import { LoadingSpinner } from '../common/LoadingSpinner';
+import toast from 'react-hot-toast';
 
 const EvaluationsList: React.FC = () => {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
   const [search, setSearch] = useState('');
+  const [showForm, setShowForm] = useState(false);
+  const [formData, setFormData] = useState({ solicitation: '', chairperson: '', chairpersonName: '', secretary: '', secretaryName: '', members: [] as string[] });
 
   const { data, isLoading } = useQuery({
     queryKey: ['evaluation-committees', page, pageSize, search],
     queryFn: () => evaluationsApi.listCommittees({ page, page_size: pageSize, search }),
+  });
+
+  const { data: solsData } = useQuery({
+    queryKey: ['solicitations-for-committee'],
+    queryFn: () => solicitationsApi.list({ page_size: 50 }),
+    enabled: showForm,
+  });
+
+  const { data: usersData } = useQuery({
+    queryKey: ['users-for-committee'],
+    queryFn: () => usersApi.list({ page_size: 100 }),
+    enabled: showForm,
+  });
+  const allUsers = usersData?.results || [];
+
+  const formMutation = useMutation({
+    mutationFn: () => {
+      const members = Array.from(new Set([...formData.members, formData.chairperson, formData.secretary].filter(Boolean)));
+      return evaluationsApi.formCommittee({
+        solicitation: formData.solicitation,
+        chairperson: formData.chairperson,
+        secretary: formData.secretary,
+        members,
+      } as any);
+    },
+    onSuccess: () => {
+      toast.success('Evaluation committee formed');
+      setShowForm(false);
+      setFormData({ solicitation: '', chairperson: '', chairpersonName: '', secretary: '', secretaryName: '', members: [] });
+      queryClient.invalidateQueries({ queryKey: ['evaluation-committees'] });
+    },
+    onError: () => toast.error('Failed to form committee'),
   });
 
   const columns = [
@@ -38,7 +76,78 @@ const EvaluationsList: React.FC = () => {
           <h1 className="text-2xl font-bold text-gray-900">Evaluation Committees</h1>
           <p className="text-sm text-gray-500 mt-1">Manage evaluation committees, COI declarations, and scoring</p>
         </div>
+        <button onClick={() => setShowForm(true)} className="px-4 py-2 bg-zammsa-green text-white rounded-xl text-sm font-bold">
+          Form Committee
+        </button>
       </div>
+
+      {showForm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30" onClick={() => setShowForm(false)}>
+          <div className="bg-white rounded-2xl shadow-xl p-6 w-full max-w-lg mx-4" onClick={(e) => e.stopPropagation()}>
+            <h2 className="text-lg font-bold text-gray-900 mb-4">Form Evaluation Committee</h2>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Solicitation</label>
+                <select value={formData.solicitation} onChange={(e) => setFormData(p => ({ ...p, solicitation: e.target.value }))}
+                  className="w-full border border-gray-200 rounded-lg px-4 py-2 text-sm">
+                  <option value="">Select solicitation...</option>
+                  {(solsData?.results || []).map((sol: any) => (
+                    <option key={sol.id} value={sol.id}>{sol.sol_number || sol.title}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Chairperson</label>
+                <select value={formData.chairperson} onChange={(e) => setFormData(p => ({ ...p, chairperson: e.target.value }))}
+                  className="w-full border border-gray-200 rounded-lg px-4 py-2 text-sm">
+                  <option value="">Select chairperson...</option>
+                  {allUsers.map((u: any) => (
+                    <option key={u.id} value={u.id}>{u.full_name || u.email}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Secretary</label>
+                <select value={formData.secretary} onChange={(e) => setFormData(p => ({ ...p, secretary: e.target.value }))}
+                  className="w-full border border-gray-200 rounded-lg px-4 py-2 text-sm">
+                  <option value="">Select secretary...</option>
+                  {allUsers.map((u: any) => (
+                    <option key={u.id} value={u.id}>{u.full_name || u.email}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Committee Members (at least 3)</label>
+                <div className="max-h-48 overflow-y-auto border border-gray-200 rounded-lg divide-y divide-gray-100">
+                  {allUsers.map((u: any) => {
+                    const isSelected = formData.members.includes(u.id);
+                    return (
+                      <label key={u.id} className="flex items-center gap-3 px-3 py-2 hover:bg-gray-50 cursor-pointer text-sm">
+                        <input type="checkbox" checked={isSelected}
+                          onChange={() => setFormData(p => ({
+                            ...p,
+                            members: isSelected ? p.members.filter((id: string) => id !== u.id) : [...p.members, u.id],
+                          }))} />
+                        <span>{u.full_name || u.email}</span>
+                        <span className="text-gray-400 text-xs ml-auto">{u.role || ''}</span>
+                      </label>
+                    );
+                  })}
+                  {allUsers.length === 0 && <p className="px-3 py-4 text-sm text-gray-400">Loading users...</p>}
+                </div>
+                <p className="text-xs text-gray-400 mt-1">{formData.members.length} selected (chairperson & secretary auto-included)</p>
+              </div>
+            </div>
+            <div className="flex justify-end gap-3 mt-6">
+              <button onClick={() => setShowForm(false)} className="px-4 py-2 border border-gray-300 rounded-lg text-sm">Cancel</button>
+              <button onClick={() => formMutation.mutate()} disabled={!formData.solicitation || !formData.chairperson || !formData.secretary || formData.members.length < 3 || formMutation.isPending}
+                className="px-4 py-2 bg-zammsa-green text-white rounded-lg text-sm font-bold disabled:opacity-50">
+                {formMutation.isPending ? 'Creating...' : 'Create Committee'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="bg-white rounded-xl shadow-sm border border-gray-100">
         <div className="p-4 border-b border-gray-100">

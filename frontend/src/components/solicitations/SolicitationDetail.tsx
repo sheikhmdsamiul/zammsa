@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { solicitationsApi } from '../../api/solicitations';
 import { StatusBadge } from '../common/StatusBadge';
@@ -8,7 +8,7 @@ import { useAuth } from '../../hooks/useAuth';
 import toast from 'react-hot-toast';
 import {
   CheckCircleIcon, XCircleIcon, InformationCircleIcon,
-  ClockIcon, ShieldCheckIcon, LockClosedIcon,
+  ClockIcon, ShieldCheckIcon, LockClosedIcon, LockOpenIcon,
   DocumentTextIcon, UserCircleIcon, PaperClipIcon,
 } from '@heroicons/react/outline';
 
@@ -57,6 +57,7 @@ function fmtDateTime(d: string | undefined): string {
 
 const SolicitationDetail: React.FC = () => {
   const { id } = useParams<{ id: string }>();
+  const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { user } = useAuth();
   const [comment, setComment] = useState('');
@@ -135,9 +136,10 @@ const SolicitationDetail: React.FC = () => {
   const canReject = status === 'pending_approval' && ['procurement_manager', 'director_procurement'].includes(role);
   const canPublish = status === 'approved' && ['procurement_officer', 'procurement_manager'].includes(role);
   const canClose = status === 'published' && ['procurement_manager', 'procurement_officer'].includes(role);
+  const canOpen = status === 'closed' && ['procurement_manager', 'procurement_officer'].includes(role);
   const canAddAddendum = ['published', 'pending_approval', 'approved'].includes(status) && ['procurement_manager', 'procurement_officer'].includes(role);
 
-  const showActions = canSubmit || canApprove || canReject || canPublish || canClose || canAddAddendum;
+  const showActions = canSubmit || canApprove || canReject || canPublish || canClose || canOpen || canAddAddendum;
 
   const currentWorkflowIdx = WORKFLOW_STEPS.findIndex(s => s.statuses.includes(status));
 
@@ -204,6 +206,11 @@ const SolicitationDetail: React.FC = () => {
             {canClose && (
               <button onClick={() => closeMutation.mutate()} disabled={closeMutation.isPending} className="inline-flex items-center gap-1.5 px-4 py-2.5 text-sm font-bold text-white bg-gray-600 rounded-xl hover:bg-gray-700 transition-colors disabled:opacity-50">
                 <LockClosedIcon className="w-4 h-4" /> {closeMutation.isPending ? 'Closing...' : 'Close'}
+              </button>
+            )}
+            {canOpen && (
+              <button onClick={() => navigate(`/bids/opening/${id}`)} className="inline-flex items-center gap-1.5 px-4 py-2.5 text-sm font-bold text-white bg-purple-600 rounded-xl hover:bg-purple-700 transition-colors">
+                <LockOpenIcon className="w-4 h-4" /> Conduct Opening
               </button>
             )}
             {canAddAddendum && !showAddendumForm && (
@@ -287,6 +294,10 @@ const SolicitationDetail: React.FC = () => {
               <div className="p-3 bg-gray-50 rounded-2xl">
                 <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Opening Date</p>
                 <p className="text-sm font-bold text-gray-900 mt-0.5">{fmtDateTime(sol.opening_date)}</p>
+              </div>
+              <div className="p-3 bg-emerald-50 rounded-2xl border border-emerald-200">
+                <p className="text-[10px] font-black text-emerald-600 uppercase tracking-widest">Total Bids Received</p>
+                <p className="text-lg font-black text-emerald-700 mt-0.5">{sol.total_bids ?? 0}</p>
               </div>
               <div className="p-3 bg-gray-50 rounded-2xl">
                 <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Bid Validity</p>

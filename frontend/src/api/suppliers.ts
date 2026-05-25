@@ -28,8 +28,14 @@ export const suppliersApi = {
   reviewApplication: (id: string, data: { status: string; comment: string }) =>
     api.post(`/suppliers/applications/${id}/review/`, data).then((r) => r.data),
 
+  listPerformances: (params?: Record<string, any>) =>
+    api.get<PaginatedResponse<any>>('/suppliers/performances/', { params }).then((r) => r.data),
+
   getPerformance: (id: string) =>
-    api.get<{ score: number; history: any[] }>(`/suppliers/performances/evaluate/${id}/`).then((r) => r.data),
+    api.get<any>(`/suppliers/performances/?supplier=${id}`).then((r) => r.data),
+
+  evaluatePerformance: (supplierPk: string, data: { metrics: Record<string, any>; overall_score: number; improvement_notes?: string }) =>
+    api.post<any>(`/suppliers/performances/evaluate/${supplierPk}/`, data).then((r) => r.data),
 
   getRiskScore: (id: string) =>
     api.get<{ score: number; factors: any[] }>(`/suppliers/risk-scores/`).then((r) => r.data),

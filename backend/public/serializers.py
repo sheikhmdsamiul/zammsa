@@ -68,6 +68,7 @@ class TenderPublicSerializer(serializers.ModelSerializer):
     view_count = serializers.SerializerMethodField()
     award_notice = serializers.SerializerMethodField()
     bid_opening_results = serializers.SerializerMethodField()
+    items = serializers.SerializerMethodField()
 
     class Meta:
         model = Solicitation
@@ -77,8 +78,23 @@ class TenderPublicSerializer(serializers.ModelSerializer):
             'estimated_value', 'currency', 'fee_required', 'fee_amount',
             'closing_date', 'opening_date', 'issue_date', 'status', 'view_count',
             'documents', 'addenda', 'clarifications', 'evaluation_criteria',
-            'award_notice', 'bid_opening_results', 'created_at',
+            'award_notice', 'bid_opening_results', 'bid_security_rate',
+            'bid_validity_days', 'created_at', 'items',
         )
+
+    def get_items(self, obj):
+        if hasattr(obj, 'requisition') and obj.requisition:
+            return [
+                {
+                    'description': item.description,
+                    'quantity': float(item.quantity),
+                    'unit': item.unit_of_measure.uom_name if item.unit_of_measure else '',
+                    'unit_price': float(item.unit_price_estimate) if item.unit_price_estimate else 0,
+                    'total_estimate': float(item.total_estimate) if item.total_estimate else 0,
+                }
+                for item in obj.requisition.items.all()
+            ]
+        return []
 
     def get_type(self, obj):
         method_lower = (obj.method or '').lower()

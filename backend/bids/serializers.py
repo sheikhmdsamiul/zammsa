@@ -83,6 +83,10 @@ class BidSubmissionListSerializer(serializers.ModelSerializer):
 class BidOpeningDetailSerializer(serializers.ModelSerializer):
     bid_submission_id = serializers.CharField(source='bid.submission_id', read_only=True)
     bidder = serializers.CharField(source='bidder_name', read_only=True)
+    bid_price = serializers.DecimalField(source='bid.bid_price', max_digits=20, decimal_places=2, read_only=True)
+    bid_security_verified = serializers.BooleanField(source='bid.security_verified', read_only=True)
+    bid_security_amount = serializers.DecimalField(source='bid.security_amount', max_digits=20, decimal_places=2, read_only=True, allow_null=True)
+    supplier_name = serializers.CharField(source='bid.supplier.full_name', read_only=True)
 
     class Meta:
         model = BidOpeningDetail

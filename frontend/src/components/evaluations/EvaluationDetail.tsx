@@ -1,10 +1,12 @@
 import React, { useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { evaluationsApi } from '../../api/evaluations';
+import { bidsApi } from '../../api/bids';
 import { StatusBadge } from '../common/StatusBadge';
 import { LoadingSpinner } from '../common/LoadingSpinner';
 import { useAuth } from '../../hooks/useAuth';
+import { ROLES } from '../../config/rbac';
 
 const EvaluationDetail: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -25,6 +27,12 @@ const EvaluationDetail: React.FC = () => {
     enabled: !!id,
   });
 
+  const { data: bidsData } = useQuery({
+    queryKey: ['bids-for-committee', committee?.solicitation],
+    queryFn: () => bidsApi.list({ solicitation: committee!.solicitation, page_size: 50 }),
+    enabled: !!committee?.solicitation,
+  });
+
   const coiMutation = useMutation({
     mutationFn: () => evaluationsApi.declareCOI(id!, { declaration: coiDeclaration, has_conflict: coiHasConflict }),
     onSuccess: () => {
@@ -33,6 +41,9 @@ const EvaluationDetail: React.FC = () => {
       setCoiHasConflict(false);
     },
   });
+
+  const navigate = useNavigate();
+  const [view, setView] = useState<'overview' | 'scoring' | 'financial' | 'ber'>('overview');
 
   if (isLoading) return <LoadingSpinner className="py-12" />;
   if (!committee) return <p className="text-center text-gray-500 py-12">Committee not found</p>;
@@ -58,8 +69,33 @@ const EvaluationDetail: React.FC = () => {
         </div>
       </div>
 
+      {/* Evaluation Workflow Navigation */}
+      <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
+        <div className="flex items-center gap-4">
+          <button onClick={() => setView('overview')} className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${view === 'overview' ? 'bg-zammsa-green text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>Overview</button>
+          <button onClick={() => setView('scoring')} className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${view === 'scoring' ? 'bg-zammsa-green text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>Technical Scoring</button>
+          <button onClick={() => setView('financial')} className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${view === 'financial' ? 'bg-zammsa-green text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>Financial Evaluation</button>
+          <button onClick={() => setView('ber')} className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${view === 'ber' ? 'bg-zammsa-green text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>BER & Approval</button>
+          <div className="ml-auto flex gap-2">
+            {isMember && !isRecused && (
+              <button onClick={() => navigate(`/evaluations/${committee.id}/coi`)} className="px-4 py-2 bg-amber-600 text-white rounded-lg text-sm font-bold">Declare COI</button>
+            )}
+            {isChairperson && (
+              <>
+              <button onClick={() => navigate(`/evaluations/preliminary/${committee.solicitation}`)} className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-bold">Preliminary Exam</button>
+              <button onClick={() => navigate(`/evaluations/${committee.id}/scoring`)} className="px-4 py-2 bg-zammsa-green text-white rounded-lg text-sm font-bold">Score Bids</button>
+              <button onClick={() => navigate(`/evaluations/${committee.solicitation}/financial`)} className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-bold">Financial Eval</button>
+              <button onClick={() => navigate(`/evaluations/ber/${committee.solicitation}`)} className="px-4 py-2 bg-purple-600 text-white rounded-lg text-sm font-bold">Generate BER</button>
+              </>
+            )}
+          </div>
+        </div>
+      </div>
+
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 space-y-6">
+          {view === 'overview' && (
+          <>
           <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
             <h2 className="text-lg font-semibold text-gray-900 mb-4">Committee Members</h2>
             <div className="space-y-3">
@@ -166,6 +202,48 @@ const EvaluationDetail: React.FC = () => {
                   </tbody>
                 </table>
               </div>
+            </div>
+          )}
+          </>
+          )}
+
+          {view === 'scoring' && (
+            <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+              <h2 className="text-lg font-semibold text-gray-900 mb-4">Technical Scoring</h2>
+              <p className="text-sm text-gray-500 mb-4">Score each bid independently. Your scores are private until all members submit.</p>
+              <div className="space-y-3">
+                {bidsData?.results?.length ? bidsData.results.map((bid: any) => (
+                  <div key={bid.id} className="flex items-center justify-between p-4 bg-gray-50 rounded-xl">
+                    <div>
+                      <span className="text-sm font-medium text-gray-900">{bid.vendor_name || bid.supplier_name || bid.id}</span>
+                      <span className="text-xs text-gray-400 ml-2">({bid.bid_id || bid.submission_id})</span>
+                    </div>
+                    <button onClick={() => navigate(`/evaluations/${committee.id}/scoring`)} className="px-4 py-2 bg-zammsa-green text-white rounded-lg text-sm font-bold">Score</button>
+                  </div>
+                )) : <p className="text-sm text-gray-400">No bids available for scoring.</p>}
+              </div>
+            </div>
+          )}
+          {view === 'financial' && (
+            <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+              <h2 className="text-lg font-semibold text-gray-900 mb-4">Financial Evaluation</h2>
+              <p className="text-sm text-gray-500 mb-4">Review and evaluate financial proposals. Apply preference margins.</p>
+              {user && [ROLES.EVALUATION_COMMITTEE_CHAIR, ROLES.DIRECTOR_PROCUREMENT].includes(user.role as any) ? (
+                <button onClick={() => navigate(`/evaluations/${committee.solicitation}/financial`)} className="px-6 py-3 bg-zammsa-green text-white rounded-xl text-sm font-bold">
+                  Open Financial Evaluation
+                </button>
+              ) : (
+                <p className="text-sm text-gray-500">Only the committee chair or director of procurement can access the financial evaluation.</p>
+              )}
+            </div>
+          )}
+          {view === 'ber' && (
+            <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+              <h2 className="text-lg font-semibold text-gray-900 mb-4">Bid Evaluation Report</h2>
+              <p className="text-sm text-gray-500 mb-4">Generate the BER, collect committee signatures, and submit to ZPC for approval.</p>
+              <button onClick={() => navigate(`/evaluations/ber/${committee.solicitation}`)} className="px-6 py-3 bg-purple-600 text-white rounded-xl text-sm font-bold">
+                Go to BER Workflow
+              </button>
             </div>
           )}
         </div>

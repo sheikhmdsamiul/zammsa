@@ -4,12 +4,14 @@ import { procurementPlanningApi } from '../../api/procurement_planning';
 import { GeneralProcurementNotice } from '../../types';
 import { StatusBadge } from '../common/StatusBadge';
 import { LoadingSpinner } from '../common/LoadingSpinner';
+import { PageHeader } from '../common/PageHeader';
+import { StatCard } from '../common/StatCard';
 import { useAuth } from '../../hooks/useAuth';
 import toast from 'react-hot-toast';
-import { 
-  ArrowLeftIcon, 
-  CheckCircleIcon, 
-  ExclamationCircleIcon, 
+import {
+  ArrowLeftIcon,
+  CheckCircleIcon,
+  ExclamationCircleIcon,
   ClockIcon,
   GlobeIcon,
   MailIcon,
@@ -20,30 +22,36 @@ import {
   OfficeBuildingIcon,
   UserCircleIcon,
   BellIcon,
+  PencilIcon,
+  XIcon,
+  PrinterIcon,
+  CashIcon,
+  ShieldCheckIcon,
+  CalendarIcon,
 } from '@heroicons/react/outline';
 
 const PUBLICATION_TARGETS = [
-  { 
-    key: 'zammsa_website', 
-    label: 'ZAMMSA Website', 
+  {
+    key: 'zammsa_website',
+    label: 'ZAMMSA Website',
     description: 'Auto-published immediately upon clicking Publish',
     icon: GlobeIcon,
   },
-  { 
-    key: 'egp_portal', 
-    label: 'ZPPA e-GP Portal', 
+  {
+    key: 'egp_portal',
+    label: 'ZPPA e-GP Portal',
     description: 'API call triggered automatically',
     icon: OfficeBuildingIcon,
   },
-  { 
-    key: 'registered_supplier_email', 
-    label: 'Registered Supplier Email Notifications', 
+  {
+    key: 'registered_supplier_email',
+    label: 'Registered Supplier Email Notifications',
     description: '47 registered suppliers in relevant categories will receive email notification',
     icon: MailIcon,
   },
-  { 
-    key: 'govt_gazette', 
-    label: 'Government Gazette', 
+  {
+    key: 'govt_gazette',
+    label: 'Government Gazette',
     description: 'System generates Gazette-formatted file for upload (submitted manually to Government Printer)',
     icon: DocumentTextIcon,
   },
@@ -64,7 +72,6 @@ const GPNDetail: React.FC = () => {
     daysRemaining?: number;
   } | null>(null);
 
-  // Form state for editable fields
   const [formContent, setFormContent] = useState<Record<string, any>>({});
 
   const loadGPN = async () => {
@@ -100,10 +107,6 @@ const GPNDetail: React.FC = () => {
     setFormContent((prev: Record<string, any>) => ({ ...prev, [field]: value }));
   };
 
-  const handleTextareaChange = (field: string, value: string) => {
-    setFormContent((prev: Record<string, any>) => ({ ...prev, [field]: value }));
-  };
-
   const toggleTarget = (key: string) => {
     setFormContent(prev => {
       const targets = [...(prev.publication_targets || [])];
@@ -131,7 +134,7 @@ const GPNDetail: React.FC = () => {
         notice_body: formContent.notice_body,
       };
 
-      const res = await procurementPlanningApi.gpn.update(id!, { content: contentUpdate });
+      await procurementPlanningApi.gpn.update(id!, { content: contentUpdate });
       toast.success('Draft saved');
       setGpn(prev => prev ? { ...prev, content: { ...(prev?.content || {}), ...contentUpdate } } : null);
     } catch (err: any) {
@@ -149,21 +152,16 @@ const GPNDetail: React.FC = () => {
     setPublishing(true);
     try {
       await saveDraft();
-      
+
       const targets = formContent.publication_targets || ['zammsa_website', 'egp_portal', 'registered_supplier_email'];
-      
-      // Simulate email stats (in real app, this would come from backend)
-      const emailStats = {
-        count: 47,
-        failed: 0,
-      };
+
+      const emailStats = { count: 47, failed: 0 };
 
       const res = await procurementPlanningApi.gpn.publish(id!, targets, [], {}, emailStats);
       toast.success(res.message);
-      
+
       const updatedGPN = await procurementPlanningApi.gpn.detail(id!);
-      
-      // Calculate ZPPA deadline info
+
       let zppaDeadline: string | undefined;
       let daysRemaining: number | undefined;
       if (updatedGPN.content?.zppa_deadline) {
@@ -172,16 +170,16 @@ const GPNDetail: React.FC = () => {
         const timeDiff = deadline.getTime() - Date.now();
         daysRemaining = Math.ceil(timeDiff / (1000 * 3600 * 24));
       }
-      
+
+      setGpn(updatedGPN);
+      setFormData(updatedGPN.content || {});
       setPublicationSuccess({
         proofs: res.publication_proofs || {},
         zppaDeadline,
         daysRemaining: daysRemaining !== null && daysRemaining !== undefined && daysRemaining >= 0 ? daysRemaining : undefined,
       });
-      
-      setTimeout(() => {
-        setPublicationSuccess(null);
-      }, 30000);
+
+      setTimeout(() => { setPublicationSuccess(null); }, 30000);
     } catch (err: any) {
       toast.error(err.response?.data?.error || 'Failed to publish GPN');
     }
@@ -192,7 +190,7 @@ const GPNDetail: React.FC = () => {
     setPreviewLoading(true);
     try {
       toast('PDF preview generation would be implemented here');
-    } catch (err: any) {
+    } catch {
       toast.error('Failed to generate preview');
     }
     setPreviewLoading(false);
@@ -200,69 +198,62 @@ const GPNDetail: React.FC = () => {
 
   useEffect(() => { loadGPN(); }, [id]);
 
-  if (loading) return <div className="p-12"><LoadingSpinner size="lg" /></div>;
-  if (!gpn) return <div className="p-12 text-center text-gray-500">GPN not found</div>;
+  if (loading) return <LoadingSpinner size="lg" className="py-24" />;
+  if (!gpn) return <div className="text-center py-24 text-gray-500 font-bold tracking-widest">GPN not found</div>;
 
   const lineItems = gpn.content?.line_items || [];
   const totalValue = lineItems.reduce((sum: number, item: any) => sum + (item.estimated_value || 0), 0);
-  
+
   const zpcApprovedAt = gpn.content?.zpc_approved_at;
-  const zpcApprovalDate = zpcApprovedAt ? new Date(zpcApprovedAt).toLocaleDateString('en-ZM', { 
-    year: 'numeric', 
-    month: 'short', 
-    day: 'numeric' 
-  }) : 'TBD';
+  const zpcApprovalDate = zpcApprovedAt
+    ? new Date(zpcApprovedAt).toLocaleDateString('en-ZM', { year: 'numeric', month: 'short', day: 'numeric' })
+    : 'TBD';
 
   const canEdit = ['procurement_officer', 'procurement_manager', 'director_procurement', 'system_admin'].includes(user?.role || '');
   const isPublished = gpn.publication_status === 'published';
 
-  // Publication Success State
   if (isPublished && publicationSuccess) {
     return (
-      <div className="max-w-5xl mx-auto space-y-6">
-        {/* Header */}
-        <div className="flex items-center justify-between">
-          <div>
-            <div className="flex items-center gap-3">
-              <h1 className="text-2xl font-bold text-gray-900">General Procurement Notice</h1>
-              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                <CheckCircleIcon className="w-3 h-3 mr-1" />
+      <div className="pb-12 max-w-7xl mx-auto">
+        <PageHeader
+          title="General Procurement Notice"
+          description={`${gpn.content?.department || '-'} — FY ${gpn.content?.fiscal_year || '-'}`}
+          breadcrumbs={[
+            { label: 'GPNs', path: '/procurement-planning/gpns' },
+            { label: 'View GPN' }
+          ]}
+          actions={
+            <div className="flex items-center gap-2">
+              <Link to="/procurement-planning/gpns" className="p-2.5 bg-white border border-gray-200 rounded-xl text-gray-400 hover:text-gray-900 transition-all">
+                <ArrowLeftIcon className="w-5 h-5" />
+              </Link>
+              <span className="inline-flex items-center px-3 py-1.5 rounded-full text-xs font-bold bg-green-100 text-green-800">
+                <CheckCircleIcon className="w-3.5 h-3.5 mr-1" />
                 Published
               </span>
             </div>
-            <p className="text-sm text-gray-500 mt-1">
-              {gpn.content?.department || '-'} &mdash; FY {gpn.content?.fiscal_year || '-'}
-            </p>
-          </div>
-          <div className="flex gap-2">
-            <Link to={`/procurement-planning/${gpn.app}`} className="text-sm text-teal-600 hover:text-teal-800 flex items-center gap-1">
-              View APP <ArrowLeftIcon className="w-4 h-4 rotate-180" />
-            </Link>
-            <button onClick={() => navigate('/procurement-planning/gpns')} className="text-sm text-gray-500 hover:text-gray-700">
-              &larr; Back to List
-            </button>
-          </div>
-        </div>
+          }
+        />
 
         {/* Success Banner */}
-        <div className="bg-green-50 border border-green-200 rounded-lg p-5">
-          <div className="flex items-start gap-4">
-            <div className="flex-shrink-0">
-              <CheckCircleIcon className="w-8 h-8 text-green-500" />
+        <div className="bg-green-50 border border-green-200 rounded-3xl p-8 mb-8">
+          <div className="flex items-start gap-5">
+            <div className="w-14 h-14 rounded-2xl bg-green-100 flex items-center justify-center shrink-0">
+              <CheckCircleIcon className="w-8 h-8 text-green-600" />
             </div>
             <div>
-              <h2 className="text-lg font-semibold text-green-800">GENERAL PROCUREMENT NOTICE PUBLISHED</h2>
-              <p className="text-sm text-green-700 mt-1">
-                <span className="font-medium">{gpn.content?.gpn_reference || 'GPN-XXXX-XXX-XXX'}</span> has been published to all selected channels.
+              <h2 className="text-lg font-black text-green-900 uppercase tracking-widest mb-1">General Procurement Notice Published</h2>
+              <p className="text-sm text-green-700">
+                <span className="font-bold">{formContent.gpn_reference || gpn.content?.gpn_reference || 'GPN-XXXX-XXX-XXX'}</span> has been published to all selected channels.
               </p>
             </div>
           </div>
         </div>
 
         {/* Publication Proofs */}
-        <div className="bg-white rounded-lg border border-gray-200 p-5">
-          <h2 className="font-semibold text-gray-900 mb-4 flex items-center gap-2">
-            <DocumentTextIcon className="w-5 h-5 text-gray-400" />
+        <div className="bg-white rounded-3xl border border-gray-100 shadow-sm p-8 mb-8">
+          <h2 className="text-sm font-black text-gray-400 uppercase tracking-[0.2em] mb-8 flex items-center gap-2">
+            <DocumentTextIcon className="w-5 h-5" />
             Publication Proofs
           </h2>
           <div className="space-y-4">
@@ -270,33 +261,33 @@ const GPNDetail: React.FC = () => {
               const proof = publicationSuccess.proofs![channel];
               const channelConfig = PUBLICATION_TARGETS.find(t => t.key === channel) || { label: channel, description: '', icon: DocumentTextIcon };
               const ChannelIcon = channelConfig.icon;
-              
+
               return (
-                <div key={channel} className="border border-gray-200 rounded-lg p-4 hover:border-teal-300 transition-colors">
-                  <div className="flex items-start gap-3">
-                    <div className="flex-shrink-0">
+                <div key={channel} className="p-6 bg-gray-50 rounded-2xl border border-gray-100 hover:border-teal-200 transition-colors">
+                  <div className="flex items-start gap-4">
+                    <div className={`w-12 h-12 rounded-xl flex items-center justify-center shrink-0 ${
+                      channel === 'govt_gazette' && !proof.url ? 'bg-amber-50 text-amber-500' : 'bg-emerald-50 text-emerald-500'
+                    }`}>
                       {channel === 'govt_gazette' && !proof.url ? (
-                        <ClockIcon className="w-5 h-5 text-yellow-500" />
+                        <ClockIcon className="w-6 h-6" />
                       ) : (
-                        <CheckCircleIcon className="w-5 h-5 text-green-500" />
+                        <CheckCircleIcon className="w-6 h-6" />
                       )}
                     </div>
                     <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
-                        <p className="font-medium text-gray-900">{channelConfig.label}</p>
+                      <div className="flex items-center gap-2 mb-1">
+                        <p className="text-sm font-bold text-gray-900">{channelConfig.label}</p>
                         {proof.status === 'published' && (
-                          <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-green-100 text-green-700">
-                            Published
-                          </span>
+                          <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded bg-emerald-50 text-emerald-600">Published</span>
                         )}
                       </div>
-                      <p className="text-sm text-gray-500 mt-0.5">{channelConfig.description}</p>
-                      
-                      <div className="mt-2 flex flex-wrap items-center gap-4 text-xs text-gray-600">
+                      <p className="text-xs text-gray-500">{channelConfig.description}</p>
+
+                      <div className="mt-3 flex flex-wrap items-center gap-4 text-xs text-gray-500">
                         <span className="flex items-center gap-1">
                           <ClockIcon className="w-3.5 h-3.5" />
-                          Published: {new Date(proof.timestamp).toLocaleString('en-ZM', { 
-                            year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' 
+                          {new Date(proof.timestamp).toLocaleString('en-ZM', {
+                            year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
                           })}
                         </span>
                         {proof.reference && (
@@ -312,21 +303,21 @@ const GPNDetail: React.FC = () => {
                           </span>
                         )}
                       </div>
-                      
+
                       {proof.url && (
                         <div className="mt-3">
-                          <a href={proof.url} target="_blank" rel="noopener noreferrer" 
-                             className="inline-flex items-center gap-1.5 text-sm text-teal-600 hover:text-teal-800 hover:underline">
-                            <ExternalLinkIcon className="w-4 h-4" />
+                          <a href={proof.url} target="_blank" rel="noopener noreferrer"
+                             className="inline-flex items-center gap-1.5 text-xs font-bold text-teal-600 hover:text-teal-800">
+                            <ExternalLinkIcon className="w-3.5 h-3.5" />
                             {proof.url}
                           </a>
                         </div>
                       )}
-                      
+
                       {channel === 'govt_gazette' && !proof.url && (
                         <div className="mt-3">
-                          <button className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50">
-                            <DownloadIcon className="w-4 h-4" />
+                          <button className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-bold text-gray-600 bg-white border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors">
+                            <DownloadIcon className="w-3.5 h-3.5" />
                             Download Gazette File
                           </button>
                         </div>
@@ -341,38 +332,36 @@ const GPNDetail: React.FC = () => {
 
         {/* ZPPA Deadline Tracking */}
         {publicationSuccess.zppaDeadline && (
-          <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-5">
+          <div className="bg-amber-50 border border-amber-200 rounded-3xl p-8 mb-8">
             <div className="flex items-start gap-4">
-              <div className="flex-shrink-0">
-                <ExclamationCircleIcon className="w-6 h-6 text-yellow-500" />
+              <div className="w-12 h-12 rounded-2xl bg-amber-100 flex items-center justify-center shrink-0">
+                <ExclamationCircleIcon className="w-6 h-6 text-amber-600" />
               </div>
               <div className="flex-1">
-                <h3 className="text-sm font-medium text-yellow-800">ZPPA Submission Tracking</h3>
-                <div className="mt-2 grid grid-cols-2 gap-4 text-sm">
-                  <div>
-                    <span className="text-yellow-700">Submission Deadline:</span>
-                    <span className="ml-2 font-medium text-gray-900">{publicationSuccess.zppaDeadline}</span>
+                <h3 className="text-sm font-bold text-amber-900 mb-3">ZPPA Submission Tracking</h3>
+                <div className="grid grid-cols-2 gap-4 text-sm">
+                  <div className="p-4 bg-white/60 rounded-xl border border-amber-100">
+                    <p className="text-xs text-amber-700 uppercase tracking-widest font-bold mb-1">Submission Deadline</p>
+                    <p className="font-bold text-gray-900">{publicationSuccess.zppaDeadline}</p>
                   </div>
-                  <div>
-                    <span className="text-yellow-700">Days Remaining:</span>
-                    <span className={`ml-2 font-medium ${
-                      publicationSuccess.daysRemaining! <= 3 
-                        ? 'text-red-600' 
-                        : publicationSuccess.daysRemaining! <= 7 
-                        ? 'text-yellow-600' 
+                  <div className="p-4 bg-white/60 rounded-xl border border-amber-100">
+                    <p className="text-xs text-amber-700 uppercase tracking-widest font-bold mb-1">Days Remaining</p>
+                    <p className={`font-bold ${
+                      publicationSuccess.daysRemaining! <= 3
+                        ? 'text-red-600'
+                        : publicationSuccess.daysRemaining! <= 7
+                        ? 'text-amber-600'
                         : 'text-green-600'
                     }`}>
                       {publicationSuccess.daysRemaining!} days
-                    </span>
+                    </p>
                   </div>
                 </div>
-                <p className="text-xs text-yellow-600 mt-2">
-                  Reminder: Update ZPPA submission reference after submission
-                </p>
-                <div className="mt-3">
-                  <button onClick={() => navigate(`/procurement-planning/${gpn.app}`)} 
-                          className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm border border-yellow-400 text-yellow-700 rounded-md hover:bg-yellow-100">
-                    <RefreshIcon className="w-4 h-4" />
+                <p className="text-xs text-amber-700 mt-3">Reminder: Update ZPPA submission reference after submission</p>
+                <div className="mt-4">
+                  <button onClick={() => navigate(`/procurement-planning/${gpn.app}`)}
+                          className="inline-flex items-center gap-1.5 px-4 py-2.5 text-xs font-bold text-amber-700 bg-white border border-amber-300 rounded-xl hover:bg-amber-50 transition-colors">
+                    <RefreshIcon className="w-3.5 h-3.5" />
                     Update ZPPA Submission
                   </button>
                 </div>
@@ -382,16 +371,15 @@ const GPNDetail: React.FC = () => {
         )}
 
         {/* Actions */}
-        <div className="bg-white rounded-lg border border-gray-200 p-5">
-          <h2 className="font-semibold text-gray-900 mb-4">Actions</h2>
+        <div className="bg-white rounded-3xl border border-gray-100 shadow-sm p-8">
           <div className="flex flex-wrap gap-3">
-            <button onClick={generatePreview} disabled={previewLoading} 
-                    className="inline-flex items-center gap-2 px-4 py-2 border border-teal-300 text-teal-700 rounded-lg text-sm hover:bg-teal-50 disabled:opacity-50">
+            <button onClick={generatePreview} disabled={previewLoading}
+                    className="inline-flex items-center gap-2 px-5 py-3 border border-teal-300 text-teal-700 rounded-xl text-sm font-bold hover:bg-teal-50 disabled:opacity-50 transition-colors">
               <DocumentTextIcon className="w-4 h-4" />
               {previewLoading ? 'Generating...' : 'Preview GPN PDF'}
             </button>
-            <button onClick={() => navigate('/procurement-planning/gpns')} 
-                    className="px-4 py-2 text-sm border border-gray-300 rounded-lg hover:bg-gray-50 text-gray-700">
+            <button onClick={() => navigate('/procurement-planning/gpns')}
+                    className="px-5 py-3 text-sm font-bold text-gray-500 bg-white border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors">
               Back to GPN List
             </button>
           </div>
@@ -400,360 +388,460 @@ const GPNDetail: React.FC = () => {
     );
   }
 
-  // Draft/Edit State
-  return (
-    <div className="max-w-6xl mx-auto space-y-6">
-      {/* Header */}
-      <div className="flex items-start justify-between">
-        <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-3">
-            <button onClick={() => navigate(`/procurement-planning/${gpn.app}`)} 
-                    className="text-sm text-teal-600 hover:text-teal-800 flex items-center gap-1">
-              <ArrowLeftIcon className="w-4 h-4" />
-              APP-{gpn.content?.department_code || 'XXX'}-{gpn.content?.fiscal_year || 'XXXX'}
-            </button>
-          </div>
-          <div className="mt-2">
-            <p className="font-semibold text-gray-900">{gpn.content?.department || 'Department Name'}</p>
-            <p className="text-xs text-gray-400 flex items-center gap-1 mt-0.5">
-              <UserCircleIcon className="w-3.5 h-3.5" />
-              {user?.full_name || 'User'}
-              <span className="mx-1">•</span>
-              <BellIcon className="w-3.5 h-3.5" />
-            </p>
-          </div>
-        </div>
-        <div className="text-right">
-          <div className="inline-flex items-center gap-2 px-3 py-1 bg-gray-100 rounded-full">
-            <span className="w-2 h-2 bg-yellow-400 rounded-full animate-pulse"></span>
-            <span className="text-xs font-medium text-gray-600">Draft</span>
-          </div>
-        </div>
-      </div>
+  // Published read-only view (on reload, without success data)
+  if (isPublished && !publicationSuccess) {
+    return (
+      <div className="pb-12 max-w-7xl mx-auto">
+        <PageHeader
+          title={`${gpn.content?.department || 'Department'} — FY ${gpn.content?.fiscal_year || '2026/2027'}`}
+          description={`Reference: ${formContent.gpn_reference || 'GPN-XXXX-XXX-XXX'}`}
+          breadcrumbs={[
+            { label: 'GPNs', path: '/procurement-planning/gpns' },
+            { label: 'View GPN' }
+          ]}
+          actions={
+            <div className="flex items-center gap-2">
+              <Link to="/procurement-planning/gpns" className="p-2.5 bg-white border border-gray-200 rounded-xl text-gray-400 hover:text-gray-900 transition-all">
+                <ArrowLeftIcon className="w-5 h-5" />
+              </Link>
+              <span className="inline-flex items-center px-3 py-1.5 rounded-full text-xs font-bold bg-green-100 text-green-800">
+                <CheckCircleIcon className="w-3.5 h-3.5 mr-1" />
+                Published
+              </span>
+            </div>
+          }
+        />
 
-      {/* Title Section */}
-      <div className="bg-white rounded-lg border border-gray-200 p-6">
-        <div className="flex items-center justify-between mb-4">
-          <h1 className="text-2xl font-bold text-gray-900">GENERAL PROCUREMENT NOTICE</h1>
-          <div className="text-right text-sm text-gray-600 space-y-1">
-            <div className="font-medium">{gpn.content?.gpn_reference || 'GPN-XXXX-XXX-XXX'}</div>
-            <div>{gpn.content?.department || 'Laboratory Department'} — FY {gpn.content?.fiscal_year || '2026/2027'}</div>
-            <div className="flex items-center justify-end gap-1.5 text-green-600">
-              <CheckCircleIcon className="w-4 h-4" />
-              <span>APP Approved by ZPC on {zpcApprovalDate}</span>
+        {/* Banner */}
+        <div className="bg-green-50 border border-green-200 rounded-3xl p-6 mb-8">
+          <div className="flex items-start gap-4">
+            <div className="w-10 h-10 rounded-2xl bg-green-100 flex items-center justify-center shrink-0">
+              <CheckCircleIcon className="w-6 h-6 text-green-600" />
+            </div>
+            <div>
+              <h2 className="text-sm font-black text-green-900 uppercase tracking-widest">Published GPN</h2>
+              <p className="text-sm text-green-700 mt-1">This General Procurement Notice has been published. Content is locked.</p>
             </div>
           </div>
         </div>
-      </div>
 
-      {/* GPN Content Section */}
-      <div className="bg-white rounded-lg border border-gray-200 p-6">
-        <h2 className="font-semibold text-gray-900 mb-5 flex items-center gap-2">
-          <DocumentTextIcon className="w-5 h-5 text-gray-400" />
-          GPN Content
-        </h2>
-        
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-          {/* Left Column - Contact Info and Notice */}
-          <div className="space-y-6">
-            {/* Issuing Authority */}
-            <div>
-              <p className="text-xs font-medium text-gray-500 uppercase tracking-wider mb-2">Issuing Authority</p>
-              <p className="text-sm font-medium text-gray-900">{formContent.issuing_authority}</p>
-            </div>
-            
-            {/* Contact Information */}
-            <div>
-              <p className="text-xs font-medium text-gray-500 uppercase tracking-wider mb-3">Contact Information</p>
-              <div className="space-y-3">
-                <div className="flex items-start gap-3">
-                  <span className="text-xs text-gray-500 w-16 flex-shrink-0">Name:</span>
-                  {!canEdit ? (
-                    <p className="text-sm text-gray-900">{formContent.contact_name}</p>
-                  ) : (
-                    <input
-                      value={formContent.contact_name || ''}
-                      onChange={(e) => handleInputChange('contact_name', e.target.value)}
-                      className="flex-1 border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent"
-                      placeholder="Enter contact name"
-                    />
-                  )}
-                </div>
-                <div className="flex items-start gap-3">
-                  <span className="text-xs text-gray-500 w-16 flex-shrink-0">Email:</span>
-                  {!canEdit ? (
-                    <p className="text-sm text-gray-900">{formContent.contact_email}</p>
-                  ) : (
-                    <input
-                      value={formContent.contact_email || ''}
-                      onChange={(e) => handleInputChange('contact_email', e.target.value)}
-                      className="flex-1 border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent"
-                      placeholder="Enter email address"
-                    />
-                  )}
-                </div>
-                <div className="flex items-start gap-3">
-                  <span className="text-xs text-gray-500 w-16 flex-shrink-0">Phone:</span>
-                  {!canEdit ? (
-                    <p className="text-sm text-gray-900">{formContent.contact_phone}</p>
-                  ) : (
-                    <input
-                      value={formContent.contact_phone || ''}
-                      onChange={(e) => handleInputChange('contact_phone', e.target.value)}
-                      className="flex-1 border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent"
-                      placeholder="Enter phone number"
-                    />
-                  )}
-                </div>
-                <div className="flex items-start gap-3">
-                  <span className="text-xs text-gray-500 w-16 flex-shrink-0">Address:</span>
-                  {!canEdit ? (
-                    <p className="text-sm text-gray-900">{formContent.contact_address}</p>
-                  ) : (
-                    <input
-                      value={formContent.contact_address || ''}
-                      onChange={(e) => handleInputChange('contact_address', e.target.value)}
-                      className="flex-1 border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent"
-                      placeholder="Enter address"
-                    />
-                  )}
+        {/* Summary Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+          <StatCard
+            label="Total Estimated Value"
+            value={`K ${totalValue.toLocaleString()}`}
+            icon={<CashIcon className="w-6 h-6" />}
+            color="green"
+            description="Planned procurements total"
+          />
+          <StatCard
+            label="Line Items"
+            value={lineItems.length}
+            icon={<DocumentTextIcon className="w-6 h-6" />}
+            color="blue"
+            description="Planned procurements"
+          />
+          <StatCard
+            label="Published"
+            value={gpn.published_at ? new Date(gpn.published_at).toLocaleDateString('en-GB') : '---'}
+            icon={<CalendarIcon className="w-6 h-6" />}
+            color="orange"
+            description="Publication date"
+          />
+        </div>
+
+        {/* Read-only content */}
+        <div className="bg-white rounded-3xl border border-gray-100 shadow-sm p-8 mb-8">
+          <h2 className="text-sm font-black text-gray-400 uppercase tracking-[0.2em] mb-8">GPN Content</h2>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+            <div className="space-y-8">
+              <div className="flex items-start gap-4">
+                <div className="w-10 h-10 rounded-xl bg-gray-50 flex items-center justify-center shrink-0"><OfficeBuildingIcon className="w-5 h-5 text-gray-400" /></div>
+                <div><p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Issuing Authority</p><p className="text-sm font-bold text-gray-900">{formContent.issuing_authority}</p></div>
+              </div>
+              <div className="bg-gray-50/50 rounded-2xl p-6 border border-gray-100">
+                <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-4">Contact Information</h3>
+                <div className="space-y-3 text-sm">
+                  <div className="flex gap-3"><span className="text-[10px] font-black text-gray-400 w-12">Name</span><span className="font-bold text-gray-900">{formContent.contact_name}</span></div>
+                  <div className="flex gap-3"><span className="text-[10px] font-black text-gray-400 w-12">Email</span><span className="font-bold text-gray-900">{formContent.contact_email}</span></div>
+                  <div className="flex gap-3"><span className="text-[10px] font-black text-gray-400 w-12">Phone</span><span className="font-bold text-gray-900">{formContent.contact_phone}</span></div>
+                  <div className="flex gap-3"><span className="text-[10px] font-black text-gray-400 w-12">Address</span><span className="font-bold text-gray-900">{formContent.contact_address}</span></div>
                 </div>
               </div>
+              <div className="flex items-start gap-4">
+                <div className="w-10 h-10 rounded-xl bg-gray-50 flex items-center justify-center shrink-0"><DocumentTextIcon className="w-5 h-5 text-gray-400" /></div>
+                <div><p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Notice Heading</p><p className="text-sm font-bold text-gray-900">{formContent.notice_heading}</p></div>
+              </div>
+              <div className="flex items-start gap-4">
+                <div className="w-10 h-10 rounded-xl bg-gray-50 flex items-center justify-center shrink-0 mt-1"><DocumentTextIcon className="w-5 h-5 text-gray-400" /></div>
+                <div><p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Notice Body</p><p className="text-sm text-gray-700 bg-gray-50/50 rounded-2xl p-5 border border-gray-100 whitespace-pre-wrap leading-relaxed">{formContent.notice_body}</p></div>
+              </div>
             </div>
-            
-            {/* Notice Heading */}
             <div>
-              <p className="text-xs font-medium text-gray-500 uppercase tracking-wider mb-2">Notice Heading</p>
-              {!canEdit ? (
-                <p className="text-sm text-gray-900">{formContent.notice_heading}</p>
-              ) : (
-                <input
-                  value={formContent.notice_heading || ''}
-                  onChange={(e) => handleInputChange('notice_heading', e.target.value)}
-                  className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent"
-                  placeholder="Enter notice heading"
-                />
-              )}
-            </div>
-            
-            {/* Notice Body */}
-            <div>
-              <p className="text-xs font-medium text-gray-500 uppercase tracking-wider mb-2">Notice Body</p>
-              {!canEdit ? (
-                <div className="text-sm text-gray-900 whitespace-pre-wrap bg-gray-50 rounded p-3 border border-gray-200">
-                  {formContent.notice_body}
-                </div>
-              ) : (
-                <textarea
-                  value={formContent.notice_body || ''}
-                  onChange={(e) => handleTextareaChange('notice_body', e.target.value)}
-                  rows={6}
-                  className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent resize-none"
-                  placeholder="Enter notice body text..."
-                />
-              )}
-            </div>
-          </div>
-          
-          {/* Right Column - Planned Procurements Table */}
-          <div>
-            <p className="text-xs font-medium text-gray-500 uppercase tracking-wider mb-3">Planned Procurements Table</p>
-            <div className="border border-gray-200 rounded-lg overflow-hidden">
-              <table className="min-w-full divide-y divide-gray-200">
-                <thead className="bg-gray-50">
-                  <tr>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Item</th>
-                    <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Value (K)</th>
-                    <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Method</th>
-                    <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Est. Date</th>
-                  </tr>
-                </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
-                  {lineItems.map((item: any, idx: number) => (
-                    <tr key={idx} className="hover:bg-gray-50">
-                      <td className="px-4 py-3 text-sm text-gray-900">{item.description}</td>
-                      <td className="px-4 py-3 text-sm text-right font-medium text-gray-900">
-                        {Number(item.estimated_value).toLocaleString()}
-                      </td>
-                      <td className="px-4 py-3 text-sm text-center">
-                        <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-700">
-                          {item.procurement_type_display || item.procurement_type || '-'}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3 text-sm text-center text-gray-500">
-                        {item.planned_issue_date 
-                          ? new Date(item.planned_issue_date).toLocaleDateString('en-ZM', { month: 'short', year: 'numeric' }) 
-                          : '-'
-                        }
-                      </td>
-                    </tr>
-                  ))}
-                  {lineItems.length === 0 && (
+              <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-4">Planned Procurements</p>
+              <div className="border border-gray-100 rounded-2xl overflow-hidden">
+                <table className="min-w-full divide-y divide-gray-50">
+                  <thead className="bg-gray-50/30">
                     <tr>
-                      <td colSpan={4} className="px-4 py-8 text-center text-gray-400 text-sm">
-                        No planned procurements
-                      </td>
+                      <th className="px-5 py-4 text-left text-[10px] font-black text-gray-400 uppercase tracking-widest">Item</th>
+                      <th className="px-5 py-4 text-right text-[10px] font-black text-gray-400 uppercase tracking-widest">Value (K)</th>
+                      <th className="px-5 py-4 text-center text-[10px] font-black text-gray-400 uppercase tracking-widest">Method</th>
+                      <th className="px-5 py-4 text-center text-[10px] font-black text-gray-400 uppercase tracking-widest">Est. Date</th>
                     </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-50">
+                    {lineItems.map((item: any, idx: number) => (
+                      <tr key={idx} className="hover:bg-gray-50/50 transition-colors">
+                        <td className="px-5 py-4 text-sm font-bold text-gray-800">{item.description}</td>
+                        <td className="px-5 py-4 text-sm text-right font-bold text-gray-900">{Number(item.estimated_value).toLocaleString()}</td>
+                        <td className="px-5 py-4 text-sm text-center"><span className="text-[10px] font-black uppercase px-2 py-1 rounded-lg bg-gray-100 text-gray-600">{item.procurement_type_display || item.procurement_type || '-'}</span></td>
+                        <td className="px-5 py-4 text-sm text-center text-gray-500">{item.planned_issue_date ? new Date(item.planned_issue_date).toLocaleDateString('en-ZM', { month: 'short', year: 'numeric' }) : '-'}</td>
+                      </tr>
+                    ))}
+                    {lineItems.length === 0 && (<tr><td colSpan={4} className="px-5 py-12 text-center text-gray-400 italic text-sm">No planned procurements</td></tr>)}
+                  </tbody>
+                  {lineItems.length > 0 && (
+                    <tfoot className="bg-gray-50/50 font-black">
+                      <tr><td className="px-5 py-4 text-sm text-gray-500">Total</td><td className="px-5 py-4 text-sm text-right text-gray-900">{totalValue.toLocaleString()}</td><td colSpan={2}></td></tr>
+                    </tfoot>
                   )}
-                </tbody>
-                {lineItems.length > 0 && (
-                  <tfoot className="bg-gray-50">
-                    <tr>
-                      <td className="px-4 py-3 text-sm font-medium text-gray-900">Total</td>
-                      <td className="px-4 py-3 text-sm text-right font-bold text-gray-900">
-                        {totalValue.toLocaleString()}
-                      </td>
-                      <td colSpan={2}></td>
-                    </tr>
-                  </tfoot>
-                )}
-              </table>
+                </table>
+              </div>
             </div>
           </div>
         </div>
-      </div>
 
-      {/* Publication Channels Section */}
-      <div className="bg-white rounded-lg border border-gray-200 p-6">
-        <h2 className="font-semibold text-gray-900 mb-5 flex items-center gap-2">
-          <GlobeIcon className="w-5 h-5 text-gray-400" />
-          Publication Channels
-        </h2>
-        <div className="space-y-4">
-          {PUBLICATION_TARGETS.map((channel) => {
-            const ChannelIcon = channel.icon;
-            const isChecked = (formContent.publication_targets || []).includes(channel.key);
-            return (
-              <div key={channel.key} className="flex items-start gap-4 p-4 border border-gray-200 rounded-lg hover:border-teal-300 transition-colors">
-                <div className="flex-shrink-0 mt-0.5">
-                  <input
-                    type="checkbox"
-                    checked={isChecked}
-                    onChange={() => toggleTarget(channel.key)}
-                    disabled={isPublished}
-                    className="h-4 w-4 text-teal-600 border-gray-300 rounded focus:ring-teal-500"
-                  />
-                </div>
-                <div className="flex-1">
-                  <div className="flex items-center gap-2">
-                    <ChannelIcon className="w-5 h-5 text-gray-400" />
-                    <p className="font-medium text-gray-900">{channel.label}</p>
-                    {isChecked && (
-                      <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-teal-100 text-teal-700">
-                        Selected
-                      </span>
+        <div className="bg-white rounded-3xl border border-gray-100 shadow-sm p-8">
+          <div className="flex flex-wrap gap-3">
+            <button onClick={generatePreview} disabled={previewLoading} className="inline-flex items-center gap-2 px-5 py-3 border border-teal-300 text-teal-700 rounded-xl text-sm font-bold hover:bg-teal-50 disabled:opacity-50 transition-colors">
+              <DocumentTextIcon className="w-4 h-4" />
+              {previewLoading ? 'Generating...' : 'Preview GPN PDF'}
+            </button>
+            <button onClick={() => navigate('/procurement-planning/gpns')} className="px-5 py-3 text-sm font-bold text-gray-500 bg-white border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors">Back to GPN List</button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="pb-12 max-w-7xl mx-auto">
+      <PageHeader
+        title={`${gpn.content?.department || 'Department'} — FY ${gpn.content?.fiscal_year || '2026/2027'}`}
+        description={`Reference: ${formContent.gpn_reference || 'GPN-XXXX-XXX-XXX'}`}
+        breadcrumbs={[
+          { label: 'GPNs', path: '/procurement-planning/gpns' },
+          { label: 'View GPN' }
+        ]}
+        actions={
+          <div className="flex items-center gap-2">
+            {canEdit && !isPublished && (
+              <button onClick={saveDraft} disabled={saving} className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 rounded-xl shadow-sm text-xs font-bold text-gray-500 hover:text-blue-600 transition-all uppercase tracking-widest">
+                {saving ? 'Saving...' : 'Save Draft'}
+              </button>
+            )}
+            <StatusBadge status={gpn.publication_status || 'draft'} className="py-2 px-4 shadow-sm" />
+          </div>
+        }
+      />
+
+      <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
+        <div className="lg:col-span-3 space-y-8">
+          {/* Summary Cards */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <StatCard
+              label="Total Estimated Value"
+              value={`K ${totalValue.toLocaleString()}`}
+              icon={<CashIcon className="w-6 h-6" />}
+              color="green"
+              description="Planned procurements total"
+            />
+            <StatCard
+              label="Line Items"
+              value={lineItems.length}
+              icon={<DocumentTextIcon className="w-6 h-6" />}
+              color="blue"
+              description="Planned procurements"
+            />
+            <StatCard
+              label="ZPC Approval"
+              value={zpcApprovalDate}
+              icon={<ShieldCheckIcon className="w-6 h-6" />}
+              color="orange"
+              description={`APP approved on this date`}
+            />
+          </div>
+
+          {/* GPN Content */}
+          <div className="bg-white rounded-3xl border border-gray-100 shadow-sm p-8">
+            <h2 className="text-sm font-black text-gray-400 uppercase tracking-[0.2em] mb-8">GPN Content</h2>
+
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+              {/* Left Column */}
+              <div className="space-y-8">
+                {/* Issuing Authority */}
+                <div className="flex items-start gap-4">
+                  <div className="w-10 h-10 rounded-xl bg-gray-50 flex items-center justify-center shrink-0"><OfficeBuildingIcon className="w-5 h-5 text-gray-400" /></div>
+                  <div className="flex-1">
+                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Issuing Authority</p>
+                    {!canEdit ? (
+                      <p className="text-sm font-bold text-gray-900">{formContent.issuing_authority}</p>
+                    ) : (
+                      <input value={formContent.issuing_authority || ''} onChange={(e) => handleInputChange('issuing_authority', e.target.value)}
+                        className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm font-bold text-gray-700 outline-none focus:ring-4 focus:ring-zammsa-green/5 transition-all" />
                     )}
                   </div>
-                  <p className="text-sm text-gray-500 mt-1 ml-7">{channel.description}</p>
+                </div>
+
+                {/* Contact Information */}
+                <div className="bg-gray-50/50 rounded-2xl p-6 border border-gray-100">
+                  <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-4 flex items-center gap-2">
+                    <UserCircleIcon className="w-4 h-4" />
+                    Contact Information
+                  </h3>
+                  <div className="space-y-4">
+                    <div className="flex items-center gap-3">
+                      <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest w-12 shrink-0">Name</span>
+                      {!canEdit ? (
+                        <p className="text-sm font-bold text-gray-900">{formContent.contact_name}</p>
+                      ) : (
+                        <input value={formContent.contact_name || ''} onChange={(e) => handleInputChange('contact_name', e.target.value)}
+                          className="flex-1 border border-gray-200 rounded-xl px-4 py-3 text-sm outline-none focus:ring-4 focus:ring-zammsa-green/5 transition-all" />
+                      )}
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest w-12 shrink-0">Email</span>
+                      {!canEdit ? (
+                        <p className="text-sm font-bold text-gray-900">{formContent.contact_email}</p>
+                      ) : (
+                        <input value={formContent.contact_email || ''} onChange={(e) => handleInputChange('contact_email', e.target.value)}
+                          className="flex-1 border border-gray-200 rounded-xl px-4 py-3 text-sm outline-none focus:ring-4 focus:ring-zammsa-green/5 transition-all" />
+                      )}
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest w-12 shrink-0">Phone</span>
+                      {!canEdit ? (
+                        <p className="text-sm font-bold text-gray-900">{formContent.contact_phone}</p>
+                      ) : (
+                        <input value={formContent.contact_phone || ''} onChange={(e) => handleInputChange('contact_phone', e.target.value)}
+                          className="flex-1 border border-gray-200 rounded-xl px-4 py-3 text-sm outline-none focus:ring-4 focus:ring-zammsa-green/5 transition-all" />
+                      )}
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest w-12 shrink-0">Address</span>
+                      {!canEdit ? (
+                        <p className="text-sm font-bold text-gray-900">{formContent.contact_address}</p>
+                      ) : (
+                        <input value={formContent.contact_address || ''} onChange={(e) => handleInputChange('contact_address', e.target.value)}
+                          className="flex-1 border border-gray-200 rounded-xl px-4 py-3 text-sm outline-none focus:ring-4 focus:ring-zammsa-green/5 transition-all" />
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Notice Heading */}
+                <div className="flex items-start gap-4">
+                  <div className="w-10 h-10 rounded-xl bg-gray-50 flex items-center justify-center shrink-0"><DocumentTextIcon className="w-5 h-5 text-gray-400" /></div>
+                  <div className="flex-1">
+                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Notice Heading</p>
+                    {!canEdit ? (
+                      <p className="text-sm font-bold text-gray-900">{formContent.notice_heading}</p>
+                    ) : (
+                      <input value={formContent.notice_heading || ''} onChange={(e) => handleInputChange('notice_heading', e.target.value)}
+                        className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm outline-none focus:ring-4 focus:ring-zammsa-green/5 transition-all" />
+                    )}
+                  </div>
+                </div>
+
+                {/* Notice Body */}
+                <div className="flex items-start gap-4">
+                  <div className="w-10 h-10 rounded-xl bg-gray-50 flex items-center justify-center shrink-0 mt-1"><DocumentTextIcon className="w-5 h-5 text-gray-400" /></div>
+                  <div className="flex-1">
+                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Notice Body</p>
+                    {!canEdit ? (
+                      <div className="text-sm text-gray-700 bg-gray-50/50 rounded-2xl p-5 border border-gray-100 whitespace-pre-wrap leading-relaxed">
+                        {formContent.notice_body}
+                      </div>
+                    ) : (
+                      <textarea value={formContent.notice_body || ''} onChange={(e) => handleInputChange('notice_body', e.target.value)}
+                        rows={6}
+                        className="w-full border border-gray-200 rounded-2xl px-5 py-4 text-sm outline-none focus:ring-4 focus:ring-zammsa-green/5 transition-all resize-none" />
+                    )}
+                  </div>
                 </div>
               </div>
-            );
-          })}
-        </div>
-      </div>
 
-      {/* ZPPA Submission Tracking Section */}
-      <div className="bg-white rounded-lg border border-gray-200 p-6">
-        <h2 className="font-semibold text-gray-900 mb-5 flex items-center gap-2">
-          <ExclamationCircleIcon className="w-5 h-5 text-gray-400" />
-          ZPPA Submission Tracking
-        </h2>
-        <div className="space-y-4">
-          <div className="grid grid-cols-2 gap-6">
-            <div className="bg-gray-50 rounded-lg p-4">
-              <p className="text-xs text-gray-500 uppercase tracking-wider">ZPC Approval Date</p>
-              <p className="mt-1 text-lg font-semibold text-gray-900">{zpcApprovalDate}</p>
-            </div>
-            <div className="bg-gray-50 rounded-lg p-4">
-              <p className="text-xs text-gray-500 uppercase tracking-wider">ZPPA Submission Deadline</p>
-              {gpn.content?.zppa_deadline ? (
-                <div>
-                  <p className="mt-1 text-lg font-semibold text-gray-900">
-                    {new Date(gpn.content.zppa_deadline).toLocaleDateString('en-ZM', { 
-                      year: 'numeric', month: 'short', day: 'numeric' 
-                    })}
-                  </p>
-                  {(() => {
-                    const daysRemaining = Math.ceil((new Date(gpn.content.zppa_deadline).getTime() - Date.now()) / (1000 * 3600 * 24));
-                    return (
-                      <p className={`text-xs mt-1 font-medium ${
-                        daysRemaining <= 3 ? 'text-red-600' : daysRemaining <= 7 ? 'text-yellow-600' : 'text-green-600'
-                      }`}>
-                        {daysRemaining} days remaining
-                      </p>
-                    );
-                  })()}
+              {/* Right Column - Line Items */}
+              <div>
+                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-4">Planned Procurements</p>
+                <div className="border border-gray-100 rounded-2xl overflow-hidden">
+                  <table className="min-w-full divide-y divide-gray-50">
+                    <thead className="bg-gray-50/30">
+                      <tr>
+                        <th className="px-5 py-4 text-left text-[10px] font-black text-gray-400 uppercase tracking-widest">Item</th>
+                        <th className="px-5 py-4 text-right text-[10px] font-black text-gray-400 uppercase tracking-widest">Value (K)</th>
+                        <th className="px-5 py-4 text-center text-[10px] font-black text-gray-400 uppercase tracking-widest">Method</th>
+                        <th className="px-5 py-4 text-center text-[10px] font-black text-gray-400 uppercase tracking-widest">Est. Date</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-50">
+                      {lineItems.map((item: any, idx: number) => (
+                        <tr key={idx} className="hover:bg-gray-50/50 transition-colors">
+                          <td className="px-5 py-4 text-sm font-bold text-gray-800">{item.description}</td>
+                          <td className="px-5 py-4 text-sm text-right font-bold text-gray-900">
+                            {Number(item.estimated_value).toLocaleString()}
+                          </td>
+                          <td className="px-5 py-4 text-sm text-center">
+                            <span className="text-[10px] font-black uppercase px-2 py-1 rounded-lg bg-gray-100 text-gray-600">
+                              {item.procurement_type_display || item.procurement_type || '-'}
+                            </span>
+                          </td>
+                          <td className="px-5 py-4 text-sm text-center text-gray-500">
+                            {item.planned_issue_date
+                              ? new Date(item.planned_issue_date).toLocaleDateString('en-ZM', { month: 'short', year: 'numeric' })
+                              : '-'
+                            }
+                          </td>
+                        </tr>
+                      ))}
+                      {lineItems.length === 0 && (
+                        <tr><td colSpan={4} className="px-5 py-12 text-center text-gray-400 italic text-sm">No planned procurements</td></tr>
+                      )}
+                    </tbody>
+                    {lineItems.length > 0 && (
+                      <tfoot className="bg-gray-50/50 font-black">
+                        <tr>
+                          <td className="px-5 py-4 text-sm text-gray-500">Total</td>
+                          <td className="px-5 py-4 text-sm text-right text-gray-900">{totalValue.toLocaleString()}</td>
+                          <td colSpan={2}></td>
+                        </tr>
+                      </tfoot>
+                    )}
+                  </table>
                 </div>
-              ) : (
-                <p className="mt-1 text-sm text-gray-400 italic">Not set</p>
-              )}
+              </div>
             </div>
           </div>
-          
-          <div className="border-t border-gray-200 pt-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-gray-500">
-                  ZPPA Submitted?
-                  <span className={`ml-2 font-medium ${gpn.content?.zppa_submitted ? 'text-green-600' : 'text-gray-900'}`}>
-                    {gpn.content?.zppa_submitted ? 'Yes' : 'No'}
-                  </span>
-                  {(gpn.content?.zppa_submitted && gpn.content?.zppa_submission_ref) && (
-                    <span className="ml-2 text-xs text-gray-500">
-                      Ref: {gpn.content.zppa_submission_ref}
-                    </span>
-                  )}
-                </p>
+        </div>
+
+        {/* Sidebar */}
+        <div className="space-y-8">
+          {/* Publication Channels */}
+          <div className="bg-white rounded-3xl border border-gray-100 shadow-sm p-8">
+            <h2 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-6 flex items-center gap-2">
+              <GlobeIcon className="w-4 h-4" />
+              Channels
+            </h2>
+            <div className="space-y-4">
+              {PUBLICATION_TARGETS.map((channel) => {
+                const ChannelIcon = channel.icon;
+                const isChecked = (formContent.publication_targets || []).includes(channel.key);
+                return (
+                  <div key={channel.key}
+                    onClick={() => canEdit && !isPublished && toggleTarget(channel.key)}
+                    className={`flex items-start gap-3 p-4 rounded-2xl border transition-all cursor-pointer ${
+                      isChecked ? 'bg-emerald-50 border-emerald-200' : 'bg-white border-gray-100 hover:border-gray-200'
+                    } ${!canEdit || isPublished ? 'cursor-default' : ''}`}>
+                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${
+                      isChecked ? 'bg-emerald-500 text-white' : 'bg-gray-50 text-gray-400'
+                    }`}>
+                      <ChannelIcon className="w-5 h-5" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <p className={`text-xs font-bold uppercase tracking-widest ${isChecked ? 'text-emerald-900' : 'text-gray-700'}`}>
+                          {channel.label}
+                        </p>
+                        {isChecked && <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />}
+                      </div>
+                      <p className="text-[10px] text-gray-500 mt-0.5 leading-relaxed">{channel.description}</p>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* ZPPA Tracking */}
+          <div className="bg-white rounded-3xl border border-gray-100 shadow-sm p-8">
+            <h2 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-6 flex items-center gap-2">
+              <ShieldCheckIcon className="w-4 h-4" />
+              ZPPA Tracking
+            </h2>
+            <div className="space-y-5">
+              <div className="flex items-center justify-between p-4 bg-gray-50 rounded-2xl">
+                <div>
+                  <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">ZPC Approval</p>
+                  <p className="text-sm font-bold text-gray-900 mt-1">{zpcApprovalDate}</p>
+                </div>
+                <CalendarIcon className="w-5 h-5 text-gray-300" />
               </div>
-              {gpn.content?.zppa_submitted && (
-                <button onClick={() => navigate(`/procurement-planning/${gpn.app}`)}
-                        className="text-sm text-teal-600 hover:text-teal-800 flex items-center gap-1">
-                  Update <ArrowLeftIcon className="w-4 h-4 rotate-180" />
+
+              <div className="flex items-center justify-between p-4 bg-gray-50 rounded-2xl">
+                <div>
+                  <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">ZPPA Deadline</p>
+                  {gpn.content?.zppa_deadline ? (
+                    <div>
+                      <p className="text-sm font-bold text-gray-900 mt-1">
+                        {new Date(gpn.content.zppa_deadline).toLocaleDateString('en-ZM', { year: 'numeric', month: 'short', day: 'numeric' })}
+                      </p>
+                      {(() => {
+                        const daysRemaining = Math.ceil((new Date(gpn.content.zppa_deadline).getTime() - Date.now()) / (1000 * 3600 * 24));
+                        return (
+                          <p className={`text-[10px] font-bold mt-0.5 ${
+                            daysRemaining <= 3 ? 'text-red-600' : daysRemaining <= 7 ? 'text-amber-600' : 'text-green-600'
+                          }`}>
+                            {daysRemaining} days remaining
+                          </p>
+                        );
+                      })()}
+                    </div>
+                  ) : (
+                    <p className="text-sm text-gray-400 italic mt-1">Not set</p>
+                  )}
+                </div>
+                <ExclamationCircleIcon className="w-5 h-5 text-amber-400" />
+              </div>
+
+              <div className="border-t border-gray-100 pt-5">
+                <div className="flex items-center justify-between">
+                  <p className="text-xs text-gray-500">
+                    ZPPA Submitted?
+                    <span className={`ml-2 font-bold ${gpn.content?.zppa_submitted ? 'text-green-600' : 'text-gray-700'}`}>
+                      {gpn.content?.zppa_submitted ? 'Yes' : 'No'}
+                    </span>
+                  </p>
+                  {gpn.content?.zppa_submitted && gpn.content?.zppa_submission_ref && (
+                    <span className="text-[10px] font-bold text-gray-400">Ref: {gpn.content.zppa_submission_ref}</span>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Actions */}
+          <div className="bg-white rounded-3xl border border-gray-100 shadow-sm p-8">
+            <h2 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-6">Actions</h2>
+            <div className="space-y-3">
+              <button onClick={generatePreview} disabled={previewLoading || isPublished}
+                      className="w-full py-4 border border-teal-200 text-teal-700 rounded-2xl text-xs font-black uppercase tracking-widest hover:bg-teal-50 disabled:opacity-50 transition-all">
+                <DocumentTextIcon className="w-4 h-4 inline mr-2" />
+                {previewLoading ? 'Generating...' : 'Preview PDF'}
+              </button>
+
+              {!isPublished && (
+                <button onClick={handlePublish} disabled={publishing || !canEdit}
+                        className="w-full py-4 bg-zammsa-green text-white rounded-2xl text-xs font-black uppercase tracking-widest shadow-lg shadow-zammsa-green/20 hover:bg-zammsa-green-dark disabled:opacity-50 transition-all">
+                  {publishing ? 'Publishing...' : 'Publish GPN'}
                 </button>
               )}
+
+              <button onClick={() => navigate(`/procurement-planning/${gpn.app}`)}
+                      className="w-full py-3 text-xs font-bold text-gray-400 uppercase tracking-widest hover:text-gray-600 transition-all">
+                View APP Details
+              </button>
             </div>
           </div>
-        </div>
-      </div>
-
-      {/* Action Buttons */}
-      <div className="bg-white rounded-lg border border-gray-200 p-6">
-        <h2 className="font-semibold text-gray-900 mb-4">Actions</h2>
-        <div className="flex flex-wrap gap-3">
-          <button onClick={generatePreview} disabled={previewLoading || isPublished} 
-                  className="inline-flex items-center gap-2 px-4 py-2 border border-teal-300 text-teal-700 rounded-lg text-sm hover:bg-teal-50 disabled:opacity-50">
-            <DocumentTextIcon className="w-4 h-4" />
-            {previewLoading ? 'Generating...' : 'Preview GPN PDF'}
-          </button>
-          
-          <button onClick={saveDraft} disabled={saving || isPublished} 
-                  className="inline-flex items-center gap-2 px-4 py-2 border border-yellow-400 text-yellow-700 rounded-lg text-sm hover:bg-yellow-50 disabled:opacity-50">
-            {saving ? 'Saving...' : 'Save Draft'}
-          </button>
-          
-          {!isPublished && (
-            <button onClick={handlePublish} disabled={publishing || !canEdit} 
-                    className="inline-flex items-center gap-2 px-4 py-2 bg-teal-600 text-white rounded-lg text-sm hover:bg-teal-700 disabled:opacity-50">
-              {publishing ? (
-                <>
-                  <LoadingSpinner size="sm" className="text-white" />
-                  Publishing...
-                </>
-              ) : (
-                <>
-                  <CheckCircleIcon className="w-4 h-4" />
-                  Publish GPN
-                </>
-              )}
-            </button>
-          )}
-          
-          {!isPublished && (
-            <button onClick={() => navigate(`/procurement-planning/${gpn.app}`)} 
-                    className="inline-flex items-center gap-1 px-4 py-2 text-sm text-gray-500 hover:text-gray-700">
-              View APP Details
-            </button>
-          )}
         </div>
       </div>
     </div>

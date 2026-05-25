@@ -1,3 +1,4 @@
+import uuid
 import secrets
 from django.db.models import Q, Max as MaxAgg
 from django.utils import timezone
@@ -27,8 +28,15 @@ class StandardPagination(PageNumberPagination):
 
 class BidFilter(django_filters.FilterSet):
     status = django_filters.CharFilter(lookup_expr='exact')
-    solicitation = django_filters.CharFilter(field_name='solicitation__sol_number', lookup_expr='exact')
+    solicitation = django_filters.CharFilter(method='filter_solicitation')
     is_late = django_filters.BooleanFilter()
+
+    def filter_solicitation(self, queryset, name, value):
+        try:
+            uuid.UUID(value)
+            return queryset.filter(solicitation_id=value)
+        except (ValueError, AttributeError):
+            return queryset.filter(solicitation__sol_number=value)
 
     class Meta:
         model = BidSubmission
@@ -282,9 +290,29 @@ def bid_opening_start_view(request, pk):
         solicitation=sol,
         conducted_by=request.user,
         status='in_progress',
+        started_at=timezone.now(),
+        scheduled_opening_time=request.data.get('scheduled_opening_time') or None,
+        public_live_link=request.data.get('public_live_link', f'portal.zammsa.gov.zm/opening/{sol.sol_number}-live'),
+        viewers_connected=int(request.data.get('viewers_connected', 0) or 0),
         witnesses=request.data.get('witnesses', []),
         witness_signatures=request.data.get('witness_signatures', []),
     )
+
+    # Pre-create BidOpeningDetail records for all submitted bids
+    # so the frontend sees the full bid list immediately
+    details = [
+        BidOpeningDetail(
+            opening=opening,
+            bid=bid,
+            opened_sequence=idx + 1,
+            bidder_name=bid.supplier.full_name if bid.supplier else "Unknown",
+            is_opened=False,
+            security_amount_read=bid.security_amount,
+            security_verified_read=bool(bid.security_verified),
+        )
+        for idx, bid in enumerate(bids)
+    ]
+    BidOpeningDetail.objects.bulk_create(details)
 
     return Response({
         'message': 'Bid opening session started',
@@ -314,11 +342,21 @@ def bid_open_single_view(request, opening_pk, bid_pk):
     if bid.status != 'submitted':
         return Response({'error': 'Bid is not in submitted status'}, status=400)
 
-    if BidOpeningDetail.objects.filter(opening=opening, bid=bid).exists():
+    detail = BidOpeningDetail.objects.filter(opening=opening, bid=bid).first()
+    if detail and detail.is_opened:
         return Response({'error': 'Bid has already been opened'}, status=400)
 
-    last_seq = BidOpeningDetail.objects.filter(opening=opening).aggregate(
-        m=MaxAgg('opened_sequence'))['m'] or 0
+    if detail is None:
+        last_seq = BidOpeningDetail.objects.filter(opening=opening).aggregate(
+            m=MaxAgg('opened_sequence'))['m'] or 0
+        detail = BidOpeningDetail(
+            opening=opening,
+            bid=bid,
+            opened_sequence=last_seq + 1,
+            bidder_name=bid.supplier.full_name,
+            security_amount_read=bid.security_amount,
+            security_verified_read=bool(bid.security_verified),
+        )
 
     financial_sealed = request.data.get('financial_sealed', 'true') in ('true', 'True', True, '1')
 
@@ -326,19 +364,25 @@ def bid_open_single_view(request, opening_pk, bid_pk):
     bid.opened_at = timezone.now()
     bid.save()
 
-    detail = BidOpeningDetail.objects.create(
-        opening=opening,
-        bid=bid,
-        opened_sequence=last_seq + 1,
-        bidder_name=bid.supplier.full_name,
-        price_read=bid.bid_price if not financial_sealed else None,
-        financial_sealed=financial_sealed,
-        objections=request.data.get('objections', ''),
-    )
+    detail.is_opened = True
+    detail.opened_at = timezone.now()
+    detail.price_read = bid.bid_price if not financial_sealed else None
+    detail.financial_sealed = financial_sealed
+    detail.objections = request.data.get('objections', '')
+    detail.security_amount_read = bid.security_amount
+    detail.security_verified_read = bool(bid.security_verified)
+    detail.save()
+
+    newly_opened_count = opening.opening_details.filter(is_opened=True).count()
+    total_count = opening.opening_details.count()
+    if total_count > 0 and newly_opened_count >= total_count:
+        opening.status = 'completed'
+        opening.completed_at = timezone.now()
+        opening.save(update_fields=['status', 'completed_at'])
 
     return Response({
-        'message': f'Bid {bid.submission_id} opened (seq {last_seq + 1})',
-        'sequence': last_seq + 1,
+        'message': f'Bid {bid.submission_id} opened (seq {detail.opened_sequence})',
+        'sequence': detail.opened_sequence,
         'bidder_name': bid.supplier.full_name,
         'financial_sealed': financial_sealed,
         'detail': BidOpeningDetailSerializer(detail).data,
@@ -369,9 +413,9 @@ WITNESSES:
 {chr(10).join(f'  - {w}' if isinstance(w, str) else f'  - {w.get("name", w)}' for w in opening.witnesses) if opening.witnesses else '  None recorded'}
 
 OPENED BIDS:
-{chr(10).join(f'  {d.opened_sequence}. {d.bidder_name or d.bid.supplier.full_name}  |  Sequence: {d.opened_sequence}  |  Financial: {"SEALED" if d.financial_sealed else f"ZMW {d.price_read}"}  |  Objections: {d.objections or "None"}' for d in details) if details else '  No bids opened'}
+{chr(10).join(f'  {d.opened_sequence}. {d.bidder_name or d.bid.supplier.full_name}  |  Sequence: {d.opened_sequence}  |  Financial: {"SEALED" if d.financial_sealed else f"ZMW {d.price_read}"}  |  Security: {"VERIFIED" if d.security_verified_read else "PENDING"} ({d.security_amount_read or 0})  |  Objections: {d.objections or "None"}' for d in details if d.is_opened) if details else '  No bids opened'}
 
-Total Bids Opened: {details.count()}
+Total Bids Opened: {details.filter(is_opened=True).count()}
 Minutes Generated: {timezone.now().strftime('%Y-%m-%d %H:%M')}
 """
 
@@ -474,6 +518,7 @@ def public_bid_opening_view(request, pk):
     data = BidOpeningSerializer(opening).data
     data['status_display'] = opening.get_status_display()
     data['total_bids'] = BidSubmission.objects.filter(solicitation=sol, status='submitted').count()
-    data['pending_bids'] = data['total_bids'] - (data.get('opened_count', 0) or 0)
+    data['opened_count'] = opening.opening_details.filter(is_opened=True).count()
+    data['pending_bids'] = max(0, data['total_bids'] - data['opened_count'])
 
     return Response(data)

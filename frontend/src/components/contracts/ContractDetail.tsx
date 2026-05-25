@@ -1,5 +1,5 @@
 import React from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { contractsApi } from '../../api/contracts';
 import { StatusBadge } from '../common/StatusBadge';
@@ -9,6 +9,7 @@ import toast from 'react-hot-toast';
 
 const ContractDetail: React.FC = () => {
   const { id } = useParams<{ id: string }>();
+  const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { user } = useAuth();
 
@@ -38,7 +39,26 @@ const ContractDetail: React.FC = () => {
           </div>
           <p className="text-sm text-gray-500 mt-1">{contract.contract_number} | {contract.vendor_name}</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-wrap">
+          {(contract.status === 'draft' || contract.status === 'awarded') && (
+            <button onClick={() => navigate(`/contracts/${id}/standstill`)} className="px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm font-bold">Award & Standstill</button>
+          )}
+          {contract.status === 'active' && (
+            <>
+              <button onClick={() => navigate(`/contracts/${id}/signing`)} className="px-4 py-2 bg-zammsa-green text-white rounded-lg text-sm font-bold">Signing & Security</button>
+              <button onClick={() => navigate(`/contracts/${id}/amendments`)} className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-bold">Amendments</button>
+              <button onClick={() => navigate(`/contracts/${id}/ld`)} className="px-4 py-2 bg-amber-600 text-white rounded-lg text-sm font-bold">Liquidated Damages</button>
+            </>
+          )}
+          {(contract.status === 'active' || contract.status === 'completed') && (
+            <>
+              <button onClick={() => navigate(`/contracts/${id}/performance`)} className="px-4 py-2 bg-purple-600 text-white rounded-lg text-sm font-bold">Performance Eval</button>
+              <button onClick={() => navigate(`/contracts/${id}/closure`)} className="px-4 py-2 bg-emerald-600 text-white rounded-lg text-sm font-bold">Close Contract</button>
+            </>
+          )}
+          {contract.status === 'closed' && (
+            <button onClick={() => navigate(`/contracts/${id}/archive`)} className="px-4 py-2 bg-gray-600 text-white rounded-lg text-sm font-bold">Archive</button>
+          )}
           {isAuthOfficer && contract.status === 'draft' && (
             <button onClick={() => signMutation.mutate()} className="px-4 py-2 bg-green-600 text-white rounded-lg text-sm">Supplier Sign</button>
           )}

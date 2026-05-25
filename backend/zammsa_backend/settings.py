@@ -122,9 +122,16 @@ CORS_ALLOWED_ORIGINS = [
     'http://localhost:3000',
     'http://127.0.0.1:3000',
     'https://procurement.zammsa.zm',
+    'https://zammsa.gov.zm',
+    'https://www.zammsa.gov.zm',
+    'https://api.zammsa.gov.zm',
+    'http://localhost:8080',
+    'https://localhost:8443',
 ]
-CORS_ALLOW_ALL_ORIGINS = True
 CORS_ALLOW_ALL_ORIGINS = True if DEBUG else False
+CORS_ALLOWED_ORIGIN_REGEXES = [
+    r'^https?://(localhost|127\.0\.0\.1)(:\d+)?$',
+]
 CORS_ALLOW_CREDENTIALS = True
 CORS_MAX_AGE = 0 if DEBUG else 86400
 
@@ -159,6 +166,15 @@ CELERY_TASK_SERIALIZER = 'json'
 CELERY_RESULT_SERIALIZER = 'json'
 CELERY_TIMEZONE = TIME_ZONE
 CELERY_BEAT_SCHEDULER = 'django_celery_beat.schedulers:DatabaseScheduler'
+
+EMAIL_BACKEND = config('EMAIL_BACKEND', default='django.core.mail.backends.console.EmailBackend')
+EMAIL_HOST = config('EMAIL_HOST', default='smtp.zammsa.gov.zm')
+EMAIL_PORT = config('EMAIL_PORT', default=587, cast=int)
+EMAIL_USE_TLS = config('EMAIL_USE_TLS', default=True, cast=bool)
+EMAIL_HOST_USER = config('EMAIL_HOST_USER', default='')
+EMAIL_HOST_PASSWORD = config('EMAIL_HOST_PASSWORD', default='')
+DEFAULT_FROM_EMAIL = config('DEFAULT_FROM_EMAIL', default='noreply@zammsa.gov.zm')
+RETENTION_ALERT_RECIPIENT = config('RETENTION_ALERT_RECIPIENT', default='records.manager@zammsa.gov.zm')
 
 AUTHENTICATION_BACKENDS = [
     'axes.backends.AxesStandaloneBackend',

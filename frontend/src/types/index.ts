@@ -120,6 +120,7 @@ export interface Solicitation {
   currency: string;
   budget_code: string;
   procurement_method: string;
+  total_bids?: number;
   created_by: string;
   department: string;
   department_name?: string;
@@ -575,6 +576,14 @@ export interface Activity {
   created_at: string;
 }
 
+export interface TenderItem {
+  description: string;
+  quantity: number;
+  unit: string;
+  unit_price: number;
+  total_estimate: number;
+}
+
 export interface TenderPublic {
   id: string;
   title: string;
@@ -600,14 +609,20 @@ export interface TenderPublic {
   evaluation_criteria: EvaluationCriterion[];
   award_notice: AwardNotice | null;
   bid_opening_results: BidOpeningResult | null;
+  bid_security_rate: number;
+  bid_validity_days: number;
+  items: TenderItem[];
   created_at: string;
 }
 
 export interface EvaluationCriterion {
   id: string;
-  description: string;
+  solicitation: string;
+  criterion_name: string;
+  criterion_type: 'mandatory' | 'technical' | 'financial';
   weight: number;
-  minimum_pass_score: number;
+  minimum_threshold: number | null;
+  order_index: number;
 }
 
 export interface AwardNotice {
@@ -1045,6 +1060,10 @@ export interface ContractProcurementPlan {
    requisition_number?: string;
    requisition_description?: string;
    requisition_department?: string;
+   requisition_required_date?: string;
+   requisition_estimated_value?: number;
+   requisition_delivery_location?: string;
+   requisition_encumbrance_ref?: string;
    procurement_strategy?: string;
    method?: 'open_tender' | 'international' | 'limited' | 'simplified' | 'direct';
    recommended_method?: 'open_tender' | 'international' | 'limited' | 'simplified' | 'direct';
@@ -1057,9 +1076,11 @@ export interface ContractProcurementPlan {
    zpc_grounds?: string;
    zpc_resolution_ref?: string;
    zpc_approved_at?: string;
-   zpc_approved_by?: string;
-   estimated_value?: number;
-   overall_risk_level?: 'low' | 'medium' | 'high';
+    zpc_approved_by?: string;
+    zpc_approved_by_name?: string;
+    estimated_value?: number;
+    overall_risk_level?: 'low' | 'medium' | 'high';
+    overall_risk_display?: string;
    resource_requirements?: Record<string, any>;
    risks?: CPPRisk[];
    milestones?: ProcurementMilestone[];

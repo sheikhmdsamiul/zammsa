@@ -32,7 +32,7 @@ export default function GPNList() {
   const loadGPNs = async () => {
     setLoading(true);
     try { const res = await procurementPlanningApi.gpn.list({ page_size: 100 }); setGpns(res.results); }
-    catch { setGpns([]); }
+    catch (err) { console.error('Failed to load GPNs:', err); toast.error('Failed to load procurement notices'); setGpns([]); }
     setLoading(false);
   };
 

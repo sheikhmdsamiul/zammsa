@@ -4,6 +4,7 @@ import { useQuery } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import { vendorApi } from '../../api/vendor';
 import { LoadingSpinner } from '../common/LoadingSpinner';
+import { TenderItem } from '../../types';
 import {
   CheckCircleIcon, XCircleIcon, InformationCircleIcon,
   LockClosedIcon, ShieldCheckIcon, ClockIcon,
@@ -90,11 +91,11 @@ const BidSubmission: React.FC = () => {
 
   const securityRequiredAmount = useMemo(() => {
     if (!parsedBidPrice) return 0;
-    const rate = (tender as any)?.bid_security_rate || 2;
+    const rate = tender?.bid_security_rate || 2;
     return parsedBidPrice * (rate / 100);
   }, [parsedBidPrice, tender]);
 
-  const addendaList = (tender as any)?.addenda || [];
+  const addendaList = tender?.addenda || [];
   const hasAddenda = addendaList.length > 0;
   const submissionType = 'Single Envelope System';
   const isGoods = true;
@@ -232,8 +233,7 @@ const BidSubmission: React.FC = () => {
   if (!tender) return <div className="text-center py-20 text-gray-400">Tender not found.</div>;
 
   if (submitted && receipt) {
-    const recTender = tender as any;
-    const bidRef = `BID-${new Date().getFullYear()}-${(recTender.tender_number || recTender.sol_number || 'XXX').split('-').slice(1).join('-')}-${String(Math.floor(Math.random() * 999)).padStart(3, '0')}`;
+    const bidRef = `BID-${new Date().getFullYear()}-${(tender.tender_number || 'XXX').split('-').slice(1).join('-')}-${String(Math.floor(Math.random() * 999)).padStart(3, '0')}`;
     return (
       <div className="max-w-3xl mx-auto py-16">
         <div className="bg-white rounded-3xl border border-gray-200 shadow-sm p-12 text-center">
@@ -247,7 +247,7 @@ const BidSubmission: React.FC = () => {
             <div className="space-y-2 text-sm">
               <div className="flex justify-between"><span className="text-gray-500">Submission ID</span><span className="font-bold">{receipt.submission_id || bidRef}</span></div>
               <div className="flex justify-between"><span className="text-gray-500">Submitted</span><span className="font-bold">{receipt.submitted_at ? fmtDateTime(receipt.submitted_at) : fmtDateTime(new Date())}</span></div>
-              <div className="flex justify-between"><span className="text-gray-500">Solicitation</span><span className="font-bold">{(recTender.tender_number || recTender.sol_number)}</span></div>
+              <div className="flex justify-between"><span className="text-gray-500">Solicitation</span><span className="font-bold">{tender.tender_number}</span></div>
               <div className="flex justify-between"><span className="text-gray-500">Supplier</span><span className="font-bold">{profile?.company_name || profile?.contact_person || '---'}</span></div>
               <div className="flex justify-between"><span className="text-gray-500">Bid Price</span><span className="font-bold">K {parsedBidPrice.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span></div>
               <div className="flex justify-between"><span className="text-gray-500">Documents</span><span className="font-bold">{Object.values(files).filter(Boolean).length} files</span></div>
@@ -288,7 +288,7 @@ const BidSubmission: React.FC = () => {
             </Link>
             <span className="text-xs font-bold text-gray-400 uppercase tracking-widest">Submit Bid</span>
             <span className="text-gray-300">|</span>
-            <h1 className="text-lg font-bold text-gray-900">{(tender as any).tender_number || (tender as any).sol_number || '---'}</h1>
+            <h1 className="text-lg font-bold text-gray-900">{tender.tender_number}</h1>
           </div>
           <div className="flex items-center gap-3 text-xs font-semibold">
             <span className="text-gray-500">Closing: {closingDate ? fmtDateTime(closingDate) : 'N/A'}</span>
@@ -499,21 +499,18 @@ const BidSubmission: React.FC = () => {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
-                  {[
-                    { item: 'HIV Rapid Test Kits', qty: 500, unit: 'Box' },
-                    { item: 'CD4 Reagents', qty: 100, unit: 'Kit' },
-                  ].map((row, i) => {
-                    const unitPrice = i === 0 ? 230 : 10400;
-                    const total = row.qty * unitPrice;
+                  {tender.items.map((row: TenderItem, i: number) => {
+                    const total = row.quantity * row.unit_price;
                     return (
                       <tr key={i} className="hover:bg-gray-50">
-                        <td className="px-5 py-4 text-sm font-semibold text-gray-800">{row.item}</td>
-                        <td className="px-5 py-4 text-right text-sm text-gray-600">{row.qty}</td>
+                        <td className="px-5 py-4 text-sm font-semibold text-gray-800">{row.description}</td>
+                        <td className="px-5 py-4 text-right text-sm text-gray-600">{row.quantity}</td>
                         <td className="px-5 py-4 text-center text-sm text-gray-600">{row.unit}</td>
                         <td className="px-5 py-4 text-right">
                           <input
                             type="number"
-                            defaultValue={unitPrice}
+                            step="0.01"
+                            defaultValue={row.unit_price}
                             className="w-full text-right text-sm font-bold text-gray-700 bg-white border border-gray-200 rounded-xl px-3 py-2 outline-none focus:ring-2 focus:ring-zammsa-green/20"
                           />
                         </td>
@@ -523,7 +520,9 @@ const BidSubmission: React.FC = () => {
                   })}
                   <tr className="bg-gray-50 font-bold">
                     <td colSpan={4} className="px-5 py-4 text-right text-sm text-gray-600">TOTAL</td>
-                    <td className="px-5 py-4 text-right text-sm text-gray-900">1,155,000</td>
+                    <td className="px-5 py-4 text-right text-sm text-gray-900">
+                      {tender.items.reduce((sum: number, row: TenderItem) => sum + row.quantity * row.unit_price, 0).toLocaleString()}
+                    </td>
                   </tr>
                 </tbody>
               </table>
@@ -537,7 +536,7 @@ const BidSubmission: React.FC = () => {
                   <input
                     value={bidPrice}
                     onChange={(e) => setBidPrice(e.target.value)}
-                    placeholder="1,155,000.00"
+                    placeholder={tender.items.reduce((sum: number, row: TenderItem) => sum + row.quantity * row.unit_price, 0).toLocaleString()}
                     className="w-64 bg-white border border-gray-200 rounded-2xl px-5 py-4 text-lg font-bold text-gray-700 outline-none focus:ring-4 focus:ring-zammsa-green/5"
                   />
                   <span className="text-sm font-bold text-gray-400">(auto-calculated)</span>
@@ -590,7 +589,7 @@ const BidSubmission: React.FC = () => {
             <h2 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-6">Bid Summary</h2>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {[
-                ['Solicitation', `${(tender as any).tender_number || (tender as any).sol_number}`],
+                ['Solicitation', tender.tender_number],
                 ['Supplier', profile?.company_name || profile?.contact_person || '---'],
                 ['Total Bid Price', `K ${parsedBidPrice.toLocaleString(undefined, { minimumFractionDigits: 2 })}`],
                 ['Bid Security', `K ${Math.round(securityRequiredAmount).toLocaleString()} — ${files.security?.name || 'Bank Guarantee'}`],

@@ -269,7 +269,7 @@ const SolicitationCreate: React.FC = () => {
           </div>
 
           <div className="flex items-center justify-center gap-3">
-            <button onClick={() => navigate('/solicitations')} className="px-6 py-3 text-sm font-bold text-gray-600 bg-white border border-gray-200 rounded-xl hover:bg-gray-50">
+            <button onClick={() => navigate(`/solicitations/${createdId}`)} className="px-6 py-3 text-sm font-bold text-gray-600 bg-white border border-gray-200 rounded-xl hover:bg-gray-50">
               View Solicitation
             </button>
             <button onClick={() => navigate('/solicitations/create')} className="px-6 py-3 text-sm font-bold text-white bg-zammsa-green rounded-xl hover:bg-zammsa-green/90">

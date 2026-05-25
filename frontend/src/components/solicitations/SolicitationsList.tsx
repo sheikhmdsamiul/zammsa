@@ -19,10 +19,12 @@ const SolicitationsList: React.FC = () => {
   const [search, setSearch] = useState('');
   const [sortKey, setSortKey] = useState('-created_at');
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isError } = useQuery({
     queryKey: ['solicitations', page, pageSize, search, sortKey],
     queryFn: () => solicitationsApi.list({ page, page_size: pageSize, search, ordering: sortKey }),
   });
+
+  React.useEffect(() => { if (isError) toast.error('Failed to load solicitations'); }, [isError]);
 
   const handleExport = async () => {
     try { const blob = await solicitationsApi.export({ search }); fileSaver.saveAs(blob, 'solicitations_export.xlsx'); toast.success('Exported'); }

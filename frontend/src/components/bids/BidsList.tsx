@@ -7,6 +7,7 @@ import { StatusBadge } from '../common/StatusBadge';
 import { SearchBar } from '../common/SearchBar';
 import { Pagination } from '../common/Pagination';
 import { LoadingSpinner } from '../common/LoadingSpinner';
+import { LockOpenIcon } from '@heroicons/react/outline';
 
 const BidsList: React.FC = () => {
   const navigate = useNavigate();
@@ -39,6 +40,10 @@ const BidsList: React.FC = () => {
           <h1 className="text-2xl font-bold text-gray-900">Bids</h1>
           <p className="text-sm text-gray-500 mt-1">View and manage submitted bids</p>
         </div>
+        <button onClick={() => navigate('/bids')} className="px-4 py-2 bg-zammsa-green text-white rounded-lg text-sm font-bold flex items-center gap-2">
+          <LockOpenIcon className="w-4 h-4" />
+          Bid Opening
+        </button>
       </div>
 
       <div className="bg-white rounded-xl shadow-sm border border-gray-100">

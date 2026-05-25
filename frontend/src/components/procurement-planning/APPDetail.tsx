@@ -162,13 +162,13 @@ export default function APPDetail() {
   const canSubmit = status === 'draft' && role === 'user_dept_staff';
   const canApprove = (
     (status === 'dept_head_review' && role === 'department_head') ||
-    (status === 'procurement_review' && role === 'procurement_manager') ||
+    (status === 'procurement_review' && role === 'procurement_officer') ||
     (status === 'director_review' && role === 'director_procurement') ||
     (status === 'zpc_review' && role === 'zpc_member')
   );
   const canRejectReturn = canApprove;
-  const canCompliance = status === 'procurement_review' && role === 'procurement_manager';
-  const canConsolidate = status === 'procurement_review' && role === 'procurement_manager';
+  const canCompliance = status === 'procurement_review' && role === 'procurement_officer';
+  const canConsolidate = status === 'procurement_review' && role === 'procurement_officer';
   const canGenerateGPN = status === 'approved' && role === 'procurement_officer';
   const canPublish = status === 'approved' && role === 'procurement_officer';
   const isAlreadyPublished = status === 'published';

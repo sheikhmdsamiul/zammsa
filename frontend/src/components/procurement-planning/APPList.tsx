@@ -7,6 +7,7 @@ import { Pagination } from '../common/Pagination';
 import { DataTable } from '../common/DataTable';
 import { PageHeader } from '../common/PageHeader';
 import { useAuth } from '../../hooks/useAuth';
+import toast from 'react-hot-toast';
 import { PlusIcon, FilterIcon, CalendarIcon } from '@heroicons/react/outline';
 
 export default function APPList() {
@@ -33,12 +34,12 @@ export default function APPList() {
       setTotalPages(res.total_pages);
       setTotalItems(res.count);
       setPage(res.page);
-    } catch { setPlans([]); }
+    } catch (err) { console.error('Failed to load APPs:', err); toast.error('Failed to load annual procurement plans'); setPlans([]); }
     setLoading(false);
   }, [page, pageSize, statusFilter, fiscalYearFilter]);
 
   const loadStats = async () => {
-    try { setStats(await procurementPlanningApi.dashboard()); } catch {}
+    try { setStats(await procurementPlanningApi.dashboard()); } catch (err) { console.error('Failed to load APP stats:', err); }
   };
 
   useEffect(() => { loadPlans(); }, [loadPlans]);

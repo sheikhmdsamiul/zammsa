@@ -83,10 +83,11 @@ class SolicitationListSerializer(serializers.ModelSerializer):
     estimated_value = serializers.SerializerMethodField()
     issue_date = serializers.SerializerMethodField()
     requisition_number = serializers.CharField(source='requisition.req_number', read_only=True)
+    total_bids = serializers.SerializerMethodField()
 
     class Meta:
         model = Solicitation
-        fields = ('id', 'solicitation_id', 'sol_number', 'title', 'type', 'method', 'department', 'estimated_value', 'issue_date', 'closing_date', 'status', 'published_at', 'created_at', 'requisition_number')
+        fields = ('id', 'solicitation_id', 'sol_number', 'title', 'type', 'method', 'department', 'estimated_value', 'issue_date', 'closing_date', 'status', 'published_at', 'created_at', 'requisition_number', 'total_bids')
 
     def get_department(self, obj):
         if obj.department:
@@ -108,6 +109,9 @@ class SolicitationListSerializer(serializers.ModelSerializer):
         if obj.published_at:
             return obj.published_at.date().isoformat()
         return obj.created_at.date().isoformat()
+
+    def get_total_bids(self, obj):
+        return obj.bids.filter(status='submitted').count()
 
 
 class SolicitationSerializer(serializers.ModelSerializer):
@@ -133,6 +137,7 @@ class SolicitationSerializer(serializers.ModelSerializer):
     approved_by = serializers.SerializerMethodField()
     rejected_by = serializers.SerializerMethodField()
     non_open_justifications = serializers.SerializerMethodField()
+    total_bids = serializers.SerializerMethodField()
 
     class Meta:
         model = Solicitation
@@ -177,6 +182,9 @@ class SolicitationSerializer(serializers.ModelSerializer):
         if obj.rejected_by:
             return {'full_name': obj.rejected_by.full_name or f"{obj.rejected_by.first_name} {obj.rejected_by.last_name}".strip(), 'email': obj.rejected_by.email}
         return None
+
+    def get_total_bids(self, obj):
+        return obj.bids.filter(status='submitted').count()
 
     def get_non_open_justifications(self, obj):
         from method_selection.models import NonOpenJustification

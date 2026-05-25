@@ -166,7 +166,7 @@ def invoice_reject_view(request, pk):
     except Invoice.DoesNotExist:
         return Response({'error': 'Invoice not found'}, status=404)
 
-    reason = request.data.get('reason', '')
+    reason = request.data.get('reason', request.data.get('rejection_reason', ''))
     inv.status = 'rejected'
     inv.rejection_reason = reason
     inv.save()
@@ -259,8 +259,9 @@ def payment_bank_confirm_view(request, pk):
     if not payment:
         return Response({'error': 'No sent payment found for this invoice'}, status=400)
 
-    confirmed = request.data.get('confirmed', False)
-    bank_ref = request.data.get('bank_reference', '')
+    status_val = (request.data.get('status') or '').lower()
+    confirmed = request.data.get('confirmed', False) or status_val == 'confirmed'
+    bank_ref = request.data.get('bank_reference', request.data.get('reference', ''))
 
     if confirmed:
         payment.status = 'confirmed'

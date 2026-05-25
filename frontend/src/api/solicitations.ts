@@ -1,9 +1,12 @@
 import api from './client';
-import { Solicitation, PaginatedResponse } from '../types';
+import { Solicitation, EvaluationCriterion, PaginatedResponse } from '../types';
 
 export const solicitationsApi = {
   list: (params?: Record<string, any>) =>
     api.get<PaginatedResponse<Solicitation>>('/solicitations/', { params }).then((r) => r.data),
+
+  listCriteria: (params?: Record<string, any>) =>
+    api.get<PaginatedResponse<EvaluationCriterion>>('/solicitations/criteria/', { params }).then((r) => r.data),
 
   get: (id: string) =>
     api.get<Solicitation>(`/solicitations/${id}/`).then((r) => r.data),

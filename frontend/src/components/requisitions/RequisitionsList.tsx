@@ -27,10 +27,12 @@ export default function RequisitionsList() {
   const [sortKey, setSortKey] = useState('-created_at');
   const [deleteModal, setDeleteModal] = useState<{ id: string; title: string } | null>(null);
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isError } = useQuery({
     queryKey: ['requisitions', page, pageSize, search, sortKey],
     queryFn: () => requisitionsApi.list({ page, page_size: pageSize, search, ordering: sortKey }),
   });
+
+  React.useEffect(() => { if (isError) toast.error('Failed to load requisitions'); }, [isError]);
 
   const deleteMutation = useMutation({
     mutationFn: (id: string) => requisitionsApi.delete(id),

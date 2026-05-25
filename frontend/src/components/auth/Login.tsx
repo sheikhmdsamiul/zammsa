@@ -8,22 +8,20 @@ import { LoadingSpinner } from '../common/LoadingSpinner';
 import { ROLES } from '../../config/rbac';
 
 const TEST_ACCOUNTS = [
-  { label: 'System Admin', email: 'admin@zammsa.zm', pw: 'Test@123' },
+  { label: 'System Admin', email: 'admin@zammsa.gov.zm', pw: 'Test@123' },
   { label: 'Director General', email: 'dg@zammsa.gov.zm', pw: 'Test@123' },
-  { label: 'Dir. Procurement', email: 'dirproc@zammsa.zm', pw: 'Test@123' },
-  { label: 'Proc. Manager', email: 'pm@zammsa.zm', pw: 'Test@123' },
-  { label: 'Proc. Officer', email: 'po@zammsa.zm', pw: 'Test@123' },
-  { label: 'Dept Head', email: 'dh@zammsa.zm', pw: 'Test@123' },
-  { label: 'Dept Staff', email: 'staff@zammsa.zm', pw: 'Test@123' },
-  { label: 'Finance Officer', email: 'fo@zammsa.zm', pw: 'Test@123' },
-  { label: 'Budget Controller', email: 'bc@zammsa.zm', pw: 'Test@123' },
+  { label: 'Dir. Procurement', email: 'director@zammsa.gov.zm', pw: 'Test@123' },
+  { label: 'Proc. Officer', email: 'procurement.officer@zammsa.gov.zm', pw: 'Test@123' },
+  { label: 'Dept Head', email: 'dept.head@zammsa.gov.zm', pw: 'Test@123' },
+  { label: 'Dept Staff', email: 'staff@zammsa.gov.zm', pw: 'Test@123' },
+  { label: 'Budget Controller', email: 'bc@zammsa.gov.zm', pw: 'Test@123' },
+  { label: 'Finance Officer', email: 'finance.officer@zammsa.gov.zm', pw: 'Test@123' },
   { label: 'ZPC Member', email: 'zpc@zammsa.gov.zm', pw: 'Test@123' },
-  { label: 'EC Chair', email: 'ecchair@zammsa.zm', pw: 'Test@123' },
-  { label: 'EC Member', email: 'ecm1@zammsa.zm', pw: 'Test@123' },
-  { label: 'Contract Manager', email: 'cm@zammsa.zm', pw: 'Test@123' },
+  { label: 'EC Member', email: 'evaluator@zammsa.gov.zm', pw: 'Test@123' },
+  { label: 'Contract Manager', email: 'contract@zammsa.gov.zm', pw: 'Test@123' },
   { label: 'ZPPA Reporter', email: 'zppa@zammsa.zm', pw: 'Test@123' },
   { label: 'Auditor', email: 'auditor@zammsa.gov.zm', pw: 'Test@123' },
-  { label: 'Supplier', email: 'vendor@healthpharma.zm', pw: 'Vendor@123' },
+  { label: 'Supplier', email: 'supplier@zammsa.gov.zm', pw: 'Test@123' },
   { label: 'Supplier Rel. Mgr', email: 'supplier.manager@zammsa.gov.zm', pw: 'Test@123' },
 ];
 

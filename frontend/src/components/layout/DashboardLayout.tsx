@@ -7,6 +7,8 @@ import {
   ChartBarIcon, CashIcon, ClipboardListIcon,
   PencilIcon, DocumentTextIcon, DocumentDuplicateIcon,
   DocumentIcon, OfficeBuildingIcon, TrendingUpIcon,
+  UsersIcon, LockOpenIcon, DocumentSearchIcon,
+  TemplateIcon, ScaleIcon,
 } from '@heroicons/react/outline';
 
 const iconClass = 'h-5 w-5';
@@ -22,12 +24,18 @@ const navItems: NavItem[] = [
   { label: 'Procurement Planning', path: '/procurement-planning', icon: <ClipboardListIcon className={iconClass} />, roles: [ROLES.USER_DEPT_STAFF, ROLES.DEPARTMENT_HEAD, ROLES.PROCUREMENT_OFFICER, ROLES.PROCUREMENT_MANAGER, ROLES.FINANCE_OFFICER, ROLES.ZPC_MEMBER, ROLES.DIRECTOR_PROCUREMENT, ROLES.DIRECTOR_GENERAL] },
   { label: 'GPNs', path: '/procurement-planning/gpns', icon: <DocumentTextIcon className={iconClass} />, roles: [ROLES.PROCUREMENT_OFFICER, ROLES.PROCUREMENT_MANAGER, ROLES.DIRECTOR_PROCUREMENT, ROLES.SYSTEM_ADMIN] },
   { label: 'CPPs', path: '/procurement-planning/cpp', icon: <DocumentIcon className={iconClass} />, roles: [ROLES.PROCUREMENT_OFFICER, ROLES.PROCUREMENT_MANAGER, ROLES.DIRECTOR_PROCUREMENT, ROLES.ZPC_MEMBER, ROLES.SYSTEM_ADMIN] },
+  { label: 'Budget Allocations', path: '/procurement-planning/budgets', icon: <ChartBarIcon className={iconClass} />, roles: [ROLES.PROCUREMENT_OFFICER, ROLES.PROCUREMENT_MANAGER, ROLES.FINANCE_OFFICER, ROLES.BUDGET_CONTROLLER, ROLES.DIRECTOR_PROCUREMENT, ROLES.DIRECTOR_GENERAL] },
   { label: 'Requisitions', path: '/requisitions', icon: <PencilIcon className={iconClass} />, roles: [ROLES.USER_DEPT_STAFF, ROLES.DEPARTMENT_HEAD, ROLES.PROCUREMENT_OFFICER, ROLES.FINANCE_OFFICER, ROLES.DIRECTOR_GENERAL] },
   { label: 'Solicitations', path: '/solicitations', icon: <ClipboardListIcon className={iconClass} />, roles: [ROLES.PROCUREMENT_OFFICER, ROLES.PROCUREMENT_MANAGER, ROLES.DIRECTOR_PROCUREMENT] },
   { label: 'Bid Management', path: '/bids', icon: <DocumentTextIcon className={iconClass} />, roles: [ROLES.PROCUREMENT_OFFICER, ROLES.PROCUREMENT_MANAGER, ROLES.EVALUATION_COMMITTEE_MEMBER, ROLES.EVALUATION_COMMITTEE_CHAIR, ROLES.ZPC_MEMBER, ROLES.DIRECTOR_PROCUREMENT] },
   { label: 'Bid Evaluation', path: '/evaluations', icon: <DocumentDuplicateIcon className={iconClass} />, roles: [ROLES.EVALUATION_COMMITTEE_MEMBER, ROLES.EVALUATION_COMMITTEE_CHAIR, ROLES.ZPC_MEMBER, ROLES.DIRECTOR_PROCUREMENT] },
+  { label: 'Committee Formation', path: '/evaluations/committee/formation', icon: <UsersIcon className={iconClass} />, roles: [ROLES.PROCUREMENT_OFFICER, ROLES.PROCUREMENT_MANAGER, ROLES.DIRECTOR_PROCUREMENT] },
+  { label: 'Bid Opening', path: '/bids/opening', icon: <LockOpenIcon className={iconClass} />, roles: [ROLES.PROCUREMENT_OFFICER, ROLES.PROCUREMENT_MANAGER, ROLES.DIRECTOR_PROCUREMENT] },
+  { label: 'Preliminary Exam', path: '/evaluations/preliminary', icon: <DocumentSearchIcon className={iconClass} />, roles: [ROLES.EVALUATION_COMMITTEE_CHAIR, ROLES.EVALUATION_COMMITTEE_MEMBER, ROLES.DIRECTOR_PROCUREMENT] },
   { label: 'Contracts', path: '/contracts', icon: <DocumentIcon className={iconClass} />, roles: [ROLES.PROCUREMENT_OFFICER, ROLES.PROCUREMENT_MANAGER, ROLES.ZPC_MEMBER, ROLES.DIRECTOR_PROCUREMENT, ROLES.DIRECTOR_GENERAL, ROLES.CONTRACT_MANAGER] },
+  { label: 'Contract Generation', path: '/contracts/generate', icon: <TemplateIcon className={iconClass} />, roles: [ROLES.PROCUREMENT_OFFICER, ROLES.PROCUREMENT_MANAGER, ROLES.DIRECTOR_PROCUREMENT] },
   { label: 'Finance & Payments', path: '/finance', icon: <CashIcon className={iconClass} />, roles: [ROLES.FINANCE_OFFICER, ROLES.BUDGET_CONTROLLER, ROLES.DIRECTOR_GENERAL, ROLES.CONTRACT_MANAGER] },
+  { label: 'Invoice Matching', path: '/finance/matching', icon: <ScaleIcon className={iconClass} />, roles: [ROLES.FINANCE_OFFICER, ROLES.BUDGET_CONTROLLER, ROLES.CONTRACT_MANAGER] },
   { label: 'Suppliers', path: '/suppliers', icon: <OfficeBuildingIcon className={iconClass} />, roles: [ROLES.SUPPLIER_RELATIONSHIP_MANAGER] },
   { label: 'Reports & Analytics', path: '/reports', icon: <TrendingUpIcon className={iconClass} />, roles: [ROLES.PROCUREMENT_MANAGER, ROLES.FINANCE_OFFICER, ROLES.ZPC_MEMBER, ROLES.DIRECTOR_PROCUREMENT, ROLES.DIRECTOR_GENERAL, ROLES.ZPPA_REPORTING_OFFICER, ROLES.BUDGET_CONTROLLER] },
 ];

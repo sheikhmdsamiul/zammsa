@@ -14,6 +14,8 @@ TEST_USERS = [
     {'email': 'evaluator@zammsa.gov.zm', 'role': 'evaluation_committee_member', 'full_name': 'Chris Evaluator'},
     {'email': 'contract@zammsa.gov.zm', 'role': 'contract_manager', 'full_name': 'Patricia Contract'},
     {'email': 'supplier.manager@zammsa.gov.zm', 'role': 'supplier_relationship_manager', 'full_name': 'Grace Supplier Relations'},
+    {'email': 'staff@zammsa.gov.zm', 'role': 'user_dept_staff', 'full_name': 'Peter Staff'},
+    {'email': 'bc@zammsa.gov.zm', 'role': 'budget_controller', 'full_name': 'Beatrice Budget'},
 ]
 
 

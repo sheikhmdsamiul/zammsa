@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { financeApi } from '../../api/finance';
 import { DataTable } from '../common/DataTable';
@@ -8,6 +9,7 @@ import { Pagination } from '../common/Pagination';
 import { LoadingSpinner } from '../common/LoadingSpinner';
 
 const Invoices: React.FC = () => {
+  const navigate = useNavigate();
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
   const [search, setSearch] = useState('');
@@ -36,7 +38,7 @@ const Invoices: React.FC = () => {
           <SearchBar value={search} onChange={setSearch} placeholder="Search invoices..." />
         </div>
         {isLoading ? <LoadingSpinner className="py-12" /> : (
-          <DataTable columns={columns} data={data?.results || []} />
+          <DataTable columns={columns} data={data?.results || []} onRowClick={(row) => navigate(`/finance/invoices/${row.id}/approval`)} />
         )}
         {data && (
           <Pagination currentPage={page} totalPages={Math.ceil(data.count / pageSize)} pageSize={pageSize}

@@ -62,19 +62,38 @@ const SolicitationEdit = React.lazy(() => import('./components/solicitations/Sol
 
 const BidsList = React.lazy(() => import('./components/bids/BidsList'));
 const BidDetail = React.lazy(() => import('./components/bids/BidDetail'));
+const BidOpeningCeremony = React.lazy(() => import('./components/bids/BidOpeningCeremony'));
+const BidOpeningList = React.lazy(() => import('./components/bids/BidOpeningList'));
 
 const EvaluationsList = React.lazy(() => import('./components/evaluations/EvaluationsList'));
 const EvaluationDetail = React.lazy(() => import('./components/evaluations/EvaluationDetail'));
+const CommitteeFormation = React.lazy(() => import('./components/evaluations/CommitteeFormation'));
+const ConflictOfInterestDeclaration = React.lazy(() => import('./components/evaluations/ConflictOfInterestDeclaration'));
+const PreliminaryExamination = React.lazy(() => import('./components/evaluations/PreliminaryExamination'));
+const TechnicalScoring = React.lazy(() => import('./components/evaluations/TechnicalScoring'));
+const FinancialEvaluation = React.lazy(() => import('./components/evaluations/FinancialEvaluation'));
+const ScoreConsolidation = React.lazy(() => import('./components/evaluations/ScoreConsolidation'));
+const BERWorkflow = React.lazy(() => import('./components/evaluations/BERWorkflow'));
 
 const ContractsList = React.lazy(() => import('./components/contracts/ContractsList'));
 const ContractCreate = React.lazy(() => import('./components/contracts/ContractCreate'));
 const ContractDetail = React.lazy(() => import('./components/contracts/ContractDetail'));
+const ContractGeneration = React.lazy(() => import('./components/contracts/ContractGeneration'));
+const StandstillMonitor = React.lazy(() => import('./components/contracts/StandstillMonitor'));
+const ContractSigning = React.lazy(() => import('./components/contracts/ContractSigning'));
+const ContractClosureChecklist = React.lazy(() => import('./components/contracts/ContractClosureChecklist'));
+const ContractArchiving = React.lazy(() => import('./components/contracts/ContractArchiving'));
+const SupplierPerformanceEval = React.lazy(() => import('./components/contracts/SupplierPerformanceEval'));
+const ContractAmendments = React.lazy(() => import('./components/contracts/ContractAmendments'));
+const LiquidatedDamages = React.lazy(() => import('./components/contracts/LiquidatedDamages'));
 
 const FinanceDashboard = React.lazy(() => import('./components/finance/FinanceDashboard'));
 const FinanceBudgets = React.lazy(() => import('./components/finance/Budgets'));
 const FinanceInvoices = React.lazy(() => import('./components/finance/Invoices'));
+const ThreeWayMatch = React.lazy(() => import('./components/finance/ThreeWayMatch'));
 const FinancePayments = React.lazy(() => import('./components/finance/Payments'));
 const FinanceLettersOfCredit = React.lazy(() => import('./components/finance/LettersOfCredit'));
+const InvoiceApproval = React.lazy(() => import('./components/finance/InvoiceApproval'));
 
 const SuppliersList = React.lazy(() => import('./components/suppliers/SuppliersList'));
 const SupplierDetail = React.lazy(() => import('./components/suppliers/SupplierDetail'));
@@ -208,12 +227,57 @@ function App() {
                     </ProtectedRoute>
                   } />
                   <Route path="bids/:id" element={<BidDetail />} />
+                  <Route path="bids/opening" element={
+                    <ProtectedRoute roles={[ROLES.PROCUREMENT_OFFICER, ROLES.PROCUREMENT_MANAGER, ROLES.DIRECTOR_PROCUREMENT]}>
+                      <BidOpeningList />
+                    </ProtectedRoute>
+                  } />
+                  <Route path="bids/opening/:solId" element={
+                    <ProtectedRoute roles={[ROLES.PROCUREMENT_OFFICER, ROLES.PROCUREMENT_MANAGER, ROLES.DIRECTOR_PROCUREMENT]}>
+                      <BidOpeningCeremony />
+                    </ProtectedRoute>
+                  } />
                   <Route path="evaluations" element={
                     <ProtectedRoute roles={[ROLES.EVALUATION_COMMITTEE_MEMBER, ROLES.EVALUATION_COMMITTEE_CHAIR, ROLES.ZPC_MEMBER, ROLES.DIRECTOR_PROCUREMENT]}>
                       <EvaluationsList />
                     </ProtectedRoute>
                   } />
+                  <Route path="evaluations/committee/formation" element={
+                    <ProtectedRoute roles={[ROLES.PROCUREMENT_OFFICER, ROLES.PROCUREMENT_MANAGER, ROLES.DIRECTOR_PROCUREMENT]}>
+                      <CommitteeFormation />
+                    </ProtectedRoute>
+                  } />
+                  <Route path="evaluations/preliminary/:solId" element={
+                    <ProtectedRoute roles={[ROLES.EVALUATION_COMMITTEE_CHAIR, ROLES.EVALUATION_COMMITTEE_MEMBER, ROLES.DIRECTOR_PROCUREMENT]}>
+                      <PreliminaryExamination />
+                    </ProtectedRoute>
+                  } />
                   <Route path="evaluations/:id" element={<EvaluationDetail />} />
+                  <Route path="evaluations/:committeeId/scoring" element={
+                    <ProtectedRoute roles={[ROLES.EVALUATION_COMMITTEE_MEMBER, ROLES.EVALUATION_COMMITTEE_CHAIR]}>
+                      <TechnicalScoring />
+                    </ProtectedRoute>
+                  } />
+                  <Route path="evaluations/:committeeId/coi" element={
+                    <ProtectedRoute roles={[ROLES.EVALUATION_COMMITTEE_MEMBER, ROLES.EVALUATION_COMMITTEE_CHAIR]}>
+                      <ConflictOfInterestDeclaration />
+                    </ProtectedRoute>
+                  } />
+                  <Route path="evaluations/:solId/financial" element={
+                    <ProtectedRoute roles={[ROLES.EVALUATION_COMMITTEE_CHAIR, ROLES.DIRECTOR_PROCUREMENT]}>
+                      <FinancialEvaluation />
+                    </ProtectedRoute>
+                  } />
+                  <Route path="evaluations/:solId/consolidation" element={
+                    <ProtectedRoute roles={[ROLES.EVALUATION_COMMITTEE_CHAIR, ROLES.DIRECTOR_PROCUREMENT]}>
+                      <ScoreConsolidation />
+                    </ProtectedRoute>
+                  } />
+                  <Route path="evaluations/ber/:solId" element={
+                    <ProtectedRoute roles={[ROLES.EVALUATION_COMMITTEE_MEMBER, ROLES.EVALUATION_COMMITTEE_CHAIR, ROLES.ZPC_MEMBER, ROLES.DIRECTOR_PROCUREMENT]}>
+                      <BERWorkflow />
+                    </ProtectedRoute>
+                  } />
                   <Route path="contracts" element={
                     <ProtectedRoute roles={[ROLES.PROCUREMENT_OFFICER, ROLES.CONTRACT_MANAGER, ROLES.PROCUREMENT_MANAGER, ROLES.DIRECTOR_PROCUREMENT, ROLES.DIRECTOR_GENERAL, ROLES.ZPC_MEMBER]}>
                       <ContractsList />
@@ -224,7 +288,27 @@ function App() {
                       <ContractCreate />
                     </ProtectedRoute>
                   } />
+                  <Route path="contracts/generate" element={
+                    <ProtectedRoute roles={[ROLES.PROCUREMENT_OFFICER, ROLES.PROCUREMENT_MANAGER, ROLES.DIRECTOR_PROCUREMENT]}>
+                      <ContractGeneration />
+                    </ProtectedRoute>
+                  } />
                   <Route path="contracts/:id" element={<ContractDetail />} />
+                  <Route path="contracts/:id/standstill" element={
+                    <ProtectedRoute roles={[ROLES.PROCUREMENT_OFFICER, ROLES.PROCUREMENT_MANAGER, ROLES.DIRECTOR_PROCUREMENT]}>
+                      <StandstillMonitor />
+                    </ProtectedRoute>
+                  } />
+                  <Route path="contracts/:id/signing" element={
+                    <ProtectedRoute roles={[ROLES.PROCUREMENT_OFFICER, ROLES.CONTRACT_MANAGER, ROLES.DIRECTOR_GENERAL]}>
+                      <ContractSigning />
+                    </ProtectedRoute>
+                  } />
+                  <Route path="contracts/:id/amendments" element={<ContractAmendments />} />
+                  <Route path="contracts/:id/ld" element={<LiquidatedDamages />} />
+                  <Route path="contracts/:id/performance" element={<SupplierPerformanceEval />} />
+                  <Route path="contracts/:id/closure" element={<ContractClosureChecklist />} />
+                  <Route path="contracts/:id/archive" element={<ContractArchiving />} />
                   <Route path="finance" element={
                     <ProtectedRoute roles={[ROLES.FINANCE_OFFICER, ROLES.BUDGET_CONTROLLER, ROLES.DIRECTOR_GENERAL, ROLES.CONTRACT_MANAGER]}>
                       <FinanceDashboard />
@@ -240,6 +324,11 @@ function App() {
                       <FinanceInvoices />
                     </ProtectedRoute>
                   } />
+                  <Route path="finance/matching" element={
+                    <ProtectedRoute roles={[ROLES.FINANCE_OFFICER, ROLES.BUDGET_CONTROLLER, ROLES.CONTRACT_MANAGER]}>
+                      <ThreeWayMatch />
+                    </ProtectedRoute>
+                  } />
                   <Route path="finance/payments" element={
                     <ProtectedRoute roles={[ROLES.FINANCE_OFFICER, ROLES.BUDGET_CONTROLLER, ROLES.DIRECTOR_GENERAL, ROLES.CONTRACT_MANAGER]}>
                       <FinancePayments />
@@ -248,6 +337,11 @@ function App() {
                   <Route path="finance/letters-of-credit" element={
                     <ProtectedRoute roles={[ROLES.FINANCE_OFFICER, ROLES.BUDGET_CONTROLLER, ROLES.DIRECTOR_GENERAL, ROLES.CONTRACT_MANAGER]}>
                       <FinanceLettersOfCredit />
+                    </ProtectedRoute>
+                  } />
+                  <Route path="finance/invoices/:invoiceId/approval" element={
+                    <ProtectedRoute roles={[ROLES.FINANCE_OFFICER, ROLES.BUDGET_CONTROLLER, ROLES.DIRECTOR_GENERAL]}>
+                      <InvoiceApproval />
                     </ProtectedRoute>
                   } />
                   <Route path="suppliers" element={

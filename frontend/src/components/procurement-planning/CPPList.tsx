@@ -37,7 +37,7 @@ export default function CPPList() {
     try {
       const res = await procurementPlanningApi.contractPlans.list({ page_size: 50 });
       setPlans(res.results);
-    } catch { setPlans([]); }
+    } catch (err) { console.error('Failed to load CPPs:', err); toast.error('Failed to load contract procurement plans'); setPlans([]); }
     setLoading(false);
   }, []);
 

@@ -30,13 +30,23 @@ class ContractFilter(django_filters.FilterSet):
     search = django_filters.CharFilter(method='filter_search')
     status = django_filters.CharFilter(lookup_expr='exact')
     contract_type = django_filters.CharFilter(lookup_expr='exact')
+    archived = django_filters.BooleanFilter(method='filter_archived')
+    archived_at__isnull = django_filters.BooleanFilter(field_name='archived_at', lookup_expr='isnull')
+    retention_expiry__gte = django_filters.DateFilter(field_name='retention_expiry', lookup_expr='gte')
+    retention_expiry__lte = django_filters.DateFilter(field_name='retention_expiry', lookup_expr='lte')
+    legal_hold = django_filters.BooleanFilter()
 
     class Meta:
         model = Contract
-        fields = ['status', 'contract_type']
+        fields = ['status', 'contract_type', 'legal_hold']
 
     def filter_search(self, queryset, name, value):
         return queryset.filter(Q(contract_number__icontains=value) | Q(supplier__name__icontains=value))
+
+    def filter_archived(self, queryset, name, value):
+        if value:
+            return queryset.filter(archived_at__isnull=False)
+        return queryset.filter(archived_at__isnull=True)
 
 
 class BaseView:

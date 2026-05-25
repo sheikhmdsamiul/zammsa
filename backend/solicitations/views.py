@@ -1,3 +1,4 @@
+import uuid
 from django.db.models import Q, Max
 from django.utils import timezone
 from django.core.mail import send_mail
@@ -399,9 +400,19 @@ def solicitation_add_addendum_view(request, pk):
     })
 
 
+class EvaluationCriterionFilter(django_filters.FilterSet):
+    solicitation = django_filters.UUIDFilter(field_name='solicitation')
+    criterion_type = django_filters.CharFilter(lookup_expr='exact')
+
+    class Meta:
+        model = EvaluationCriterion
+        fields = ['solicitation', 'criterion_type']
+
+
 class EvaluationCriterionListView(BaseView, generics.ListCreateAPIView):
     queryset = EvaluationCriterion.objects.select_related('solicitation').all()
     serializer_class = EvaluationCriterionSerializer
+    filterset_class = EvaluationCriterionFilter
     ordering = ['order_index']
 
 

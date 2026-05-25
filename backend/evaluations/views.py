@@ -1,3 +1,4 @@
+import uuid
 from decimal import Decimal
 from django.db.models import Q, Avg, Sum
 from django.utils import timezone
@@ -31,9 +32,18 @@ class BaseView:
     permission_classes = [IsAuthenticated]
 
 
+class EvaluationCommitteeFilter(django_filters.FilterSet):
+    solicitation = django_filters.UUIDFilter(field_name='solicitation')
+
+    class Meta:
+        model = EvaluationCommittee
+        fields = ['solicitation']
+
+
 class EvaluationCommitteeListView(BaseView, generics.ListCreateAPIView):
     queryset = EvaluationCommittee.objects.select_related('solicitation', 'chairperson', 'secretary').all()
     serializer_class = EvaluationCommitteeSerializer
+    filterset_class = EvaluationCommitteeFilter
     ordering = ['-formed_at']
 
 

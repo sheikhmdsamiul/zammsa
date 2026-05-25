@@ -31,6 +31,9 @@ export const bidsApi = {
   openBids: (solicitationId: string) =>
     api.post(`/bids/openings/`, { solicitation: solicitationId }).then((r) => r.data),
 
+  listOpenings: (params?: Record<string, any>) =>
+    api.get<PaginatedResponse<any>>('/bids/openings/', { params }).then((r) => r.data),
+
   getOpeningMinutes: (openingId: string) =>
     api.get(`/bids/openings/${openingId}/`, { responseType: 'blob' }),
 

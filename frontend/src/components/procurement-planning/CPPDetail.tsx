@@ -8,20 +8,14 @@ import { PageHeader } from '../common/PageHeader';
 import { StatCard } from '../common/StatCard';
 import { useAuth } from '../../hooks/useAuth';
 import toast from 'react-hot-toast';
-import { 
-  ArrowLeftIcon, CheckIcon, XIcon, PencilIcon, 
-  LightningBoltIcon, ClipboardListIcon, CashIcon, 
+import {
+  ArrowLeftIcon, CheckIcon, XIcon, PencilIcon,
+  LightningBoltIcon, ClipboardListIcon, CashIcon,
   ClockIcon, ShieldCheckIcon, DocumentTextIcon,
-  ExclamationIcon, ChatAlt2Icon, DatabaseIcon
+  ExclamationIcon, ChatAlt2Icon, DatabaseIcon,
+  OfficeBuildingIcon, UserCircleIcon, CalendarIcon,
+  GlobeIcon, ScaleIcon, CheckCircleIcon, RefreshIcon,
 } from '@heroicons/react/outline';
-
-const CPP_WORKFLOW_STAGES = [
-  { key: 'draft', label: 'Drafting' },
-  { key: 'pending_zpc', label: 'ZPC Review' },
-  { key: 'approved', label: 'Approved' },
-  { key: 'active', label: 'In Force' },
-  { key: 'completed', label: 'Closed' },
-] as const;
 
 const METHOD_LABELS: Record<string, string> = {
   open_tender: 'Open National Bidding',
@@ -29,6 +23,29 @@ const METHOD_LABELS: Record<string, string> = {
   limited: 'Limited Bidding',
   simplified: 'Simplified Bidding',
   direct: 'Direct Procurement',
+};
+
+const METHOD_LABELS_SHORT: Record<string, string> = {
+  open_tender: 'ONB',
+  international: 'OIB',
+  limited: 'LB',
+  simplified: 'SIM',
+  direct: 'DIR',
+};
+
+const WORKFLOW_STAGES = [
+  { key: 'draft', label: 'Drafting' },
+  { key: 'pending_zpc', label: 'ZPC Review' },
+  { key: 'approved', label: 'Approved' },
+  { key: 'active', label: 'In Force' },
+  { key: 'completed', label: 'Closed' },
+];
+
+const RISK_COLORS: Record<string, string> = {
+  low: 'bg-emerald-50 text-emerald-600 border-emerald-200',
+  medium: 'bg-amber-50 text-amber-600 border-amber-200',
+  high: 'bg-rose-50 text-rose-600 border-rose-200',
+  critical: 'bg-red-50 text-red-700 border-red-300',
 };
 
 export default function CPPDetail() {
@@ -100,9 +117,9 @@ export default function CPPDetail() {
 
   return (
     <div className="pb-12 max-w-7xl mx-auto">
-      <PageHeader 
+      <PageHeader
         title={`Procurement Strategy: ${cpp.requisition_number || '---'}`}
-        description={`CPP Reference ID: ${cpp.cpp_id.slice(0, 8)}`}
+        description={`CPP Reference ID: ${cpp.cpp_id.slice(0, 8)}${cpp.amendment_version ? ` | Amendment v${cpp.amendment_version}` : ''}`}
         breadcrumbs={[
           { label: 'Planning', path: '/procurement-planning' },
           { label: 'Strategies', path: '/procurement-planning/cpp' },
@@ -122,30 +139,30 @@ export default function CPPDetail() {
         <div className="lg:col-span-3 space-y-8">
           {/* Summary Cards */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-             <StatCard 
-               label="Current Strategy"
-               value={METHOD_LABELS[cpp.method || '']?.split(' ')[0] || 'TBD'}
+             <StatCard
+               label="Method Recommendation"
+               value={METHOD_LABELS_SHORT[cpp.method || ''] || 'TBD'}
                icon={<LightningBoltIcon className="w-6 h-6" />}
                color="blue"
                description={METHOD_LABELS[cpp.method || ''] || 'Awaiting definition'}
              />
-             <StatCard 
-               label="Milestones"
-               value={cpp.milestones?.length || 0}
-               icon={<ClipboardListIcon className="w-6 h-6" />}
-               color="orange"
-               description="Critical path steps"
+             <StatCard
+               label="Estimated Value"
+               value={cpp.estimated_value ? `K ${Number(cpp.estimated_value).toLocaleString()}` : '---'}
+               icon={<CashIcon className="w-6 h-6" />}
+               color="green"
+               description="Total contract estimate"
              />
-              <StatCard 
-                label="Risk Rating"
-                value={cpp.risks?.length ? 'LOGGED' : 'NONE'}
-                icon={<ExclamationIcon className="w-6 h-6" />}
-                color={cpp.risks?.length ? 'red' : 'green'}
-                description={`${cpp.risks?.length || 0} items identified`}
-              />
+             <StatCard
+               label="Risks"
+               value={cpp.risks?.length || 0}
+               icon={<ExclamationIcon className="w-6 h-6" />}
+               color={cpp.risks?.length ? 'red' : 'green'}
+               description={`${cpp.risks?.length || 0} item(s) identified`}
+             />
           </div>
 
-          {/* Primary Details */}
+          {/* Strategy Overview */}
           <div className="bg-white rounded-3xl border border-gray-100 shadow-sm p-8">
              <h2 className="text-sm font-black text-gray-400 uppercase tracking-[0.2em] mb-8">Strategy Overview</h2>
              <div className="grid grid-cols-1 md:grid-cols-2 gap-y-8 gap-x-12">
@@ -154,16 +171,24 @@ export default function CPPDetail() {
                    <div><p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Requisition Ref</p><p className="text-sm font-bold text-gray-900">{cpp.requisition_number || cpp.requisition}</p></div>
                 </div>
                 <div className="flex items-start gap-4">
+                   <div className="w-10 h-10 rounded-xl bg-gray-50 flex items-center justify-center shrink-0"><OfficeBuildingIcon className="w-5 h-5 text-gray-400"/></div>
+                   <div><p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Department</p><p className="text-sm font-bold text-gray-900">{cpp.requisition_department || '---'}</p></div>
+                </div>
+                <div className="flex items-start gap-4">
                    <div className="w-10 h-10 rounded-xl bg-gray-50 flex items-center justify-center shrink-0"><DatabaseIcon className="w-5 h-5 text-gray-400"/></div>
-                   <div><p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Method Recommendation</p><p className="text-sm font-bold text-gray-900 capitalize">{METHOD_LABELS[cpp.recommended_method || ''] || 'N/A'}</p></div>
+                   <div><p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Method</p><p className="text-sm font-bold text-gray-900 capitalize">{METHOD_LABELS[cpp.method || ''] || 'N/A'}</p></div>
                 </div>
                 <div className="flex items-start gap-4">
                    <div className="w-10 h-10 rounded-xl bg-gray-50 flex items-center justify-center shrink-0"><ShieldCheckIcon className="w-5 h-5 text-gray-400"/></div>
-                   <div><p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Method Override</p><p className="text-sm font-bold text-gray-900">{cpp.method_override ? 'YES (ZPC ACTION)' : 'NO'}</p></div>
+                   <div><p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Override</p><p className="text-sm font-bold text-gray-900">{cpp.method_override ? 'YES (ZPC)' : 'NO'}</p></div>
                 </div>
                 <div className="flex items-start gap-4">
                    <div className="w-10 h-10 rounded-xl bg-gray-50 flex items-center justify-center shrink-0"><ClockIcon className="w-5 h-5 text-gray-400"/></div>
                    <div><p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Planning Date</p><p className="text-sm font-bold text-gray-900">{new Date(cpp.created_at).toLocaleDateString('en-GB')}</p></div>
+                </div>
+                <div className="flex items-start gap-4">
+                   <div className="w-10 h-10 rounded-xl bg-gray-50 flex items-center justify-center shrink-0"><UserCircleIcon className="w-5 h-5 text-gray-400"/></div>
+                   <div><p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Created By</p><p className="text-sm font-bold text-gray-900">{cpp.created_by_name || '---'}</p></div>
                 </div>
              </div>
              {cpp.override_reason && (
@@ -174,6 +199,129 @@ export default function CPPDetail() {
              )}
           </div>
 
+          {/* Requisition Details */}
+          {cpp.requisition_department && (
+            <div className="bg-white rounded-3xl border border-gray-100 shadow-sm p-8">
+              <h2 className="text-sm font-black text-gray-400 uppercase tracking-[0.2em] mb-8">Requisition Details</h2>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-y-8 gap-x-12">
+                <div className="flex items-start gap-4">
+                  <div className="w-10 h-10 rounded-xl bg-gray-50 flex items-center justify-center shrink-0"><DocumentTextIcon className="w-5 h-5 text-gray-400"/></div>
+                  <div><p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Requisition #</p><p className="text-sm font-bold text-gray-900">{cpp.requisition_number || '---'}</p></div>
+                </div>
+                <div className="flex items-start gap-4">
+                  <div className="w-10 h-10 rounded-xl bg-gray-50 flex items-center justify-center shrink-0"><CashIcon className="w-5 h-5 text-gray-400"/></div>
+                  <div><p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Estimated Value</p><p className="text-sm font-bold text-gray-900">K {Number(cpp.estimated_value || 0).toLocaleString()}</p></div>
+                </div>
+                <div className="flex items-start gap-4">
+                  <div className="w-10 h-10 rounded-xl bg-gray-50 flex items-center justify-center shrink-0"><CalendarIcon className="w-5 h-5 text-gray-400"/></div>
+                  <div><p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Required Date</p><p className="text-sm font-bold text-gray-900">{cpp.requisition_required_date ? new Date(cpp.requisition_required_date).toLocaleDateString('en-GB') : '---'}</p></div>
+                </div>
+                <div className="flex items-start gap-4">
+                  <div className="w-10 h-10 rounded-xl bg-gray-50 flex items-center justify-center shrink-0"><OfficeBuildingIcon className="w-5 h-5 text-gray-400"/></div>
+                  <div><p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Delivery Location</p><p className="text-sm font-bold text-gray-900">{cpp.requisition_delivery_location || '---'}</p></div>
+                </div>
+                <div className="flex items-start gap-4">
+                  <div className="w-10 h-10 rounded-xl bg-gray-50 flex items-center justify-center shrink-0"><ShieldCheckIcon className="w-5 h-5 text-gray-400"/></div>
+                  <div><p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Encumbrance Ref</p><p className="text-sm font-bold text-gray-900">{cpp.requisition_encumbrance_ref || '---'}</p></div>
+                </div>
+                <div className="flex items-start gap-4">
+                  <div className="w-10 h-10 rounded-xl bg-gray-50 flex items-center justify-center shrink-0"><DatabaseIcon className="w-5 h-5 text-gray-400"/></div>
+                  <div><p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Risk Level</p><p className="text-sm font-bold text-gray-900">{cpp.overall_risk_level ? cpp.overall_risk_level.toUpperCase() : '---'}</p></div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ZPC Approval Details */}
+          {(cpp.zpc_approval_required || cpp.zpc_approved_at) && (
+            <div className="bg-white rounded-3xl border border-gray-100 shadow-sm p-8">
+              <h2 className="text-sm font-black text-gray-400 uppercase tracking-[0.2em] mb-8">ZPC Approval Details</h2>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-y-8 gap-x-12">
+                {cpp.zpc_approval_required !== undefined && (
+                  <div className="flex items-start gap-4">
+                    <div className="w-10 h-10 rounded-xl bg-gray-50 flex items-center justify-center shrink-0"><ShieldCheckIcon className="w-5 h-5 text-gray-400"/></div>
+                    <div><p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Approval Required</p><p className="text-sm font-bold text-gray-900">{cpp.zpc_approval_required ? 'Yes' : 'No'}</p></div>
+                  </div>
+                )}
+                {cpp.zpc_approved_at && (
+                  <div className="flex items-start gap-4">
+                    <div className="w-10 h-10 rounded-xl bg-gray-50 flex items-center justify-center shrink-0"><CalendarIcon className="w-5 h-5 text-gray-400"/></div>
+                    <div><p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Approved At</p><p className="text-sm font-bold text-gray-900">{new Date(cpp.zpc_approved_at).toLocaleDateString('en-GB')}</p></div>
+                  </div>
+                )}
+                {cpp.zpc_approved_by_name && (
+                  <div className="flex items-start gap-4">
+                    <div className="w-10 h-10 rounded-xl bg-gray-50 flex items-center justify-center shrink-0"><UserCircleIcon className="w-5 h-5 text-gray-400"/></div>
+                    <div><p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Approved By</p><p className="text-sm font-bold text-gray-900">{cpp.zpc_approved_by_name}</p></div>
+                  </div>
+                )}
+                {cpp.zpc_resolution_ref && (
+                  <div className="flex items-start gap-4">
+                    <div className="w-10 h-10 rounded-xl bg-gray-50 flex items-center justify-center shrink-0"><DocumentTextIcon className="w-5 h-5 text-gray-400"/></div>
+                    <div><p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Resolution Ref</p><p className="text-sm font-bold text-gray-900">{cpp.zpc_resolution_ref}</p></div>
+                  </div>
+                )}
+                {cpp.zpc_justification && (
+                  <div className="flex items-start gap-4 lg:col-span-3">
+                    <div className="w-10 h-10 rounded-xl bg-gray-50 flex items-center justify-center shrink-0"><DocumentTextIcon className="w-5 h-5 text-gray-400"/></div>
+                    <div><p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Justification</p><p className="text-sm font-bold text-gray-900">{cpp.zpc_justification}</p></div>
+                  </div>
+                )}
+              </div>
+              {cpp.zpc_grounds && (
+                <div className="mt-8 pt-8 border-t border-gray-50">
+                  <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-3">ZPC Grounds</h3>
+                  <p className="text-sm text-gray-700 leading-relaxed font-medium bg-gray-50/50 p-6 rounded-2xl">"{cpp.zpc_grounds}"</p>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Risks Table */}
+          {cpp.risks && cpp.risks.length > 0 && (
+            <div className="bg-white rounded-3xl border border-gray-100 shadow-sm overflow-hidden">
+              <div className="p-8 border-b border-gray-50">
+                <h2 className="text-sm font-black text-gray-400 uppercase tracking-[0.2em]">Risk Register</h2>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="min-w-full divide-y divide-gray-50">
+                  <thead className="bg-gray-50/30">
+                    <tr>
+                      <th className="px-8 py-4 text-left text-[10px] font-black text-gray-400 uppercase tracking-widest">Category</th>
+                      <th className="px-8 py-4 text-left text-[10px] font-black text-gray-400 uppercase tracking-widest">Description</th>
+                      <th className="px-8 py-4 text-center text-[10px] font-black text-gray-400 uppercase tracking-widest">Likelihood</th>
+                      <th className="px-8 py-4 text-center text-[10px] font-black text-gray-400 uppercase tracking-widest">Impact</th>
+                      <th className="px-8 py-4 text-left text-[10px] font-black text-gray-400 uppercase tracking-widest">Mitigation</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-50">
+                    {cpp.risks.map((risk: any, i: number) => (
+                      <tr key={i} className="hover:bg-gray-50/50 transition-colors">
+                        <td className="px-8 py-5">
+                          <span className="text-[10px] font-black uppercase px-2.5 py-1 rounded-lg bg-gray-100 text-gray-600">
+                            {risk.risk_category}
+                          </span>
+                        </td>
+                        <td className="px-8 py-5 text-sm font-medium text-gray-800">{risk.risk_description}</td>
+                        <td className="px-8 py-5 text-center">
+                          <span className={`text-[10px] font-black uppercase px-2.5 py-1 rounded-lg ${RISK_COLORS[risk.likelihood] || 'bg-gray-100 text-gray-600'}`}>
+                            {risk.likelihood}
+                          </span>
+                        </td>
+                        <td className="px-8 py-5 text-center">
+                          <span className={`text-[10px] font-black uppercase px-2.5 py-1 rounded-lg ${RISK_COLORS[risk.impact] || 'bg-gray-100 text-gray-600'}`}>
+                            {risk.impact}
+                          </span>
+                        </td>
+                        <td className="px-8 py-5 text-sm text-gray-600">{risk.mitigation_strategy || '---'}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
           {/* Milestones Table */}
           <div className="bg-white rounded-3xl border border-gray-100 shadow-sm overflow-hidden">
              <div className="p-8 border-b border-gray-50">
@@ -183,7 +331,7 @@ export default function CPPDetail() {
                 <table className="min-w-full divide-y divide-gray-50">
                    <thead className="bg-gray-50/30">
                       <tr>
-                         <th className="px-8 py-4 text-left text-[10px] font-black text-gray-400 uppercase tracking-widest">Milestone Activity</th>
+                         <th className="px-8 py-4 text-left text-[10px] font-black text-gray-400 uppercase tracking-widest">Activity</th>
                          <th className="px-8 py-4 text-center text-[10px] font-black text-gray-400 uppercase tracking-widest">Planned Date</th>
                          <th className="px-8 py-4 text-center text-[10px] font-black text-gray-400 uppercase tracking-widest">Actual Date</th>
                          <th className="px-8 py-4 text-right text-[10px] font-black text-gray-400 uppercase tracking-widest">Status</th>
@@ -225,9 +373,9 @@ export default function CPPDetail() {
            <div className="bg-white rounded-3xl border border-gray-100 shadow-sm p-8">
               <h2 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-8">Process Status</h2>
               <div className="space-y-8 relative before:absolute before:inset-0 before:ml-1.5 before:h-full before:w-0.5 before:bg-gray-100">
-                 {CPP_WORKFLOW_STAGES.map((step, i) => {
+                 {WORKFLOW_STAGES.map((step, i) => {
                     const isCurrent = status === step.key;
-                    const stageIdx = CPP_WORKFLOW_STAGES.findIndex(s => s.key === status);
+                    const stageIdx = WORKFLOW_STAGES.findIndex(s => s.key === status);
                     const isDone = stageIdx > i;
 
                     return (
@@ -246,13 +394,13 @@ export default function CPPDetail() {
               </div>
            </div>
 
-           {/* Operations */}
+           {/* Decision Actions */}
            {(canSubmitToZPC || canZPCAction) && (
               <div className="bg-white rounded-3xl border border-gray-100 shadow-sm p-8">
                  <h2 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-6">Decision Actions</h2>
                  <div className="space-y-3">
                     {canSubmitToZPC && (
-                       <button onClick={submitToZPC} disabled={actionLoading !== ''} className="w-full py-4 bg-amber-600 text-white rounded-2xl text-xs font-black uppercase tracking-widest shadow-lg shadow-amber-100 hover:bg-amber-700 transition-all disabled:opacity-50">Registry Submit</button>
+                       <button onClick={submitToZPC} disabled={actionLoading !== ''} className="w-full py-4 bg-amber-600 text-white rounded-2xl text-xs font-black uppercase tracking-widest shadow-lg shadow-amber-100 hover:bg-amber-700 transition-all disabled:opacity-50">Submit to ZPC</button>
                     )}
                     {canZPCAction && (
                        <>
@@ -264,7 +412,23 @@ export default function CPPDetail() {
               </div>
            )}
 
-           {/* History / Decisions */}
+           {/* Amendment Info */}
+           {cpp.is_baseline_locked && (
+             <div className="bg-white rounded-3xl border border-gray-100 shadow-sm p-8">
+               <h2 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-6">Baseline Locked</h2>
+               <div className="flex items-start gap-4">
+                 <div className="w-10 h-10 rounded-xl bg-amber-50 flex items-center justify-center shrink-0">
+                   <ShieldCheckIcon className="w-5 h-5 text-amber-600" />
+                 </div>
+                 <div>
+                   <p className="text-sm font-bold text-gray-900">Baseline v{cpp.amendment_version || 1}</p>
+                   <p className="text-xs text-gray-500 mt-1">Locked by {cpp.baseline_locked_by_name || 'System'} on {cpp.baseline_locked_at ? new Date(cpp.baseline_locked_at).toLocaleDateString('en-GB') : '---'}</p>
+                 </div>
+               </div>
+             </div>
+           )}
+
+           {/* History */}
            <div className="bg-white rounded-3xl border border-gray-100 shadow-sm p-8 text-center">
               <ChatAlt2Icon className="w-8 h-8 text-gray-100 mx-auto mb-3" />
               <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Internal Discussion</p>
@@ -282,20 +446,20 @@ export default function CPPDetail() {
             </div>
             <h3 className="text-2xl font-black text-gray-900 tracking-tight">Strategy Decision</h3>
             <p className="text-sm font-medium text-gray-500 mt-2 mb-8">Provide a clear reason for rejecting or returning this strategy to the procurement officer.</p>
-            
-            <textarea 
-               value={reason} 
-               onChange={(e) => setReason(e.target.value)} 
-               rows={4} 
-               placeholder="Decision details..." 
-               className="w-full bg-gray-50 border border-gray-100 rounded-2xl p-5 text-sm outline-none focus:ring-4 focus:ring-rose-500/5 transition-all" 
+
+            <textarea
+               value={reason}
+               onChange={(e) => setReason(e.target.value)}
+               rows={4}
+               placeholder="Decision details..."
+               className="w-full bg-gray-50 border border-gray-100 rounded-2xl p-5 text-sm outline-none focus:ring-4 focus:ring-rose-500/5 transition-all"
             />
-            
+
             <div className="flex gap-4 mt-10">
               <button onClick={() => { setShowReject(false); setReason(''); }} className="flex-1 py-4 text-sm font-bold text-gray-400 bg-gray-50 rounded-2xl hover:bg-gray-100 transition-all uppercase tracking-widest">Cancel</button>
-              <button 
+              <button
                 onClick={() => rejectCPP(true)}
-                disabled={!reason.trim() || actionLoading !== ''} 
+                disabled={!reason.trim() || actionLoading !== ''}
                 className="flex-1 py-4 bg-rose-600 text-white rounded-2xl text-sm font-black uppercase tracking-widest shadow-lg shadow-rose-100 hover:bg-rose-700 disabled:opacity-50 transition-all"
               >
                  Confirm
