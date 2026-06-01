@@ -50,6 +50,7 @@ const BidSubmission: React.FC = () => {
 
   const [files, setFiles] = useState<Record<string, File | null>>({
     technical: null,
+    financial: null,
     security: null,
     zamra: null,
     bidForms: null,
@@ -97,16 +98,21 @@ const BidSubmission: React.FC = () => {
 
   const addendaList = tender?.addenda || [];
   const hasAddenda = addendaList.length > 0;
-  const submissionType = 'Single Envelope System';
+  const submissionType = tender?.submission_format === 'two' ? 'Two-Envelope System' : 'Single Envelope System';
   const isGoods = true;
   const zamraRequired = isGoods;
+  const bidSecurityRequired = tender?.bid_security_required !== false;
 
-  const allDocsUploaded = !!files.technical && !!files.security && (!zamraRequired || !!files.zamra) && !!files.bidForms && !!files.boq;
+  const allDocsUploaded = !!files.technical && !!files.financial && (!bidSecurityRequired || !!files.security) && (!zamraRequired || !!files.zamra) && !!files.bidForms && !!files.boq;
 
   const allAddendaAcknowledged = hasAddenda ? addendaList.every((a: any) => addendaAcknowledged.has(a.id || a.addendum_id || String(a.number))) : true;
   const canSubmit = allDocsUploaded && declarationAccurate && parsedBidPrice > 0;
 
   const handleFileChange = (key: string, file: File | null) => {
+    if (file && file.size > 50 * 1024 * 1024) {
+      toast.error('Each bid document must be 50MB or smaller');
+      return;
+    }
     setFiles((prev) => ({ ...prev, [key]: file }));
   };
 
@@ -124,6 +130,7 @@ const BidSubmission: React.FC = () => {
     try {
       const form = new FormData();
       if (files.technical) form.append('technical_proposal', files.technical);
+      if (files.financial) form.append('financial_proposal', files.financial);
       if (files.security) form.append('bid_security', files.security);
       if (files.zamra) form.append('zamra_registration', files.zamra);
       if (files.bidForms) form.append('bid_forms', files.bidForms);
@@ -131,6 +138,8 @@ const BidSubmission: React.FC = () => {
       if (files.supporting) form.append('other_supporting', files.supporting);
       form.append('addenda_acknowledged', 'true');
       form.append('bid_price', String(parsedBidPrice));
+      form.append('security_amount', String(Math.round(securityRequiredAmount)));
+      form.append('security_type', tender?.bid_security_type || 'bank_guarantee');
       form.append('validity_period_days', String(90));
 
       const res = await vendorApi.bids.submitBid(id!, form);
@@ -432,6 +441,14 @@ const BidSubmission: React.FC = () => {
                 'Include: company profile, experience, references, sample product documentation, after-sales plan'
               )}
               {docUploadRow(
+                'Financial Proposal',
+                'financial', true, 'Max file size: 50MB | Accepted: PDF only',
+                '.pdf',
+                submissionType === 'Two-Envelope System'
+                  ? 'This file is sealed by the system until authorized financial opening.'
+                  : 'This file is submitted with the bid and may be read at bid opening.'
+              )}
+              {bidSecurityRequired && docUploadRow(
                 'Bid Security Document',
                 'security', true, 'Must be from a registered commercial bank in Zambia. Valid for: 118 days from closing date (90+28 days)',
                 '.pdf,.jpg,.jpeg,.png',

@@ -55,6 +55,7 @@ export default function CPPDetail() {
   const [cpp, setCpp] = useState<ContractProcurementPlan | null>(null);
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState('');
+  const [validationError, setValidationError] = useState<string[] | null>(null);
   const [showReject, setShowReject] = useState(false);
   const [reason, setReason] = useState('');
 
@@ -87,10 +88,19 @@ export default function CPPDetail() {
     if (!id) return;
     setActionLoading('submit');
     try {
+      setValidationError(null);
       await procurementPlanningApi.contractPlans.submit(id);
       toast.success('Submitted to ZPC registry');
       loadData();
-    } catch (err: any) { toast.error(err.response?.data?.error || 'Submission failed'); }
+    } catch (err: any) {
+      const details = err.response?.data?.details;
+      const msg = err.response?.data?.error || 'Submission failed';
+      if (details) {
+        setValidationError(details);
+      } else {
+        toast.error(msg);
+      }
+    }
     setActionLoading('');
   };
 
@@ -134,6 +144,28 @@ export default function CPPDetail() {
           </div>
         }
       />
+
+      {validationError && (
+        <div className="bg-rose-50 border border-rose-200 rounded-2xl p-6">
+          <div className="flex items-start gap-4">
+            <ExclamationIcon className="w-6 h-6 text-rose-500 shrink-0 mt-0.5" />
+            <div className="flex-1 min-w-0">
+              <h3 className="text-sm font-black text-rose-800 uppercase tracking-widest mb-2">Cannot Submit — Fix These Issues</h3>
+              <ul className="space-y-1.5">
+                {validationError.map((err, i) => (
+                  <li key={i} className="text-sm text-rose-700 flex items-start gap-2">
+                    <span className="mt-1.5 w-1.5 h-1.5 rounded-full bg-rose-400 shrink-0" />
+                    {err}
+                  </li>
+                ))}
+              </ul>
+            </div>
+            <button onClick={() => setValidationError(null)} className="p-1.5 rounded-lg hover:bg-rose-100 text-rose-400 hover:text-rose-600 transition-colors">
+              <XIcon className="w-5 h-5" />
+            </button>
+          </div>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
         <div className="lg:col-span-3 space-y-8">

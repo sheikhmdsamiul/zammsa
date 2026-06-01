@@ -177,7 +177,7 @@ The system has five portals:
 - Bid opening and processing
 - Support evaluation process
 
-**Navigation**: Requisitions, Solicitations, Bids, Contracts (view)
+**Navigation**: Requisitions, Solicitations, Bids, Contracts (view), Evaluation handoff only
 
 ---
 
@@ -652,22 +652,23 @@ The system has five portals:
 
 | Role | Email | Password |
 |------|-------|----------|
-| System Admin | admin@zammsa.zm | Test@123 |
-| Director General | dg@zammsa.zm | Test@123 |
-| Director of Procurement | dirproc@zammsa.zm | Test@123 |
-| Procurement Manager | pm@zammsa.zm | Test@123 |
-| Procurement Officer | po@zammsa.zm | Test@123 |
-| Department Head | dh@zammsa.zm | Test@123 |
-| Department Staff | staff@zammsa.zm | Test@123 |
-| Finance Officer | fo@zammsa.zm | Test@123 |
-| Budget Controller | bc@zammsa.zm | Test@123 |
-| ZPC Member | zpc@zammsa.zm | Test@123 |
-| EC Chair | ecchair@zammsa.zm | Test@123 |
-| EC Member | ecm1@zammsa.zm | Test@123 |
-| Contract Manager | cm@zammsa.zm | Test@123 |
-| ZPPA Reporter | zppa@zammsa.zm | Test@123 |
-| Auditor | auditor@zammsa.zm | Test@123 |
-| Supplier | vendor@healthpharma.zm | Vendor@123 |
+| System Admin | admin@zammsa.gov.zm | Test@123 |
+| Director General | dg@zammsa.gov.zm | Test@123 |
+| Director of Procurement | director@zammsa.gov.zm | Test@123 |
+| Procurement Manager | pm@zammsa.gov.zm | Test@123 |
+| Procurement Officer | procurement.officer@zammsa.gov.zm | Test@123 |
+| Department Head | dept.head@zammsa.gov.zm | Test@123 |
+| Department Staff | staff@zammsa.gov.zm | Test@123 |
+| Finance Officer | finance.officer@zammsa.gov.zm | Test@123 |
+| Budget Controller | bc@zammsa.gov.zm | Test@123 |
+| ZPC Member | zpc@zammsa.gov.zm | Test@123 |
+| EC Chair | ecchair@zammsa.gov.zm | Test@123 |
+| EC Member | evaluator@zammsa.gov.zm | Test@123 |
+| Contract Manager | contract@zammsa.gov.zm | Test@123 |
+| ZPPA Reporter | zppa@zammsa.gov.zm | Test@123 |
+| Auditor | auditor@zammsa.gov.zm | Test@123 |
+| Integration Manager | integration@zammsa.gov.zm | Test@123 |
+| Supplier | supplier@zammsa.gov.zm | Test@123 |
 | Supplier Relationship Manager | supplier.manager@zammsa.gov.zm | Test@123 |
 
 ---

@@ -610,6 +610,9 @@ export interface TenderPublic {
   award_notice: AwardNotice | null;
   bid_opening_results: BidOpeningResult | null;
   bid_security_rate: number;
+  bid_security_required?: boolean;
+  bid_security_type?: string;
+  submission_format?: 'single' | 'two';
   bid_validity_days: number;
   items: TenderItem[];
   created_at: string;

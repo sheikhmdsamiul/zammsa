@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Outlet, useLocation } from 'react-router-dom';
+import { Outlet } from 'react-router-dom';
 import { useAuth, useLogout } from '../../hooks/useAuth';
 import { ROLES } from '../../config/rbac';
 import Sidebar, { NavItem } from './Sidebar';
@@ -7,8 +7,10 @@ import {
   ChartBarIcon, CashIcon, ClipboardListIcon,
   PencilIcon, DocumentTextIcon, DocumentDuplicateIcon,
   DocumentIcon, OfficeBuildingIcon, TrendingUpIcon,
-  UsersIcon, LockOpenIcon, DocumentSearchIcon,
-  TemplateIcon, ScaleIcon,
+  UsersIcon, LockOpenIcon, CheckCircleIcon,
+  ClockIcon, ExclamationIcon, StarIcon,
+  ShieldCheckIcon, AnnotationIcon, BadgeCheckIcon,
+  CalendarIcon,
 } from '@heroicons/react/outline';
 
 const iconClass = 'h-5 w-5';
@@ -19,33 +21,277 @@ const PageLoader = () => (
   </div>
 );
 
-const navItems: NavItem[] = [
-  { label: 'Dashboard', path: '/dashboard', icon: <ChartBarIcon className={iconClass} /> },
-  { label: 'Procurement Planning', path: '/procurement-planning', icon: <ClipboardListIcon className={iconClass} />, roles: [ROLES.USER_DEPT_STAFF, ROLES.DEPARTMENT_HEAD, ROLES.PROCUREMENT_OFFICER, ROLES.PROCUREMENT_MANAGER, ROLES.FINANCE_OFFICER, ROLES.ZPC_MEMBER, ROLES.DIRECTOR_PROCUREMENT, ROLES.DIRECTOR_GENERAL] },
-  { label: 'GPNs', path: '/procurement-planning/gpns', icon: <DocumentTextIcon className={iconClass} />, roles: [ROLES.PROCUREMENT_OFFICER, ROLES.PROCUREMENT_MANAGER, ROLES.DIRECTOR_PROCUREMENT, ROLES.SYSTEM_ADMIN] },
-  { label: 'CPPs', path: '/procurement-planning/cpp', icon: <DocumentIcon className={iconClass} />, roles: [ROLES.PROCUREMENT_OFFICER, ROLES.PROCUREMENT_MANAGER, ROLES.DIRECTOR_PROCUREMENT, ROLES.ZPC_MEMBER, ROLES.SYSTEM_ADMIN] },
-  { label: 'Budget Allocations', path: '/procurement-planning/budgets', icon: <ChartBarIcon className={iconClass} />, roles: [ROLES.PROCUREMENT_OFFICER, ROLES.PROCUREMENT_MANAGER, ROLES.FINANCE_OFFICER, ROLES.BUDGET_CONTROLLER, ROLES.DIRECTOR_PROCUREMENT, ROLES.DIRECTOR_GENERAL] },
-  { label: 'Requisitions', path: '/requisitions', icon: <PencilIcon className={iconClass} />, roles: [ROLES.USER_DEPT_STAFF, ROLES.DEPARTMENT_HEAD, ROLES.PROCUREMENT_OFFICER, ROLES.FINANCE_OFFICER, ROLES.DIRECTOR_GENERAL] },
-  { label: 'Solicitations', path: '/solicitations', icon: <ClipboardListIcon className={iconClass} />, roles: [ROLES.PROCUREMENT_OFFICER, ROLES.PROCUREMENT_MANAGER, ROLES.DIRECTOR_PROCUREMENT] },
-  { label: 'Bid Management', path: '/bids', icon: <DocumentTextIcon className={iconClass} />, roles: [ROLES.PROCUREMENT_OFFICER, ROLES.PROCUREMENT_MANAGER, ROLES.EVALUATION_COMMITTEE_MEMBER, ROLES.EVALUATION_COMMITTEE_CHAIR, ROLES.ZPC_MEMBER, ROLES.DIRECTOR_PROCUREMENT] },
-  { label: 'Bid Evaluation', path: '/evaluations', icon: <DocumentDuplicateIcon className={iconClass} />, roles: [ROLES.EVALUATION_COMMITTEE_MEMBER, ROLES.EVALUATION_COMMITTEE_CHAIR, ROLES.ZPC_MEMBER, ROLES.DIRECTOR_PROCUREMENT] },
-  { label: 'Committee Formation', path: '/evaluations/committee/formation', icon: <UsersIcon className={iconClass} />, roles: [ROLES.PROCUREMENT_OFFICER, ROLES.PROCUREMENT_MANAGER, ROLES.DIRECTOR_PROCUREMENT] },
-  { label: 'Bid Opening', path: '/bids/opening', icon: <LockOpenIcon className={iconClass} />, roles: [ROLES.PROCUREMENT_OFFICER, ROLES.PROCUREMENT_MANAGER, ROLES.DIRECTOR_PROCUREMENT] },
-  { label: 'Preliminary Exam', path: '/evaluations/preliminary', icon: <DocumentSearchIcon className={iconClass} />, roles: [ROLES.EVALUATION_COMMITTEE_CHAIR, ROLES.EVALUATION_COMMITTEE_MEMBER, ROLES.DIRECTOR_PROCUREMENT] },
-  { label: 'Contracts', path: '/contracts', icon: <DocumentIcon className={iconClass} />, roles: [ROLES.PROCUREMENT_OFFICER, ROLES.PROCUREMENT_MANAGER, ROLES.ZPC_MEMBER, ROLES.DIRECTOR_PROCUREMENT, ROLES.DIRECTOR_GENERAL, ROLES.CONTRACT_MANAGER] },
-  { label: 'Contract Generation', path: '/contracts/generate', icon: <TemplateIcon className={iconClass} />, roles: [ROLES.PROCUREMENT_OFFICER, ROLES.PROCUREMENT_MANAGER, ROLES.DIRECTOR_PROCUREMENT] },
-  { label: 'Finance & Payments', path: '/finance', icon: <CashIcon className={iconClass} />, roles: [ROLES.FINANCE_OFFICER, ROLES.BUDGET_CONTROLLER, ROLES.DIRECTOR_GENERAL, ROLES.CONTRACT_MANAGER] },
-  { label: 'Invoice Matching', path: '/finance/matching', icon: <ScaleIcon className={iconClass} />, roles: [ROLES.FINANCE_OFFICER, ROLES.BUDGET_CONTROLLER, ROLES.CONTRACT_MANAGER] },
-  { label: 'Suppliers', path: '/suppliers', icon: <OfficeBuildingIcon className={iconClass} />, roles: [ROLES.SUPPLIER_RELATIONSHIP_MANAGER] },
-  { label: 'Reports & Analytics', path: '/reports', icon: <TrendingUpIcon className={iconClass} />, roles: [ROLES.PROCUREMENT_MANAGER, ROLES.FINANCE_OFFICER, ROLES.ZPC_MEMBER, ROLES.DIRECTOR_PROCUREMENT, ROLES.DIRECTOR_GENERAL, ROLES.ZPPA_REPORTING_OFFICER, ROLES.BUDGET_CONTROLLER] },
-];
+/** Maps sub-items to their closest existing route so sidebar navigation never 404s. */
+function useSidebarItems(userRole: string | undefined): NavItem[] {
+  const role = userRole === 'zppa_reporter' ? 'zppa_reporting_officer' : userRole;
+
+  const items: Record<string, NavItem[]> = {
+    [ROLES.PROCUREMENT_OFFICER]: [
+      { label: 'Dashboard', path: '/dashboard', icon: <ChartBarIcon className={iconClass} /> },
+      { label: 'Procurement Planning', path: '/procurement-planning', icon: <ClipboardListIcon className={iconClass} />,
+        children: [
+          { label: 'Annual Plans (APP)', path: '/procurement-planning' },
+          { label: 'Contract Plans (CPP)', path: '/procurement-planning/cpp' },
+        ]
+      },
+      { label: 'Requisitions', path: '/requisitions', icon: <PencilIcon className={iconClass} />, badge: 3 },
+      { label: 'Solicitations', path: '/solicitations', icon: <DocumentTextIcon className={iconClass} />, badge: 2,
+        children: [
+          { label: 'Create New', path: '/solicitations/create' },
+          { label: 'Draft', path: '/solicitations' },
+          { label: 'Pending Approval', path: '/solicitations' },
+          { label: 'Published', path: '/solicitations' },
+          { label: 'Closed', path: '/solicitations' },
+          { label: 'All Solicitations', path: '/solicitations' },
+        ]
+      },
+      { label: 'Bid Management', path: '/bids', icon: <LockOpenIcon className={iconClass} />, badge: 1,
+        children: [
+          { label: 'Bid Opening List', path: '/bids/opening' },
+          { label: 'Opening Setup', path: '/bids/opening/setup' },
+          { label: 'Received Bids', path: '/bids' },
+          { label: 'Minutes Archive', path: '/bids/opening/minutes' },
+          { label: 'Late/Rejected Bids', path: '/bids/late-rejected' },
+        ]
+      },
+      { label: 'Evaluations', path: '/evaluations', icon: <DocumentDuplicateIcon className={iconClass} />, badge: 1,
+        children: [
+          { label: 'Committee Formation', path: '/evaluations/committee/formation' },
+          { label: 'Active Evaluations', path: '/evaluations' },
+          { label: 'Post-Qualification', path: '/evaluations/post-qualification' },
+        ]
+      },
+      { label: 'Contract Award', path: '/contracts', icon: <BadgeCheckIcon className={iconClass} />,
+        children: [
+          { label: 'Award Overview', path: '/contracts/award-overview' },
+          { label: 'Award Notices', path: '/contracts/award-notices' },
+          { label: 'Standstill Monitor', path: '/contracts' },
+          { label: 'Appeals', path: '/contracts/appeals' },
+          { label: 'Generate Contract', path: '/contracts/generate' },
+          { label: 'Performance Security', path: '/contracts/performance-security' },
+        ]
+      },
+      { label: 'Suppliers', path: '/suppliers', icon: <OfficeBuildingIcon className={iconClass} /> },
+      { label: 'Reports', path: '/reports', icon: <TrendingUpIcon className={iconClass} /> },
+    ],
+    [ROLES.DIRECTOR_PROCUREMENT]: [
+      { label: 'Dashboard', path: '/dashboard', icon: <ChartBarIcon className={iconClass} /> },
+      { label: 'Approvals', path: '/requisitions', icon: <CheckCircleIcon className={iconClass} />, badge: 5 },
+      { label: 'Procurement Planning', path: '/procurement-planning', icon: <ClipboardListIcon className={iconClass} />,
+        children: [
+          { label: 'Annual Plans (APP)', path: '/procurement-planning' },
+          { label: 'Contract Plans (CPP)', path: '/procurement-planning/cpp' },
+        ]
+      },
+      { label: 'Solicitations', path: '/solicitations', icon: <DocumentTextIcon className={iconClass} /> },
+      { label: 'Bid Evaluation', path: '/evaluations', icon: <DocumentDuplicateIcon className={iconClass} />,
+        children: [
+          { label: 'Form EC Committee', path: '/evaluations/committee/formation' },
+          { label: 'Active Evaluations', path: '/evaluations' },
+          { label: 'Post-Qualification', path: '/evaluations/post-qualification' },
+          { label: 'BERs Awaiting ZPC', path: '/evaluations/zpc-approval' },
+        ]
+      },
+      { label: 'Contract Award', path: '/contracts', icon: <BadgeCheckIcon className={iconClass} />,
+        children: [
+          { label: 'Award Overview', path: '/contracts/award-overview' },
+          { label: 'Award Notices', path: '/contracts/award-notices' },
+          { label: 'Standstill Monitor', path: '/contracts' },
+          { label: 'Appeals', path: '/contracts/appeals' },
+          { label: 'Generate Contract', path: '/contracts/generate' },
+          { label: 'Performance Security', path: '/contracts/performance-security' },
+        ]
+      },
+      { label: 'Compliance', path: '/reports', icon: <ShieldCheckIcon className={iconClass} /> },
+      { label: 'Analytics', path: '/reports', icon: <TrendingUpIcon className={iconClass} /> },
+    ],
+    [ROLES.EVALUATION_COMMITTEE_MEMBER]: [
+      { label: 'Dashboard', path: '/dashboard', icon: <ChartBarIcon className={iconClass} /> },
+      { label: 'My Evaluations', path: '/evaluations', icon: <DocumentDuplicateIcon className={iconClass} />, badge: 2 },
+      { label: 'Declarations', path: '/evaluations', icon: <AnnotationIcon className={iconClass} /> },
+      { label: 'Bid Documents', path: '/bids', icon: <DocumentTextIcon className={iconClass} /> },
+    ],
+    [ROLES.EVALUATION_COMMITTEE_CHAIR]: [
+      { label: 'Dashboard', path: '/dashboard', icon: <ChartBarIcon className={iconClass} /> },
+      { label: 'My Evaluations', path: '/evaluations', icon: <DocumentDuplicateIcon className={iconClass} />, badge: 2 },
+      { label: 'Declarations', path: '/evaluations', icon: <AnnotationIcon className={iconClass} /> },
+      { label: 'Post-Qualification', path: '/evaluations/post-qualification', icon: <ClipboardListIcon className={iconClass} /> },
+      { label: 'Bid Documents', path: '/bids', icon: <DocumentTextIcon className={iconClass} /> },
+    ],
+    [ROLES.ZPC_MEMBER]: [
+      { label: 'Dashboard', path: '/dashboard', icon: <ChartBarIcon className={iconClass} /> },
+      { label: 'ZPC Approvals', path: '/requisitions', icon: <CheckCircleIcon className={iconClass} />, badge: 4,
+        children: [
+          { label: 'BERs Pending', path: '/evaluations/zpc-approval' },
+          { label: 'APP Reviews', path: '/procurement-planning' },
+          { label: 'CPP Non-Open Method', path: '/procurement-planning/cpp' },
+          { label: 'Requisitions >K250K', path: '/requisitions' },
+          { label: 'Contract Amendments', path: '/contracts' },
+        ]
+      },
+      { label: 'ZPC Meeting', path: '/dashboard', icon: <CalendarIcon className={iconClass} /> },
+      { label: 'Approvals History', path: '/requisitions', icon: <ClockIcon className={iconClass} /> },
+    ],
+    [ROLES.DIRECTOR_GENERAL]: [
+      { label: 'Dashboard', path: '/dashboard', icon: <ChartBarIcon className={iconClass} /> },
+      { label: 'My Approvals', path: '/requisitions', icon: <CheckCircleIcon className={iconClass} />, badge: 3,
+        children: [
+          { label: 'Requisitions', path: '/requisitions' },
+          { label: 'Invoice Payments', path: '/finance/invoices' },
+          { label: 'Contract Signing', path: '/contracts' },
+        ]
+      },
+      { label: 'Executive Overview', path: '/dashboard', icon: <ChartBarIcon className={iconClass} />,
+        children: [
+          { label: 'Procurement KPIs', path: '/reports' },
+          { label: 'Budget Status', path: '/finance/budgets' },
+          { label: 'Active Contracts', path: '/contracts' },
+          { label: 'Supplier Performance', path: '/contracts' },
+        ]
+      },
+      { label: 'Contracts', path: '/contracts', icon: <DocumentIcon className={iconClass} /> },
+      { label: 'Reports', path: '/reports', icon: <TrendingUpIcon className={iconClass} /> },
+    ],
+    [ROLES.CONTRACT_MANAGER]: [
+      { label: 'Dashboard', path: '/dashboard', icon: <ChartBarIcon className={iconClass} /> },
+      { label: 'My Contracts', path: '/contracts', icon: <DocumentIcon className={iconClass} />, badge: 4 },
+      { label: 'Milestones', path: '/contracts/milestones', icon: <ClockIcon className={iconClass} />, badge: 1 },
+      { label: 'Amendments', path: '/contracts/amendments', icon: <PencilIcon className={iconClass} /> },
+      { label: 'Liquidated Damages', path: '/contracts/liquidated-damages', icon: <ExclamationIcon className={iconClass} /> },
+      { label: 'Invoices & Payments', path: '/finance/invoices', icon: <CashIcon className={iconClass} /> },
+      { label: 'Supplier Performance', path: '/contracts/supplier-performance', icon: <StarIcon className={iconClass} /> },
+      { label: 'Contract Closure', path: '/contracts/closure', icon: <LockOpenIcon className={iconClass} /> },
+    ],
+    [ROLES.FINANCE_OFFICER]: [
+      { label: 'Dashboard', path: '/dashboard', icon: <ChartBarIcon className={iconClass} /> },
+      { label: 'Finance', path: '/finance', icon: <CashIcon className={iconClass} />,
+        children: [
+          { label: 'Overview', path: '/finance' },
+          { label: 'Budgets', path: '/finance/budgets' },
+        ]
+      },
+      { label: 'Invoices', path: '/finance/invoices', icon: <DocumentTextIcon className={iconClass} />, badge: 2,
+        children: [
+          { label: 'Invoice Queue', path: '/finance/invoices' },
+          { label: '3-Way Matching', path: '/finance/matching' },
+        ]
+      },
+      { label: 'Payments', path: '/finance/payments', icon: <CashIcon className={iconClass} />,
+        children: [
+          { label: 'Payment Queue', path: '/finance/payments' },
+          { label: 'Letters of Credit', path: '/finance/letters-of-credit' },
+        ]
+      },
+      { label: 'Requisitions', path: '/requisitions', icon: <PencilIcon className={iconClass} /> },
+      { label: 'Procurement Planning', path: '/procurement-planning', icon: <ClipboardListIcon className={iconClass} /> },
+      { label: 'Reports', path: '/reports', icon: <TrendingUpIcon className={iconClass} /> },
+    ],
+    [ROLES.BUDGET_CONTROLLER]: [
+      { label: 'Dashboard', path: '/dashboard', icon: <ChartBarIcon className={iconClass} /> },
+      { label: 'Finance', path: '/finance', icon: <CashIcon className={iconClass} />,
+        children: [
+          { label: 'Overview', path: '/finance' },
+          { label: 'Budgets', path: '/finance/budgets' },
+        ]
+      },
+      { label: 'Invoices', path: '/finance/invoices', icon: <DocumentTextIcon className={iconClass} />, badge: 2,
+        children: [
+          { label: 'Invoice Queue', path: '/finance/invoices' },
+          { label: '3-Way Matching', path: '/finance/matching' },
+        ]
+      },
+      { label: 'Payments', path: '/finance/payments', icon: <CashIcon className={iconClass} />,
+        children: [
+          { label: 'Payment Queue', path: '/finance/payments' },
+          { label: 'Letters of Credit', path: '/finance/letters-of-credit' },
+        ]
+      },
+      { label: 'Requisitions', path: '/requisitions', icon: <PencilIcon className={iconClass} /> },
+      { label: 'Procurement Planning', path: '/procurement-planning', icon: <ClipboardListIcon className={iconClass} /> },
+      { label: 'Reports', path: '/reports', icon: <TrendingUpIcon className={iconClass} /> },
+    ],
+    [ROLES.DEPARTMENT_HEAD]: [
+      { label: 'Dashboard', path: '/dashboard', icon: <ChartBarIcon className={iconClass} /> },
+      { label: 'Requisitions', path: '/requisitions', icon: <PencilIcon className={iconClass} />, badge: 2 },
+      { label: 'Procurement Planning', path: '/procurement-planning', icon: <ClipboardListIcon className={iconClass} /> },
+    ],
+    [ROLES.USER_DEPT_STAFF]: [
+      { label: 'Dashboard', path: '/dashboard', icon: <ChartBarIcon className={iconClass} /> },
+      { label: 'Requisitions', path: '/requisitions', icon: <PencilIcon className={iconClass} />,
+        children: [
+          { label: 'Create New', path: '/requisitions/create' },
+          { label: 'My Requisitions', path: '/requisitions' },
+        ]
+      },
+      { label: 'Procurement Planning', path: '/procurement-planning', icon: <ClipboardListIcon className={iconClass} /> },
+    ],
+    [ROLES.PROCUREMENT_MANAGER]: [
+      { label: 'Dashboard', path: '/dashboard', icon: <ChartBarIcon className={iconClass} /> },
+      { label: 'Solicitations', path: '/solicitations', icon: <DocumentTextIcon className={iconClass} /> },
+      { label: 'Bid Management', path: '/bids', icon: <LockOpenIcon className={iconClass} />,
+        children: [
+          { label: 'Bid Opening List', path: '/bids/opening' },
+          { label: 'Opening Setup', path: '/bids/opening/setup' },
+          { label: 'All Bids', path: '/bids' },
+          { label: 'Minutes Archive', path: '/bids/opening/minutes' },
+          { label: 'Late/Rejected Bids', path: '/bids/late-rejected' },
+        ]
+      },
+      { label: 'Evaluations', path: '/evaluations', icon: <DocumentDuplicateIcon className={iconClass} />,
+        children: [
+          { label: 'Committee Formation', path: '/evaluations/committee/formation' },
+          { label: 'Active Evaluations', path: '/evaluations' },
+          { label: 'Post-Qualification', path: '/evaluations/post-qualification' },
+        ]
+      },
+      { label: 'Contracts', path: '/contracts', icon: <DocumentIcon className={iconClass} />,
+        children: [
+          { label: 'All Contracts', path: '/contracts' },
+          { label: 'Award Overview', path: '/contracts/award-overview' },
+          { label: 'Award Notices', path: '/contracts/award-notices' },
+          { label: 'Standstill Monitor', path: '/contracts' },
+          { label: 'Appeals', path: '/contracts/appeals' },
+          { label: 'Generate Contract', path: '/contracts/generate' },
+          { label: 'Performance Security', path: '/contracts/performance-security' },
+        ]
+      },
+      { label: 'Procurement Planning', path: '/procurement-planning', icon: <ClipboardListIcon className={iconClass} /> },
+    ],
+    [ROLES.AUDITOR]: [
+      { label: 'Dashboard', path: '/dashboard', icon: <ChartBarIcon className={iconClass} /> },
+    ],
+    [ROLES.ZPPA_REPORTING_OFFICER]: [
+      { label: 'Dashboard', path: '/dashboard', icon: <ChartBarIcon className={iconClass} /> },
+      { label: 'Reports', path: '/reports', icon: <TrendingUpIcon className={iconClass} /> },
+    ],
+    [ROLES.INTEGRATION_MANAGER]: [
+      { label: 'Dashboard', path: '/dashboard', icon: <ChartBarIcon className={iconClass} /> },
+    ],
+  };
+
+  if (role && items[role]) {
+    return items[role];
+  }
+
+  return [
+    { label: 'Dashboard', path: '/dashboard', icon: <ChartBarIcon className={iconClass} /> },
+    { label: 'Procurement Planning', path: '/procurement-planning', icon: <ClipboardListIcon className={iconClass} /> },
+    { label: 'Requisitions', path: '/requisitions', icon: <PencilIcon className={iconClass} /> },
+    { label: 'Solicitations', path: '/solicitations', icon: <DocumentTextIcon className={iconClass} /> },
+    { label: 'Bid Management', path: '/bids', icon: <LockOpenIcon className={iconClass} /> },
+    { label: 'Evaluations', path: '/evaluations', icon: <DocumentDuplicateIcon className={iconClass} /> },
+    { label: 'Contracts', path: '/contracts', icon: <DocumentIcon className={iconClass} /> },
+    { label: 'Finance', path: '/finance', icon: <CashIcon className={iconClass} /> },
+    { label: 'Reports', path: '/reports', icon: <TrendingUpIcon className={iconClass} /> },
+  ];
+}
 
 const DashboardLayout: React.FC = () => {
   const { user } = useAuth();
   const logout = useLogout();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const normalizedRole = user?.role === 'zppa_reporter' ? 'zppa_reporting_officer' : user?.role;
-  const visibleNav = navItems.filter((item) => !item.roles || (normalizedRole && item.roles.includes(normalizedRole)));
+  const navItems = useSidebarItems(normalizedRole);
 
   const sidebarFooter = (
     <div className="flex items-center gap-3 px-2 py-1">
@@ -72,10 +318,32 @@ const DashboardLayout: React.FC = () => {
     </div>
   );
 
+  const getRoleTitle = (role?: string) => {
+    if (!role) return 'Internal Portal';
+    const titles: Record<string, string> = {
+      [ROLES.PROCUREMENT_OFFICER]: 'Procurement Officer',
+      [ROLES.PROCUREMENT_MANAGER]: 'Procurement Manager',
+      [ROLES.DIRECTOR_PROCUREMENT]: 'Director of Procurement',
+      [ROLES.EVALUATION_COMMITTEE_MEMBER]: 'Evaluation Committee Member',
+      [ROLES.EVALUATION_COMMITTEE_CHAIR]: 'Evaluation Committee Chair',
+      [ROLES.ZPC_MEMBER]: 'ZPC Member',
+      [ROLES.DIRECTOR_GENERAL]: 'Director General',
+      [ROLES.CONTRACT_MANAGER]: 'Contract Manager',
+      [ROLES.FINANCE_OFFICER]: 'Finance Officer',
+      [ROLES.BUDGET_CONTROLLER]: 'Budget Controller',
+      [ROLES.DEPARTMENT_HEAD]: 'Department Head',
+      [ROLES.USER_DEPT_STAFF]: 'Department Staff',
+      [ROLES.AUDITOR]: 'Auditor',
+      [ROLES.ZPPA_REPORTING_OFFICER]: 'ZPPA Reporting Officer',
+      [ROLES.INTEGRATION_MANAGER]: 'Integration Manager',
+    };
+    return titles[role] || role.replace(/_/g, ' ');
+  };
+
   return (
     <div className="min-h-screen flex bg-gray-50">
       <Sidebar 
-        navItems={visibleNav}
+        navItems={navItems}
         isOpen={sidebarOpen}
         onClose={() => setSidebarOpen(false)}
         accentColor="zammsa-green"
@@ -92,20 +360,21 @@ const DashboardLayout: React.FC = () => {
           
           <div className="flex flex-col">
             <h1 className="text-lg font-bold text-gray-900">ZAMMSA PMS</h1>
-            <p className="text-xs text-gray-500 font-medium">{user?.department || 'Internal Portal'}</p>
+            <p className="text-xs text-gray-500 font-medium">{getRoleTitle(user?.role)}</p>
           </div>
 
           <div className="flex items-center gap-4">
-            <button className="p-2 text-gray-400 hover:text-zammsa-green hover:bg-zammsa-green/5 rounded-xl transition-all">
+            <button className="relative p-2 text-gray-400 hover:text-zammsa-green hover:bg-zammsa-green/5 rounded-xl transition-all">
               <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
               </svg>
+              <span className="absolute top-1.5 right-1.5 w-4 h-4 bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center border-2 border-white">3</span>
             </button>
             <div className="h-8 w-px bg-gray-200 mx-2" />
             <div className="flex items-center gap-3">
                <div className="text-right hidden sm:block">
                   <p className="text-sm font-bold text-gray-900 leading-none">{user?.full_name}</p>
-                  <p className="text-[10px] text-gray-500 font-bold uppercase tracking-tighter">{user?.role?.replace(/_/g, ' ')}</p>
+                  <p className="text-[10px] text-gray-500 font-bold uppercase tracking-tighter">{getRoleTitle(user?.role)}</p>
                </div>
                <div className="w-10 h-10 bg-gray-100 rounded-xl border border-gray-200 flex items-center justify-center overflow-hidden">
                   <span className="text-zammsa-green font-bold text-sm">

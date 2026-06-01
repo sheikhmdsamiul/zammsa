@@ -2,10 +2,9 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
-import { fetchEvaluationDashboard, saveEvaluationScore, submitEvaluation } from '../../api/dashboards';
+import { fetchEvaluationDashboard } from '../../api/dashboards';
 import { evaluationsApi } from '../../api/evaluations';
 import { LoadingSpinner } from '../common/LoadingSpinner';
-import { StatusBadge } from '../common/StatusBadge';
 import { useAppSelector } from '../../hooks/useRedux';
 
 const ROLES = {
@@ -21,8 +20,6 @@ const EvaluationDashboard: React.FC = () => {
   const [pollInterval] = useState(30000);
   const [memberTab, setMemberTab] = useState<'dashboard' | 'scoring'>('dashboard');
 
-  const [scores, setScores] = useState<Record<string, Record<string, number>>>({});
-  const [comments, setComments] = useState<Record<string, Record<string, string>>>({});
   const [showSign, setShowSign] = useState(false);
   const [signPassword, setSignPassword] = useState('');
   const [signId, setSignId] = useState<string | null>(null);
@@ -31,20 +28,8 @@ const EvaluationDashboard: React.FC = () => {
 
   const { data, isLoading } = useQuery({
     queryKey: ['evaluationDashboard'],
-    queryFn: fetchEvaluationDashboard,
+    queryFn: () => fetchEvaluationDashboard(user?.id),
     refetchInterval: pollInterval,
-  });
-
-  const saveMut = useMutation({
-    mutationFn: ({ id, data: d }: { id: string; data: any }) => saveEvaluationScore(id, d),
-    onSuccess: () => { toast.success('Scores saved as draft'); },
-    onError: (err: any) => toast.error(err?.message || 'Save failed'),
-  });
-
-  const submitMut = useMutation({
-    mutationFn: (id: string) => submitEvaluation(id),
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['evaluationDashboard'] }); toast.success('Evaluation submitted'); },
-    onError: (err: any) => toast.error(err?.message || 'Submission failed'),
   });
 
   const openFinMut = useMutation({
@@ -71,7 +56,6 @@ const EvaluationDashboard: React.FC = () => {
   const coiNeeded = assignments.filter((a: any) => a.status === 'coi_needed' || a.status === 'pending_coi');
   const prelimPending = assignments.filter((a: any) => a.status === 'preliminary' || a.status === 'preliminary_pending');
   const scoringPending = assignments.filter((a: any) => a.status === 'scoring' || a.status === 'scoring_pending');
-  const completedEvals = assignments.filter((a: any) => a.status === 'completed');
 
   if (isChair) {
     const finAuthPending = assignments.filter((a: any) => a.status === 'tech_scoring_complete');
@@ -240,7 +224,7 @@ const EvaluationDashboard: React.FC = () => {
                 onChange={(e) => setDiscussionNotes(e.target.value)}
                 rows={2}
                 className="w-full border border-gray-200 rounded-lg px-4 py-2 text-sm"
-                placeholder="Minor score variations noted. No significant outliers..."
+                placeholder="Enter discussion notes..."
               />
             </div>
 
@@ -515,118 +499,57 @@ const EvaluationDashboard: React.FC = () => {
       )}
 
       {memberTab === 'scoring' && (
-        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
-          <h2 className="text-lg font-semibold text-gray-900 mb-4">Technical Scoring — SOL-2026-IT-02</h2>
-          <p className="text-xs text-gray-500 mb-4">Evaluator: John Mbewe | Your scores are PRIVATE until all submit</p>
-
-          <div className="mb-6">
-            <p className="text-sm font-medium text-gray-700 mb-2">Scoring Progress</p>
-            <div className="flex items-center gap-3">
-              <div className="flex-1 bg-gray-200 rounded-full h-3">
-                <div className="bg-zammsa-green h-3 rounded-full" style={{ width: '60%' }} />
+        <div className="space-y-6">
+          <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <h2 className="text-lg font-semibold text-gray-900">My Evaluations</h2>
+                <p className="text-sm text-gray-500 mt-1">Open your assigned committee to continue with COI, Technical Scoring, Financial Evaluation, and BER.</p>
               </div>
-              <span className="text-sm font-bold text-zammsa-green">3 of 5 bids scored</span>
-            </div>
-          </div>
-
-          <h3 className="text-sm font-semibold text-gray-900 mb-3">Select Bid to Score:</h3>
-          <div className="overflow-x-auto mb-6">
-            <table className="min-w-full divide-y divide-gray-200 text-sm">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th className="px-4 py-2 text-left font-medium text-gray-500">Bid</th>
-                  <th className="px-4 py-2 text-right font-medium text-gray-500">My Status</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-100">
-                {['Supplier A', 'Supplier B', 'Supplier C', 'Supplier D', 'Supplier E'].map((name, i) => (
-                  <tr key={name} className="hover:bg-gray-50">
-                    <td className="px-4 py-2 font-medium text-gray-900">Bid {i + 1} — {name}</td>
-                    <td className="px-4 py-2 text-right">
-                      {i < 3 ? (
-                        <span className="inline-flex items-center gap-1 text-xs font-medium text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded">✅ Scored</span>
-                      ) : i === 3 ? (
-                        <button onClick={() => navigate(`/evaluations/${assignments[0]?.id}/scoring`)} className="px-3 py-1 text-xs font-bold text-white bg-zammsa-green rounded-lg hover:bg-green-700">⏳ Score Now</button>
-                      ) : (
-                        <span className="text-xs text-gray-400">⏳ Pending</span>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-
-          <div className="p-4 bg-gray-50 rounded-lg border border-gray-100 mb-6">
-            <h3 className="text-sm font-semibold text-gray-900 mb-4">Scoring: Bid 4 — Supplier D</h3>
-            <div className="flex gap-2 mb-4">
-              <button className="px-3 py-1 text-xs font-medium text-zammsa-green bg-white border border-gray-200 rounded-lg hover:bg-gray-50">📄 View Technical Proposal</button>
-              <button className="px-3 py-1 text-xs font-medium text-zammsa-green bg-white border border-gray-200 rounded-lg hover:bg-gray-50">📄 View ZAMRA Certificates</button>
+              <button
+                onClick={() => navigate('/evaluations')}
+                className="px-4 py-2 text-sm font-bold text-zammsa-green bg-zammsa-green/5 border border-zammsa-green/20 rounded-lg hover:bg-zammsa-green/10"
+              >
+                View Committee List
+              </button>
             </div>
 
-            <div className="space-y-4">
-              {[
-                { name: 'Experience', weight: 30, score: 82, comment: '5 years exp, good references' },
-                { name: 'Technical Quality', weight: 40, score: 78, comment: 'WHO prequalified products' },
-                { name: 'After-sales', weight: 30, score: 85, comment: 'Strong warranty plan provided' },
-              ].map((criterion) => (
-                <div key={criterion.name} className="flex items-center gap-4">
-                  <div className="w-48">
-                    <p className="text-sm font-medium text-gray-700">{criterion.name} ({criterion.weight}%)</p>
+            <div className="space-y-3">
+              {assignments.length > 0 ? assignments.map((a: any) => (
+                <div key={a.id} className="flex items-center justify-between gap-4 p-4 bg-gray-50 rounded-xl">
+                  <div>
+                    <p className="text-sm font-semibold text-gray-900">{a.solicitation || 'Assigned solicitation'}</p>
+                    <p className="text-xs text-gray-500 mt-1">Status: {a.status || 'pending'}</p>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs text-gray-500">Score:</span>
-                    <input
-                      type="number"
-                      defaultValue={criterion.score}
-                      className="w-16 border border-gray-300 rounded px-2 py-1 text-sm text-center font-bold"
-                      min={0}
-                      max={100}
-                    />
-                    <span className="text-xs text-gray-500">/100</span>
-                  </div>
-                  <div className="flex-1">
-                    <input
-                      defaultValue={criterion.comment}
-                      className="w-full border border-gray-300 rounded px-2 py-1 text-sm"
-                      placeholder="Comments..."
-                    />
-                  </div>
+                  <button
+                    onClick={() => navigate(`/evaluations/${a.id}`)}
+                    className="px-4 py-2 bg-zammsa-green text-white rounded-lg text-sm font-bold hover:bg-green-700"
+                  >
+                    Open Committee
+                  </button>
                 </div>
-              ))}
-            </div>
-
-            <div className="mt-4 p-3 bg-zammsa-green/5 border border-zammsa-green/20 rounded-lg">
-              <p className="text-sm font-semibold text-gray-700">
-                Weighted Total: (82×30%)+(78×40%)+(85×30%) = 24.6+31.2+25.5 = <span className="text-zammsa-green font-bold">81.3</span>
-              </p>
-              <p className="text-xs text-emerald-600 mt-1">Status: 81.3 ≥ 70 threshold ✅</p>
+              )) : (
+                <p className="text-sm text-gray-400 text-center py-6">No evaluation assignments found.</p>
+              )}
             </div>
           </div>
 
-          <div className="flex gap-3">
-            <button
-              onClick={() => {
-                const firstId = assignments[0]?.id;
-                if (firstId) saveMut.mutate({ id: firstId, data: { scores, comments } });
-              }}
-              disabled={saveMut.isPending}
-              className="px-5 py-2 bg-zammsa-green text-white text-sm font-bold rounded-lg disabled:opacity-50"
-            >
-              {saveMut.isPending ? 'Saving...' : 'Save Scores for Bid 4'}
-            </button>
-            <button
-              onClick={() => {
-                const firstId = assignments[0]?.id;
-                if (firstId) {
-                  saveMut.mutate({ id: firstId, data: { scores, comments, submit: true } });
-                }
-              }}
-              disabled={submitMut.isPending}
-              className="px-5 py-2 bg-zammsa-orange text-white text-sm font-bold rounded-lg disabled:opacity-50"
-            >
-              {submitMut.isPending ? 'Saving...' : 'Save & Move to Bid 5 →'}
-            </button>
+          <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+            <h2 className="text-lg font-semibold text-gray-900 mb-4">Workflow Steps</h2>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+              <div className="rounded-xl border border-gray-200 bg-gray-50 p-4">
+                <p className="font-semibold text-gray-900">Technical Scoring</p>
+                <p className="text-gray-500 mt-1">Open the committee and use the scoring tab once COI is complete.</p>
+              </div>
+              <div className="rounded-xl border border-gray-200 bg-gray-50 p-4">
+                <p className="font-semibold text-gray-900">Financial Evaluation</p>
+                <p className="text-gray-500 mt-1">Chair or delegated procurement lead can move to financial evaluation after technical consolidation.</p>
+              </div>
+              <div className="rounded-xl border border-gray-200 bg-gray-50 p-4">
+                <p className="font-semibold text-gray-900">BER</p>
+                <p className="text-gray-500 mt-1">Generate, sign, submit to ZPC, and review the approval status from the BER workflow.</p>
+              </div>
+            </div>
           </div>
         </div>
       )}

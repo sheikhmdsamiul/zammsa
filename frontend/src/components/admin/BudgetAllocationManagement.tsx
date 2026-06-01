@@ -126,7 +126,7 @@ const BudgetAllocationManagement: React.FC = () => {
               </div>
               <div>
                 <label className="text-xs text-gray-500">Allocated Amount (ZMW)</label>
-                <input type="number" min="0" step="0.01" value={createForm.allocated_amount} onChange={(e) => setCreateForm({ ...createForm, allocated_amount: e.target.value })} placeholder="e.g. 5000000" className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm mt-1" />
+                <input type="number" min="0" step="0.01" value={createForm.allocated_amount} onChange={(e) => setCreateForm({ ...createForm, allocated_amount: e.target.value })} placeholder="Enter amount" className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm mt-1" />
               </div>
             </div>
             <div className="flex justify-end gap-3 mt-6">

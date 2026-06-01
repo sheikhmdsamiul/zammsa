@@ -1,10 +1,10 @@
 import React, { useState } from 'react';
-import { Outlet } from 'react-router-dom';
+import { Outlet, useLocation } from 'react-router-dom';
 import { useAuth, useLogout } from '../../hooks/useAuth';
 import Sidebar, { NavItem } from './Sidebar';
 import {
   ChartBarIcon, ClipboardListIcon, DocumentTextIcon,
-  DuplicateIcon, CashIcon, UserIcon, CogIcon,
+  DuplicateIcon, CashIcon, UserIcon,
 } from '@heroicons/react/outline';
 
 const iconClass = 'h-5 w-5';
@@ -18,12 +18,20 @@ const PageLoader = () => (
 const navItems: NavItem[] = [
   { label: 'Dashboard', path: '/vendor/dashboard', icon: <ChartBarIcon className={iconClass} /> },
   { label: 'Open Tenders', path: '/vendor/open-tenders', icon: <ClipboardListIcon className={iconClass} /> },
-  { label: 'My Bids', path: '/vendor/bids', icon: <DocumentTextIcon className={iconClass} /> },
-  { label: 'My Contracts', path: '/vendor/contracts', icon: <DuplicateIcon className={iconClass} /> },
-  { label: 'Invoices', path: '/vendor/invoices', icon: <CashIcon className={iconClass} /> },
-  { label: 'Profile', path: '/vendor/profile', icon: <UserIcon className={iconClass} /> },
-  { label: 'Settings', path: '/vendor/settings', icon: <CogIcon className={iconClass} /> },
+  { label: 'My Bids', path: '/vendor/bids', icon: <DocumentTextIcon className={iconClass} />, badge: 2 },
+  { label: 'My Contracts', path: '/vendor/contracts', icon: <DuplicateIcon className={iconClass} />, badge: 1 },
+  { label: 'Invoices & Payments', path: '/vendor/invoices', icon: <CashIcon className={iconClass} />, badge: 3 },
+  { label: 'My Profile', path: '/vendor/profile', icon: <UserIcon className={iconClass} /> },
 ];
+
+const getStatusBadge = () => {
+  return (
+    <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-emerald-900/30 text-emerald-400 text-[10px] font-bold rounded-full uppercase tracking-wider border border-emerald-800">
+      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+      Active — Citizen-Owned
+    </span>
+  );
+};
 
 const VendorLayout: React.FC = () => {
   const { user } = useAuth();
@@ -38,7 +46,7 @@ const VendorLayout: React.FC = () => {
         </span>
       </div>
       <div className="flex-1 min-w-0">
-        <p className="text-sm font-bold text-white truncate">{user?.full_name}</p>
+        <p className="text-sm font-bold text-white truncate">{user?.full_name || 'Supplier'}</p>
         <p className="text-[10px] text-gray-500 font-medium uppercase tracking-wider truncate">Supplier Account</p>
       </div>
       <button onClick={logout} className="p-2 text-gray-500 hover:text-red-500 transition-colors">
@@ -55,7 +63,7 @@ const VendorLayout: React.FC = () => {
         navItems={navItems}
         isOpen={sidebarOpen}
         onClose={() => setSidebarOpen(false)}
-        brandName="Supplier Portal"
+        brandName="ZAMMSA Supplier"
         accentColor="zammsa-green"
         footer={sidebarFooter}
       />
@@ -69,22 +77,23 @@ const VendorLayout: React.FC = () => {
           </button>
           
           <div className="flex flex-col">
-            <h1 className="text-lg font-bold text-gray-900">Vendor Space</h1>
-            <p className="text-xs text-gray-500 font-medium">ZAMMSA Supplier Portal</p>
+            <h1 className="text-lg font-bold text-gray-900">ZAMMSA Supplier Portal</h1>
+            <p className="text-xs text-gray-500 font-medium">{user?.full_name || 'Supplier'}</p>
           </div>
 
           <div className="flex items-center gap-4">
+            {getStatusBadge()}
             <button className="relative p-2 text-gray-400 hover:text-zammsa-green hover:bg-zammsa-green/5 rounded-xl transition-all">
               <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
               </svg>
-              <span className="absolute top-1.5 right-1.5 w-4 h-4 bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center border-2 border-white">3</span>
+              <span className="absolute top-1.5 right-1.5 w-4 h-4 bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center border-2 border-white">2</span>
             </button>
             <div className="h-8 w-px bg-gray-200 mx-2" />
             <div className="flex items-center gap-3">
                <div className="text-right hidden sm:block">
                   <p className="text-sm font-bold text-gray-900 leading-none">{user?.full_name}</p>
-                  <p className="text-[10px] text-gray-500 font-bold uppercase tracking-tighter">Supplier</p>
+                  <p className="text-[10px] text-gray-500 font-bold uppercase tracking-tighter">Supplier Account</p>
                </div>
                <div className="w-10 h-10 bg-gray-100 rounded-xl border border-gray-200 flex items-center justify-center overflow-hidden">
                   <span className="text-zammsa-green font-bold text-sm">

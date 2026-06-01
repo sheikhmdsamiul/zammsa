@@ -101,25 +101,25 @@ const CommodityManagement: React.FC = () => {
               <input
                 value={form.commodity_code}
                 onChange={(e) => setForm({ ...form, commodity_code: e.target.value })}
-                placeholder="Code (e.g. MED-PAR-001)"
+                placeholder="Commodity code"
                 className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
               />
               <input
                 value={form.commodity_name}
                 onChange={(e) => setForm({ ...form, commodity_name: e.target.value })}
-                placeholder="Name (e.g. Paracetamol 500mg Tablets)"
+                placeholder="Commodity name"
                 className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
               />
               <input
                 value={form.category}
                 onChange={(e) => setForm({ ...form, category: e.target.value })}
-                placeholder="Category (e.g. Pharmaceuticals)"
+                placeholder="Category"
                 className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
               />
               <input
                 value={form.sub_category}
                 onChange={(e) => setForm({ ...form, sub_category: e.target.value })}
-                placeholder="Sub-Category (e.g. Analgesics)"
+                placeholder="Sub-Category"
                 className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
               />
             </div>

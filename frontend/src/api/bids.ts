@@ -37,8 +37,14 @@ export const bidsApi = {
   getOpeningMinutes: (openingId: string) =>
     api.get(`/bids/openings/${openingId}/`, { responseType: 'blob' }),
 
-  startOpeningSession: (solicitationId: string, witnesses?: string[]) =>
-    api.post<any>(`/bids/openings/start/${solicitationId}/`, { witnesses: witnesses || [] }).then((r) => r.data),
+  startOpeningSession: (solicitationId: string, data: {
+    witnesses?: string[];
+    scheduled_opening_time?: string;
+    public_live_link?: string;
+    observations?: string;
+    location?: string;
+  }) =>
+    api.post<any>(`/bids/openings/start/${solicitationId}/`, data).then((r) => r.data),
 
   openSingleBid: (openingId: string, bidId: string, data?: { financial_sealed?: boolean; objections?: string }) =>
     api.post<any>(`/bids/openings/${openingId}/open-bid/${bidId}/`, data || {}).then((r) => r.data),
@@ -54,4 +60,10 @@ export const bidsApi = {
 
   getPublicOpening: (solicitationId: string) =>
     api.get<any>(`/bids/public/openings/${solicitationId}/`).then((r) => r.data),
+
+  listLateRejected: (params?: Record<string, any>) =>
+    api.get<PaginatedResponse<any>>('/bids/', { params: { ...params, status: 'non_responsive' } }).then((r) => r.data),
+
+  listLateBids: (params?: Record<string, any>) =>
+    api.get<PaginatedResponse<any>>('/bids/', { params: { ...params, is_late: true } }).then((r) => r.data),
 };

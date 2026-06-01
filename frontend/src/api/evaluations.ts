@@ -82,4 +82,10 @@ export const evaluationsApi = {
 
   downloadBER: (reportId: string) =>
     api.get(`/evaluations/reports/${reportId}/`, { responseType: 'blob' }),
+
+  listPostQuals: (params?: Record<string, any>) =>
+    api.get<PaginatedResponse<any>>('/evaluations/post-qualifications/', { params }).then((r) => r.data),
+
+  listBERs: (params?: Record<string, any>) =>
+    api.get<PaginatedResponse<any>>('/evaluations/reports/', { params }).then((r) => r.data),
 };

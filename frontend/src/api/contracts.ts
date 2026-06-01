@@ -59,6 +59,24 @@ export const contractsApi = {
   signAmendment: (id: string, amendmentId: string, signedBy: string) =>
     api.post<any>(`/contracts/${id}/amendments/${amendmentId}/sign/`, { signed_by: signedBy }).then((r) => r.data),
 
+  listMilestones: (params?: Record<string, any>) =>
+    api.get<PaginatedResponse<any>>('/contracts/milestones/', { params }).then((r) => r.data),
+
+  listAmendments: (params?: Record<string, any>) =>
+    api.get<PaginatedResponse<any>>('/contracts/amendments/', { params }).then((r) => r.data),
+
+  listClosures: (params?: Record<string, any>) =>
+    api.get<PaginatedResponse<any>>('/contracts/closures/', { params }).then((r) => r.data),
+
+  listLiquidatedDamages: (params?: Record<string, any>) =>
+    api.get<PaginatedResponse<any>>('/contracts/liquidated-damages/', { params }).then((r) => r.data),
+
+  listAppeals: (params?: Record<string, any>) =>
+    api.get<PaginatedResponse<any>>('/contracts/appeals/', { params }).then((r) => r.data),
+
+  listRetention: (params?: Record<string, any>) =>
+    api.get<PaginatedResponse<Contract>>('/contracts/retention/', { params }).then((r) => r.data),
+
   export: (params?: Record<string, any>) =>
     api.get('/contracts/', { params, responseType: 'blob' }),
 };

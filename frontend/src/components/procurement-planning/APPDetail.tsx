@@ -75,11 +75,11 @@ export default function APPDetail() {
   const [gpnContent, setGpnContent] = useState({
     notice_heading: '',
     notice_body: '',
-    contact_name: 'Director of Procurement',
-    contact_email: 'procurement@zammsa.gov.zm',
-    contact_phone: '+260 211 123456',
-    contact_address: 'Plot 1, Government Road, Lusaka',
-    issuing_authority: 'Zambia Medicines and Medical Supplies Agency',
+    contact_name: '',
+    contact_email: '',
+    contact_phone: '',
+    contact_address: '',
+    issuing_authority: '',
     gpn_reference: ''
   });
 

@@ -19,6 +19,19 @@ from .serializers import (
 from django.utils import timezone
 from datetime import timedelta
 
+CONTRACT_GENERATION_ROLES = ('procurement_officer', 'system_admin')
+CONTRACT_MANAGER_ROLES = ('contract_manager', 'procurement_manager', 'director_procurement', 'system_admin')
+
+
+def _add_working_days(start_date, days):
+    current = start_date
+    added = 0
+    while added < days:
+        current += timedelta(days=1)
+        if current.weekday() < 5:
+            added += 1
+    return current
+
 
 class StandardPagination(PageNumberPagination):
     page_size = 25
@@ -77,6 +90,9 @@ class ContractDetailView(generics.RetrieveUpdateDestroyAPIView):
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def contract_publish_award_view(request, pk):
+    if getattr(request.user, 'role', '') not in CONTRACT_GENERATION_ROLES:
+        return Response({'error': 'Only procurement officers can publish award notices'}, status=403)
+
     try:
         contract = Contract.objects.get(pk=pk)
     except Contract.DoesNotExist:
@@ -85,7 +101,8 @@ def contract_publish_award_view(request, pk):
     contract.award_notice_published = True
     contract.award_notice_published_at = timezone.now()
     contract.waiting_period_start = timezone.now().date()
-    contract.waiting_period_end = timezone.now().date() + timedelta(days=contract.waiting_period_days)
+    contract.waiting_period_end = _add_working_days(timezone.now().date(), contract.waiting_period_days)
+    contract.status = 'draft'
     contract.save()
 
     return Response({
@@ -101,6 +118,13 @@ def contract_supplier_sign_view(request, pk):
         contract = Contract.objects.get(pk=pk)
     except Contract.DoesNotExist:
         return Response({'error': 'Contract not found'}, status=404)
+
+    if contract.appeal_pending:
+        return Response({'error': 'Cannot sign contract while an appeal is pending'}, status=400)
+    if not contract.award_notice_published:
+        return Response({'error': 'Award notice must be published before supplier signature'}, status=400)
+    if contract.waiting_period_end and timezone.now().date() < contract.waiting_period_end:
+        return Response({'error': 'Standstill period has not expired'}, status=400)
 
     contract.signed_by_vendor = True
     contract.signed_vendor_date = timezone.now().date()
@@ -120,6 +144,13 @@ def contract_countersign_view(request, pk):
 
     if request.user.role != 'director_general':
         return Response({'error': 'Only Director General can countersign'}, status=403)
+
+    if not contract.signed_by_vendor:
+        return Response({'error': 'Supplier must sign before Director General countersignature'}, status=400)
+    if contract.appeal_pending:
+        return Response({'error': 'Cannot countersign contract while an appeal is pending'}, status=400)
+    if contract.waiting_period_end and timezone.now().date() < contract.waiting_period_end:
+        return Response({'error': 'Standstill period has not expired'}, status=400)
 
     contract.signed_by_authority = True
     contract.signed_authority_date = timezone.now().date()
@@ -199,6 +230,9 @@ def contract_validate_security_view(request, pk, security_pk):
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def contract_assign_manager_view(request, pk):
+    if getattr(request.user, 'role', '') not in CONTRACT_MANAGER_ROLES:
+        return Response({'error': 'Only contract management roles can assign contract managers'}, status=403)
+
     try:
         contract = Contract.objects.get(pk=pk)
     except Contract.DoesNotExist:
@@ -312,12 +346,17 @@ def contract_activate_after_waiting_view(request, pk):
     if not contract.award_notice_published:
         return Response({'error': 'Award notice not yet published'}, status=400)
 
-    contract.status = 'active' if not contract.performance_security_required else 'pending_acceptance'
-    contract.award_date = timezone.now().date()
+    if contract.waiting_period_end and timezone.now().date() < contract.waiting_period_end:
+        return Response({
+            'error': 'Standstill period has not expired',
+            'waiting_period_end': contract.waiting_period_end,
+        }, status=400)
+
+    contract.status = 'pending_acceptance'
     contract.save()
 
     return Response({
-        'message': 'Waiting period complete. Contract activated.',
+        'message': 'Standstill complete. Contract ready for supplier signature.',
         'status': contract.status,
     })
 
@@ -429,6 +468,9 @@ def contract_archive_view(request, pk):
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def contract_amend_view(request, pk):
+    if getattr(request.user, 'role', '') not in CONTRACT_MANAGER_ROLES:
+        return Response({'error': 'Only contract management roles can request amendments'}, status=403)
+
     try:
         contract = Contract.objects.get(pk=pk)
     except Contract.DoesNotExist:
@@ -451,7 +493,7 @@ def contract_amend_view(request, pk):
         if not legal_opinion:
             return Response({'error': 'Legal opinion required for variations exceeding 25%'}, status=400)
 
-    last_num = contract.amendments.aggregate(m=Max('amendment_number'))['amendment_number__max'] or 0
+    last_num = contract.amendments.aggregate(m=Max('amendment_number'))['m'] or 0
 
     amendment = ContractAmendment.objects.create(
         contract=contract,
@@ -536,6 +578,18 @@ class ContractMilestoneListView(BaseView, generics.ListCreateAPIView):
     ordering = ['due_date']
 
 
+class ContractAmendmentListView(BaseView, generics.ListCreateAPIView):
+    queryset = ContractAmendment.objects.select_related('contract').all()
+    serializer_class = ContractAmendmentSerializer
+    ordering = ['-created_at']
+
+
+class ClosureChecklistListView(BaseView, generics.ListCreateAPIView):
+    queryset = ClosureChecklist.objects.select_related('contract', 'completed_by').all()
+    serializer_class = ClosureChecklistSerializer
+    ordering = ['-completed_at']
+
+
 class ContractMilestoneDetailView(generics.RetrieveUpdateDestroyAPIView):
     queryset = ContractMilestone.objects.all()
     serializer_class = ContractMilestoneSerializer
@@ -552,3 +606,9 @@ class TerminationListView(BaseView, generics.ListCreateAPIView):
     queryset = ContractTermination.objects.select_related('contract').all()
     serializer_class = ContractTerminationSerializer
     ordering = ['-created_at']
+
+
+class AppealListView(BaseView, generics.ListCreateAPIView):
+    queryset = Appeal.objects.select_related('contract', 'bidder', 'resolved_by').all()
+    serializer_class = AppealSerializer
+    ordering = ['-filed_at']

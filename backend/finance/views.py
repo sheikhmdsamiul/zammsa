@@ -1,4 +1,8 @@
 from decimal import Decimal
+import hashlib
+import hmac
+from xml.etree.ElementTree import Element, SubElement, tostring
+from django.conf import settings
 from django.db.models import Q, Sum
 from django.utils import timezone
 from rest_framework import generics, filters, status
@@ -16,6 +20,36 @@ from .serializers import (
     PaymentSerializer, LetterOfCreditSerializer,
 )
 from contracts.models import Contract
+
+FINANCE_PAYMENT_ROLES = ('finance_officer', 'budget_controller', 'system_admin')
+APPROVAL_FLOW = ('finance_officer', 'department_head', 'director_general')
+
+
+def _verify_hmac_signature(request, secret_setting_name):
+    secret = getattr(settings, secret_setting_name, '')
+    if not secret:
+        return True
+
+    supplied = request.headers.get('X-ZAMMSA-Signature') or request.headers.get('X-Hub-Signature-256', '')
+    if supplied.startswith('sha256='):
+        supplied = supplied.split('=', 1)[1]
+    if not supplied:
+        return False
+
+    expected = hmac.new(
+        str(secret).encode('utf-8'),
+        request.body,
+        hashlib.sha256,
+    ).hexdigest()
+    return hmac.compare_digest(expected, supplied)
+
+
+def _next_invoice_approval_step(invoice):
+    if invoice.status != 'pending_approval':
+        return 'finance_officer'
+    if invoice.approval_route in APPROVAL_FLOW:
+        return invoice.approval_route
+    return 'finance_officer'
 
 
 class StandardPagination(PageNumberPagination):
@@ -111,15 +145,26 @@ def invoice_submit_view(request, pk):
 @permission_classes([IsAuthenticated])
 def invoice_match_view(request, pk):
     try:
-        inv = Invoice.objects.get(pk=pk)
+        inv = Invoice.objects.select_related('grn', 'contract').get(pk=pk)
     except Invoice.DoesNotExist:
         return Response({'error': 'Invoice not found'}, status=404)
 
-    po_qty = Decimal(str(request.data.get('po_quantity', 0)))
-    grn_qty = Decimal(str(request.data.get('grn_quantity', 0)))
-    inv_qty = Decimal(str(request.data.get('invoice_quantity', 0)))
-    po_price = Decimal(str(request.data.get('po_price', 0)))
-    inv_price = Decimal(str(request.data.get('invoice_price', 0)))
+    if request.data:
+        po_qty = Decimal(str(request.data.get('po_quantity', 0)))
+        grn_qty = Decimal(str(request.data.get('grn_quantity', 0)))
+        inv_qty = Decimal(str(request.data.get('invoice_quantity', 0)))
+        po_price = Decimal(str(request.data.get('po_price', 0)))
+        inv_price = Decimal(str(request.data.get('invoice_price', 0)))
+    elif inv.grn:
+        po_qty = inv.grn.quantity_received
+        grn_qty = inv.grn.quantity_received
+        inv_qty = inv.grn.quantity_received
+        po_price = inv.grn.unit_price
+        inv_price = (inv.amount / inv_qty) if inv_qty else Decimal('0')
+    else:
+        po_qty = grn_qty = inv_qty = Decimal('0')
+        po_price = Decimal(str(inv.amount or 0))
+        inv_price = Decimal(str(inv.amount or 0))
 
     if po_qty == grn_qty == inv_qty and po_price == inv_price:
         match_status = 'complete'
@@ -154,6 +199,19 @@ def invoice_match_view(request, pk):
     return Response({
         'message': f'3-way match completed: {match_status}',
         'match_status': match_status,
+        'match': {
+            'overall_match': match_status == 'complete',
+            'flag_for_review': match_status != 'complete',
+            'invoice_amount': float(inv.amount),
+            'po_amount': float(po_qty * po_price),
+            'grn_amount': float(grn_qty * po_price),
+            'invoice_vs_po': po_price == inv_price,
+            'po_vs_grn': po_qty == grn_qty,
+            'invoice_vs_grn': grn_qty == inv_qty,
+            'quantity_match': po_qty == grn_qty == inv_qty,
+            'invoice_qty': float(inv_qty),
+            'grn_qty': float(grn_qty),
+        },
         'discrepancies': discrepancies,
     })
 
@@ -181,30 +239,41 @@ def invoice_approve_view(request, pk):
     except Invoice.DoesNotExist:
         return Response({'error': 'Invoice not found'}, status=404)
 
-    route = inv.determine_approval_route()
-    inv.approval_route = route
+    if inv.status != 'pending_approval':
+        return Response({'error': 'Invoice must be ready for approval before approval can continue'}, status=400)
 
-    role_ok = {
-        'finance_officer': request.user.role == 'finance_officer',
-        'department_head': request.user.role == 'department_head',
-        'director_general': request.user.role == 'director_general',
-    }.get(route, False)
+    final_route = inv.determine_approval_route()
+    current_step = _next_invoice_approval_step(inv)
 
-    if not role_ok:
+    if request.user.role != current_step:
         return Response({
-            'error': f'This invoice requires approval from {dict(INVOICE_APPROVAL_ROUTES).get(route, route)}',
-            'required_route': route,
+            'error': f'This invoice requires approval from {dict(INVOICE_APPROVAL_ROUTES).get(current_step, current_step)}',
+            'required_route': current_step,
         }, status=403)
 
-    inv.status = 'approved'
-    inv.approved_at = timezone.now()
-    inv.save()
-    return Response({'message': 'Invoice approved for payment', 'status': inv.status, 'approval_route': route})
+    if current_step == final_route:
+        inv.status = 'approved'
+        inv.approved_at = timezone.now()
+        inv.approval_route = final_route
+        inv.save(update_fields=['status', 'approved_at', 'approval_route', 'updated_at'])
+        return Response({'message': 'Invoice approved for payment', 'status': inv.status, 'approval_route': final_route})
+
+    next_step = APPROVAL_FLOW[APPROVAL_FLOW.index(current_step) + 1]
+    inv.approval_route = next_step
+    inv.save(update_fields=['approval_route', 'updated_at'])
+    return Response({
+        'message': f'Invoice approved and routed to {dict(INVOICE_APPROVAL_ROUTES).get(next_step, next_step)}',
+        'status': inv.status,
+        'approval_route': next_step,
+    })
 
 
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def grn_webhook_view(request):
+    if not _verify_hmac_signature(request, 'WMS_WEBHOOK_SECRET'):
+        return Response({'error': 'Invalid webhook signature'}, status=403)
+
     grn_number = request.data.get('grn_number', '')
     po_number = request.data.get('po_number', '')
     contract_id = request.data.get('contract_id', '')
@@ -222,6 +291,8 @@ def grn_webhook_view(request):
             contract = Contract.objects.get(pk=contract_id)
         except Contract.DoesNotExist:
             pass
+    if contract is None and po_number:
+        contract = Contract.objects.filter(contract_number=po_number, status__in=('active', 'pending_acceptance')).first()
 
     total_amount = quantity * unit_price
 
@@ -250,6 +321,9 @@ def grn_webhook_view(request):
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def payment_bank_confirm_view(request, pk):
+    if not _verify_hmac_signature(request, 'BANK_WEBHOOK_SECRET'):
+        return Response({'error': 'Invalid webhook signature'}, status=403)
+
     try:
         inv = Invoice.objects.get(pk=pk)
     except Invoice.DoesNotExist:
@@ -260,16 +334,16 @@ def payment_bank_confirm_view(request, pk):
         return Response({'error': 'No sent payment found for this invoice'}, status=400)
 
     status_val = (request.data.get('status') or '').lower()
-    confirmed = request.data.get('confirmed', False) or status_val == 'confirmed'
-    bank_ref = request.data.get('bank_reference', request.data.get('reference', ''))
+    confirmed = request.data.get('confirmed', False) or status_val in ('confirmed', 'paid')
+    bank_ref = request.data.get('bank_reference', request.data.get('paymentRef', request.data.get('reference', '')))
 
     if confirmed:
         payment.status = 'confirmed'
         payment.reference = bank_ref
-        payment.save()
+        payment.save(update_fields=['status', 'reference'])
         inv.status = 'paid'
         inv.paid_at = timezone.now()
-        inv.save()
+        inv.save(update_fields=['status', 'paid_at', 'updated_at'])
         return Response({'message': 'Payment confirmed by bank', 'status': inv.status, 'bank_reference': bank_ref})
     else:
         payment.status = 'failed'
@@ -329,14 +403,22 @@ def payment_process_view(request, pk):
     except Invoice.DoesNotExist:
         return Response({'error': 'Invoice not found'}, status=404)
 
+    if request.user.role not in FINANCE_PAYMENT_ROLES:
+        return Response({'error': 'Only finance officers can process payments'}, status=403)
+
+    if inv.status != 'approved':
+        return Response({'error': 'Invoice must be approved for payment before processing'}, status=400)
+
     payment_method = request.data.get('payment_method', 'electronic')
     amount = Decimal(str(request.data.get('amount', inv.amount)))
-
-    from xml.etree.ElementTree import Element, SubElement, tostring
-    import hashlib
+    if amount <= 0:
+        return Response({'error': 'Payment amount must be positive'}, status=400)
+    if amount > inv.amount:
+        return Response({'error': 'Payment amount cannot exceed invoice amount'}, status=400)
 
     pmt = Payment.objects.create(
         invoice=inv,
+        contract=inv.contract,
         amount=amount,
         payment_method=payment_method,
         status='processing',
@@ -358,31 +440,32 @@ def payment_process_view(request, pk):
         pmt.iso20022_file_ref = file_hash
         pmt.status = 'sent'
         pmt.processed_at = timezone.now()
-        pmt.save()
-        inv.status = 'paid'
-        inv.paid_at = timezone.now()
-        inv.save()
+        pmt.save(update_fields=['iso20022_file_ref', 'status', 'processed_at'])
 
         return Response({
-            'message': 'ISO 20022 payment file generated',
+            'message': 'ISO 20022 payment file generated and sent for bank processing',
+            'status': pmt.status,
             'iso20022_file_ref': file_hash,
-            'xml_content': xml_bytes,
+            'xml_content': xml_bytes if getattr(settings, 'DEBUG', False) else '',
         })
 
     pmt.status = 'sent'
     pmt.processed_at = timezone.now()
-    pmt.save()
-    inv.status = 'paid'
-    inv.paid_at = timezone.now()
-    inv.save()
+    pmt.save(update_fields=['status', 'processed_at'])
 
-    return Response({'message': 'Payment processed', 'status': inv.status})
+    return Response({'message': 'Payment sent for bank processing', 'status': pmt.status})
 
 
 class PaymentListView(BaseView, generics.ListAPIView):
     queryset = Payment.objects.select_related('invoice').all()
     serializer_class = PaymentSerializer
     ordering = ['-created_at']
+
+
+class GRNListView(BaseView, generics.ListAPIView):
+    queryset = GoodsReceiptNote.objects.select_related('contract').all()
+    serializer_class = GoodsReceiptNoteSerializer
+    ordering = ['-received_date']
 
 
 class LetterOfCreditListView(BaseView, generics.ListCreateAPIView):

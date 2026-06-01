@@ -18,21 +18,41 @@ const PageLoader = () => (
 
 const navItems: NavItem[] = [
   { label: 'Dashboard', path: '/admin', icon: <ChartBarIcon className={iconClass} /> },
-  { label: 'User Management', path: '/admin/users', icon: <UserGroupIcon className={iconClass} /> },
-  { label: 'Role Management', path: '/admin/roles', icon: <LockClosedIcon className={iconClass} /> },
-  { label: 'Vendor Applications', path: '/admin/vendor-applications', icon: <ClipboardListIcon className={iconClass} /> },
-  { label: 'Vendor Management', path: '/admin/vendors', icon: <OfficeBuildingIcon className={iconClass} /> },
-  { label: 'System Health', path: '/admin/system-health', icon: <HeartIcon className={iconClass} /> },
-  { label: 'Audit Logs', path: '/admin/audit-logs', icon: <ClipboardListIcon className={iconClass} /> },
-  { label: 'Governance Settings', path: '/admin/governance', icon: <AdjustmentsIcon className={iconClass} /> },
-  { label: 'Integration Monitor', path: '/admin/integrations', icon: <LinkIcon className={iconClass} /> },
-  { label: 'System Settings', path: '/admin/settings', icon: <CogIcon className={iconClass} /> },
-  { label: 'Departments', path: '/admin/departments', icon: <OfficeBuildingIcon className={iconClass} /> },
-  { label: 'Fiscal Years', path: '/admin/fiscal-years', icon: <CalendarIcon className={iconClass} /> },
-  { label: 'Commodities', path: '/admin/commodities', icon: <CubeIcon className={iconClass} /> },
-  { label: 'Budget Allocations', path: '/admin/budget-allocations', icon: <CurrencyDollarIcon className={iconClass} /> },
+  { label: 'Users & Roles', path: '/admin/users', icon: <UserGroupIcon className={iconClass} />,
+    children: [
+      { label: 'All Users', path: '/admin/users' },
+      { label: 'Roles & Permissions', path: '/admin/roles' },
+      { label: 'Departments', path: '/admin/departments' },
+    ]
+  },
+  { label: 'Vendors', path: '/admin/vendor-applications', icon: <OfficeBuildingIcon className={iconClass} />,
+    children: [
+      { label: 'Applications', path: '/admin/vendor-applications' },
+      { label: 'Approved Vendors', path: '/admin/vendors' },
+    ]
+  },
+  { label: 'System', path: '/admin/system-health', icon: <HeartIcon className={iconClass} />,
+    children: [
+      { label: 'System Health', path: '/admin/system-health' },
+      { label: 'Settings', path: '/admin/settings' },
+      { label: 'Integrations', path: '/admin/integrations' },
+      { label: 'Backups', path: '/admin/backups' },
+    ]
+  },
+  { label: 'Planning Data', path: '/admin/fiscal-years', icon: <CalendarIcon className={iconClass} />,
+    children: [
+      { label: 'Fiscal Years', path: '/admin/fiscal-years' },
+      { label: 'Commodities', path: '/admin/commodities' },
+      { label: 'Budget Allocations', path: '/admin/budget-allocations' },
+    ]
+  },
+  { label: 'Compliance', path: '/admin/audit-logs', icon: <AdjustmentsIcon className={iconClass} />,
+    children: [
+      { label: 'Audit Logs', path: '/admin/audit-logs' },
+      { label: 'Governance', path: '/admin/governance' },
+    ]
+  },
   { label: 'Reports', path: '/admin/reports', icon: <TrendingUpIcon className={iconClass} /> },
-  { label: 'Backup Management', path: '/admin/backups', icon: <SaveIcon className={iconClass} /> },
 ];
 
 const AdminLayout: React.FC = () => {

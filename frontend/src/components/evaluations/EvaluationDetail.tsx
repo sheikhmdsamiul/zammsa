@@ -55,7 +55,18 @@ const EvaluationDetail: React.FC = () => {
   );
   const alreadyDeclared = coiState?.declarations?.some((d: any) => d.member === user?.id);
   const isRecused = coiState?.recused_members?.includes(user?.id || '');
-  const memberList = (committee.members || []).map((m: any) => typeof m === 'string' ? { user: m, full_name: m.slice(0, 8) } : m);
+  const memberListMap = new Map<string, any>();
+  const addMember = (id: string, member: any) => {
+    if (!id || memberListMap.has(id)) return;
+    memberListMap.set(id, member);
+  };
+  addMember(committee.chairperson, { user: committee.chairperson, full_name: committee.chairperson_name || committee.chairperson, role: 'Chairperson' });
+  addMember(committee.secretary, { user: committee.secretary, full_name: committee.secretary_name || committee.secretary, role: 'Secretary' });
+  (committee.members || []).forEach((m: any) => {
+    const id = typeof m === 'string' ? m : m.user;
+    addMember(id, typeof m === 'string' ? { user: m, full_name: m.slice(0, 8) } : m);
+  });
+  const memberList = Array.from(memberListMap.values());
 
   return (
     <div className="max-w-5xl mx-auto space-y-6">

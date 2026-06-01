@@ -5,6 +5,7 @@ import { evaluationsApi } from '../../api/evaluations';
 import { StatusBadge } from '../common/StatusBadge';
 import { LoadingSpinner } from '../common/LoadingSpinner';
 import { useAuth } from '../../hooks/useAuth';
+import type { ConflictOfInterest, CommitteeCOIState } from '../../types';
 import toast from 'react-hot-toast';
 import {
   CheckCircleIcon, XCircleIcon, ShieldCheckIcon,
@@ -20,6 +21,7 @@ const ConflictOfInterestDeclaration: React.FC = () => {
   const [hasConflict, setHasConflict] = useState<boolean | null>(null);
   const [declaration, setDeclaration] = useState('');
   const [submitted, setSubmitted] = useState(false);
+  const [localDeclaration, setLocalDeclaration] = useState<ConflictOfInterest | null>(null);
 
   const { data: committee, isLoading: committeeLoading } = useQuery({
     queryKey: ['evaluation-committee', committeeId],
@@ -38,7 +40,21 @@ const ConflictOfInterestDeclaration: React.FC = () => {
       declaration: declaration || 'No conflict of interest to declare',
       has_conflict: hasConflict || false,
     }),
-    onSuccess: () => {
+    onSuccess: (response: any) => {
+      const savedDeclaration: ConflictOfInterest | null = response?.coi || null;
+      if (savedDeclaration) {
+        setLocalDeclaration(savedDeclaration);
+        queryClient.setQueryData<CommitteeCOIState | undefined>(['coi-state', committeeId], (current) => {
+          const existing = current?.declarations || [];
+          const filtered = existing.filter((item) => item.id !== savedDeclaration.id && item.member !== savedDeclaration.member);
+          return {
+            declarations: [...filtered, savedDeclaration],
+            recused_members: savedDeclaration.recused
+              ? Array.from(new Set([...(current?.recused_members || []), savedDeclaration.member]))
+              : (current?.recused_members || []),
+          };
+        });
+      }
       setSubmitted(true);
       queryClient.invalidateQueries({ queryKey: ['coi-state', committeeId] });
       toast.success('COI declaration submitted');
@@ -49,19 +65,32 @@ const ConflictOfInterestDeclaration: React.FC = () => {
   if (committeeLoading || coiLoading) return <LoadingSpinner className="py-12" />;
   if (!committee) return <p className="text-center text-gray-500 py-12">Committee not found</p>;
 
-  const members = [
-    { id: committee.chairperson, name: committee.chairperson_name || committee.chairperson, role: 'Chairperson' },
-    { id: committee.secretary, name: committee.secretary_name || committee.secretary, role: 'Secretary' },
-    ...(committee.members || []).map((m: any) => ({
-      id: typeof m === 'string' ? m : m.user,
-      name: typeof m === 'string' ? m.slice(0, 8) : m.full_name || m.user,
-      role: 'Member',
-    })),
-  ];
+  const memberMap = new Map<string, { id: string; name: string; role: string }>();
+  const addMember = (id: string, name: string, role: string) => {
+    if (!id) return;
+    if (!memberMap.has(id)) memberMap.set(id, { id, name, role });
+  };
+
+  addMember(committee.chairperson, committee.chairperson_name || committee.chairperson, 'Chairperson');
+  addMember(committee.secretary, committee.secretary_name || committee.secretary, 'Secretary');
+  (committee.members || []).forEach((m: any) => {
+    const id = typeof m === 'string' ? m : m.user;
+    const name = typeof m === 'string' ? m.slice(0, 8) : m.full_name || m.user;
+    addMember(id, name, 'Member');
+  });
+
+  const members = Array.from(memberMap.values());
 
   const declarations = coiState?.declarations || [];
-  const allDeclared = declarations.length >= members.length;
-  const myDeclaration = declarations.find((d: any) => d.user === user?.id || d.user_id === user?.id);
+  const visibleDeclarations = localDeclaration
+    ? [
+        ...declarations.filter((d: any) => d.id !== localDeclaration.id && d.member !== localDeclaration.member),
+        localDeclaration,
+      ]
+    : declarations;
+  const allDeclared = visibleDeclarations.length >= members.length;
+  const myDeclaration = visibleDeclarations.find((d: any) => d.member === user?.id || d.user === user?.id || d.user_id === user?.id);
+  const hasMyDeclaration = Boolean(myDeclaration || submitted);
 
   return (
     <div className="max-w-4xl mx-auto space-y-6">
@@ -77,7 +106,7 @@ const ConflictOfInterestDeclaration: React.FC = () => {
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 space-y-6">
-          {!myDeclaration && (
+          {!hasMyDeclaration && (
             <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
               <h2 className="text-lg font-semibold text-gray-900 mb-4">Your Declaration</h2>
               <div className="space-y-4">
@@ -131,7 +160,7 @@ const ConflictOfInterestDeclaration: React.FC = () => {
             </div>
           )}
 
-          {myDeclaration && (
+          {hasMyDeclaration && myDeclaration && (
             <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
               <h2 className="text-lg font-semibold text-gray-900 mb-4">Your Declaration</h2>
               <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-lg">
@@ -147,7 +176,7 @@ const ConflictOfInterestDeclaration: React.FC = () => {
                   <p className="text-xs text-emerald-700 mt-2">{myDeclaration.declaration}</p>
                 )}
                 <p className="text-xs text-emerald-500 mt-1">
-                  Submitted: {new Date((myDeclaration as any).created_at || (myDeclaration as any).submitted_at).toLocaleString()}
+                  Submitted: {new Date((myDeclaration as any).declared_at || (myDeclaration as any).created_at || (myDeclaration as any).submitted_at).toLocaleString()}
                 </p>
               </div>
             </div>
@@ -171,7 +200,7 @@ const ConflictOfInterestDeclaration: React.FC = () => {
             </h2>
             <div className="space-y-3">
               {members.map((m, i) => {
-                const declared = declarations.find((d: any) => d.user === m.id || d.user_id === m.id);
+                const declared = visibleDeclarations.find((d: any) => d.member === m.id || d.user === m.id || d.user_id === m.id);
                 return (
                   <div key={i} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg text-sm">
                     <div>
@@ -195,7 +224,7 @@ const ConflictOfInterestDeclaration: React.FC = () => {
               <div className="flex justify-between text-sm">
                 <span className="text-gray-500">Status</span>
                 <span className={`font-medium ${allDeclared ? 'text-emerald-600' : 'text-amber-600'}`}>
-                  {declarations.length} / {members.length} declared
+                  {visibleDeclarations.length} / {members.length} declared
                 </span>
               </div>
             </div>

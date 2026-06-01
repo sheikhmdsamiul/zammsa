@@ -541,7 +541,7 @@ const SolicitationCreate: React.FC = () => {
                 </div>
                 <div>
                   <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5 block ml-1">Venue / Link</label>
-                  <input type="text" value={preBidVenue} onChange={(e) => setPreBidVenue(e.target.value)} placeholder="e.g. ZAMMSA Boardroom, Lusaka" className="w-full bg-white border border-gray-200 rounded-2xl px-5 py-4 text-sm font-bold text-gray-700 outline-none focus:ring-4 focus:ring-zammsa-green/5" />
+                  <input type="text" value={preBidVenue} onChange={(e) => setPreBidVenue(e.target.value)} placeholder="e.g. Boardroom, City" className="w-full bg-white border border-gray-200 rounded-2xl px-5 py-4 text-sm font-bold text-gray-700 outline-none focus:ring-4 focus:ring-zammsa-green/5" />
                 </div>
               </div>
             </div>

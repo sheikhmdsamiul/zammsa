@@ -128,7 +128,7 @@ const ContractClosureChecklist: React.FC = () => {
             <h2 className="text-lg font-semibold text-gray-900 mb-4">Closure Notes</h2>
             <textarea value={closureNotes} onChange={(e) => setClosureNotes(e.target.value)} rows={3}
               className="w-full border rounded-lg px-4 py-3 text-sm"
-              placeholder="All deliverables completed. Minor delay resolved. Good supplier performance (87.25/100)..." />
+              placeholder="Enter closure notes..." />
             <button onClick={() => closureMutation.mutate()} disabled={closureMutation.isPending}
               className="mt-4 px-6 py-3 bg-zammsa-green text-white rounded-xl text-sm font-bold">
               {closureMutation.isPending ? 'Closing...' : 'Mark Contract as COMPLETED'}

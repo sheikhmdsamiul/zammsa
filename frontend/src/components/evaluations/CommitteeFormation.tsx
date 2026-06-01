@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useEffect, useState } from 'react';
+import { useLocation } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { evaluationsApi } from '../../api/evaluations';
 import { solicitationsApi } from '../../api/solicitations';
@@ -12,7 +12,7 @@ import {
 } from '@heroicons/react/outline';
 
 const CommitteeFormation: React.FC = () => {
-  const navigate = useNavigate();
+  const location = useLocation();
   const queryClient = useQueryClient();
 
   const [solicitation, setSolicitation] = useState('');
@@ -21,6 +21,7 @@ const CommitteeFormation: React.FC = () => {
   const [members, setMembers] = useState<string[]>([]);
   const [coiRequired, setCoiRequired] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+  const [editingCommitteeId, setEditingCommitteeId] = useState<string | null>(null);
 
   const { data: committeesData, isLoading } = useQuery({
     queryKey: ['evaluation-committees'],
@@ -40,23 +41,35 @@ const CommitteeFormation: React.FC = () => {
   const allUsers = usersData?.results || [];
   const committees = committeesData?.results || [];
 
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const solicitationParam = params.get('solicitation');
+    if (solicitationParam) {
+      setSolicitation(solicitationParam);
+    }
+  }, [location.search]);
+
   const formMutation = useMutation({
     mutationFn: () => {
       const allMembers = Array.from(new Set([...members, chairperson, secretary].filter(Boolean)));
-      return evaluationsApi.formCommittee({
+      const payload = {
         solicitation,
         chairperson,
         secretary,
         members: allMembers,
         require_coi: coiRequired,
-      } as any);
+      } as any;
+      return editingCommitteeId
+        ? evaluationsApi.updateCommittee(editingCommitteeId, payload)
+        : evaluationsApi.formCommittee(payload);
     },
     onSuccess: () => {
-      toast.success('Evaluation committee formed successfully');
+      toast.success(editingCommitteeId ? 'Evaluation committee updated successfully' : 'Evaluation committee formed successfully');
       setSolicitation('');
       setChairperson('');
       setSecretary('');
       setMembers([]);
+      setEditingCommitteeId(null);
       queryClient.invalidateQueries({ queryKey: ['evaluation-committees'] });
     },
     onError: (err: any) => toast.error(err?.response?.data?.error || 'Failed to form committee'),
@@ -76,7 +89,27 @@ const CommitteeFormation: React.FC = () => {
     setSubmitting(false);
   };
 
-  const existingCommittee = committees.find((c: any) => c.solicitation === solicitation);
+  const openEditCommittee = (c: any) => {
+    const committeeMembers = Array.isArray(c.members)
+      ? c.members.map((m: any) => (typeof m === 'string' ? m : m?.user || m?.id)).filter(Boolean)
+      : [];
+    const chairpersonId = c.chairperson || '';
+    const secretaryId = c.secretary || '';
+
+    setEditingCommitteeId(c.id);
+    setSolicitation(c.solicitation || '');
+    setChairperson(chairpersonId);
+    setSecretary(secretaryId);
+    setMembers(Array.from(new Set([...committeeMembers, chairpersonId, secretaryId].filter(Boolean))));
+  };
+
+  const resetForm = () => {
+    setEditingCommitteeId(null);
+    setSolicitation('');
+    setChairperson('');
+    setSecretary('');
+    setMembers([]);
+  };
 
   return (
     <div className="max-w-6xl mx-auto space-y-6">
@@ -86,7 +119,14 @@ const CommitteeFormation: React.FC = () => {
             <h1 className="text-2xl font-bold text-gray-900">Form Evaluation Committee</h1>
             <StatusBadge status={committees.length > 0 ? 'active' : 'draft'} />
           </div>
-          <p className="text-sm text-gray-500 mt-1">Create evaluation committees for solicitations under evaluation</p>
+          <p className="text-sm text-gray-500 mt-1">
+            Use the sidebar path: Evaluations {'->'} Committee Formation
+          </p>
+          {editingCommitteeId && (
+            <p className="text-sm text-amber-600 mt-2 font-medium">
+              Editing an existing committee. Save changes to update the formed committee.
+            </p>
+          )}
         </div>
       </div>
 
@@ -170,13 +210,13 @@ const CommitteeFormation: React.FC = () => {
           </div>
 
           <div className="flex justify-end gap-3">
-            <button onClick={() => navigate('/evaluations')} className="px-4 py-2.5 border border-gray-300 rounded-lg text-sm">
-              Cancel
-            </button>
+              <button onClick={resetForm} className="px-4 py-2.5 border border-gray-300 rounded-lg text-sm">
+                {editingCommitteeId ? 'Cancel Edit' : 'Cancel'}
+              </button>
             <button onClick={handleSubmit} disabled={submitting || !solicitation || !chairperson || !secretary || members.length < 3}
               className="px-6 py-2.5 bg-zammsa-green text-white rounded-lg text-sm font-bold disabled:opacity-50 flex items-center gap-2">
               <PlusIcon className="w-4 h-4" />
-              {submitting ? 'Creating...' : 'Form Evaluation Committee'}
+              {submitting ? (editingCommitteeId ? 'Updating...' : 'Creating...') : (editingCommitteeId ? 'Update Evaluation Committee' : 'Form Evaluation Committee')}
             </button>
           </div>
         </div>
@@ -189,10 +229,16 @@ const CommitteeFormation: React.FC = () => {
             </h2>
             <div className="space-y-3">
               {committees.slice(0, 5).map((c: any) => (
-                <div key={c.id} className="p-3 bg-gray-50 rounded-lg text-sm cursor-pointer hover:bg-gray-100"
-                  onClick={() => navigate(`/evaluations/${c.id}`)}>
+                <div key={c.id} className="p-3 bg-gray-50 rounded-lg text-sm hover:bg-gray-100">
                   <p className="font-medium text-gray-900">{c.solicitation?.slice(0, 12)}</p>
                   <p className="text-xs text-gray-500">{c.member_count || 0} members</p>
+                  <button
+                    type="button"
+                    onClick={() => openEditCommittee(c)}
+                    className="mt-2 px-3 py-1.5 bg-white border border-gray-300 rounded-lg text-xs font-semibold text-gray-700 hover:bg-gray-50"
+                  >
+                    Edit Committee
+                  </button>
                 </div>
               ))}
               {committees.length === 0 && (

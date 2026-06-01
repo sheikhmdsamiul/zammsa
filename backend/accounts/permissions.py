@@ -49,3 +49,16 @@ class IsAdminOrReadOnly(BasePermission):
         return request.user.is_authenticated and request.user.role in (
             'system_admin', 'director_procurement', 'director_general',
         )
+
+
+class CanManageEvaluationCommittees(BasePermission):
+    def has_permission(self, request, view):
+        if request.method in ('GET', 'HEAD', 'OPTIONS'):
+            return request.user.is_authenticated
+
+        return request.user.is_authenticated and request.user.role in (
+            'procurement_officer',
+            'procurement_manager',
+            'director_procurement',
+            'system_admin',
+        )

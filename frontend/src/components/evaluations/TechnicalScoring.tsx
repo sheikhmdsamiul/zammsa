@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { evaluationsApi } from '../../api/evaluations';
@@ -32,6 +32,12 @@ const TechnicalScoring: React.FC = () => {
     enabled: !!committeeId,
   });
 
+  const { data: coiState } = useQuery({
+    queryKey: ['coi-committee', committeeId],
+    queryFn: () => evaluationsApi.getCOI(committeeId!),
+    enabled: !!committeeId,
+  });
+
   const { data: solicitation, isLoading: solicitationLoading } = useQuery({
     queryKey: ['solicitation-detail', committee?.solicitation],
     queryFn: () => solicitationsApi.get(committee!.solicitation),
@@ -52,6 +58,22 @@ const TechnicalScoring: React.FC = () => {
     const s = scores[bid.id];
     return s && criteria.every((c) => s[c.id]?.score > 0);
   }).length;
+
+  const committeeMemberIds = useMemo(() => {
+    const ids = new Set<string>();
+    if (!committee) return ids;
+    ids.add(String(committee.chairperson || ''));
+    ids.add(String(committee.secretary || ''));
+    (committee.members || []).forEach((m: any) => {
+      const id = typeof m === 'string' ? m : m?.user || m?.id;
+      if (id) ids.add(String(id));
+    });
+    return ids;
+  }, [committee]);
+
+  const isCommitteeMember = committee ? committeeMemberIds.has(String(user?.id || '')) : false;
+  const isRecused = Boolean(coiState?.recused_members?.includes(String(user?.id || '')));
+  const canProceedFinancial = user && [ROLES.EVALUATION_COMMITTEE_CHAIR, ROLES.DIRECTOR_PROCUREMENT].includes(user.role as any);
 
   useEffect(() => {
     if (!bidList.length || !criteria.length) return;
@@ -184,6 +206,32 @@ const TechnicalScoring: React.FC = () => {
     );
   }
 
+  if (!isCommitteeMember) {
+    return (
+      <div className="max-w-4xl mx-auto py-12 text-center">
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-10">
+          <h2 className="text-xl font-bold text-gray-900 mb-2">Access Restricted</h2>
+          <p className="text-gray-500">
+            This technical scoring workspace is only available to assigned evaluation committee members and the chair.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  if (isRecused) {
+    return (
+      <div className="max-w-4xl mx-auto py-12 text-center">
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-10">
+          <h2 className="text-xl font-bold text-gray-900 mb-2">Recused From Evaluation</h2>
+          <p className="text-gray-500">
+            You have declared a conflict of interest and cannot participate in technical scoring for this solicitation.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   if (allSubmitted) {
     return (
       <div className="max-w-4xl mx-auto py-12 text-center">
@@ -205,7 +253,7 @@ const TechnicalScoring: React.FC = () => {
             })}
           </div>
 
-          {user && [ROLES.EVALUATION_COMMITTEE_CHAIR, ROLES.DIRECTOR_PROCUREMENT].includes(user.role as any) ? (
+          {canProceedFinancial ? (
             <button
               onClick={() => committee?.solicitation ? navigate(`/evaluations/${committee.solicitation}/financial`) : navigate('/evaluations')}
               className="px-6 py-3 bg-zammsa-green text-white rounded-xl font-bold"

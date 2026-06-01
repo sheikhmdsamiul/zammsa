@@ -9,6 +9,7 @@ from rest_framework.response import Response
 from rest_framework.pagination import PageNumberPagination
 from django_filters.rest_framework import DjangoFilterBackend
 import django_filters
+from accounts.permissions import CanManageEvaluationCommittees
 
 from .models import EvaluationCommittee, ConflictOfInterest, PreliminaryExam, TechnicalScore, FinancialEvaluation, CombinedScore, BidEvaluationReport, PostQualification
 from .serializers import (
@@ -40,17 +41,70 @@ class EvaluationCommitteeFilter(django_filters.FilterSet):
         fields = ['solicitation']
 
 
+class TechnicalScoreFilter(django_filters.FilterSet):
+    solicitation = django_filters.UUIDFilter(field_name='bid__solicitation')
+    bid = django_filters.UUIDFilter(field_name='bid')
+    evaluator = django_filters.UUIDFilter(field_name='evaluator')
+    is_final = django_filters.BooleanFilter(field_name='is_final')
+
+    class Meta:
+        model = TechnicalScore
+        fields = ['solicitation', 'bid', 'evaluator', 'is_final']
+
+
+class FinancialEvaluationFilter(django_filters.FilterSet):
+    solicitation = django_filters.UUIDFilter(field_name='bid__solicitation')
+    bid = django_filters.UUIDFilter(field_name='bid')
+    preference_category = django_filters.CharFilter(field_name='preference_category', lookup_expr='iexact')
+
+    class Meta:
+        model = FinancialEvaluation
+        fields = ['solicitation', 'bid', 'preference_category']
+
+
+class BidEvaluationReportFilter(django_filters.FilterSet):
+    solicitation = django_filters.UUIDFilter(field_name='solicitation')
+    status = django_filters.CharFilter(field_name='status', lookup_expr='iexact')
+
+    class Meta:
+        model = BidEvaluationReport
+        fields = ['solicitation', 'status']
+
+
 class EvaluationCommitteeListView(BaseView, generics.ListCreateAPIView):
     queryset = EvaluationCommittee.objects.select_related('solicitation', 'chairperson', 'secretary').all()
     serializer_class = EvaluationCommitteeSerializer
     filterset_class = EvaluationCommitteeFilter
     ordering = ['-formed_at']
+    permission_classes = [CanManageEvaluationCommittees]
+
+    def get_queryset(self):
+        qs = super().get_queryset()
+        mine = str(self.request.query_params.get('mine', '')).lower() in ('1', 'true', 'yes', 'on')
+        if not mine:
+            return qs
+
+        user_id = str(self.request.user.id)
+        my_committee_ids = []
+
+        for committee in qs:
+            member_ids = []
+            for member in committee.members or []:
+                if isinstance(member, dict):
+                    member_ids.append(str(member.get('user') or ''))
+                else:
+                    member_ids.append(str(member))
+
+            if str(committee.chairperson_id) == user_id or str(committee.secretary_id) == user_id or user_id in member_ids:
+                my_committee_ids.append(committee.committee_id)
+
+        return qs.filter(committee_id__in=my_committee_ids)
 
 
 class EvaluationCommitteeDetailView(generics.RetrieveUpdateDestroyAPIView):
     queryset = EvaluationCommittee.objects.all()
     serializer_class = EvaluationCommitteeSerializer
-    permission_classes = [IsAuthenticated]
+    permission_classes = [CanManageEvaluationCommittees]
 
 
 class PreliminaryExamListView(BaseView, generics.ListCreateAPIView):
@@ -68,6 +122,7 @@ class PreliminaryExamDetailView(generics.RetrieveUpdateDestroyAPIView):
 class TechnicalScoreListView(BaseView, generics.ListCreateAPIView):
     queryset = TechnicalScore.objects.select_related('bid', 'evaluator', 'criterion').all()
     serializer_class = TechnicalScoreSerializer
+    filterset_class = TechnicalScoreFilter
     ordering = ['-submitted_at']
 
 
@@ -364,6 +419,7 @@ def calculate_qcbs_view(request, solicitation_pk):
 class FinancialEvaluationListView(BaseView, generics.ListCreateAPIView):
     queryset = FinancialEvaluation.objects.select_related('bid').all()
     serializer_class = FinancialEvaluationSerializer
+    filterset_class = FinancialEvaluationFilter
     ordering = ['-evaluation_id']
 
 
@@ -453,6 +509,9 @@ def list_passed_tech_bids_view(request, solicitation_pk):
             'bid_id': str(bid.bid_id),
             'submission_id': bid.submission_id,
             'bidder_name': bid.supplier.full_name,
+            'original_price': float(bid.bid_price or 0),
+            'preference_category': financial_eval.preference_category if financial_eval else 'non_citizen',
+            'preference_margin': float(financial_eval.preference_applied or 0) if financial_eval else 0,
             'overall_technical_score': float(overall_pct),
             'passed': passed,
             'financial_evaluation_id': str(financial_eval.evaluation_id) if financial_eval else None,
@@ -553,6 +612,7 @@ def select_winner_view(request, solicitation_pk):
 class BidEvaluationReportListView(BaseView, generics.ListCreateAPIView):
     queryset = BidEvaluationReport.objects.select_related('solicitation', 'approved_by', 'created_by').all()
     serializer_class = BidEvaluationReportSerializer
+    filterset_class = BidEvaluationReportFilter
     ordering = ['-created_at']
 
 

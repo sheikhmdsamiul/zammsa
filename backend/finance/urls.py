@@ -16,6 +16,7 @@ urlpatterns = [
     path('invoices/<uuid:pk>/send-advice/', views.invoice_send_payment_advice_view, name='invoice-send-advice'),
     path('invoices/<uuid:pk>/post-erp/', views.invoice_post_to_erp_view, name='invoice-post-erp'),
     path('grn-webhook/', views.grn_webhook_view, name='grn-webhook'),
+    path('grns/', views.GRNListView.as_view(), name='grn-list'),
     path('payments/', views.PaymentListView.as_view(), name='payment-list'),
     path('letters-of-credit/', views.LetterOfCreditListView.as_view(), name='loc-list'),
     path('letters-of-credit/<uuid:pk>/', views.LetterOfCreditDetailView.as_view(), name='loc-detail'),

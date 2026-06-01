@@ -42,6 +42,8 @@ class ContractTerminationSerializer(serializers.ModelSerializer):
 class AppealSerializer(serializers.ModelSerializer):
     id = serializers.UUIDField(source='appeal_id', read_only=True)
     bidder_name = serializers.CharField(source='bidder.full_name', read_only=True)
+    contract_number = serializers.CharField(source='contract.contract_number', read_only=True)
+    contract_title = serializers.CharField(source='contract.title', read_only=True)
 
     class Meta:
         model = Appeal

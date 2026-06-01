@@ -103,9 +103,20 @@ To keep this repository maintainable, detailed UI wireframe blocks and narrative
 - Requisition threshold routing is mandatory: `<= K250,000` DG path, `> K250,000` includes ZPC.
 - Payment routing is mandatory: `<= K100,000` Finance Officer, `<= K500,000` with Department Head, `> K500,000` with DG.
 - Data retention baseline is 7 years minimum.
+- Bid submission must reject late bids without creating a persisted submission record.
+- Two-envelope financial documents remain sealed in API responses until financial opening is authorized.
+- Contract award standstill uses 10 working days before supplier signing and DG countersignature can proceed.
+- Payment processing sends a payment instruction; invoices become `paid` only after bank confirmation webhook.
+- WMS and bank webhooks support HMAC-SHA256 verification via `WMS_WEBHOOK_SECRET` and `BANK_WEBHOOK_SECRET`.
+
+## Production Deployment Notes
+
+- Set `DEBUG=False`; values like `release` are invalid for Django boolean parsing.
+- Set `WMS_WEBHOOK_SECRET` and `BANK_WEBHOOK_SECRET` in production so unsigned webhook calls are rejected.
+- Configure bank SFTP/PGP outside the API layer; the API stores the ISO 20022 file reference and waits for bank confirmation.
+- Keep the 50MB bid upload limit aligned between frontend validation, reverse proxy limits, and Django request handling.
 
 ## Related Files
 
 - `backend/ROLE_RESPONSIBILITY_MATRIX.md`
 - `backend/APP_WORKFLOW_SUMMARY.md`
-

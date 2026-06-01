@@ -358,11 +358,18 @@ class InvoiceWorkflowTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
 
     def test_approve_invoice_department_head(self):
-        self.client.force_authenticate(user=self.dept_head)
         inv = self._create_invoice(amount=200000)
         inv.status = 'pending_approval'
         inv.save()
         url = reverse('invoice-approve', args=[inv.invoice_id])
+
+        response = self.client.post(url)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        inv.refresh_from_db()
+        self.assertEqual(inv.status, 'pending_approval')
+        self.assertEqual(inv.approval_route, 'department_head')
+
+        self.client.force_authenticate(user=self.dept_head)
         response = self.client.post(url)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         inv.refresh_from_db()
@@ -370,11 +377,23 @@ class InvoiceWorkflowTests(APITestCase):
         self.assertEqual(inv.approval_route, 'department_head')
 
     def test_approve_invoice_director_general(self):
-        self.client.force_authenticate(user=self.dir_gen)
         inv = self._create_invoice(amount=600000)
         inv.status = 'pending_approval'
         inv.save()
         url = reverse('invoice-approve', args=[inv.invoice_id])
+
+        response = self.client.post(url)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        inv.refresh_from_db()
+        self.assertEqual(inv.approval_route, 'department_head')
+
+        self.client.force_authenticate(user=self.dept_head)
+        response = self.client.post(url)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        inv.refresh_from_db()
+        self.assertEqual(inv.approval_route, 'director_general')
+
+        self.client.force_authenticate(user=self.dir_gen)
         response = self.client.post(url)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         inv.refresh_from_db()
@@ -437,8 +456,8 @@ class PaymentTests(APITestCase):
         }, format='json')
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         inv.refresh_from_db()
-        self.assertEqual(inv.status, 'paid')
-        self.assertIsNotNone(inv.paid_at)
+        self.assertEqual(inv.status, 'approved')
+        self.assertIsNone(inv.paid_at)
         self.assertEqual(Payment.objects.count(), 1)
         payment = Payment.objects.first()
         self.assertEqual(payment.status, 'sent')
@@ -449,6 +468,7 @@ class PaymentTests(APITestCase):
             'amount': 50000, 'payment_method': 'iso20022',
         }, format='json')
         self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['status'], 'sent')
         self.assertIn('iso20022_file_ref', response.data)
         self.assertIn('xml_content', response.data)
 

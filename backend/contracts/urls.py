@@ -22,6 +22,9 @@ urlpatterns = [
     path('securities/', views.ContractSecurityListView.as_view(), name='contract-security-list'),
     path('milestones/', views.ContractMilestoneListView.as_view(), name='contract-milestone-list'),
     path('milestones/<uuid:pk>/', views.ContractMilestoneDetailView.as_view(), name='contract-milestone-detail'),
+    path('amendments/', views.ContractAmendmentListView.as_view(), name='amendment-list'),
+    path('closures/', views.ClosureChecklistListView.as_view(), name='closure-list'),
     path('liquidated-damages/', views.LiquidatedDamagesListView.as_view(), name='ld-list'),
     path('terminations/', views.TerminationListView.as_view(), name='termination-list'),
+    path('appeals/', views.AppealListView.as_view(), name='appeal-list'),
 ]

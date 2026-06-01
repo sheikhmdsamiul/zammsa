@@ -83,17 +83,28 @@ export const fetchZPCDashboard = (): Promise<ZPCDashboardData> =>
     upcoming_meetings: [],
   } as ZPCDashboardData));
 
-export const fetchEvaluationDashboard = (): Promise<EvaluationDashboardData> =>
-  apiClient.get(`/evaluations/committees/`).then((r) => {
+export const fetchEvaluationDashboard = (userId?: string): Promise<EvaluationDashboardData> =>
+  apiClient.get(`/evaluations/committees/`, { params: { mine: true } }).then((r) => {
     const raw = r.data as any;
     const committees = raw.results || raw.data || raw || [];
-    const assignments = (Array.isArray(committees) ? committees : []).map((c: any) => ({
-      id: c.id || '',
-      solicitation: c.solicitation_title || c.solicitation || '',
-      role: c.user_role || c.role || 'member',
-      deadline: c.deadline || c.closing_date || new Date().toISOString(),
-      status: c.status || 'pending',
-    }));
+    const assignments = (Array.isArray(committees) ? committees : []).map((c: any) => {
+      const memberIds = (c.members || []).map((m: any) => (typeof m === 'string' ? m : m?.user)).filter(Boolean);
+      const role = String(c.chairperson) === String(userId)
+        ? 'chairperson'
+        : String(c.secretary) === String(userId)
+          ? 'secretary'
+          : memberIds.includes(String(userId))
+            ? 'member'
+            : c.user_role || c.role || 'member';
+
+      return {
+        id: c.id || c.committee_id || '',
+        solicitation: c.solicitation_title || c.solicitation?.sol_number || c.solicitation || '',
+        role,
+        deadline: c.deadline || c.closing_date || new Date().toISOString(),
+        status: c.status || 'pending',
+      };
+    });
     return {
       assignments,
       scoring_matrix: [],

@@ -1,9 +1,11 @@
-import React, { useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { useQuery, useMutation } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { evaluationsApi } from '../../api/evaluations';
 import { LoadingSpinner } from '../common/LoadingSpinner';
 import { StatusBadge } from '../common/StatusBadge';
+import { useAuth } from '../../hooks/useAuth';
+import { ROLES } from '../../config/rbac';
 import toast from 'react-hot-toast';
 import {
   CheckCircleIcon, LockOpenIcon, StarIcon,
@@ -20,6 +22,8 @@ const ceecPreferenceMap: Record<string, { label: string; margin: number }> = {
 const FinancialEvaluation: React.FC = () => {
   const { solId } = useParams<{ solId: string }>();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  const { user } = useAuth();
 
   const [authorized, setAuthorized] = useState(false);
   const [winnerSelected, setWinnerSelected] = useState(false);
@@ -33,30 +37,38 @@ const FinancialEvaluation: React.FC = () => {
   });
 
   const passedBids = passedBidsData?.bids || [];
+  const financialOpened = passedBids.some((b: any) => b.financial_sealed === false);
+  const canManageFinancial = !!user && [ROLES.EVALUATION_COMMITTEE_CHAIR, ROLES.DIRECTOR_PROCUREMENT].includes(user.role as any);
 
-  const evaluatedBids = passedBids.map((b: any) => {
+  useEffect(() => {
+    setAuthorized(financialOpened);
+  }, [financialOpened]);
+
+  const evaluatedBids = useMemo(() => passedBids.map((b: any) => {
     const pref = ceecPreferenceMap[b.preference_category || 'non_citizen'] || ceecPreferenceMap.non_citizen;
-    const price = b.evaluated_price || b.original_price || 0;
-    const evalPrice = price * (1 - pref.margin / 100);
+    const prefMargin = Number(b.preference_margin ?? pref.margin ?? 0);
+    const price = Number(b.original_price || b.bid_price || b.evaluated_price || 0);
+    const evalPrice = Number(b.evaluated_price ?? price * (1 - prefMargin / 100));
     return {
       bidId: b.bid_id || b.id,
       bidderName: b.bidder_name || b.vendor_name || 'Unknown',
       bidPrice: price,
       ceec: b.preference_category || 'non_citizen',
       ceecLabel: pref.label,
-      prefMargin: pref.margin,
+      prefMargin,
       evaluatedPrice: evalPrice,
       techScore: b.overall_technical_score || 0,
     };
-  });
+  }), [passedBids]);
 
-  const rankedBids = [...evaluatedBids].sort((a: any, b: any) => a.evaluatedPrice - b.evaluatedPrice);
+  const rankedBids = useMemo(() => [...evaluatedBids].sort((a: any, b: any) => a.evaluatedPrice - b.evaluatedPrice), [evaluatedBids]);
 
   const authorizeMutation = useMutation({
     mutationFn: () => evaluationsApi.authorizeFinancialOpening(solId!),
     onSuccess: (data: any) => {
       setAuthorized(true);
       toast.success(`Financial envelopes opened for ${data.opened_count} bids`);
+      queryClient.invalidateQueries({ queryKey: ['passed-tech-bids', solId] });
     },
     onError: (err: any) => toast.error(err?.response?.data?.error || 'Failed to authorize opening'),
   });
@@ -73,17 +85,30 @@ const FinancialEvaluation: React.FC = () => {
 
   if (bidsLoading) return <LoadingSpinner className="py-12" />;
 
+  if (!canManageFinancial) {
+    return (
+      <div className="max-w-4xl mx-auto py-12 text-center">
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-10">
+          <h2 className="text-xl font-bold text-gray-900 mb-2">Access Restricted</h2>
+          <p className="text-gray-500">
+            Financial evaluation is restricted to the committee chair or the Director of Procurement.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="max-w-5xl mx-auto space-y-6">
       <div className="flex items-center justify-between">
         <div>
           <div className="flex items-center gap-3">
             <h1 className="text-2xl font-bold text-gray-900">Financial Evaluation</h1>
-            <StatusBadge status={authorized ? 'active' : 'draft'} />
+            <StatusBadge status={financialOpened || authorized ? 'active' : 'draft'} />
           </div>
           <p className="text-sm text-gray-500 mt-1">Bids that passed technical evaluation (threshold: 70/100)</p>
         </div>
-        {!authorized && (
+        {!financialOpened && !authorized && (
           <button
             onClick={() => authorizeMutation.mutate()}
             disabled={authorizeMutation.isPending}
@@ -98,6 +123,12 @@ const FinancialEvaluation: React.FC = () => {
       {!passedBids.length && !authorized && (
         <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 text-center">
           <p className="text-gray-500">No bids have passed technical evaluation yet. Ensure all committee members have completed technical scoring.</p>
+        </div>
+      )}
+
+      {financialOpened && (
+        <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4 text-sm text-emerald-800">
+          Financial envelopes are already open for the passing bids in this solicitation.
         </div>
       )}
 

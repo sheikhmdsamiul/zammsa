@@ -20,7 +20,7 @@ const ThreeWayMatch: React.FC = () => {
 
   const { data: invoicesData, isLoading } = useQuery({
     queryKey: ['invoices-for-match'],
-    queryFn: () => financeApi.listInvoices({ status: 'pending_match', page_size: 50 }),
+    queryFn: () => financeApi.listInvoices({ status: 'submitted', page_size: 50 }),
   });
 
   const invoices = invoicesData?.results || [];
@@ -35,6 +35,7 @@ const ThreeWayMatch: React.FC = () => {
     mutationFn: () => financeApi.matchInvoice(selectedInvoice),
     onSuccess: (data: any) => {
       setMatchResult(data.match);
+      queryClient.invalidateQueries({ queryKey: ['invoices-for-match'] });
       toast.success('3-way match completed');
     },
     onError: (err: any) => toast.error(err?.response?.data?.error || 'Match failed'),
@@ -45,7 +46,7 @@ const ThreeWayMatch: React.FC = () => {
     onSuccess: () => {
       setMatched(true);
       queryClient.invalidateQueries({ queryKey: ['invoices-for-match'] });
-      toast.success('Invoice approved after 3-way match');
+      toast.success('Invoice approval step completed');
     },
     onError: () => toast.error('Failed to approve invoice'),
   });

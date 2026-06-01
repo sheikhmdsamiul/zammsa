@@ -1,5 +1,6 @@
 import uuid
 import secrets
+from decimal import Decimal, InvalidOperation
 from django.db.models import Q, Max as MaxAgg
 from django.utils import timezone
 from rest_framework import generics, filters, status
@@ -18,6 +19,36 @@ from .serializers import (
 )
 from solicitations.models import Solicitation
 from solicitations.serializers import SolicitationAddendumSerializer
+
+MAX_BID_UPLOAD_SIZE = 50 * 1024 * 1024
+SUPPLIER_ROLES = ('supplier_user', 'system_admin')
+BID_OPENING_ROLES = ('procurement_officer', 'procurement_manager', 'system_admin')
+
+
+def _bool_from_request(value):
+    return value in ('true', 'True', True, '1', 1)
+
+
+def _validate_upload(file_obj, label):
+    if not file_obj:
+        return f'{label} is required'
+    if getattr(file_obj, 'size', 0) > MAX_BID_UPLOAD_SIZE:
+        return f'{label} exceeds 50MB maximum file size'
+    return None
+
+
+def _parse_decimal(value, label, required=False):
+    if value in (None, ''):
+        if required:
+            raise ValueError(f'{label} is required')
+        return None
+    try:
+        parsed = Decimal(str(value))
+    except (InvalidOperation, ValueError):
+        raise ValueError(f'{label} must be a valid number')
+    if parsed < 0:
+        raise ValueError(f'{label} cannot be negative')
+    return parsed
 
 
 class StandardPagination(PageNumberPagination):
@@ -41,6 +72,22 @@ class BidFilter(django_filters.FilterSet):
     class Meta:
         model = BidSubmission
         fields = ['status', 'is_late']
+
+
+class BidOpeningFilter(django_filters.FilterSet):
+    status = django_filters.CharFilter(lookup_expr='exact')
+    solicitation = django_filters.CharFilter(method='filter_solicitation')
+
+    def filter_solicitation(self, queryset, name, value):
+        try:
+            uuid.UUID(value)
+            return queryset.filter(solicitation_id=value)
+        except (ValueError, AttributeError):
+            return queryset.filter(solicitation__sol_number=value)
+
+    class Meta:
+        model = BidOpening
+        fields = ['status']
 
 
 class BaseView:
@@ -86,6 +133,9 @@ class BidSubmissionDetailView(generics.RetrieveUpdateDestroyAPIView):
 @permission_classes([IsAuthenticated])
 def bid_submit_view(request):
     """Full 9-step two-envelope bid submission workflow"""
+    if getattr(request.user, 'role', '') not in SUPPLIER_ROLES:
+        return Response({'error': 'Only supplier users can submit bids'}, status=403)
+
     sol_id = request.data.get('solicitation_id') or request.data.get('solicitation')
     if not sol_id:
         return Response({'error': 'solicitation_id is required'}, status=400)
@@ -102,29 +152,51 @@ def bid_submit_view(request):
     is_late = sol.closing_date < now
 
     if is_late:
-        late_bid = BidSubmission.objects.create(
-            solicitation=sol,
-            supplier=request.user,
-            is_late=True,
-            status='submitted',
-            submitted_at=now,
-        )
         return Response({
             'error': 'Bid submission deadline has passed',
             'is_late': True,
-            'submission_id': late_bid.submission_id,
+            'closed_at': sol.closing_date.isoformat(),
+            'server_time': now.isoformat(),
         }, status=400)
 
     if BidSubmission.objects.filter(solicitation=sol, supplier=request.user).exclude(status='withdrawn').exists():
         return Response({'error': 'You have already submitted a bid for this solicitation'}, status=400)
 
-    acknowledgments = request.data.get('addenda_acknowledged', 'false')
-    addenda_acknowledged = acknowledgments in ('true', 'True', True, '1')
+    addenda_acknowledged = _bool_from_request(request.data.get('addenda_acknowledged', False))
 
     sol_addenda_count = sol.addenda.count()
     if sol_addenda_count > 0 and not addenda_acknowledged:
         return Response({'error': 'You must acknowledge all addenda before submitting'}, status=400)
 
+    technical_file = request.FILES.get('technical_proposal')
+    financial_file = request.FILES.get('financial_proposal')
+    security_file = request.FILES.get('bid_security')
+    zamra_file = request.FILES.get('zamra_registration')
+    supporting_file = request.FILES.get('other_supporting')
+
+    upload_errors = [
+        _validate_upload(technical_file, 'Technical proposal'),
+        _validate_upload(financial_file, 'Financial proposal'),
+    ]
+    if getattr(sol, 'bid_security_required', True):
+        upload_errors.append(_validate_upload(security_file, 'Bid security'))
+    for optional_file, label in (
+        (zamra_file, 'ZAMRA registration'),
+        (supporting_file, 'Supporting document'),
+    ):
+        if optional_file and optional_file.size > MAX_BID_UPLOAD_SIZE:
+            upload_errors.append(f'{label} exceeds 50MB maximum file size')
+    upload_errors = [err for err in upload_errors if err]
+    if upload_errors:
+        return Response({'error': 'Bid submission validation failed', 'details': upload_errors}, status=400)
+
+    try:
+        bid_price = _parse_decimal(request.data.get('bid_price'), 'bid_price')
+        security_amount = _parse_decimal(request.data.get('security_amount'), 'security_amount')
+    except ValueError as exc:
+        return Response({'error': str(exc)}, status=400)
+
+    two_envelope = getattr(sol, 'submission_format', 'single') == 'two'
     submission_id = f"BID-{now.strftime('%Y%m%d')}-{secrets.token_hex(3).upper()}"
     receipt_number = f"RCT-{now.strftime('%Y%m%d')}-{secrets.token_hex(4).upper()}"
 
@@ -133,21 +205,18 @@ def bid_submit_view(request):
         supplier=request.user,
         submission_id=submission_id,
         receipt_number=receipt_number,
-        bid_price=request.data.get('bid_price') or None,
+        bid_price=bid_price,
         validity_period_days=request.data.get('validity_period_days') or None,
+        security_amount=security_amount,
+        security_type=request.data.get('security_type', ''),
+        security_expiry=request.data.get('security_expiry') or None,
         status='submitted',
         is_late=False,
         submitted_at=now,
         addenda_acknowledged=addenda_acknowledged,
         addenda_acknowledged_at=now if addenda_acknowledged else None,
-        financial_envelope_encrypted=True,
+        financial_envelope_encrypted=two_envelope,
     )
-
-    technical_file = request.FILES.get('technical_proposal')
-    financial_file = request.FILES.get('financial_proposal')
-    security_file = request.FILES.get('bid_security')
-    zamra_file = request.FILES.get('zamra_registration')
-    supporting_file = request.FILES.get('other_supporting')
 
     if technical_file:
         from django.core.files.storage import default_storage
@@ -160,7 +229,8 @@ def bid_submit_view(request):
 
     if financial_file:
         from django.core.files.storage import default_storage
-        fin_path = default_storage.save(f'bids/{bid.bid_id}/financial_{financial_file.name}', financial_file)
+        envelope_prefix = 'sealed_financial' if two_envelope else 'financial'
+        fin_path = default_storage.save(f'bids/{bid.bid_id}/{envelope_prefix}_{financial_file.name}', financial_file)
         BidDocument.objects.create(
             bid=bid,
             document_type='financial_proposal',
@@ -200,7 +270,7 @@ def bid_submit_view(request):
         'submission_id': submission_id,
         'bid_id': str(bid.bid_id),
         'submitted_at': now.isoformat(),
-        'financial_envelope_encrypted': True,
+        'financial_envelope_encrypted': two_envelope,
         'documents_uploaded': {
             'technical_proposal': technical_file is not None,
             'financial_proposal': financial_file is not None,
@@ -261,6 +331,8 @@ class PreBidConferenceDetailView(generics.RetrieveUpdateDestroyAPIView):
 class BidOpeningListView(BaseView, generics.ListCreateAPIView):
     queryset = BidOpening.objects.select_related('solicitation', 'conducted_by').prefetch_related('opening_details').all()
     serializer_class = BidOpeningSerializer
+    filterset_class = BidOpeningFilter
+    search_fields = ['solicitation__sol_number', 'solicitation__title', 'conducted_by__full_name', 'status', 'public_live_link']
     ordering = ['-opened_at']
 
 
@@ -274,10 +346,16 @@ class BidOpeningDetailView(generics.RetrieveAPIView):
 @permission_classes([IsAuthenticated])
 def bid_opening_start_view(request, pk):
     """Step 1: Create bid opening session without opening bids"""
+    if getattr(request.user, 'role', '') not in BID_OPENING_ROLES:
+        return Response({'error': 'Only procurement officers can start bid openings'}, status=403)
+
     try:
         sol = Solicitation.objects.get(pk=pk)
     except Solicitation.DoesNotExist:
         return Response({'error': 'Solicitation not found'}, status=404)
+
+    if sol.status != 'closed':
+        return Response({'error': 'Only closed solicitations can be opened'}, status=400)
 
     if BidOpening.objects.filter(solicitation=sol, status='in_progress').exists():
         return Response({'error': 'An opening session is already in progress'}, status=400)
@@ -296,6 +374,7 @@ def bid_opening_start_view(request, pk):
         viewers_connected=int(request.data.get('viewers_connected', 0) or 0),
         witnesses=request.data.get('witnesses', []),
         witness_signatures=request.data.get('witness_signatures', []),
+        observations=request.data.get('observations', ''),
     )
 
     # Pre-create BidOpeningDetail records for all submitted bids
@@ -326,6 +405,9 @@ def bid_opening_start_view(request, pk):
 @permission_classes([IsAuthenticated])
 def bid_open_single_view(request, opening_pk, bid_pk):
     """Step 3: Open a single bid one at a time"""
+    if getattr(request.user, 'role', '') not in BID_OPENING_ROLES:
+        return Response({'error': 'Only procurement officers can open bids'}, status=403)
+
     try:
         opening = BidOpening.objects.get(pk=opening_pk)
     except BidOpening.DoesNotExist:
@@ -358,7 +440,10 @@ def bid_open_single_view(request, opening_pk, bid_pk):
             security_verified_read=bool(bid.security_verified),
         )
 
-    financial_sealed = request.data.get('financial_sealed', 'true') in ('true', 'True', True, '1')
+    financial_sealed = _bool_from_request(request.data.get(
+        'financial_sealed',
+        getattr(opening.solicitation, 'submission_format', 'single') == 'two',
+    ))
 
     bid.status = 'opened'
     bid.opened_at = timezone.now()
@@ -464,10 +549,16 @@ def bid_opening_send_minutes_view(request, pk):
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def bid_opening_conduct_view(request, pk):
+    if getattr(request.user, 'role', '') not in BID_OPENING_ROLES:
+        return Response({'error': 'Only procurement officers can conduct bid openings'}, status=403)
+
     try:
         sol = Solicitation.objects.get(pk=pk)
     except Solicitation.DoesNotExist:
         return Response({'error': 'Solicitation not found'}, status=404)
+
+    if sol.closing_date > timezone.now():
+        return Response({'error': 'Bid opening cannot start before the closing deadline'}, status=400)
 
     bids = BidSubmission.objects.filter(solicitation=sol, status='submitted').order_by('submitted_at')
     if not bids.exists():

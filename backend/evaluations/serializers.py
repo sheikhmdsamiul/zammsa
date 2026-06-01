@@ -50,6 +50,8 @@ class EvaluationCommitteeSerializer(serializers.ModelSerializer):
             return str(val)
         chairperson_id = _to_id(attrs.get('chairperson'))
         secretary_id = _to_id(attrs.get('secretary'))
+        if chairperson_id and secretary_id and chairperson_id == secretary_id:
+            raise serializers.ValidationError('Chairperson and secretary must be different users.')
         all_members = list({_to_id(m) for m in members} | {chairperson_id, secretary_id} - {''})
         if len(all_members) < 3:
             raise serializers.ValidationError(
@@ -119,11 +121,20 @@ class BidEvaluationReportSerializer(serializers.ModelSerializer):
 
     def get_required_count(self, obj):
         committees = EvaluationCommittee.objects.filter(solicitation=obj.solicitation)
-        count = 0
+        member_ids = set()
         for c in committees:
-            count += len(c.members)
-            count += 2  # chairperson + secretary
-        return count
+            if c.chairperson_id:
+                member_ids.add(str(c.chairperson_id))
+            if c.secretary_id:
+                member_ids.add(str(c.secretary_id))
+            for member in c.members or []:
+                if isinstance(member, dict):
+                    uid = member.get('user')
+                else:
+                    uid = member
+                if uid:
+                    member_ids.add(str(uid))
+        return len(member_ids)
 
 
 class PostQualificationSerializer(serializers.ModelSerializer):

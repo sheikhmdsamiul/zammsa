@@ -175,6 +175,8 @@ EMAIL_HOST_USER = config('EMAIL_HOST_USER', default='')
 EMAIL_HOST_PASSWORD = config('EMAIL_HOST_PASSWORD', default='')
 DEFAULT_FROM_EMAIL = config('DEFAULT_FROM_EMAIL', default='noreply@zammsa.gov.zm')
 RETENTION_ALERT_RECIPIENT = config('RETENTION_ALERT_RECIPIENT', default='records.manager@zammsa.gov.zm')
+WMS_WEBHOOK_SECRET = config('WMS_WEBHOOK_SECRET', default='')
+BANK_WEBHOOK_SECRET = config('BANK_WEBHOOK_SECRET', default='')
 
 AUTHENTICATION_BACKENDS = [
     'axes.backends.AxesStandaloneBackend',

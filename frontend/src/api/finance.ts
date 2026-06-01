@@ -33,22 +33,28 @@ export const financeApi = {
     api.post<Invoice>('/finance/invoices/', data).then((r) => r.data),
 
   submitInvoice: (id: string) =>
-    api.post<{ message: string; status: string; approval_route: string }>(`/finance/invoices/${id}/submit/`).then((r) => r.data),
+    api.post<{ message: string; status: string; approval_route?: string }>(`/finance/invoices/${id}/submit/`).then((r) => r.data),
 
-  matchInvoice: (id: string) =>
-    api.post<{ message: string; match: any }>(`/finance/invoices/${id}/match/`).then((r) => r.data),
+  matchInvoice: (id: string, data?: {
+    po_quantity?: number;
+    grn_quantity?: number;
+    invoice_quantity?: number;
+    po_price?: number;
+    invoice_price?: number;
+  }) =>
+    api.post<{ message: string; match_status: string; match: any; discrepancies: Record<string, any> }>(`/finance/invoices/${id}/match/`, data || {}).then((r) => r.data),
 
   approveInvoice: (id: string) =>
-    api.post<{ message: string; approval_route: string }>(`/finance/invoices/${id}/approve/`).then((r) => r.data),
+    api.post<{ message: string; status: string; approval_route: string }>(`/finance/invoices/${id}/approve/`).then((r) => r.data),
 
   rejectInvoice: (id: string, rejection_reason?: string) =>
     api.post<{ message: string; status: string }>(`/finance/invoices/${id}/reject/`, { rejection_reason }).then((r) => r.data),
 
   processPayment: (id: string, data: { amount: number; payment_method: string; reference?: string; vendor?: string }) =>
-    api.post<{ message: string; payment_id: string; status: string }>(`/finance/invoices/${id}/pay/`, data).then((r) => r.data),
+    api.post<{ message: string; payment_id?: string; status: string; iso20022_file_ref?: string; xml_content?: string }>(`/finance/invoices/${id}/pay/`, data).then((r) => r.data),
 
-  bankConfirmPayment: (id: string, data: { status: string; reference?: string }) =>
-    api.post<{ message: string; payment_status: string; invoice_status: string }>(`/finance/invoices/${id}/bank-confirm/`, data).then((r) => r.data),
+  bankConfirmPayment: (id: string, data: { status: string; reference?: string; paymentRef?: string; bank_reference?: string }) =>
+    api.post<{ message: string; status: string; bank_reference: string }>(`/finance/invoices/${id}/bank-confirm/`, data).then((r) => r.data),
 
   sendPaymentAdvice: (id: string) =>
     api.post<{ message: string }>(`/finance/invoices/${id}/send-advice/`).then((r) => r.data),
@@ -73,4 +79,7 @@ export const financeApi = {
 
   postGrnWebhook: (data: any) =>
     api.post<GoodsReceiptNote>('/finance/grn-webhook/', data).then((r) => r.data),
+
+  listGrns: (params?: Record<string, any>) =>
+    api.get<PaginatedResponse<GoodsReceiptNote>>('/finance/grns/', { params }).then((r) => r.data),
 };

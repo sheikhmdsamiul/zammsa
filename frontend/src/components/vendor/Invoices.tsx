@@ -15,7 +15,7 @@ const Invoices: React.FC = () => {
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(PAGE_SIZE);
   const [showForm, setShowForm] = useState(false);
-  const [newInvoice, setNewInvoice] = useState({ contract: '', amount: '', description: '' });
+  const [newInvoice, setNewInvoice] = useState({ contract: '', invoice_number: '', po_number: '', amount: '', description: '' });
   const [invoiceFile, setInvoiceFile] = useState<File | null>(null);
 
   const params: Record<string, any> = { page, page_size: pageSize };
@@ -33,13 +33,15 @@ const Invoices: React.FC = () => {
     try {
       const form = new FormData();
       form.append('contract', newInvoice.contract);
+      if (newInvoice.invoice_number) form.append('invoice_number', newInvoice.invoice_number);
+      if (newInvoice.po_number) form.append('po_number', newInvoice.po_number);
       form.append('amount', newInvoice.amount);
       form.append('description', newInvoice.description);
       if (invoiceFile) form.append('document', invoiceFile);
       await vendorApi.invoices.create(form);
       toast.success('Invoice submitted');
       setShowForm(false);
-      setNewInvoice({ contract: '', amount: '', description: '' });
+      setNewInvoice({ contract: '', invoice_number: '', po_number: '', amount: '', description: '' });
       setInvoiceFile(null);
       refetch();
     } catch { /* handled by interceptor */ }
@@ -66,6 +68,14 @@ const Invoices: React.FC = () => {
               <input value={newInvoice.contract} onChange={(e) => setNewInvoice((f) => ({ ...f, contract: e.target.value }))} className="w-full border-gray-300 rounded-lg" />
             </div>
             <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Invoice Number</label>
+              <input value={newInvoice.invoice_number} onChange={(e) => setNewInvoice((f) => ({ ...f, invoice_number: e.target.value }))} className="w-full border-gray-300 rounded-lg" placeholder="Auto-generated if blank" />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">PO Number</label>
+              <input value={newInvoice.po_number} onChange={(e) => setNewInvoice((f) => ({ ...f, po_number: e.target.value }))} className="w-full border-gray-300 rounded-lg" placeholder="Defaults to contract number" />
+            </div>
+            <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Amount (ZMW)</label>
               <input type="number" value={newInvoice.amount} onChange={(e) => setNewInvoice((f) => ({ ...f, amount: e.target.value }))} className="w-full border-gray-300 rounded-lg" />
             </div>
@@ -85,7 +95,9 @@ const Invoices: React.FC = () => {
       <div className="flex flex-col sm:flex-row gap-4 mb-6">
         <select value={status} onChange={(e) => { setStatus(e.target.value); setPage(1); }} className="border-gray-300 rounded-lg text-sm w-44">
           <option value="">All Statuses</option>
-          <option value="pending">Pending</option>
+          <option value="submitted">Submitted</option>
+          <option value="pending_matching">Pending Match</option>
+          <option value="pending_approval">Pending Approval</option>
           <option value="approved">Approved</option>
           <option value="paid">Paid</option>
           <option value="rejected">Rejected</option>

@@ -18,12 +18,30 @@ class BidDocumentSerializer(serializers.ModelSerializer):
     def get_file_url(self, obj):
         if not obj.file_path:
             return ''
+        if self._is_sealed_financial_document(obj):
+            return ''
         request = self.context.get('request')
         if obj.file_path.startswith('http://') or obj.file_path.startswith('https://'):
             return obj.file_path
         if request:
             return request.build_absolute_uri(f'/media/{obj.file_path}')
         return f'/media/{obj.file_path}'
+
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        if self._is_sealed_financial_document(instance):
+            data['file_path'] = ''
+            data['filename'] = '[SEALED]'
+        return data
+
+    def _is_sealed_financial_document(self, obj):
+        if obj.document_type != 'financial_proposal':
+            return False
+        if not getattr(obj.bid, 'financial_envelope_encrypted', False):
+            return False
+        request = self.context.get('request')
+        role = getattr(getattr(request, 'user', None), 'role', '')
+        return role not in ('evaluation_committee_chair', 'system_admin')
 
 
 class BidSecuritySerializer(serializers.ModelSerializer):

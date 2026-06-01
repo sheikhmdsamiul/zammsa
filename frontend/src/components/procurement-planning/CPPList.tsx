@@ -19,6 +19,7 @@ export default function CPPList() {
   const [plans, setPlans] = useState<ContractProcurementPlan[]>([]);
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState('');
+  const [validationErrors, setValidationErrors] = useState<string[] | null>(null);
 
   const methodLabel = (method?: string) => {
     const map: Record<string, string> = {
@@ -65,10 +66,19 @@ export default function CPPList() {
   const handleSubmitToZPC = async (id: string) => {
     setActionLoading(id);
     try {
+      setValidationErrors(null);
       const res = await procurementPlanningApi.contractPlans.submit(id);
       toast.success(res.message || 'CPP submitted to ZPC');
       loadPlans();
-    } catch (err: any) { toast.error(err.response?.data?.error || 'Submit failed'); }
+    } catch (err: any) {
+      const details = err.response?.data?.details;
+      const msg = err.response?.data?.error || 'Submit failed';
+      if (details) {
+        setValidationErrors(details);
+      } else {
+        toast.error(msg);
+      }
+    }
     setActionLoading('');
   };
 
@@ -177,6 +187,29 @@ export default function CPPList() {
             <ClipboardCheckIcon className="w-12 h-12 text-gray-200 mx-auto mb-4" />
             <p className="text-sm font-bold text-gray-400 uppercase tracking-widest">No strategies found</p>
          </div>
+      )}
+
+      {validationErrors && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/60 backdrop-blur-sm p-6">
+          <div className="bg-white rounded-3xl shadow-2xl max-w-lg w-full p-8 border border-white/20">
+            <div className="w-14 h-14 rounded-2xl bg-rose-100 text-rose-600 flex items-center justify-center mb-6">
+              <XIcon className="w-7 h-7" />
+            </div>
+            <h3 className="text-xl font-black text-gray-900 tracking-tight mb-2">Cannot Submit — Fix These Issues</h3>
+            <ul className="space-y-2 mb-8">
+              {validationErrors.map((err, i) => (
+                <li key={i} className="flex items-start gap-2.5 text-sm text-rose-700 bg-rose-50 p-3 rounded-xl">
+                  <span className="w-1.5 h-1.5 rounded-full bg-rose-400 shrink-0 mt-1.5" />
+                  {err}
+                </li>
+              ))}
+            </ul>
+            <button onClick={() => setValidationErrors(null)}
+              className="w-full py-4 bg-rose-600 text-white rounded-2xl text-sm font-black uppercase tracking-widest shadow-lg shadow-rose-100 hover:bg-rose-700 transition-all">
+              Dismiss
+            </button>
+          </div>
+        </div>
       )}
     </div>
   );

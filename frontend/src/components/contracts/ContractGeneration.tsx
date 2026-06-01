@@ -144,7 +144,7 @@ const ContractGeneration: React.FC = () => {
                   <label className="block text-sm font-medium text-gray-700 mb-1">Contract Number</label>
                   <input value={contractNumber} onChange={(e) => setContractNumber(e.target.value)}
                     className="w-full border border-gray-200 rounded-lg px-4 py-2.5 text-sm"
-                    placeholder="CON-2026-XXX-01" />
+                    placeholder="Enter contract number..." />
                 </div>
 
                 <div className="grid grid-cols-2 gap-4">

@@ -4,6 +4,8 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { evaluationsApi } from '../../api/evaluations';
 import { solicitationsApi } from '../../api/solicitations';
 import { usersApi } from '../../api/endpoints';
+import { useAppSelector } from '../../hooks/useRedux';
+import { ROLES } from '../../config/rbac';
 import { DataTable } from '../common/DataTable';
 import { StatusBadge } from '../common/StatusBadge';
 import { SearchBar } from '../common/SearchBar';
@@ -14,15 +16,25 @@ import toast from 'react-hot-toast';
 const EvaluationsList: React.FC = () => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const { user } = useAppSelector((s) => s.auth);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
   const [search, setSearch] = useState('');
   const [showForm, setShowForm] = useState(false);
+  const [editingCommitteeId, setEditingCommitteeId] = useState<string | null>(null);
   const [formData, setFormData] = useState({ solicitation: '', chairperson: '', chairpersonName: '', secretary: '', secretaryName: '', members: [] as string[] });
+  const myEvaluationsOnly = user?.role === ROLES.EVALUATION_COMMITTEE_MEMBER || user?.role === ROLES.EVALUATION_COMMITTEE_CHAIR;
+  const manageCommitteeRoles: string[] = [
+    ROLES.PROCUREMENT_OFFICER,
+    ROLES.PROCUREMENT_MANAGER,
+    ROLES.DIRECTOR_PROCUREMENT,
+    ROLES.SYSTEM_ADMIN,
+  ];
+  const canManageCommittees = !!user?.role && manageCommitteeRoles.includes(user.role);
 
   const { data, isLoading } = useQuery({
-    queryKey: ['evaluation-committees', page, pageSize, search],
-    queryFn: () => evaluationsApi.listCommittees({ page, page_size: pageSize, search }),
+    queryKey: ['evaluation-committees', page, pageSize, search, myEvaluationsOnly],
+    queryFn: () => evaluationsApi.listCommittees({ page, page_size: pageSize, search, mine: myEvaluationsOnly ? true : undefined }),
   });
 
   const { data: solsData } = useQuery({
@@ -41,21 +53,51 @@ const EvaluationsList: React.FC = () => {
   const formMutation = useMutation({
     mutationFn: () => {
       const members = Array.from(new Set([...formData.members, formData.chairperson, formData.secretary].filter(Boolean)));
-      return evaluationsApi.formCommittee({
+      const payload = {
         solicitation: formData.solicitation,
         chairperson: formData.chairperson,
         secretary: formData.secretary,
         members,
-      } as any);
+      } as any;
+
+      return editingCommitteeId
+        ? evaluationsApi.updateCommittee(editingCommitteeId, payload)
+        : evaluationsApi.formCommittee(payload);
     },
     onSuccess: () => {
-      toast.success('Evaluation committee formed');
+      toast.success(editingCommitteeId ? 'Evaluation committee updated' : 'Evaluation committee formed');
       setShowForm(false);
+      setEditingCommitteeId(null);
       setFormData({ solicitation: '', chairperson: '', chairpersonName: '', secretary: '', secretaryName: '', members: [] });
       queryClient.invalidateQueries({ queryKey: ['evaluation-committees'] });
     },
-    onError: () => toast.error('Failed to form committee'),
+    onError: () => toast.error(editingCommitteeId ? 'Failed to update committee' : 'Failed to form committee'),
   });
+
+  const openCreateForm = () => {
+    setEditingCommitteeId(null);
+    setFormData({ solicitation: '', chairperson: '', chairpersonName: '', secretary: '', secretaryName: '', members: [] });
+    setShowForm(true);
+  };
+
+  const openEditForm = (row: any) => {
+    const committeeMembers = Array.isArray(row.members)
+      ? row.members.map((m: any) => (typeof m === 'string' ? m : m?.user || m?.id)).filter(Boolean)
+      : [];
+    const chairpersonId = row.chairperson || '';
+    const secretaryId = row.secretary || '';
+
+    setEditingCommitteeId(row.id);
+    setFormData({
+      solicitation: row.solicitation || '',
+      chairperson: chairpersonId,
+      chairpersonName: row.chairperson_name || '',
+      secretary: secretaryId,
+      secretaryName: row.secretary_name || '',
+      members: Array.from(new Set([...committeeMembers, chairpersonId, secretaryId].filter(Boolean))),
+    });
+    setShowForm(true);
+  };
 
   const columns = [
     { key: 'id', label: 'ID', render: (_: any, row: any) => (
@@ -67,24 +109,49 @@ const EvaluationsList: React.FC = () => {
     { key: 'secretary_name', label: 'Secretary' },
     { key: 'formed_date', label: 'Formed', render: (v: string) => v ? new Date(v).toLocaleDateString() : '-' },
     { key: 'status', label: 'Status', render: (v: string) => <StatusBadge status={v || 'active'} /> },
+    ...(canManageCommittees ? [{
+      key: 'actions',
+      label: 'Actions',
+      render: (_: any, row: any) => (
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            openEditForm(row);
+          }}
+          className="px-3 py-1.5 bg-white border border-gray-300 rounded-lg text-xs font-semibold text-gray-700 hover:bg-gray-50"
+        >
+          Edit
+        </button>
+      ),
+    }] : []),
   ];
 
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Evaluation Committees</h1>
-          <p className="text-sm text-gray-500 mt-1">Manage evaluation committees, COI declarations, and scoring</p>
+          <h1 className="text-2xl font-bold text-gray-900">
+            {myEvaluationsOnly ? 'My Evaluations' : 'Evaluation Committees'}
+          </h1>
+          <p className="text-sm text-gray-500 mt-1">
+            {myEvaluationsOnly
+              ? 'View only the committees you were assigned to'
+              : 'Manage evaluation committees, COI declarations, and scoring'}
+          </p>
         </div>
-        <button onClick={() => setShowForm(true)} className="px-4 py-2 bg-zammsa-green text-white rounded-xl text-sm font-bold">
-          Form Committee
-        </button>
+        {canManageCommittees && (
+          <button onClick={openCreateForm} className="px-4 py-2 bg-zammsa-green text-white rounded-xl text-sm font-bold">
+            Form Committee
+          </button>
+        )}
       </div>
 
-      {showForm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30" onClick={() => setShowForm(false)}>
+      {canManageCommittees && showForm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30" onClick={() => { setShowForm(false); setEditingCommitteeId(null); }}>
           <div className="bg-white rounded-2xl shadow-xl p-6 w-full max-w-lg mx-4" onClick={(e) => e.stopPropagation()}>
-            <h2 className="text-lg font-bold text-gray-900 mb-4">Form Evaluation Committee</h2>
+            <h2 className="text-lg font-bold text-gray-900 mb-4">
+              {editingCommitteeId ? 'Update Evaluation Committee' : 'Form Evaluation Committee'}
+            </h2>
             <div className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Solicitation</label>
@@ -139,10 +206,12 @@ const EvaluationsList: React.FC = () => {
               </div>
             </div>
             <div className="flex justify-end gap-3 mt-6">
-              <button onClick={() => setShowForm(false)} className="px-4 py-2 border border-gray-300 rounded-lg text-sm">Cancel</button>
+              <button onClick={() => { setShowForm(false); setEditingCommitteeId(null); }} className="px-4 py-2 border border-gray-300 rounded-lg text-sm">Cancel</button>
               <button onClick={() => formMutation.mutate()} disabled={!formData.solicitation || !formData.chairperson || !formData.secretary || formData.members.length < 3 || formMutation.isPending}
                 className="px-4 py-2 bg-zammsa-green text-white rounded-lg text-sm font-bold disabled:opacity-50">
-                {formMutation.isPending ? 'Creating...' : 'Create Committee'}
+                {formMutation.isPending
+                  ? (editingCommitteeId ? 'Updating...' : 'Creating...')
+                  : (editingCommitteeId ? 'Update Committee' : 'Create Committee')}
               </button>
             </div>
           </div>

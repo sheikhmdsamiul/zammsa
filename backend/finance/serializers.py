@@ -1,4 +1,6 @@
 from rest_framework import serializers
+from django.core.files.storage import default_storage
+from django.utils import timezone
 from .models import BudgetAllocation, BudgetEncumbrance, GoodsReceiptNote, Invoice, ThreeWayMatch, Payment, LetterOfCredit
 
 
@@ -53,7 +55,7 @@ class InvoiceListSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Invoice
-        fields = ('id', 'invoice_id', 'invoice_number', 'contract_number', 'supplier_name', 'amount', 'status', 'due_date', 'paid_date', 'submitted_at', 'approved_at', 'paid_at', 'created_at')
+        fields = ('id', 'invoice_id', 'invoice_number', 'contract_number', 'supplier_name', 'amount', 'status', 'approval_route', 'due_date', 'paid_date', 'submitted_at', 'approved_at', 'paid_at', 'created_at')
 
 
 class InvoiceSerializer(serializers.ModelSerializer):
@@ -68,6 +70,33 @@ class InvoiceSerializer(serializers.ModelSerializer):
         model = Invoice
         fields = '__all__'
         read_only_fields = ('invoice_id', 'created_at', 'updated_at', 'erp_posted_at', 'payment_advice_sent_at')
+
+    def validate(self, attrs):
+        contract = attrs.get('contract') or getattr(self.instance, 'contract', None)
+        supplier = attrs.get('supplier') or getattr(self.instance, 'supplier', None)
+        if contract and supplier and contract.supplier_id != supplier.supplier_id:
+            raise serializers.ValidationError('Invoice supplier must match the selected contract supplier.')
+        if contract and not supplier:
+            attrs['supplier'] = contract.supplier
+        if not attrs.get('invoice_number') and not getattr(self.instance, 'invoice_number', ''):
+            today = timezone.now().strftime('%Y%m%d')
+            attrs['invoice_number'] = f'INV-{today}-{Invoice.objects.count() + 1:05d}'
+        if contract and not attrs.get('po_number') and not getattr(self.instance, 'po_number', ''):
+            attrs['po_number'] = contract.contract_number
+        return attrs
+
+    def create(self, validated_data):
+        document = validated_data.get('document')
+        invoice = Invoice(**{k: v for k, v in validated_data.items() if k != 'document'})
+        if hasattr(document, 'name'):
+            invoice.document = default_storage.save(f'invoices/{document.name}', document)
+        elif document:
+            invoice.document = str(document)
+        invoice.status = validated_data.get('status') or 'submitted'
+        if invoice.status == 'submitted' and not invoice.submitted_at:
+            invoice.submitted_at = timezone.now()
+        invoice.save()
+        return invoice
 
     def get_suggested_approval_route(self, obj):
         return obj.determine_approval_route()

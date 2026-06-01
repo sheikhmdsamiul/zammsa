@@ -137,7 +137,7 @@ const SupplierPerformanceEval: React.FC = () => {
         <h2 className="text-lg font-semibold text-gray-900 mb-4">Comments</h2>
         <textarea value={comments} onChange={(e) => setComments(e.target.value)} rows={3}
           className="w-full border rounded-lg px-4 py-3 text-sm"
-          placeholder="Good overall performance. Delivery was 5 days late due to site access issues..." />
+          placeholder="Enter performance comments..." />
       </div>
 
       <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">

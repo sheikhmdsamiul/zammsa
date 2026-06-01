@@ -92,7 +92,7 @@ const BidOpeningCeremony: React.FC = () => {
   });
 
   const startOpeningMutation = useMutation({
-    mutationFn: () => bidsApi.startOpeningSession(solId!, [witness1, witness2]),
+    mutationFn: () => bidsApi.startOpeningSession(solId!, { witnesses: [witness1, witness2] }),
     onSuccess: (data) => {
       setOpeningId(data.opening_id);
       setOpeningStarted(true);
@@ -425,12 +425,17 @@ VALID BIDS OPENED: ${Object.values(openedBids).filter(b => b.opened).length}`}
 
               {allSigned && !sendMinutesMutation.isPending && (
                 <div className="flex justify-end mt-2">
-                  <button
-                    onClick={() => navigate(`/evaluations`)}
-                    className="px-6 py-2 bg-purple-600 text-white rounded-lg text-sm font-bold hover:bg-purple-700"
-                  >
-                    Proceed to Evaluation
-                  </button>
+                  <div className="text-right">
+                    <p className="text-xs text-gray-500 mb-2">
+                      Next step: Evaluations {'->'} Committee Formation
+                    </p>
+                    <button
+                      onClick={() => navigate(`/evaluations/committee/formation?solicitation=${solId}`)}
+                      className="px-6 py-2 bg-purple-600 text-white rounded-lg text-sm font-bold hover:bg-purple-700"
+                    >
+                      Go to Committee Formation
+                    </button>
+                  </div>
                 </div>
               )}
             </>

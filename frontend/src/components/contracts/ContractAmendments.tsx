@@ -19,9 +19,7 @@ const ContractAmendments: React.FC = () => {
   const [newDeliveryDate, setNewDeliveryDate] = useState('');
   const [submitted, setSubmitted] = useState(false);
 
-  const [amendments, setAmendments] = useState<any[]>([
-    { id: 'amd-1', amendment_number: 1, description: 'Time extension due to site renovation at Central Medical Stores Block C', reason: 'Supplier unable to access delivery site', value_change: 0, variation_percentage: 0, signed_by_supplier: true, signed_by_authority: true, approved_by: 'DOP', created_at: '2026-07-25' },
-  ]);
+  const [amendments, setAmendments] = useState<any[]>([]);
 
   const amendMutation = useMutation({
     mutationFn: () => contractsApi.amend(id!, { reason, description, financial_impact: hasFinancialChange ? financialImpact : 0, legal_opinion_ref: '' }),
@@ -50,7 +48,7 @@ const ContractAmendments: React.FC = () => {
             <h1 className="text-2xl font-bold text-gray-900">Contract Amendments</h1>
             <StatusBadge status="active" />
           </div>
-          <p className="text-sm text-gray-500 mt-1">CON-2026-LAB-11</p>
+          <p className="text-sm text-gray-500 mt-1">{id}</p>
         </div>
         {!showForm && (
           <button onClick={() => setShowForm(true)} className="px-4 py-2 bg-zammsa-green text-white rounded-lg text-sm font-bold">Request Amendment</button>
@@ -97,7 +95,7 @@ const ContractAmendments: React.FC = () => {
 
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Reason</label>
-              <input value={reason} onChange={(e) => setReason(e.target.value)} className="w-full border rounded-lg px-4 py-2 text-sm" placeholder="Supplier unable to access delivery site..." />
+              <input value={reason} onChange={(e) => setReason(e.target.value)} className="w-full border rounded-lg px-4 py-2 text-sm" placeholder="Enter reason for amendment..." />
             </div>
 
             <div>
@@ -124,11 +122,7 @@ const ContractAmendments: React.FC = () => {
             </div>
 
             <div className="p-4 bg-gray-50 rounded-lg text-sm">
-              <p className="font-medium text-gray-700">Variation Cap Check</p>
-              <p className="text-gray-500 mt-1">Original Value: K 1,155,000 | Previous: K 0 | This: K {hasFinancialChange ? financialImpact.toLocaleString() : '0'} | Cap: 25% (K288,750)</p>
-              {hasFinancialChange && financialImpact > 288750 && (
-                <p className="text-rose-600 font-medium mt-1">⚠ Exceeds variation cap of 25%</p>
-              )}
+              <p className="font-medium text-gray-700">Financial Impact: K {hasFinancialChange ? financialImpact.toLocaleString() : '0'}</p>
             </div>
 
             <div className="flex gap-3 justify-end">
