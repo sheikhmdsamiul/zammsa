@@ -32,7 +32,7 @@ const StandstillMonitor: React.FC = () => {
       queryClient.invalidateQueries({ queryKey: ['contract', id] });
       toast.success('Award notice published. Standstill period started.');
     },
-    onError: () => toast.error('Failed to publish award notice'),
+    onError: (err: any) => toast.error(err?.response?.data?.error || 'Failed to publish award notice'),
   });
 
   const fileAppealMutation = useMutation({
@@ -54,17 +54,29 @@ const StandstillMonitor: React.FC = () => {
   });
 
   if (isLoading) return <LoadingSpinner className="py-12" />;
-  if (!contract) return <p className="text-center text-gray-500 py-12">Contract not found</p>;
+  if (!contract) return (
+    <div className="max-w-4xl mx-auto py-12 text-center">
+      <DocumentTextIcon className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+      <p className="text-lg font-bold text-gray-500">Contract not found</p>
+      <p className="text-sm text-gray-400 mt-1">The contract you're looking for doesn't exist or has been removed.</p>
+    </div>
+  );
 
   const standstillStart = contract.award_notice_published_at
     ? new Date(contract.award_notice_published_at).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
-    : new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+    : '---';
 
   const standstillEnd = contract.waiting_period_end
     ? new Date(contract.waiting_period_end).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
-    : new Date(Date.now() + 10 * 24 * 60 * 60 * 1000).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+    : '---';
 
-  const appealLogged = false;
+  const waitingDays = contract.waiting_period_days || 10;
+
+  const standstillElapsedPct = contract.award_notice_published_at && contract.waiting_period_end
+    ? Math.min(100, Math.round(((Date.now() - new Date(contract.award_notice_published_at).getTime()) / (new Date(contract.waiting_period_end).getTime() - new Date(contract.award_notice_published_at).getTime())) * 100))
+    : 0;
+
+  const appealLogged = contract.appeal_pending;
   const standstillExpired = published && !appealLogged;
 
   return (
@@ -123,16 +135,16 @@ const StandstillMonitor: React.FC = () => {
               </div>
               <div className="p-4 bg-gray-50 rounded-xl text-center">
                 <p className="text-xs text-gray-500 font-medium">Elapsed</p>
-                <p className="text-sm font-bold text-gray-900 mt-1">In progress</p>
+                <p className="text-sm font-bold text-gray-900 mt-1">{standstillElapsedPct}%</p>
               </div>
               <div className="p-4 bg-gray-50 rounded-xl text-center">
                 <p className="text-xs text-gray-500 font-medium">Remaining</p>
-                <p className="text-sm font-bold text-gray-900 mt-1">10 working days</p>
+                <p className="text-sm font-bold text-gray-900 mt-1">{published ? `${waitingDays} working days` : '---'}</p>
               </div>
             </div>
 
             <div className="w-full bg-gray-200 rounded-full h-2 mb-6">
-              <div className="bg-zammsa-green h-2 rounded-full" style={{ width: '50%' }} />
+              <div className="bg-zammsa-green h-2 rounded-full transition-all" style={{ width: `${standstillElapsedPct}%` }} />
             </div>
 
             <div className="flex items-center justify-between p-4 bg-emerald-50 border border-emerald-200 rounded-lg">
@@ -148,10 +160,10 @@ const StandstillMonitor: React.FC = () => {
             <h2 className="text-lg font-semibold text-gray-900 mb-4">Notifications Sent</h2>
             <div className="space-y-3">
               {[
-                { label: 'Winner (Lusaka Reagents)', desc: 'Award notification sent', done: true },
-                { label: 'Losers (5 suppliers)', desc: 'Unsuccessful notifications sent', done: true },
-                { label: 'Public portal', desc: 'Award notice published', done: true },
-                { label: 'ZPPA e-GP', desc: 'Award notice published', done: true },
+                { label: `Winner (${contract.vendor_name})`, desc: 'Award notification sent', done: contract.award_notice_published },
+                { label: 'Unsuccessful bidders', desc: 'Notification status pending', done: false },
+                { label: 'ZAMMSA Public Portal', desc: contract.award_notice_published ? 'Award notice published' : 'Not yet published', done: contract.award_notice_published },
+                { label: 'ZPPA e-GP Portal', desc: contract.award_notice_published ? 'Award notice forwarded' : 'Not yet forwarded', done: contract.award_notice_published },
               ].map((n, i) => (
                 <div key={i} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
                   <div>

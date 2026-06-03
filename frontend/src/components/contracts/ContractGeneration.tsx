@@ -1,19 +1,22 @@
 import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { contractsApi } from '../../api/contracts';
 import { evaluationsApi } from '../../api/evaluations';
 import { solicitationsApi } from '../../api/solicitations';
 import { LoadingSpinner } from '../common/LoadingSpinner';
 import { StatusBadge } from '../common/StatusBadge';
+import { XCircleIcon } from '@heroicons/react/outline';
 import toast from 'react-hot-toast';
 import {
   DocumentTextIcon, CheckCircleIcon, CashIcon,
-  CalendarIcon,
+  CalendarIcon, InformationCircleIcon,
 } from '@heroicons/react/outline';
 
 const ContractGeneration: React.FC = () => {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const preselectedBerId = searchParams.get('ber_id');
 
   const [selectedSolicitation, setSelectedSolicitation] = useState('');
   const [selectedBidId, setSelectedBidId] = useState('');
@@ -22,15 +25,14 @@ const ContractGeneration: React.FC = () => {
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [paymentTerms, setPaymentTerms] = useState('net_30');
-  const [generating, setGenerating] = useState(false);
   const [generated, setGenerated] = useState(false);
 
-  const { data: solsData, isLoading: solsLoading } = useQuery({
+  const { data: solsData, isLoading: solsLoading, error: solsError } = useQuery({
     queryKey: ['solicitations-awarded'],
-    queryFn: () => solicitationsApi.list({ status: 'evaluated', page_size: 50 }),
+    queryFn: () => solicitationsApi.list({ status: 'awarded', page_size: 50 }),
   });
 
-  const { data: passedBidsData } = useQuery({
+  const { data: passedBidsData, isLoading: bidsLoading, error: bidsError } = useQuery({
     queryKey: ['passed-bids', selectedSolicitation],
     queryFn: () => evaluationsApi.listPassedTechBids(selectedSolicitation),
     enabled: !!selectedSolicitation,
@@ -43,13 +45,14 @@ const ContractGeneration: React.FC = () => {
     mutationFn: () => contractsApi.create({
       contract_number: contractNumber,
       solicitation: selectedSolicitation,
-      vendor: (selectedBid as any)?.vendor || (selectedBid as any)?.supplier || '',
-      vendor_name: selectedBid?.bidder_name || (selectedBid as any)?.vendor_name || '',
+      winning_bid: (selectedBid as any)?.bid_id || selectedBidId,
+      supplier: (selectedBid as any)?.vendor?.[0]?.id || (selectedBid as any)?.vendor_id || (selectedBid as any)?.supplier || '',
+      title: `Contract for ${selectedBid?.bidder_name || (selectedBid as any)?.vendor_name || ''}`,
       value: contractValue,
       start_date: startDate,
       end_date: endDate,
-      payment_terms: paymentTerms,
       status: 'draft',
+      ber: preselectedBerId || undefined,
     } as any),
     onSuccess: (data: any) => {
       setGenerated(true);
@@ -58,14 +61,12 @@ const ContractGeneration: React.FC = () => {
     onError: (err: any) => toast.error(err?.response?.data?.error || 'Failed to generate contract'),
   });
 
-  const handleGenerate = async () => {
+  const handleGenerate = () => {
     if (!selectedSolicitation || !selectedBidId || !contractNumber || !contractValue || !startDate || !endDate) {
       toast.error('All required fields must be filled');
       return;
     }
-    setGenerating(true);
-    await generateMutation.mutateAsync();
-    setGenerating(false);
+    generateMutation.mutate();
   };
 
   if (generated) {
@@ -101,20 +102,33 @@ const ContractGeneration: React.FC = () => {
         </div>
       </div>
 
-      {solsLoading ? <LoadingSpinner className="py-12" /> : (
+      {solsLoading ? <LoadingSpinner className="py-12" /> : solsError ? (
+        <div className="text-center py-12">
+          <XCircleIcon className="w-12 h-12 text-rose-400 mx-auto mb-4" />
+          <p className="text-lg font-bold text-rose-600">Failed to load awarded solicitations</p>
+          <p className="text-sm text-gray-400 mt-1">Please try refreshing the page</p>
+        </div>
+      ) : (solsData?.results || []).length === 0 ? (
+        <div className="text-center py-12">
+          <InformationCircleIcon className="w-12 h-12 text-amber-400 mx-auto mb-4" />
+          <p className="text-lg font-bold text-amber-700">No awarded solicitations found</p>
+          <p className="text-sm text-gray-400 mt-1">Complete the evaluation and award process before generating a contract.</p>
+        </div>
+      ) : (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <div className="lg:col-span-2 space-y-6">
             <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
               <h2 className="text-lg font-semibold text-gray-900 mb-6">
                 <DocumentTextIcon className="w-5 h-5 inline mr-2 text-zammsa-green" />
                 Contract Details
+                {preselectedBerId && <span className="ml-2 text-xs font-normal text-gray-400">(from BER)</span>}
               </h2>
               <div className="space-y-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Solicitation</label>
                   <select value={selectedSolicitation} onChange={(e) => { setSelectedSolicitation(e.target.value); setSelectedBidId(''); }}
                     className="w-full border border-gray-200 rounded-lg px-4 py-2.5 text-sm">
-                    <option value="">Select evaluated solicitation...</option>
+                    <option value="">Select awarded solicitation...</option>
                     {(solsData?.results || []).map((sol: any) => (
                       <option key={sol.id} value={sol.id}>{sol.sol_number || sol.title || sol.id}</option>
                     ))}
@@ -123,21 +137,27 @@ const ContractGeneration: React.FC = () => {
 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Awarded Bidder</label>
-                  <select value={selectedBidId} onChange={(e) => {
-                    setSelectedBidId(e.target.value);
-                    const bid = passedBids.find((b: any) => (b.bid_id || b.id) === e.target.value);
-                    if (bid) {
-                      setContractValue(bid.evaluated_price || (bid as any).original_price || 0);
-                    }
-                  }} disabled={!selectedSolicitation}
-                    className="w-full border border-gray-200 rounded-lg px-4 py-2.5 text-sm">
-                    <option value="">Select winning bidder...</option>
-                    {passedBids.map((b) => (
-                      <option key={b.bid_id || (b as any).id} value={b.bid_id || (b as any).id}>
-                        {b.bidder_name || (b as any).vendor_name} — K {(b.evaluated_price || (b as any).original_price || 0).toLocaleString()}
-                      </option>
-                    ))}
-                  </select>
+                  {bidsLoading ? (
+                    <div className="w-full border border-gray-200 rounded-lg px-4 py-2.5 text-sm text-gray-400">Loading bidders...</div>
+                  ) : bidsError ? (
+                    <div className="w-full border border-rose-200 rounded-lg px-4 py-2.5 text-sm text-rose-500">Failed to load bidders</div>
+                  ) : (
+                    <select value={selectedBidId} onChange={(e) => {
+                      setSelectedBidId(e.target.value);
+                      const bid = passedBids.find((b: any) => (b.bid_id || b.id) === e.target.value);
+                      if (bid) {
+                        setContractValue(bid.evaluated_price || (bid as any).original_price || 0);
+                      }
+                    }} disabled={!selectedSolicitation}
+                      className="w-full border border-gray-200 rounded-lg px-4 py-2.5 text-sm">
+                      <option value="">Select winning bidder...</option>
+                      {passedBids.map((b) => (
+                        <option key={b.bid_id || (b as any).id} value={b.bid_id || (b as any).id}>
+                          {b.bidder_name || (b as any).vendor_name} — K {(b.evaluated_price || (b as any).original_price || 0).toLocaleString()}
+                        </option>
+                      ))}
+                    </select>
+                  )}
                 </div>
 
                 <div>
@@ -192,9 +212,9 @@ const ContractGeneration: React.FC = () => {
                   <button onClick={() => navigate('/contracts')} className="px-4 py-2.5 border border-gray-300 rounded-lg text-sm">
                     Cancel
                   </button>
-                  <button onClick={handleGenerate} disabled={generating || !selectedSolicitation || !selectedBidId || !contractNumber}
+                  <button onClick={handleGenerate} disabled={generateMutation.isPending || !selectedSolicitation || !selectedBidId || !contractNumber}
                     className="px-6 py-2.5 bg-zammsa-green text-white rounded-lg text-sm font-bold disabled:opacity-50">
-                    {generating ? 'Generating...' : 'Generate Contract'}
+                    {generateMutation.isPending ? 'Generating...' : 'Generate Contract'}
                   </button>
                 </div>
               </div>

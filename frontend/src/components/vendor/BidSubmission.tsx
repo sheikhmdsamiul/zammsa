@@ -66,7 +66,7 @@ const BidSubmission: React.FC = () => {
     enabled: !!id,
   });
 
-  const { data: profile } = useQuery({
+  const { data: profile, isLoading: profileLoading } = useQuery({
     queryKey: ['vendor-profile-light'],
     queryFn: () => vendorApi.profile.get(),
   });
@@ -115,7 +115,7 @@ const BidSubmission: React.FC = () => {
   const addendaList = tender?.addenda || [];
   const hasAddenda = addendaList.length > 0;
   const submissionType = tender?.submission_format === 'two' ? 'Two-Envelope System' : 'Single Envelope System';
-  const isGoods = true;
+  const isGoods = tender?.type === 'rfb' || tender?.type === 'rfq';
   const zamraRequired = isGoods;
   const bidSecurityRequired = tender?.bid_security_required !== false;
 
@@ -157,7 +157,7 @@ const BidSubmission: React.FC = () => {
       form.append('bid_price', String(parsedBidPrice));
       form.append('security_amount', String(Math.round(securityRequiredAmount)));
       form.append('security_type', tender?.bid_security_type || 'bank_guarantee');
-      form.append('validity_period_days', String(90));
+      form.append('validity_period_days', String(tender?.bid_validity_days || 90));
 
       const lineItems = tender.items.map((item: TenderItem, i: number) => ({
         description: item.description,
@@ -264,11 +264,12 @@ const BidSubmission: React.FC = () => {
     );
   };
 
-  if (isLoading) return <LoadingSpinner size="lg" className="py-20" />;
+  if (isLoading || profileLoading) return <LoadingSpinner size="lg" className="py-20" />;
   if (!tender) return <div className="text-center py-20 text-gray-400">Tender not found.</div>;
+  if (!profile) return <div className="text-center py-20 text-gray-400">Could not load vendor profile. Please try again.</div>;
 
   if (submitted && receipt) {
-    const bidRef = `BID-${new Date().getFullYear()}-${(tender.tender_number || 'XXX').split('-').slice(1).join('-')}-${String(Math.floor(Math.random() * 999)).padStart(3, '0')}`;
+    const bidRef = receipt.submission_id || receipt.bid_id || `BID-${new Date().getFullYear()}-${(tender.tender_number || 'XXX').split('-').slice(1).join('-')}-XXX`;
     return (
       <div className="max-w-3xl mx-auto py-16">
         <div className="bg-white rounded-3xl border border-gray-200 shadow-sm p-12 text-center">
@@ -372,9 +373,9 @@ const BidSubmission: React.FC = () => {
                 ['Solicitation status', `Open (closes in ${timeRemaining})`, true],
                 ['Your account status', 'Active', true],
                 ['ZPPA Debarment', 'Not debarred', true],
-                ['ZRA Tax Clearance', `Valid until 31 Dec ${new Date().getFullYear()}`, true],
+                ['ZRA Tax Clearance', (profile as any)?.zra_expiry ? `Valid until ${fmtDate((profile as any).zra_expiry)}` : 'Verified', true],
                 ['PACRA Registration', `Active — ${profile?.company_name || profile?.contact_person || 'Your Company'}`, true],
-                ['CEEC Certificate', `${ceecInfo.label} — valid until 30 Jun ${new Date().getFullYear() + 1}`, true],
+                ['CEEC Certificate', `${ceecInfo.label}${(profile as any)?.ceec_expiry ? ` — valid until ${fmtDate((profile as any).ceec_expiry)}` : ''}`, true],
               ].map(([label, value, pass]) => (
                 <div key={label as string} className="flex items-start gap-3 p-4 bg-gray-50 rounded-2xl border border-gray-100">
                   {pass ? (

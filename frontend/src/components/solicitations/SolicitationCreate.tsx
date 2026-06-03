@@ -117,7 +117,7 @@ const SolicitationCreate: React.FC = () => {
   const [channels, setChannels] = useState<string[]>(['zammsa', 'zppa', 'email']);
   const [confirmed, setConfirmed] = useState(false);
 
-  const { data: reqsData } = useQuery({
+  const { data: reqsData, isLoading: reqsLoading, error: reqsError } = useQuery({
     queryKey: ['requisitions', 'approved-cpp'],
     queryFn: () => requisitionsApi.list({ page_size: 200, status: 'approved', has_approved_cpp: true }),
   });
@@ -148,6 +148,9 @@ const SolicitationCreate: React.FC = () => {
       setSuccess(true);
       setCreatedId(res.id || res.solicitation_id || '');
     },
+    onError: (err: any) => {
+      toast.error(err?.response?.data?.error || err?.message || 'Failed to create solicitation');
+    },
   });
 
   const handleSubmit = () => {
@@ -157,7 +160,9 @@ const SolicitationCreate: React.FC = () => {
     if (!closingDate) { toast.error('Closing date is required'); return; }
     if (!weightValid) { toast.error('Technical criteria weights must total 100%'); return; }
     if (mandatoryCriteria.length === 0) { toast.error('At least one mandatory criterion is required'); return; }
+    if (mandatoryCriteria.some(c => !c.name.trim())) { toast.error('All mandatory criteria must have a name'); return; }
     if (technicalCriteria.length === 0) { toast.error('At least one technical criterion is required'); return; }
+    if (technicalCriteria.some(c => !c.name.trim())) { toast.error('All technical criteria must have a name'); return; }
     if (!confirmed) { toast.error('Please confirm the submission declaration'); return; }
 
     const solType = template === 'itb' ? 'rfb' : template === 'rfp' ? 'rfp' : 'rfq';
@@ -211,8 +216,20 @@ const SolicitationCreate: React.FC = () => {
       if (!requisition) { toast.error('Select a linked requisition'); return; }
       if (!title.trim()) { toast.error('Title is required'); return; }
       if (!closingDate) { toast.error('Closing date is required'); return; }
+      if (issueDate && closingDate && new Date(closingDate) <= new Date(issueDate)) { toast.error('Closing date must be after issue date'); return; }
+      if (openingDate && new Date(openingDate) < new Date(closingDate)) { toast.error('Opening date must be after closing date'); return; }
     }
-    if (currentStep === 2 && !weightValid) { toast.error('Technical criteria weights must total 100%'); return; }
+    if (currentStep === 2) {
+      if (mandatoryCriteria.some(c => !c.name.trim())) { toast.error('All mandatory criteria must have a name'); return; }
+      if (technicalCriteria.some(c => !c.name.trim())) { toast.error('All technical criteria must have a name'); return; }
+      if (!weightValid) { toast.error('Technical criteria weights must total 100%'); return; }
+    }
+    if (currentStep === 3) {
+      if (!contactPerson.trim()) { toast.error('Contact person is required'); return; }
+      if (!contactPhone.trim()) { toast.error('Contact phone is required'); return; }
+      if (!contactEmail.trim()) { toast.error('Contact email is required'); return; }
+    }
+    if (currentStep === 4 && channels.length === 0) { toast.error('Select at least one publication channel'); return; }
     setCurrentStep(s => Math.min(s + 1, SOL_STEPS.length - 1));
   };
 
@@ -345,12 +362,12 @@ const SolicitationCreate: React.FC = () => {
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                 <div className="p-4 bg-gray-50 rounded-2xl">
                   <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">CPP</p>
-                  <p className="text-sm font-bold text-gray-900">{(selectedReq as any)?.cpp_number || 'CPP-2026-LAB-07'}</p>
+                  <p className="text-sm font-bold text-gray-900">{(selectedReq as any)?.cpp_number || '---'}</p>
                   <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-md mt-1 inline-block">Approved — Baseline Locked</span>
                 </div>
                 <div className="p-4 bg-gray-50 rounded-2xl">
                   <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Method</p>
-                  <p className="text-sm font-bold text-gray-900">Open National Bidding</p>
+                  <p className="text-sm font-bold text-gray-900">{(selectedReq as any)?.recommended_method || (selectedReq as any)?.procurement_method || '---'}</p>
                 </div>
                 <div className="p-4 bg-gray-50 rounded-2xl">
                   <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Value</p>
@@ -358,8 +375,27 @@ const SolicitationCreate: React.FC = () => {
                 </div>
                 <div className="p-4 bg-gray-50 rounded-2xl">
                   <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Type</p>
-                  <p className="text-sm font-bold text-gray-900">Goods</p>
+                  <p className="text-sm font-bold text-gray-900">{(selectedReq as any)?.procurement_type || (selectedReq as any)?.commodity_category || '---'}</p>
                 </div>
+              </div>
+            ) : reqsLoading ? (
+              <div className="p-6 text-center">
+                <div className="animate-pulse flex justify-center">
+                  <div className="h-4 w-48 bg-gray-200 rounded"></div>
+                </div>
+                <p className="text-sm text-gray-400 mt-2">Loading approved requisitions...</p>
+              </div>
+            ) : reqsError ? (
+              <div className="p-6 text-center">
+                <XCircleIcon className="w-8 h-8 text-rose-400 mx-auto mb-2" />
+                <p className="text-sm font-bold text-rose-600">Failed to load requisitions</p>
+                <p className="text-xs text-gray-400 mt-1">Please try refreshing the page</p>
+              </div>
+            ) : requisitions.length === 0 ? (
+              <div className="p-6 text-center">
+                <InformationCircleIcon className="w-8 h-8 text-amber-400 mx-auto mb-2" />
+                <p className="text-sm font-bold text-amber-700">No approved requisitions with CPP found</p>
+                <p className="text-xs text-gray-400 mt-1">Create and approve a requisition with a Contract Procurement Plan first.</p>
               </div>
             ) : (
               <div>
@@ -433,7 +469,7 @@ const SolicitationCreate: React.FC = () => {
               <div>
                 <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5 block ml-1">Solicitation Number</label>
                 <div className="bg-gray-50 border border-gray-200 rounded-2xl px-5 py-4 text-sm font-bold text-gray-500">
-                  {`SOL-${new Date().getFullYear()}-${department?.slice(0, 3).toUpperCase() || 'XXX'}-${String(Math.floor(Math.random() * 99)).padStart(2, '0')}`}  (auto-generated)
+                  SOL-{new Date().getFullYear()}-{department?.slice(0, 3).toUpperCase() || 'XXX'}-XX  (auto-generated on submit)
                 </div>
               </div>
               <div>
@@ -442,7 +478,7 @@ const SolicitationCreate: React.FC = () => {
               </div>
               <div>
                 <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5 block ml-1">Description *</label>
-                <textarea rows={3} value={description} onChange={(e) => setDescription(e.target.value)} className="w-full bg-white border border-gray-200 rounded-2xl px-5 py-4 text-sm font-bold text-gray-700 outline-none focus:ring-4 focus:ring-zammsa-green/5" />
+                <textarea rows={3} value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Detailed description of goods, works, or services" className="w-full bg-white border border-gray-200 rounded-2xl px-5 py-4 text-sm font-bold text-gray-700 outline-none focus:ring-4 focus:ring-zammsa-green/5" />
               </div>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div>
@@ -647,7 +683,7 @@ const SolicitationCreate: React.FC = () => {
             <div className={`mt-4 p-4 rounded-2xl border ${weightValid ? 'bg-emerald-50 border-emerald-200' : 'bg-rose-50 border-rose-200'}`}>
               <p className={`text-sm font-bold ${weightValid ? 'text-emerald-700' : 'text-rose-700'} flex items-center gap-1`}>
                   {weightValid ? <CheckCircleIcon className="w-4 h-4" /> : <XCircleIcon className="w-4 h-4" />}
-                  Total Weight: {technicalCriteria.map(c => c.weight).join('% + ')}% = {totalWeight}%
+                  Total Weight: {technicalCriteria.map(c => `${c.weight}%`).join(' + ')} = {totalWeight}%
                 </p>
             </div>
           </div>
@@ -771,13 +807,21 @@ const SolicitationCreate: React.FC = () => {
 
             <div className="mb-6">
               <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-3">Specification Documents (auto-linked from Requisition)</p>
-              <div className="space-y-2">
-                <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-xl">
-                  <CheckCircleIcon className="w-4 h-4 text-emerald-500" />
-                  <span className="text-sm font-semibold text-gray-700">LabSpec_Reagents_2026.pdf</span>
-                  <span className="text-[10px] font-bold text-gray-400 ml-auto">from REQ-{selectedReq?.req_number || '---'}</span>
+              {selectedReq?.specifications && (selectedReq as any).specifications.length > 0 ? (
+                <div className="space-y-2">
+                  {(selectedReq as any).specifications.map((spec: any, i: number) => (
+                    <div key={i} className="flex items-center gap-3 p-3 bg-gray-50 rounded-xl">
+                      <CheckCircleIcon className="w-4 h-4 text-emerald-500" />
+                      <span className="text-sm font-semibold text-gray-700">{spec.filename || spec.name || `Specification ${i + 1}`}</span>
+                      <span className="text-[10px] font-bold text-gray-400 ml-auto">from REQ-{selectedReq?.req_number || '---'}</span>
+                    </div>
+                  ))}
                 </div>
-              </div>
+              ) : (
+                <div className="p-4 bg-gray-50 rounded-xl">
+                  <p className="text-sm text-gray-400 italic">No specification documents attached to the linked requisition.</p>
+                </div>
+              )}
             </div>
 
             <div className="mb-6">
@@ -795,15 +839,27 @@ const SolicitationCreate: React.FC = () => {
                   onChange={(e) => {
                     const fileList = e.target.files;
                     if (!fileList) return;
-                    const newFiles: UploadFile[] = Array.from(fileList).map(file => ({
-                      id: `${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-                      file,
-                      name: file.name,
-                      size: file.size < 1024 ? `${file.size}B` :
-                            file.size < 1024 * 1024 ? `${(file.size / 1024).toFixed(0)}KB` :
-                            `${(file.size / (1024 * 1024)).toFixed(1)}MB`,
-                    }));
-                    setUploadFiles(prev => [...prev, ...newFiles]);
+                    const maxBytes = 50 * 1024 * 1024;
+                    const oversized: string[] = [];
+                    const valid: UploadFile[] = [];
+                    Array.from(fileList).forEach(file => {
+                      if (file.size > maxBytes) {
+                        oversized.push(file.name);
+                      } else {
+                        valid.push({
+                          id: `${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+                          file,
+                          name: file.name,
+                          size: file.size < 1024 ? `${file.size}B` :
+                                file.size < 1024 * 1024 ? `${(file.size / 1024).toFixed(0)}KB` :
+                                `${(file.size / (1024 * 1024)).toFixed(1)}MB`,
+                        });
+                      }
+                    });
+                    if (oversized.length > 0) {
+                      toast.error(`${oversized.join(', ')} exceed${oversized.length === 1 ? 's' : ''} the 50MB limit`);
+                    }
+                    setUploadFiles(prev => [...prev, ...valid]);
                     e.target.value = '';
                   }}
                 />
@@ -880,7 +936,7 @@ const SolicitationCreate: React.FC = () => {
               {[
                 `Template: ${template === 'itb' ? 'ITB (Goods, Single Envelope)' : template === 'rfp' ? 'RFP (Consulting, Two Envelope)' : 'RFQ (Quotations)'}`,
                 `Title and description provided`,
-                `Linked to approved CPP: ${(selectedReq as any)?.cpp_number || 'CPP-2026-LAB-07'}`,
+                `Linked to approved CPP: ${(selectedReq as any)?.cpp_number || '---'}`,
                 `Issue date: ${fmtDate(issueDate)}`,
                 `Closing: ${fmtDate(closingDate)} — ${solicitationPeriodDays} days (ONB minimum met)`,
                 `Opening: ${fmtDate(openingDate)} ${openingHour}:${openingMinute} — after closing`,
@@ -906,13 +962,13 @@ const SolicitationCreate: React.FC = () => {
             <h2 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-6">Solicitation Summary</h2>
             <div className="grid grid-cols-2 gap-4">
               {[
-                ['Reference', `SOL-${new Date().getFullYear()}-${department?.slice(0, 3).toUpperCase() || 'XXX'}-${String(Math.floor(Math.random() * 99)).padStart(2, '0')}`],
+                ['Reference', `SOL-${new Date().getFullYear()}-${department?.slice(0, 3).toUpperCase() || 'XXX'}-XX`],
                 ['Title', title],
                 ['Method', 'Open National Bidding'],
                 ['Value', `K ${estimatedValue.toLocaleString()}`],
                 ['Closing', `${fmtDate(closingDate)} ${closingHour}:${closingMinute} CAT`],
                 ['Opening', `${fmtDate(openingDate)} ${openingHour}:${openingMinute} CAT`],
-                ['Suppliers', `${requisitions.length} will be notified`],
+                ['Suppliers', 'Registered suppliers in category will be notified'],
               ].map(([label, value]) => (
                 <div key={label} className="p-4 bg-gray-50 rounded-2xl">
                   <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">{label}</p>
