@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
@@ -46,7 +46,6 @@ const BidSubmission: React.FC = () => {
 
   const [addendaAcknowledged, setAddendaAcknowledged] = useState<Set<string>>(new Set());
   const [declarationAccurate, setDeclarationAccurate] = useState(false);
-  const [bidPrice, setBidPrice] = useState('');
 
   const [files, setFiles] = useState<Record<string, File | null>>({
     technical: null,
@@ -57,6 +56,9 @@ const BidSubmission: React.FC = () => {
     boq: null,
     supporting: null,
   });
+
+  const [itemPrices, setItemPrices] = useState<Record<number, number>>({});
+  const [bidPrice, setBidPrice] = useState('');
 
   const { data: tender, isLoading } = useQuery({
     queryKey: ['vendor-open-tender', id],
@@ -72,7 +74,21 @@ const BidSubmission: React.FC = () => {
   const ceecCategory = (profile?.ceec_category || 'non_citizen') as string;
   const ceecInfo = ceecPreferenceMap[ceecCategory] || ceecPreferenceMap.non_citizen;
 
+  useEffect(() => {
+    if (tender?.items) {
+      const initial: Record<number, number> = {};
+      tender.items.forEach((item: TenderItem, i: number) => { initial[i] = item.unit_price; });
+      setItemPrices(initial);
+    }
+  }, [tender]);
+
+  const lineItemTotal = useMemo(() => {
+    if (!tender?.items) return 0;
+    return tender.items.reduce((sum: number, item: TenderItem, i: number) => sum + (itemPrices[i] ?? item.unit_price) * item.quantity, 0);
+  }, [tender, itemPrices]);
+
   const parsedBidPrice = Number((bidPrice || '0').replace(/,/g, '')) || 0;
+
   const evaluatedPrice = useMemo(() => {
     if (!parsedBidPrice || !ceecInfo.margin) return parsedBidPrice;
     return parsedBidPrice * (1 - ceecInfo.margin / 100);
@@ -117,11 +133,12 @@ const BidSubmission: React.FC = () => {
   };
 
   const saveDraft = () => {
-    localStorage.setItem(`bid-draft-${id}`, JSON.stringify({ bidPrice }));
+    localStorage.setItem(`bid-draft-${id}`, JSON.stringify({ bidPrice, itemPrices }));
     toast.success('Draft saved locally');
   };
 
   const submitBid = async () => {
+    if (!tender) return;
     if (!canSubmit) {
       toast.error('Please complete all mandatory fields before submitting');
       return;
@@ -141,6 +158,15 @@ const BidSubmission: React.FC = () => {
       form.append('security_amount', String(Math.round(securityRequiredAmount)));
       form.append('security_type', tender?.bid_security_type || 'bank_guarantee');
       form.append('validity_period_days', String(90));
+
+      const lineItems = tender.items.map((item: TenderItem, i: number) => ({
+        description: item.description,
+        quantity: item.quantity,
+        unit: item.unit,
+        unit_price: itemPrices[i] ?? item.unit_price,
+        total_price: (itemPrices[i] ?? item.unit_price) * item.quantity,
+      }));
+      form.append('line_items', JSON.stringify(lineItems));
 
       const res = await vendorApi.bids.submitBid(id!, form);
       setReceipt(res);
@@ -166,7 +192,7 @@ const BidSubmission: React.FC = () => {
       return;
     }
     if (currentStep === 2 && parsedBidPrice <= 0) {
-      toast.error('Enter a valid bid price');
+      toast.error('Enter a valid total bid price');
       return;
     }
     setCurrentStep(s => Math.min(s + 1, BID_STEPS.length - 1));
@@ -258,7 +284,7 @@ const BidSubmission: React.FC = () => {
               <div className="flex justify-between"><span className="text-gray-500">Submitted</span><span className="font-bold">{receipt.submitted_at ? fmtDateTime(receipt.submitted_at) : fmtDateTime(new Date())}</span></div>
               <div className="flex justify-between"><span className="text-gray-500">Solicitation</span><span className="font-bold">{tender.tender_number}</span></div>
               <div className="flex justify-between"><span className="text-gray-500">Supplier</span><span className="font-bold">{profile?.company_name || profile?.contact_person || '---'}</span></div>
-              <div className="flex justify-between"><span className="text-gray-500">Bid Price</span><span className="font-bold">K {parsedBidPrice.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span></div>
+                <div className="flex justify-between"><span className="text-gray-500">Bid Price</span><span className="font-bold">K {parsedBidPrice.toLocaleString()}</span></div>
               <div className="flex justify-between"><span className="text-gray-500">Documents</span><span className="font-bold">{Object.values(files).filter(Boolean).length} files</span></div>
               <div className="flex justify-between"><span className="text-gray-500">Status</span><span className="font-bold flex items-center gap-1"><LockClosedIcon className="w-4 h-4" /> Sealed — awaiting opening</span></div>
             </div>
@@ -517,7 +543,8 @@ const BidSubmission: React.FC = () => {
                 </thead>
                 <tbody className="divide-y divide-gray-100">
                   {tender.items.map((row: TenderItem, i: number) => {
-                    const total = row.quantity * row.unit_price;
+                    const unitPrice = itemPrices[i] ?? row.unit_price;
+                    const total = row.quantity * unitPrice;
                     return (
                       <tr key={i} className="hover:bg-gray-50">
                         <td className="px-5 py-4 text-sm font-semibold text-gray-800">{row.description}</td>
@@ -527,18 +554,20 @@ const BidSubmission: React.FC = () => {
                           <input
                             type="number"
                             step="0.01"
-                            defaultValue={row.unit_price}
+                            min="0"
+                            value={unitPrice}
+                            onChange={(e) => setItemPrices(prev => ({ ...prev, [i]: parseFloat(e.target.value) || 0 }))}
                             className="w-full text-right text-sm font-bold text-gray-700 bg-white border border-gray-200 rounded-xl px-3 py-2 outline-none focus:ring-2 focus:ring-zammsa-green/20"
                           />
                         </td>
-                        <td className="px-5 py-4 text-right text-sm font-bold text-gray-900">{total.toLocaleString()}</td>
+                        <td className="px-5 py-4 text-right text-sm font-bold text-gray-900">{total.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
                       </tr>
                     );
                   })}
                   <tr className="bg-gray-50 font-bold">
                     <td colSpan={4} className="px-5 py-4 text-right text-sm text-gray-600">TOTAL</td>
                     <td className="px-5 py-4 text-right text-sm text-gray-900">
-                      {tender.items.reduce((sum: number, row: TenderItem) => sum + row.quantity * row.unit_price, 0).toLocaleString()}
+                      {lineItemTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}
                     </td>
                   </tr>
                 </tbody>
@@ -551,19 +580,20 @@ const BidSubmission: React.FC = () => {
                 <div className="flex items-center gap-3">
                   <span className="text-lg font-bold text-gray-400">K</span>
                   <input
+                    type="text"
+                    inputMode="decimal"
                     value={bidPrice}
-                    onChange={(e) => setBidPrice(e.target.value)}
-                    placeholder={tender.items.reduce((sum: number, row: TenderItem) => sum + row.quantity * row.unit_price, 0).toLocaleString()}
-                    className="w-64 bg-white border border-gray-200 rounded-2xl px-5 py-4 text-lg font-bold text-gray-700 outline-none focus:ring-4 focus:ring-zammsa-green/5"
+                    onChange={(e) => setBidPrice(e.target.value.replace(/[^0-9,.]/g, ''))}
+                    placeholder="Enter total bid price"
+                    className="w-64 bg-white border border-gray-200 rounded-2xl px-5 py-4 text-lg font-bold text-gray-700 outline-none focus:ring-2 focus:ring-zammsa-green/20 focus:border-zammsa-green/40 transition-all"
                   />
-                  <span className="text-sm font-bold text-gray-400">(auto-calculated)</span>
                 </div>
               </div>
 
               <div className="p-5 bg-gray-50 border border-gray-200 rounded-2xl">
                 <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Bid Security Amount Confirmed</p>
                 <p className="text-sm font-bold text-gray-900">
-                  2% of K{parsedBidPrice.toLocaleString()} = K{Math.round(securityRequiredAmount).toLocaleString()}
+                  {(tender?.bid_security_rate || 2)}% of K{parsedBidPrice.toLocaleString()} = K{Math.round(securityRequiredAmount).toLocaleString()}
                 </p>
                 {files.security && (
                   <p className="text-[11px] text-emerald-600 mt-1 flex items-center gap-1">
@@ -587,11 +617,11 @@ const BidSubmission: React.FC = () => {
               </div>
               <div className="p-5 bg-gray-50 rounded-2xl">
                 <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Your Bid Price</p>
-                <p className="text-sm font-bold text-gray-900 mt-1">K {parsedBidPrice.toLocaleString(undefined, { minimumFractionDigits: 2 })}</p>
+                <p className="text-sm font-bold text-gray-900 mt-1">K {parsedBidPrice.toLocaleString()}</p>
               </div>
               <div className="p-5 bg-gray-50 rounded-2xl border-2 border-emerald-200">
                 <p className="text-[10px] font-black text-emerald-600 uppercase tracking-widest">Evaluated Price (for ranking)</p>
-                <p className="text-sm font-bold text-emerald-700 mt-1">K {evaluatedPrice.toLocaleString(undefined, { minimumFractionDigits: 2 })} (K{parsedBidPrice.toLocaleString()} \u00d7 {(100 - ceecInfo.margin) / 100})</p>
+                <p className="text-sm font-bold text-emerald-700 mt-1">K {evaluatedPrice.toLocaleString()} (K{parsedBidPrice.toLocaleString()} \u00d7 {(100 - ceecInfo.margin) / 100})</p>
               </div>
             </div>
             <p className="text-[11px] text-gray-400 mt-3 flex items-center gap-1"><InformationCircleIcon className="w-3.5 h-3.5" /> Evaluated price is used ONLY for ranking during evaluation. If awarded, your CONTRACT price = K{parsedBidPrice.toLocaleString()} (actual bid).</p>
@@ -608,7 +638,7 @@ const BidSubmission: React.FC = () => {
               {[
                 ['Solicitation', tender.tender_number],
                 ['Supplier', profile?.company_name || profile?.contact_person || '---'],
-                ['Total Bid Price', `K ${parsedBidPrice.toLocaleString(undefined, { minimumFractionDigits: 2 })}`],
+                ['Total Bid Price', `K ${parsedBidPrice.toLocaleString()}`],
                 ['Bid Security', `K ${Math.round(securityRequiredAmount).toLocaleString()} — ${files.security?.name || 'Bank Guarantee'}`],
                 ['CEEC Status', `${ceecInfo.label} (${ceecInfo.margin}% preference)`],
                 ['Documents', `${Object.values(files).filter(Boolean).length} files uploaded \u2705`],

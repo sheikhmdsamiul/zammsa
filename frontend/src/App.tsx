@@ -9,7 +9,7 @@ import ProtectedRoute from './components/common/ProtectedRoute';
 import ErrorBoundary from './components/common/ErrorBoundary';
 import { useAuth } from './hooks/useAuth';
 import PublicLayout from './components/public/PublicLayout';
-import { INTERNAL_PORTAL_ROLES, ROLES, SUPPLIER_PORTAL_ROLES } from './config/rbac';
+import { INTERNAL_PORTAL_ROLES, ROLES, SUPPLIER_PORTAL_ROLES, EVALUATION_COMMITTEE_ROLES } from './config/rbac';
 
 const queryClient = new QueryClient({
   defaultOptions: { queries: { retry: 1, refetchOnWindowFocus: false } },
@@ -236,7 +236,7 @@ function App() {
                     </ProtectedRoute>
                   } />
                   <Route path="bids" element={
-                    <ProtectedRoute roles={[ROLES.PROCUREMENT_OFFICER, ROLES.PROCUREMENT_MANAGER, ROLES.EVALUATION_COMMITTEE_MEMBER, ROLES.EVALUATION_COMMITTEE_CHAIR, ROLES.ZPC_MEMBER, ROLES.DIRECTOR_PROCUREMENT]}>
+                    <ProtectedRoute roles={[...EVALUATION_COMMITTEE_ROLES, ROLES.PROCUREMENT_OFFICER, ROLES.PROCUREMENT_MANAGER, ROLES.ZPC_MEMBER, ROLES.DIRECTOR_PROCUREMENT]}>
                       <BidsList />
                     </ProtectedRoute>
                   } />
@@ -267,7 +267,7 @@ function App() {
                     </ProtectedRoute>
                   } />
                   <Route path="evaluations" element={
-                    <ProtectedRoute roles={[ROLES.EVALUATION_COMMITTEE_MEMBER, ROLES.EVALUATION_COMMITTEE_CHAIR, ROLES.ZPC_MEMBER, ROLES.DIRECTOR_PROCUREMENT]}>
+                    <ProtectedRoute roles={[...EVALUATION_COMMITTEE_ROLES, ROLES.ZPC_MEMBER, ROLES.DIRECTOR_PROCUREMENT]}>
                       <EvaluationsList />
                     </ProtectedRoute>
                   } />
@@ -277,7 +277,7 @@ function App() {
                     </ProtectedRoute>
                   } />
                   <Route path="evaluations/preliminary/:solId" element={
-                    <ProtectedRoute roles={[ROLES.EVALUATION_COMMITTEE_CHAIR, ROLES.EVALUATION_COMMITTEE_MEMBER, ROLES.DIRECTOR_PROCUREMENT]}>
+                    <ProtectedRoute roles={[...EVALUATION_COMMITTEE_ROLES]}>
                       <PreliminaryExamination />
                     </ProtectedRoute>
                   } />
@@ -291,14 +291,18 @@ function App() {
                       <ZPCApproval />
                     </ProtectedRoute>
                   } />
-                  <Route path="evaluations/:id" element={<EvaluationDetail />} />
+                  <Route path="evaluations/:id" element={
+                    <ProtectedRoute roles={[...EVALUATION_COMMITTEE_ROLES]}>
+                      <EvaluationDetail />
+                    </ProtectedRoute>
+                  } />
                   <Route path="evaluations/:committeeId/scoring" element={
-                    <ProtectedRoute roles={[ROLES.EVALUATION_COMMITTEE_MEMBER, ROLES.EVALUATION_COMMITTEE_CHAIR]}>
+                    <ProtectedRoute roles={[...EVALUATION_COMMITTEE_ROLES]}>
                       <TechnicalScoring />
                     </ProtectedRoute>
                   } />
                   <Route path="evaluations/:committeeId/coi" element={
-                    <ProtectedRoute roles={[ROLES.EVALUATION_COMMITTEE_MEMBER, ROLES.EVALUATION_COMMITTEE_CHAIR]}>
+                    <ProtectedRoute roles={[...EVALUATION_COMMITTEE_ROLES]}>
                       <ConflictOfInterestDeclaration />
                     </ProtectedRoute>
                   } />
@@ -313,7 +317,7 @@ function App() {
                     </ProtectedRoute>
                   } />
                   <Route path="evaluations/ber/:solId" element={
-                    <ProtectedRoute roles={[ROLES.EVALUATION_COMMITTEE_MEMBER, ROLES.EVALUATION_COMMITTEE_CHAIR, ROLES.ZPC_MEMBER, ROLES.DIRECTOR_PROCUREMENT]}>
+                    <ProtectedRoute roles={[...EVALUATION_COMMITTEE_ROLES, ROLES.ZPC_MEMBER, ROLES.DIRECTOR_PROCUREMENT]}>
                       <BERWorkflow />
                     </ProtectedRoute>
                   } />

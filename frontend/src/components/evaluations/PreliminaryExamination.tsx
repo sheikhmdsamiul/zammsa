@@ -12,6 +12,8 @@ import {
   ShieldCheckIcon,
 } from '@heroicons/react/outline';
 
+import { ConfirmModal } from '../common/ConfirmModal';
+
 interface BidExamination {
   bidId: string;
   bidderName: string;
@@ -42,6 +44,14 @@ const PreliminaryExamination: React.FC = () => {
   });
 
   const bids = bidsData?.results || [];
+
+  const { data: committeesData } = useQuery({
+    queryKey: ['committees-for-prelim', solId],
+    queryFn: () => evaluationsApi.listCommittees({ solicitation: solId, page_size: 5 }),
+    enabled: !!solId && !!allCompleted,
+  });
+
+  const primaryCommittee = (committeesData?.results || [])[0];
 
   const thresholdCheckMutation = useMutation({
     mutationFn: (bidId: string) => evaluationsApi.thresholdCheck(bidId),
@@ -203,6 +213,15 @@ const PreliminaryExamination: React.FC = () => {
 
       {allExamined && !allCompleted && (
         <div className="flex justify-end">
+          <ConfirmModal
+            open={false}
+            onClose={() => {}}
+            onConfirm={() => { setAllCompleted(true); toast.success('Preliminary examination completed'); }}
+            title="Complete Preliminary Examination?"
+            message="This will mark all bids as examined. Individual bid results can still be reviewed later."
+            variant="info"
+            confirmText="Yes, Complete Examination"
+          />
           <button onClick={() => { setAllCompleted(true); toast.success('Preliminary examination completed'); }}
             className="px-6 py-3 bg-zammsa-green text-white rounded-xl text-sm font-bold">
             Complete Preliminary Examination
@@ -217,7 +236,7 @@ const PreliminaryExamination: React.FC = () => {
           <p className="text-sm text-emerald-600 mb-4">
             {examList.filter(e => e.securityVerified && e.docsComplete && e.eligibilityPass && e.conformityPass).length} of {examList.length} bids passed
           </p>
-          <button onClick={() => navigate(`/evaluations`)}
+          <button onClick={() => navigate(primaryCommittee ? `/evaluations/${primaryCommittee.id}/scoring` : `/evaluations`)}
             className="px-6 py-3 bg-purple-600 text-white rounded-xl text-sm font-bold">
             Proceed to Technical Evaluation
           </button>

@@ -2,28 +2,15 @@ import React, { useMemo, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { evaluationsApi } from '../../api/evaluations';
+import { solicitationsApi } from '../../api/solicitations';
 import { LoadingSpinner } from '../common/LoadingSpinner';
 import { StatusBadge } from '../common/StatusBadge';
+import { ConfirmModal } from '../common/ConfirmModal';
+import { EvaluationCriterion } from '../../types';
 import toast from 'react-hot-toast';
-import { LockOpenIcon } from '@heroicons/react/outline';
+import { LockOpenIcon, ExclamationIcon, CheckCircleIcon, XCircleIcon } from '@heroicons/react/outline';
 
-type PassingBid = {
-  bid_id?: string;
-  id?: string;
-  bidder_name?: string;
-  vendor_name?: string;
-  overall_technical_score?: number;
-  passed?: boolean;
-  financial_sealed?: boolean;
-  evaluated_price?: number | null;
-};
-
-type TechnicalScoreRow = {
-  bid: string;
-  evaluator?: string;
-  evaluator_name: string;
-  weighted_score: number | string;
-};
+type MemberInfo = { id: string; name: string; role: string };
 
 const ScoreConsolidation: React.FC = () => {
   const { solId } = useParams<{ solId: string }>();
@@ -32,6 +19,13 @@ const ScoreConsolidation: React.FC = () => {
 
   const [discussionNotes, setDiscussionNotes] = useState('');
   const [authChecked, setAuthChecked] = useState(false);
+  const [showConfirmAuth, setShowConfirmAuth] = useState(false);
+
+  const { data: solicitation, isLoading: solLoading } = useQuery({
+    queryKey: ['solicitation-detail', solId],
+    queryFn: () => solicitationsApi.get(solId!),
+    enabled: !!solId,
+  });
 
   const { data: committeesData, isLoading: committeesLoading } = useQuery({
     queryKey: ['committees-score-consolidation', solId],
@@ -53,11 +47,14 @@ const ScoreConsolidation: React.FC = () => {
 
   const committees = committeesData?.results || [];
   const primaryCommittee = committees[0];
-  const passedBids: PassingBid[] = passedBidsData?.bids || [];
-  const technicalScores: TechnicalScoreRow[] = technicalScoresData?.results || [];
+  const passedBids: any[] = passedBidsData?.bids || [];
+  const technicalScores: any[] = technicalScoresData?.results || [];
+  const criteria: EvaluationCriterion[] = (solicitation?.evaluation_criteria || []).filter(
+    (c: EvaluationCriterion) => c.criterion_type === 'technical'
+  );
 
   const committeeMembers = useMemo(() => {
-    const memberMap = new Map<string, { id: string; name: string; role: string }>();
+    const memberMap = new Map<string, MemberInfo>();
     const add = (id?: string, name?: string, role?: string) => {
       if (!id || memberMap.has(id)) return;
       memberMap.set(id, { id, name: name || id, role: role || 'Member' });
@@ -72,59 +69,82 @@ const ScoreConsolidation: React.FC = () => {
       });
     }
 
-    if (!memberMap.size) {
-      technicalScores.forEach((score) => add(score.evaluator, score.evaluator_name, 'Member'));
-    }
+    technicalScores.forEach((score) => add(score.evaluator, score.evaluator_name, 'Member'));
 
     return Array.from(memberMap.values());
   }, [primaryCommittee, technicalScores]);
 
-  const evaluatorOrder = committeeMembers.length
-    ? committeeMembers.map((m) => m.name)
-    : Array.from(new Set(technicalScores.map((s) => s.evaluator_name).filter(Boolean)));
+  // Build score matrix: bidId -> criterionId -> memberId -> {score, comment?}
+  const scoreMatrix = useMemo(() => {
+    const matrix = new Map<string, Map<string, Map<string, { rawScore: number }>>>();
 
-  const consolidatedRows = useMemo(() => {
-    const passingIds = new Set(passedBids.map((b) => String(b.bid_id || b.id || '')));
-    const rows = new Map<string, {
-      id: string;
-      name: string;
-      memberScores: Record<string, number>;
-      average: number;
-      passed: boolean;
-      financialSealed: boolean;
-      evaluatedPrice: number | null;
-    }>();
+    technicalScores.forEach((s: any) => {
+      const bidId = String(s.bid || '');
+      const criterionId = String(s.criterion || '');
+      const evaluatorId = String(s.evaluator || '');
+      const rawScore = Number(s.raw_score || 0);
 
-    const bidLookup = new Map<string, PassingBid>();
-    passedBids.forEach((bid) => {
-      bidLookup.set(String(bid.bid_id || bid.id || ''), bid);
+      if (!matrix.has(bidId)) matrix.set(bidId, new Map());
+      const bidMatrix = matrix.get(bidId)!;
+      if (!bidMatrix.has(criterionId)) bidMatrix.set(criterionId, new Map());
+      bidMatrix.get(criterionId)!.set(evaluatorId, { rawScore });
     });
 
-    technicalScores.forEach((score) => {
-      const bidId = String(score.bid || '');
-      if (!passingIds.has(bidId)) return;
+    return matrix;
+  }, [technicalScores]);
 
-      const bid = bidLookup.get(bidId);
-      if (!bid) return;
+  const membersSubmitted = useMemo(() => {
+    const submitted = new Set<string>();
+    technicalScores.forEach((s: any) => {
+      if (s.evaluator) submitted.add(String(s.evaluator));
+    });
+    return submitted;
+  }, [technicalScores]);
 
-      const row = rows.get(bidId) || {
-        id: bidId,
-        name: bid.bidder_name || bid.vendor_name || bidId,
-        memberScores: {},
-        average: Number(bid.overall_technical_score || 0),
-        passed: Boolean(bid.passed),
-        financialSealed: Boolean(bid.financial_sealed),
-        evaluatedPrice: bid.evaluated_price ?? null,
-      };
+  const allMembersSubmitted = committeeMembers.length > 0 && committeeMembers.every(m => membersSubmitted.has(m.id));
 
-      row.memberScores[score.evaluator_name || 'Evaluator'] = (row.memberScores[score.evaluator_name || 'Evaluator'] || 0) + Number(score.weighted_score || 0);
-      rows.set(bidId, row);
+  // Check for discrepancies (>15 points deviation from average on any criterion)
+  const discrepancies = useMemo(() => {
+    const flags: { bidderName: string; criterionName: string; memberName: string; score: number; avg: number; diff: number }[] = [];
+
+    passedBids.forEach((bid: any) => {
+      const bidId = String(bid.bid_id || bid.id || '');
+      const bidMatrix = scoreMatrix.get(bidId);
+      if (!bidMatrix) return;
+
+      criteria.forEach((criterion) => {
+        const criterionId = criterion.id;
+        const criterionScores = bidMatrix.get(criterionId);
+        if (!criterionScores) return;
+
+        const scores = Array.from(criterionScores.values());
+        if (scores.length < 2) return;
+
+        const avg = scores.reduce((sum, s) => sum + s.rawScore, 0) / scores.length;
+
+        criterionScores.forEach((s, evaluatorId) => {
+          const diff = Math.abs(s.rawScore - avg);
+          if (diff > 15) {
+            const member = committeeMembers.find(m => m.id === evaluatorId);
+            flags.push({
+              bidderName: bid.bidder_name || bid.vendor_name || bidId,
+              criterionName: criterion.criterion_name,
+              memberName: member?.name || evaluatorId,
+              score: s.rawScore,
+              avg: Math.round(avg * 100) / 100,
+              diff: Math.round(diff * 100) / 100,
+            });
+          }
+        });
+      });
     });
 
-    return Array.from(rows.values()).sort((a, b) => b.average - a.average);
-  }, [passedBids, technicalScores]);
+    return flags;
+  }, [passedBids, scoreMatrix, criteria, committeeMembers]);
 
-  const authorizeMutation = useMutation({
+  const hasDiscrepancies = discrepancies.length > 0;
+
+  const approveMutation = useMutation({
     mutationFn: () => evaluationsApi.authorizeFinancialOpening(solId!),
     onSuccess: (data: any) => {
       toast.success(`Financial envelopes opened for ${data.opened_count || 0} bids`);
@@ -133,15 +153,15 @@ const ScoreConsolidation: React.FC = () => {
     onError: (err: any) => toast.error(err?.response?.data?.error || 'Failed to authorise'),
   });
 
-  if (committeesLoading || passedBidsLoading || technicalScoresLoading) {
+  if (solLoading || committeesLoading || passedBidsLoading || technicalScoresLoading) {
     return <LoadingSpinner className="py-12" />;
   }
 
-  const financialOpened = passedBids.some((bid) => bid.financial_sealed === false);
-  const allPassed = passedBids.length > 0 && passedBids.every((bid) => bid.passed);
+  const financialOpened = passedBids.some((bid: any) => bid.financial_sealed === false);
+  const allPassed = passedBids.length > 0 && passedBids.every((bid: any) => bid.passed);
 
   return (
-    <div className="max-w-6xl mx-auto space-y-6">
+    <div className="max-w-7xl mx-auto space-y-6">
       <div className="flex items-center justify-between">
         <div>
           <div className="flex items-center gap-3">
@@ -149,99 +169,163 @@ const ScoreConsolidation: React.FC = () => {
             <StatusBadge status={financialOpened ? 'completed' : 'active'} />
           </div>
           <p className="text-sm text-gray-500 mt-1">
-            Consolidated technical scores for solicitation {solId}
+            {solicitation?.sol_number || solId} — {solicitation?.title || ''}
+          </p>
+          <p className="text-xs text-gray-400 mt-0.5">
+            Members Submitted: {membersSubmitted.size} of {committeeMembers.length} {allMembersSubmitted ? '✅' : ''}
           </p>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-5">
-          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Committee Members</p>
-          <p className="text-3xl font-bold text-gray-900 mt-1">{committeeMembers.length}</p>
-          <p className="text-xs text-gray-500 mt-2">Chair, secretary, and members combined</p>
+      {hasDiscrepancies && (
+        <div className="bg-orange-50 border border-orange-200 rounded-xl p-4">
+          <div className="flex items-start gap-3">
+            <ExclamationIcon className="w-5 h-5 text-orange-600 shrink-0 mt-0.5" />
+            <div>
+              <p className="text-sm font-medium text-orange-800">Discrepancy Detected</p>
+              <p className="text-xs text-orange-700 mt-1">
+                {discrepancies.length} member score(s) deviate more than 15 points from the average on specific criteria.
+                Chair must add explanation or re-open scoring for those criteria.
+              </p>
+              <div className="mt-2 space-y-1">
+                {discrepancies.map((d, i) => (
+                  <p key={i} className="text-xs text-orange-600">
+                    {d.bidderName} — {d.criterionName}: {d.memberName} scored {d.score} vs avg {d.avg} (diff: {d.diff})
+                  </p>
+                ))}
+              </div>
+            </div>
+          </div>
         </div>
-        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-5">
-          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Passing Bids</p>
-          <p className="text-3xl font-bold text-emerald-600 mt-1">{passedBids.length}</p>
-          <p className="text-xs text-gray-500 mt-2">{allPassed ? 'All passed the technical threshold' : 'Awaiting complete technical results'}</p>
-        </div>
-        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-5">
-          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Financial Opening</p>
-          <p className={`text-3xl font-bold mt-1 ${financialOpened ? 'text-emerald-600' : 'text-amber-500'}`}>
-            {financialOpened ? 'Opened' : 'Pending'}
-          </p>
-          <p className="text-xs text-gray-500 mt-2">
-            {financialOpened ? 'Financial envelopes are already open' : 'Authorize opening after technical consolidation'}
-          </p>
-        </div>
-      </div>
+      )}
 
+      {/* Per-bid detailed breakdown */}
+      {passedBids.map((bid: any) => {
+        const bidId = String(bid.bid_id || bid.id || '');
+        const bidMatrix = scoreMatrix.get(bidId);
+        const bidPassed = bid.passed;
+        const overallTech = Number(bid.overall_technical_score || 0).toFixed(1);
+        const bidderName = bid.bidder_name || bid.vendor_name || bidId;
+
+        return (
+          <div key={bidId} className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <h2 className="text-lg font-semibold text-gray-900">{bidderName}</h2>
+                <p className="text-xs text-gray-400">{bid.submission_id || ''}</p>
+              </div>
+              <div className="text-right">
+                <p className={`text-lg font-bold ${bidPassed ? 'text-emerald-600' : 'text-red-600'}`}>
+                  Total: {overallTech}
+                </p>
+                <span className={`text-xs font-medium px-2 py-0.5 rounded ${bidPassed ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'}`}>
+                  {bidPassed ? '✅ Passes threshold' : '🔴 Fails threshold'}
+                </span>
+              </div>
+            </div>
+
+            {bidMatrix && criteria.length > 0 && (
+              <div className="overflow-x-auto">
+                <table className="min-w-full divide-y divide-gray-200 text-xs">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="px-3 py-2 text-left font-medium text-gray-500">Criterion</th>
+                      <th className="px-3 py-2 text-center font-medium text-gray-500">WT</th>
+                      {committeeMembers.map(m => (
+                        <th key={m.id} className="px-3 py-2 text-center font-medium text-gray-500">{m.name.split(' ')[0]}</th>
+                      ))}
+                      <th className="px-3 py-2 text-center font-medium text-gray-500">AVG</th>
+                      <th className="px-3 py-2 text-center font-medium text-gray-500">WTOTAL</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100">
+                    {criteria.map((criterion) => {
+                      const criterionScores = bidMatrix.get(criterion.id);
+                      if (!criterionScores) return null;
+
+                      let avgRaw = 0;
+                      let scoredCount = 0;
+                      const memberScores = committeeMembers.map(m => {
+                        const s = criterionScores.get(m.id);
+                        if (s) {
+                          avgRaw += s.rawScore;
+                          scoredCount++;
+                          return s.rawScore;
+                        }
+                        return null;
+                      });
+                      avgRaw = scoredCount > 0 ? avgRaw / scoredCount : 0;
+                      const weightedScore = avgRaw * (criterion.weight / 100);
+
+                      return (
+                        <tr key={criterion.id} className="hover:bg-gray-50">
+                          <td className="px-3 py-2 font-medium text-gray-900 whitespace-nowrap">{criterion.criterion_name}</td>
+                          <td className="px-3 py-2 text-center text-gray-500">{criterion.weight}%</td>
+                          {memberScores.map((score, idx) => (
+                            <td key={idx} className="px-3 py-2 text-center font-mono">{score !== null ? score : '-'}</td>
+                          ))}
+                          <td className="px-3 py-2 text-center font-bold text-gray-700">{avgRaw.toFixed(1)}</td>
+                          <td className="px-3 py-2 text-center font-bold text-zammsa-green">{weightedScore.toFixed(1)}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+
+            {!bidMatrix && (
+              <p className="text-sm text-gray-400 py-4 text-center">No detailed scores available for this bid yet.</p>
+            )}
+          </div>
+        );
+      })}
+
+      {passedBids.length === 0 && (
+        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-8 text-center">
+          <p className="text-gray-500">No bids with finalized technical scores found for this solicitation.</p>
+        </div>
+      )}
+
+      {/* Technical Ranking */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
-        <h2 className="text-lg font-semibold text-gray-900 mb-4">Committee Members</h2>
-        <div className="flex flex-wrap gap-2">
-          {committeeMembers.map((member) => (
-            <span key={member.id} className="inline-flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium bg-gray-50 text-gray-700 border border-gray-200">
-              <span className="w-2 h-2 rounded-full bg-zammsa-green" />
-              {member.name} <span className="text-xs text-gray-400">({member.role})</span>
-            </span>
-          ))}
-          {committeeMembers.length === 0 && (
-            <p className="text-sm text-gray-400">No committee members found for this solicitation.</p>
-          )}
-        </div>
-      </div>
-
-      <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
-        <h2 className="text-lg font-semibold text-gray-900 mb-4">Technical Scores by Bid</h2>
+        <h2 className="text-lg font-semibold text-gray-900 mb-4">Technical Ranking (qualifying bids only)</h2>
         <div className="overflow-x-auto">
           <table className="min-w-full divide-y divide-gray-200 text-sm">
             <thead className="bg-gray-50">
               <tr>
-                <th className="px-4 py-3 text-left font-medium text-gray-500">Bidder</th>
-                <th className="px-4 py-3 text-left font-medium text-gray-500">Evaluator Totals</th>
-                <th className="px-4 py-3 text-center font-medium text-gray-500">Average</th>
-                <th className="px-4 py-3 text-center font-medium text-gray-500">Status</th>
-                <th className="px-4 py-3 text-right font-medium text-gray-500">Financial Seal</th>
+                <th className="px-4 py-2 text-left font-medium text-gray-500">#</th>
+                <th className="px-4 py-2 text-left font-medium text-gray-500">Bidder</th>
+                <th className="px-4 py-2 text-center font-medium text-gray-500">Tech Score</th>
+                <th className="px-4 py-2 text-center font-medium text-gray-500">Financial</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
-              {consolidatedRows.map((row) => (
-                <tr key={row.id} className={row.passed ? 'hover:bg-gray-50' : 'bg-red-50/40'}>
-                  <td className="px-4 py-3 font-medium text-gray-900">{row.name}</td>
-                  <td className="px-4 py-3">
-                    <div className="flex flex-wrap gap-2">
-                      {evaluatorOrder.map((name) => (
-                        <span key={name} className="inline-flex items-center gap-1 rounded-full bg-gray-100 px-2.5 py-1 text-xs font-medium text-gray-700">
-                          {name}: {(row.memberScores[name] || 0).toFixed(1)}
-                        </span>
-                      ))}
-                    </div>
-                  </td>
-                  <td className="px-4 py-3 text-center font-bold text-zammsa-green">{row.average.toFixed(1)}</td>
-                  <td className="px-4 py-3 text-center">
-                    <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium ${row.passed ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'}`}>
-                      {row.passed ? 'Passes' : 'Below threshold'}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3 text-right">
-                    <span className={`text-xs font-medium ${row.financialSealed ? 'text-amber-600' : 'text-emerald-600'}`}>
-                      {row.financialSealed ? 'Sealed' : 'Opened'}
-                    </span>
-                  </td>
-                </tr>
-              ))}
-              {consolidatedRows.length === 0 && (
-                <tr>
-                  <td colSpan={5} className="px-4 py-8 text-center text-sm text-gray-400">
-                    No consolidated technical scores are available yet.
-                  </td>
-                </tr>
-              )}
+              {[...passedBids]
+                .sort((a: any, b: any) => (b.overall_technical_score || 0) - (a.overall_technical_score || 0))
+                .map((bid: any, i: number) => (
+                  <tr key={bid.bid_id || bid.id} className={bid.passed ? 'hover:bg-gray-50' : 'bg-red-50/40'}>
+                    <td className="px-4 py-2 font-medium text-gray-500">{i + 1}</td>
+                    <td className="px-4 py-2 font-medium text-gray-900">{bid.bidder_name || bid.vendor_name || bid.bid_id}</td>
+                    <td className="px-4 py-2 text-center">
+                      <span className={`font-bold ${bid.passed ? 'text-zammsa-green' : 'text-red-600'}`}>
+                        {Number(bid.overall_technical_score || 0).toFixed(1)}
+                        {!bid.passed && ' ❌'}
+                      </span>
+                    </td>
+                    <td className="px-4 py-2 text-center">
+                      <span className="text-xs text-amber-600 font-medium">
+                        {bid.financial_sealed ? '🔒 Sealed' : '🔓 Opened'}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
             </tbody>
           </table>
         </div>
       </div>
 
+      {/* Chair Notes */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
         <h2 className="text-lg font-semibold text-gray-900 mb-4">Chair Notes</h2>
         <textarea
@@ -252,17 +336,19 @@ const ScoreConsolidation: React.FC = () => {
           placeholder="Enter discussion notes for the BER..."
         />
         <p className="text-xs text-gray-500 mt-2">
-          These notes are intended to carry into the Bid Evaluation Report.
+          These notes will be carried into the Bid Evaluation Report.
         </p>
       </div>
 
+      {/* Authorise Financial Opening */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
         <h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
           <LockOpenIcon className="w-5 h-5 text-blue-500" />
           Authorise Financial Envelope Opening
         </h2>
         <p className="text-sm text-gray-600 mb-4">
-          Once technical consolidation is complete, the chair can authorise the opening of financial envelopes for all technically passing bids.
+          Once technical consolidation is complete, the chair can authorise the opening of financial envelopes
+          for all technically passing bids. Disqualified bids' envelopes remain sealed permanently.
         </p>
 
         <label className="flex items-start gap-3 p-4 bg-blue-50 border border-blue-200 rounded-lg cursor-pointer">
@@ -275,20 +361,20 @@ const ScoreConsolidation: React.FC = () => {
           <div>
             <p className="text-sm font-medium text-blue-900">I confirm technical consolidation is complete</p>
             <p className="text-xs text-blue-700 mt-0.5">
-              This will unseal the financial envelopes for all passing bids.
+              This will unseal the financial envelopes for all passing bids only.
             </p>
           </div>
         </label>
 
         <div className="flex gap-3 mt-4">
           <button
-            onClick={() => authChecked && authorizeMutation.mutate()}
-            disabled={!authChecked || authorizeMutation.isPending || financialOpened}
+            onClick={() => setShowConfirmAuth(true)}
+            disabled={!authChecked || approveMutation.isPending || financialOpened}
             className="px-6 py-3 bg-zammsa-green text-white text-sm font-bold rounded-lg disabled:opacity-50 hover:bg-green-700"
           >
             {financialOpened
               ? 'Financial Envelopes Already Opened'
-              : authorizeMutation.isPending
+              : approveMutation.isPending
                 ? 'Authorising...'
                 : 'Authorise Financial Envelope Opening'}
           </button>
@@ -299,6 +385,16 @@ const ScoreConsolidation: React.FC = () => {
             Go to Financial Evaluation
           </button>
         </div>
+
+        <ConfirmModal
+          open={showConfirmAuth}
+          onClose={() => setShowConfirmAuth(false)}
+          onConfirm={() => { setShowConfirmAuth(false); approveMutation.mutate(); }}
+          title="Authorise Financial Envelope Opening?"
+          message="This will irreversibly unseal financial envelopes for all technically passing bids. Disqualified bids' envelopes remain permanently sealed."
+          variant="warning"
+          confirmText="Yes, Authorise Opening"
+        />
       </div>
     </div>
   );

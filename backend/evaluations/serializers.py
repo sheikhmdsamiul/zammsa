@@ -21,6 +21,8 @@ class EvaluationCommitteeSerializer(serializers.ModelSerializer):
     status = serializers.SerializerMethodField()
     coi_declarations = ConflictOfInterestSerializer(many=True, read_only=True)
     member_count = serializers.SerializerMethodField()
+    solicitation_number = serializers.CharField(source='solicitation.sol_number', read_only=True, default='')
+    solicitation_title = serializers.CharField(source='solicitation.title', read_only=True, default='')
 
     class Meta:
         model = EvaluationCommittee
@@ -50,9 +52,15 @@ class EvaluationCommitteeSerializer(serializers.ModelSerializer):
             return str(val)
         chairperson_id = _to_id(attrs.get('chairperson'))
         secretary_id = _to_id(attrs.get('secretary'))
-        if chairperson_id and secretary_id and chairperson_id == secretary_id:
+        if not chairperson_id:
+            raise serializers.ValidationError({'chairperson': 'Chairperson is required.'})
+        if not secretary_id:
+            raise serializers.ValidationError({'secretary': 'Secretary is required.'})
+        if chairperson_id == secretary_id:
             raise serializers.ValidationError('Chairperson and secretary must be different users.')
-        all_members = list({_to_id(m) for m in members} | {chairperson_id, secretary_id} - {''})
+        if chairperson_id in [_to_id(m) for m in members if _to_id(m)]:
+            pass  # chairperson can also be a member
+        all_members = list({_to_id(m) for m in members if _to_id(m)} | {chairperson_id, secretary_id})
         if len(all_members) < 3:
             raise serializers.ValidationError(
                 'Committee must have at least 3 unique members (including chairperson and secretary).'
@@ -134,7 +142,7 @@ class BidEvaluationReportSerializer(serializers.ModelSerializer):
                     uid = member
                 if uid:
                     member_ids.add(str(uid))
-        return len(member_ids)
+        return len(member_ids) if member_ids else 0
 
 
 class PostQualificationSerializer(serializers.ModelSerializer):

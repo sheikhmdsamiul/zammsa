@@ -1,6 +1,6 @@
 from decimal import Decimal
 import os
-from django.db.models import Q, Avg
+from django.db.models import Q, Avg, Sum as models_Sum
 from django.utils import timezone
 from django.core.files.storage import default_storage
 from rest_framework import generics, filters, status
@@ -12,6 +12,10 @@ from django_filters.rest_framework import DjangoFilterBackend
 import django_filters
 
 from .models import Supplier, VendorApplication, VendorApplicationDocument, SupplierDocument, SupplierPerformance, SupplierRiskScore, Blacklist
+from bids.models import BidSubmission
+from contracts.models import Contract
+from finance.models import Invoice
+from solicitations.models import Solicitation
 from .serializers import (
     SupplierSerializer, SupplierListSerializer, VendorApplicationSerializer,
     VendorApplicationListSerializer, VendorApplicationDocumentSerializer,
@@ -390,3 +394,98 @@ class BlacklistListView(BaseView, generics.ListCreateAPIView):
     queryset = Blacklist.objects.select_related('supplier').all()
     serializer_class = BlacklistSerializer
     ordering = ['-created_at']
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def vendor_dashboard_view(request):
+    user = request.user
+
+    open_tenders = Solicitation.objects.filter(status='published').count()
+
+    active_bids = BidSubmission.objects.filter(
+        supplier=user,
+        status__in=['submitted', 'opened', 'responsive'],
+    ).count()
+
+    total_bids = BidSubmission.objects.filter(supplier=user).count()
+
+    awarded_contracts = Contract.objects.filter(
+        winning_bid__supplier=user,
+        status__in=['active', 'pending_acceptance'],
+    ).count()
+
+    total_value_awarded = Contract.objects.filter(
+        winning_bid__supplier=user,
+        status__in=['active', 'completed'],
+    ).aggregate(total=models_Sum('value'))['total'] or 0
+
+    supplier = None
+    if user.employee_id and user.employee_id.startswith('SUP-'):
+        try:
+            supplier = Supplier.objects.get(registration_number=user.employee_id.replace('SUP-', '', 1))
+        except Supplier.DoesNotExist:
+            pass
+
+    pending_invoices = 0
+    if supplier:
+        pending_invoices = Invoice.objects.filter(
+            supplier=supplier,
+            status__in=['submitted', 'pending_matching', 'pending_approval'],
+        ).count()
+
+    profile_completeness = 0
+    profile = VendorApplication.objects.filter(email=user.email, status='approved').first()
+    if profile:
+        filled = sum(1 for f in ['company_name', 'registration_number', 'tin', 'contact_person', 'contact_phone', 'address'] if getattr(profile, f, None))
+        profile_completeness = int((filled / 6) * 100)
+
+    return Response({
+        'open_tenders': open_tenders,
+        'total_bids': total_bids,
+        'active_bids': active_bids,
+        'awarded_contracts': awarded_contracts,
+        'pending_invoices': pending_invoices,
+        'profile_completeness': profile_completeness,
+        'total_value_awarded': float(total_value_awarded),
+    })
+
+
+@api_view(['GET', 'PATCH'])
+@permission_classes([IsAuthenticated])
+def vendor_profile_view(request):
+    user = request.user
+    profile = None
+
+    # First try to find an approved VendorApplication for this user's email
+    if user.email:
+        profile = VendorApplication.objects.filter(email=user.email).order_by('-created_at').first()
+
+    # Fall back to Supplier record via employee_id
+    if not profile and user.employee_id and user.employee_id.startswith('SUP-'):
+        try:
+            supplier = Supplier.objects.get(registration_number=user.employee_id.replace('SUP-', '', 1))
+            return Response({
+                'company_name': supplier.name,
+                'registration_number': supplier.registration_number,
+                'tin': supplier.tin,
+                'ceec_category': supplier.ceec_category,
+                'email': user.email,
+                'status': supplier.status,
+            })
+        except Supplier.DoesNotExist:
+            pass
+
+    if not profile:
+        return Response({'detail': 'Profile not found'}, status=404)
+
+    if request.method == 'GET':
+        serializer = VendorApplicationSerializer(profile)
+        return Response(serializer.data)
+
+    elif request.method == 'PATCH':
+        serializer = VendorApplicationSerializer(profile, data=request.data, partial=True)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data)
+        return Response(serializer.errors, status=400)

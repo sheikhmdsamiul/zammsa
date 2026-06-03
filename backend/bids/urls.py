@@ -16,7 +16,8 @@ urlpatterns = [
     path('openings/start/<uuid:pk>/', views.bid_opening_start_view, name='opening-start'),
     path('openings/<uuid:opening_pk>/open-bid/<uuid:bid_pk>/', views.bid_open_single_view, name='opening-open-bid'),
     path('openings/<uuid:pk>/minutes/', views.bid_opening_minutes_view, name='opening-minutes'),
-    path('openings/<uuid:pk>/send-minutes/', views.bid_opening_send_minutes_view, name='opening-send-minutes'),
+    path('openings/<uuid:pk>/finalize/', views.bid_opening_finalize_view, name='opening-finalize'),
+    path('openings/<uuid:pk>/send-minutes/', views.bid_opening_finalize_view, name='opening-send-minutes'),
     path('openings/conduct/<uuid:pk>/', views.bid_opening_conduct_view, name='opening-conduct'),
     path('public/openings/<uuid:pk>/', views.public_bid_opening_view, name='public-opening'),
 ]

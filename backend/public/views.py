@@ -45,13 +45,13 @@ class TenderList(generics.ListAPIView):
         )
         status = self.request.query_params.get('status')
         method = self.request.query_params.get('method')
-        search = self.request.query_params.get('search')
+        search = self.request.query_params.get('search') or self.request.query_params.get('q')
         ordering = self.request.query_params.get('ordering', '-published_at')
 
         if status:
             queryset = queryset.filter(status=status)
         else:
-            queryset = queryset.filter(status__in=['published', 'closed', 'awarded'])
+            queryset = queryset.filter(status='published')
 
         if method:
             queryset = queryset.filter(method__icontains=method)

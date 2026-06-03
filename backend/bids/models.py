@@ -58,6 +58,7 @@ class BidSubmission(models.Model):
     addenda_acknowledged_at = models.DateTimeField(null=True, blank=True)
     submitted_at = models.DateTimeField(auto_now_add=True)
     opened_at = models.DateTimeField(null=True, blank=True)
+    line_items = models.JSONField(default=list, blank=True)
 
     class Meta:
         db_table = 'bid_submission'

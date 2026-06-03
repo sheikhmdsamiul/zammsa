@@ -6,7 +6,7 @@ import {
 
 export const vendorApi = {
   getDashboard: () =>
-    api.get<VendorDashboardStats>('/suppliers/').then((r) => r.data as any),
+    api.get<VendorDashboardStats>('/suppliers/dashboard/').then((r) => r.data),
   getActivities: (params?: Record<string, any>) =>
     api.get<PaginatedResponse<VendorActivity>>('/audit-logs/', { params }).then((r) => r.data as any),
   getUpcomingDeadlines: () =>
@@ -91,9 +91,9 @@ export const vendorApi = {
 
   profile: {
     get: () =>
-      api.get<VendorRegistration>('/suppliers/').then((r) => r.data),
+      api.get<VendorRegistration>('/suppliers/profile/').then((r) => r.data),
     update: (data: FormData) =>
-      api.patch<VendorRegistration>('/suppliers/', data, {
+      api.patch<VendorRegistration>('/suppliers/profile/', data, {
         headers: { 'Content-Type': 'multipart/form-data' },
       }).then((r) => r.data),
   },

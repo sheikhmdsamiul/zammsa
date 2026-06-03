@@ -28,7 +28,7 @@ const BidOpeningCeremony: React.FC = () => {
   const [signedOfficer, setSignedOfficer] = useState(false);
   const [signedWitness1, setSignedWitness1] = useState(false);
   const [signedWitness2, setSignedWitness2] = useState(false);
-  const [minutesGenerated, setMinutesGenerated] = useState(false);
+  const [finalized, setFinalized] = useState(false);
 
   const { data: solicitation, isLoading: solLoading } = useQuery({
     queryKey: ['solicitation', solId],
@@ -85,12 +85,6 @@ const BidOpeningCeremony: React.FC = () => {
     enabled: !!openingId && openingStarted,
   });
 
-  const { data: minutes } = useQuery({
-    queryKey: ['bid-opening-minutes', openingId],
-    queryFn: () => bidsApi.getMinutes(openingId!),
-    enabled: !!openingId && minutesGenerated,
-  });
-
   const startOpeningMutation = useMutation({
     mutationFn: () => bidsApi.startOpeningSession(solId!, { witnesses: [witness1, witness2] }),
     onSuccess: (data) => {
@@ -133,12 +127,23 @@ const BidOpeningCeremony: React.FC = () => {
     onError: () => toast.error('Failed to open bid'),
   });
 
-  const sendMinutesMutation = useMutation({
-    mutationFn: () => bidsApi.sendMinutes(openingId!),
-    onSuccess: () => {
-      toast.success('Minutes sent to all bidders');
+  const finalizeMutation = useMutation({
+    mutationFn: () => {
+      const witnessSignatures: Array<{ name: string; role: string; signed_at: string }> = [];
+      if (signedOfficer) witnessSignatures.push({ name: officerName, role: 'Procurement Officer', signed_at: new Date().toISOString() });
+      if (signedWitness1) witnessSignatures.push({ name: witness1Name, role: 'Witness 1', signed_at: new Date().toISOString() });
+      if (signedWitness2) witnessSignatures.push({ name: witness2Name, role: 'Witness 2', signed_at: new Date().toISOString() });
+      return bidsApi.finalizeOpening(openingId!, { observations, witness_signatures: witnessSignatures });
     },
-    onError: () => toast.error('Failed to send minutes'),
+    onSuccess: () => {
+      setFinalized(true);
+      queryClient.invalidateQueries({ queryKey: ['bid-opening', openingId] });
+      queryClient.invalidateQueries({ queryKey: ['bid-openings-list'] });
+      toast.success('Bid opening finalized. Minutes sent to all bidders.');
+    },
+    onError: (err: any) => {
+      toast.error(err?.response?.data?.error || 'Failed to finalize bid opening');
+    },
   });
 
   const openingDetails = opening?.opening_details || [];
@@ -345,7 +350,7 @@ const BidOpeningCeremony: React.FC = () => {
             />
           </div>
 
-          {allOpened && (
+          {allOpened && !finalized && (
             <>
               <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
                 <h2 className="text-lg font-semibold text-gray-900 mb-4">Bid Opening Minutes</h2>
@@ -406,35 +411,41 @@ VALID BIDS OPENED: ${Object.values(openedBids).filter(b => b.opened).length}`}
               </div>
 
               <div className="flex items-center gap-3 justify-end">
-                <button
-                  onClick={() => { setMinutesGenerated(true); toast.success('Minutes generated'); }}
-                  className="px-4 py-2 bg-white border border-gray-300 rounded-lg text-sm"
-                >
-                  Preview Minutes
-                </button>
-                {allSigned && (
-                  <button
-                    onClick={() => sendMinutesMutation.mutate()}
-                    disabled={sendMinutesMutation.isPending}
-                    className="px-6 py-2 bg-zammsa-green text-white rounded-lg text-sm font-bold disabled:opacity-50"
-                  >
-                    {sendMinutesMutation.isPending ? 'Sending...' : 'Finalize & Send Minutes'}
-                  </button>
+                {!finalized && (
+                  <>
+                    {allSigned && (
+                      <button
+                        onClick={() => finalizeMutation.mutate()}
+                        disabled={finalizeMutation.isPending}
+                        className="px-6 py-2 bg-zammsa-green text-white rounded-lg text-sm font-bold disabled:opacity-50"
+                      >
+                        {finalizeMutation.isPending ? 'Sending...' : 'Finalize & Send Minutes'}
+                      </button>
+                    )}
+                  </>
                 )}
               </div>
 
-              {allSigned && !sendMinutesMutation.isPending && (
-                <div className="flex justify-end mt-2">
+              {finalized && (
+                <div className="mt-6 flex items-center justify-end gap-3">
                   <div className="text-right">
                     <p className="text-xs text-gray-500 mb-2">
-                      Next step: Evaluations {'->'} Committee Formation
+                      Bid opening finalized. Minutes have been sent to all bidders.
                     </p>
-                    <button
-                      onClick={() => navigate(`/evaluations/committee/formation?solicitation=${solId}`)}
-                      className="px-6 py-2 bg-purple-600 text-white rounded-lg text-sm font-bold hover:bg-purple-700"
-                    >
-                      Go to Committee Formation
-                    </button>
+                    <div className="flex gap-2 justify-end">
+                      <button
+                        onClick={() => navigate('/bids/opening/minutes')}
+                        className="px-4 py-2 bg-white border border-gray-300 rounded-lg text-sm"
+                      >
+                        View Minutes Archive
+                      </button>
+                      <button
+                        onClick={() => navigate(`/evaluations/committee/formation?solicitation=${solId}`)}
+                        className="px-6 py-2 bg-purple-600 text-white rounded-lg text-sm font-bold hover:bg-purple-700"
+                      >
+                        Next: Committee Formation
+                      </button>
+                    </div>
                   </div>
                 </div>
               )}

@@ -95,7 +95,7 @@ class BidSubmissionListSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = BidSubmission
-        fields = ('id', 'bid_id', 'submission_id', 'receipt_number', 'bid_number', 'vendor_name', 'supplier_name', 'bid_price', 'bid_amount', 'currency', 'status', 'is_late', 'financial_envelope_encrypted', 'addenda_acknowledged', 'submitted_at', 'solicitation_title', 'solicitation_number', 'solicitation_type', 'closing_date')
+        fields = ('id', 'bid_id', 'submission_id', 'receipt_number', 'bid_number', 'vendor_name', 'supplier_name', 'bid_price', 'bid_amount', 'currency', 'status', 'is_late', 'financial_envelope_encrypted', 'addenda_acknowledged', 'submitted_at', 'solicitation_title', 'solicitation_number', 'solicitation_type', 'closing_date', 'line_items')
 
 
 class BidOpeningDetailSerializer(serializers.ModelSerializer):

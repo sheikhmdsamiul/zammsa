@@ -58,6 +58,12 @@ export const bidsApi = {
   sendMinutes: (openingId: string) =>
     api.post<any>(`/bids/openings/${openingId}/send-minutes/`).then((r) => r.data),
 
+  finalizeOpening: (openingId: string, data: {
+    observations?: string;
+    witness_signatures?: Array<{ name: string; role: string; signed_at: string }>;
+  }) =>
+    api.post<any>(`/bids/openings/${openingId}/finalize/`, data).then((r) => r.data),
+
   getPublicOpening: (solicitationId: string) =>
     api.get<any>(`/bids/public/openings/${solicitationId}/`).then((r) => r.data),
 

@@ -123,7 +123,7 @@ class SolicitationSerializer(serializers.ModelSerializer):
     department = serializers.SerializerMethodField()
     department_name = serializers.SerializerMethodField()
 
-    opening_date = serializers.DateTimeField(required=False)
+    opening_date = serializers.DateTimeField(required=False, allow_null=True)
     requisition = serializers.PrimaryKeyRelatedField(required=True, queryset=Requisition.objects.all())
     document_sets = SolicitationDocumentSerializer(many=True, source='documents', read_only=True)
     clarification_responses = ClarificationRequestSerializer(many=True, source='clarifications', read_only=True)

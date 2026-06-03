@@ -11,8 +11,19 @@ import { useAuth } from '../../hooks/useAuth';
 import { ROLES } from '../../config/rbac';
 import toast from 'react-hot-toast';
 import {
-  CheckCircleIcon, ArrowLeftIcon,
+  CheckCircleIcon, ArrowLeftIcon, XCircleIcon,
 } from '@heroicons/react/outline';
+
+type PrelimCheck = {
+  criterion: string;
+  passed: boolean;
+};
+
+const DEFAULT_PRELIM_CHECKS: PrelimCheck[] = [
+  { criterion: 'Bid security provided', passed: false },
+  { criterion: 'Bid validity period met', passed: false },
+  { criterion: 'All required forms submitted', passed: false },
+];
 
 const TechnicalScoring: React.FC = () => {
   const { committeeId } = useParams<{ committeeId: string }>();
@@ -22,8 +33,10 @@ const TechnicalScoring: React.FC = () => {
 
   const [currentBidIndex, setCurrentBidIndex] = useState(0);
   const [scores, setScores] = useState<Record<string, Record<string, { score: number; comment: string }>>>({});
+  const [prelim, setPrelim] = useState<Record<string, PrelimCheck[]>>({});
   const [submitting, setSubmitting] = useState(false);
   const [allSubmitted, setAllSubmitted] = useState(false);
+  const [showConfirmSubmit, setShowConfirmSubmit] = useState(false);
   const [loadingScores, setLoadingScores] = useState(false);
 
   const { data: committee, isLoading: committeeLoading } = useQuery({
@@ -54,10 +67,24 @@ const TechnicalScoring: React.FC = () => {
   const bidList = bidsData?.results || [];
   const currentBid = bidList[currentBidIndex];
   const currentScores = scores[currentBid?.id] || {};
+  const currentPrelim = prelim[currentBid?.id] || DEFAULT_PRELIM_CHECKS.map(c => ({ ...c }));
+
   const scoredCount = bidList.filter((bid: any) => {
     const s = scores[bid.id];
-    return s && criteria.every((c) => s[c.id]?.score > 0);
+    return s && criteria.length > 0 && criteria.every((c) => s[c.id] !== undefined);
   }).length;
+
+  const allBidsScored = bidList.length > 0 && scoredCount === bidList.length;
+
+  const prelimAllPassed = (bidId: string) => {
+    const checks = prelim[bidId] || [];
+    return checks.length > 0 && checks.every(c => c.passed);
+  };
+
+  const prelimAnyFailed = (bidId: string) => {
+    const checks = prelim[bidId] || [];
+    return checks.some(c => !c.passed);
+  };
 
   const committeeMemberIds = useMemo(() => {
     const ids = new Set<string>();
@@ -73,7 +100,6 @@ const TechnicalScoring: React.FC = () => {
 
   const isCommitteeMember = committee ? committeeMemberIds.has(String(user?.id || '')) : false;
   const isRecused = Boolean(coiState?.recused_members?.includes(String(user?.id || '')));
-  const canProceedFinancial = user && [ROLES.EVALUATION_COMMITTEE_CHAIR, ROLES.DIRECTOR_PROCUREMENT].includes(user.role as any);
 
   useEffect(() => {
     if (!bidList.length || !criteria.length) return;
@@ -84,27 +110,25 @@ const TechnicalScoring: React.FC = () => {
           evaluationsApi.getMyScores(bid.id).then(data => ({ bidId: bid.id, data }))
         )
       );
-      setScores(prev => {
-        const next = { ...prev };
-        for (const r of results) {
-          if (r.status === 'fulfilled') {
-            const { bidId, data } = r.value;
-            if (!data?.my_scores?.length) continue;
-            for (const s of data.my_scores) {
-              if (!s.criterion) continue;
-              const criterionId = s.criterion;
-              const c = criteria.find((crt: EvaluationCriterion) => crt.id === criterionId);
-              if (!c) continue;
-              next[bidId] = next[bidId] || {};
-              next[bidId][criterionId] = {
-                score: Number(s.raw_score),
-                comment: s.comment || '',
-              };
-            }
+      const newScores = { ...scores };
+      for (const r of results) {
+        if (r.status === 'fulfilled') {
+          const { bidId, data } = r.value;
+          if (!data?.my_scores?.length) continue;
+          for (const s of data.my_scores) {
+            if (!s.criterion) continue;
+            const criterionId = s.criterion;
+            const c = criteria.find((crt: EvaluationCriterion) => crt.id === criterionId);
+            if (!c) continue;
+            newScores[bidId] = newScores[bidId] || {};
+            newScores[bidId][criterionId] = {
+              score: Number(s.raw_score),
+              comment: s.comment || '',
+            };
           }
         }
-        return next;
-      });
+      }
+      setScores(newScores);
       setLoadingScores(false);
     };
     fetchExistingScores();
@@ -115,23 +139,9 @@ const TechnicalScoring: React.FC = () => {
     let total = 0;
     criteria.forEach((c) => {
       const entry = s[c.id];
-      if (entry) total += entry.score * (c.weight / 100);
+      if (entry && entry.score > 0) total += entry.score * (c.weight / 100);
     });
     return total;
-  };
-
-  const getFormulaBreakdown = (bidId: string) => {
-    const s = scores[bidId] || {};
-    const parts: string[] = [];
-    let total = 0;
-    criteria.forEach((c) => {
-      const entry = s[c.id];
-      const score = entry?.score || 0;
-      const contrib = score * (c.weight / 100);
-      parts.push(`${score}×${c.weight}%`);
-      total += contrib;
-    });
-    return { formula: parts.join('+'), total };
   };
 
   const updateScore = (bidId: string, criterionId: string, field: 'score' | 'comment', value: string | number) => {
@@ -145,6 +155,14 @@ const TechnicalScoring: React.FC = () => {
         },
       },
     }));
+  };
+
+  const updatePrelim = (bidId: string, index: number, passed: boolean) => {
+    setPrelim(prev => {
+      const checks = [...(prev[bidId] || DEFAULT_PRELIM_CHECKS.map(c => ({ ...c })))];
+      checks[index] = { ...checks[index], passed };
+      return { ...prev, [bidId]: checks };
+    });
   };
 
   const submitScoresForCurrent = async () => {
@@ -177,11 +195,41 @@ const TechnicalScoring: React.FC = () => {
       queryClient.invalidateQueries({ queryKey: ['solicitation-bids'] });
       if (currentBidIndex < bidList.length - 1) {
         setCurrentBidIndex(i => i + 1);
-      } else {
-        setAllSubmitted(true);
       }
     } catch {
       toast.error('Failed to submit scores');
+    }
+    setSubmitting(false);
+  };
+
+  const submitAllScores = async () => {
+    setSubmitting(true);
+    let allSuccess = true;
+    for (let i = 0; i < bidList.length; i++) {
+      const bid = bidList[i];
+      const bidScores = scores[bid.id] || {};
+      for (const c of criteria) {
+        const entry = bidScores[c.id];
+        if (!entry || !(entry.score > 0)) continue;
+        try {
+          await evaluationsApi.submitScores({
+            bid_id: bid.id,
+            criterion_id: c.id,
+            raw_score: entry.score,
+            comment: entry.comment,
+          });
+        } catch (err: any) {
+          if (err?.response?.data?.error?.includes('already scored')) continue;
+          allSuccess = false;
+        }
+      }
+    }
+    if (allSuccess) {
+      toast.success('All scores submitted successfully');
+      setAllSubmitted(true);
+      setShowConfirmSubmit(false);
+    } else {
+      toast.error('Some scores could not be submitted');
     }
     setSubmitting(false);
   };
@@ -212,7 +260,7 @@ const TechnicalScoring: React.FC = () => {
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-10">
           <h2 className="text-xl font-bold text-gray-900 mb-2">Access Restricted</h2>
           <p className="text-gray-500">
-            This technical scoring workspace is only available to assigned evaluation committee members and the chair.
+            This technical scoring workspace is only available to assigned evaluation committee members.
           </p>
         </div>
       </div>
@@ -223,9 +271,10 @@ const TechnicalScoring: React.FC = () => {
     return (
       <div className="max-w-4xl mx-auto py-12 text-center">
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-10">
+          <XCircleIcon className="w-16 h-16 text-red-400 mx-auto mb-4" />
           <h2 className="text-xl font-bold text-gray-900 mb-2">Recused From Evaluation</h2>
           <p className="text-gray-500">
-            You have declared a conflict of interest and cannot participate in technical scoring for this solicitation.
+            You have been recused due to a declared conflict of interest and cannot participate in scoring.
           </p>
         </div>
       </div>
@@ -238,7 +287,8 @@ const TechnicalScoring: React.FC = () => {
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-12">
           <CheckCircleIcon className="w-16 h-16 text-emerald-500 mx-auto mb-4" />
           <h2 className="text-2xl font-bold text-gray-900 mb-2">All Scores Submitted</h2>
-          <p className="text-gray-500 mb-6">Your independent evaluation has been recorded. Scores are private until all members submit.</p>
+          <p className="text-gray-500 mb-2">Your independent evaluation has been recorded. Scores are private until all members submit.</p>
+          <p className="text-sm text-amber-600 mb-6 font-medium">Waiting for other members to complete scoring</p>
 
           <div className="max-w-lg mx-auto space-y-4 mb-8">
             <h3 className="text-lg font-semibold text-gray-900">Your Scores Summary</h3>
@@ -247,22 +297,23 @@ const TechnicalScoring: React.FC = () => {
               return (
                 <div key={bid.id} className="flex items-center justify-between p-4 bg-gray-50 rounded-xl">
                   <span className="font-medium text-gray-900">{bid.vendor_name || bid.id}</span>
-                  <span className="font-bold text-zammsa-green">{wt.toFixed(1)} / 100</span>
+                  <div className="text-right">
+                    <span className="font-bold text-zammsa-green">{wt.toFixed(1)} / 100</span>
+                    <span className={`ml-2 text-xs font-medium ${wt >= 70 ? 'text-emerald-600' : 'text-red-600'}`}>
+                      {wt >= 70 ? '✅ Passes' : '🔴 Below threshold'}
+                    </span>
+                  </div>
                 </div>
               );
             })}
           </div>
 
-          {canProceedFinancial ? (
-            <button
-              onClick={() => committee?.solicitation ? navigate(`/evaluations/${committee.solicitation}/financial`) : navigate('/evaluations')}
-              className="px-6 py-3 bg-zammsa-green text-white rounded-xl font-bold"
-            >
-              Proceed to Financial Evaluation
-            </button>
-          ) : (
-            <p className="text-sm text-gray-500">The committee chair will proceed with the financial evaluation.</p>
-          )}
+          <button
+            onClick={() => navigate('/evaluations')}
+            className="px-6 py-3 bg-zammsa-green text-white rounded-xl font-bold"
+          >
+            Back to My Evaluations
+          </button>
         </div>
       </div>
     );
@@ -276,26 +327,34 @@ const TechnicalScoring: React.FC = () => {
     );
   }
 
-  const { formula, total: weightedTotal } = getFormulaBreakdown(currentBid?.id);
+  const currentWeightedTotal = getWeightedTotal(currentBid?.id);
+  const threshold = solicitation?.minimum_technical_threshold || 70;
 
   return (
-    <div className="max-w-5xl mx-auto space-y-6">
+    <div className="max-w-6xl mx-auto space-y-6">
       <div className="flex items-center justify-between">
         <div>
           <div className="flex items-center gap-3">
-            <h1 className="text-2xl font-bold text-gray-900">Technical Scoring</h1>
+            <h1 className="text-2xl font-bold text-gray-900">Technical Evaluation</h1>
             <StatusBadge status="active" />
           </div>
           <p className="text-sm text-gray-500 mt-1">
-            YOUR SCORES ARE PRIVATE until all members submit | Bid {currentBidIndex + 1} of {bidList.length}
+            {solicitation?.sol_number || committee?.solicitation_number || ''} — {solicitation?.title || committee?.solicitation_title || ''}
+          </p>
+          <p className="text-xs text-gray-400 mt-0.5">
+            Evaluator: {user?.full_name} &nbsp;|&nbsp; Role: {user?.role === ROLES.EVALUATION_COMMITTEE_CHAIR ? 'Chair' : 'Member'}
           </p>
         </div>
+      </div>
+
+      <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-xs text-amber-800">
+        Your scores are private. You cannot see other members' scores until you submit all your scores.
       </div>
 
       {/* Progress Bar */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
         <div className="flex items-center justify-between mb-2">
-          <span className="text-sm font-medium text-gray-700">Scoring Progress</span>
+          <span className="text-sm font-medium text-gray-700">Your Progress</span>
           <span className="text-sm font-bold text-zammsa-green">{scoredCount} of {bidList.length} bids scored</span>
         </div>
         <div className="w-full bg-gray-200 rounded-full h-3">
@@ -304,32 +363,41 @@ const TechnicalScoring: React.FC = () => {
             style={{ width: `${(scoredCount / Math.max(bidList.length, 1)) * 100}%` }}
           />
         </div>
+        <p className="text-xs text-gray-400 mt-1">You must score ALL bids before submitting</p>
       </div>
 
       {/* Bid Selection Table */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-5">
-        <h2 className="text-sm font-semibold text-gray-900 mb-3">Select Bid to Score:</h2>
+        <h2 className="text-sm font-semibold text-gray-900 mb-3">Bids to Evaluate</h2>
         <div className="overflow-x-auto">
           <table className="min-w-full divide-y divide-gray-200 text-sm">
             <thead className="bg-gray-50">
               <tr>
-                <th className="px-4 py-2 text-left font-medium text-gray-500">Bid</th>
-                <th className="px-4 py-2 text-right font-medium text-gray-500">My Status</th>
+                <th className="px-4 py-2 text-left font-medium text-gray-500">#</th>
+                <th className="px-4 py-2 text-left font-medium text-gray-500">Bidder</th>
+                <th className="px-4 py-2 text-center font-medium text-gray-500">Your Status</th>
+                <th className="px-4 py-2 text-right font-medium text-gray-500">Action</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
               {bidList.map((bid: any, i: number) => {
-                const isScored = scores[bid.id] && criteria.every((c) => (scores[bid.id]?.[c.id]?.score || 0) > 0);
+                const isScored = scores[bid.id] && criteria.length > 0 && criteria.every((c) => (scores[bid.id]?.[c.id]?.score || 0) > 0);
                 return (
                   <tr key={bid.id} className={`hover:bg-gray-50 cursor-pointer ${i === currentBidIndex ? 'bg-zammsa-green/5' : ''}`} onClick={() => setCurrentBidIndex(i)}>
-                    <td className="px-4 py-2 font-medium text-gray-900">Bid {i + 1} — {bid.vendor_name || bid.id}</td>
+                    <td className="px-4 py-2 text-gray-500">{i + 1}</td>
+                    <td className="px-4 py-2 font-medium text-gray-900">{bid.vendor_name || bid.supplier_name || bid.id}</td>
+                    <td className="px-4 py-2 text-center">
+                      {isScored ? (
+                        <span className="inline-flex items-center gap-1 text-xs font-medium text-emerald-600 bg-emerald-50 px-2.5 py-1 rounded-full">✅ Scored</span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 text-xs font-medium text-amber-600 bg-amber-50 px-2.5 py-1 rounded-full">⏳ Pending</span>
+                      )}
+                    </td>
                     <td className="px-4 py-2 text-right">
                       {isScored ? (
-                        <span className="inline-flex items-center gap-1 text-xs font-medium text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded">✅ Scored</span>
-                      ) : i === currentBidIndex ? (
-                        <span className="inline-flex items-center gap-1 text-xs font-medium text-blue-600 bg-blue-50 px-2 py-0.5 rounded">🔄 Scoring Now</span>
+                        <span className="text-xs text-zammsa-green font-medium cursor-pointer hover:underline">View/Edit</span>
                       ) : (
-                        <button className="px-3 py-1 text-xs font-bold text-white bg-zammsa-green rounded-lg hover:bg-green-700">⏳ Score Now</button>
+                        <button className="px-3 py-1 text-xs font-bold text-white bg-zammsa-green rounded-lg hover:bg-green-700">Score Now</button>
                       )}
                     </td>
                   </tr>
@@ -340,92 +408,182 @@ const TechnicalScoring: React.FC = () => {
         </div>
       </div>
 
-      {/* Scoring Form */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
-        <div className="flex items-center justify-between mb-6">
-          <div>
-            <h2 className="text-lg font-semibold text-gray-900">Scoring: Bid {currentBidIndex + 1} — {currentBid.vendor_name || currentBid.id}</h2>
+      {currentBid && (
+        <>
+          {/* Preliminary Check */}
+          <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-lg font-semibold text-gray-900">
+                Preliminary Check — {currentBid.vendor_name || currentBid.id}
+              </h2>
+              <span className="text-xs text-gray-400">{currentBid.bid_number || currentBid.submission_id || ''}</span>
+            </div>
+            <div className="space-y-2">
+              {currentPrelim.map((check: PrelimCheck, idx: number) => (
+                <div key={idx} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                  <span className="text-sm text-gray-700">{check.criterion}</span>
+                  <div className="flex items-center gap-3">
+                    <label className={`flex items-center gap-1.5 px-3 py-1 rounded text-xs font-medium cursor-pointer ${check.passed ? 'bg-emerald-100 text-emerald-700' : 'bg-gray-100 text-gray-500'}`}>
+                      <input type="radio" name={`prelim-${currentBid.id}-${idx}`} checked={check.passed} onChange={() => updatePrelim(currentBid.id, idx, true)} className="sr-only" />
+                      ● Pass
+                    </label>
+                    <label className={`flex items-center gap-1.5 px-3 py-1 rounded text-xs font-medium cursor-pointer ${!check.passed ? 'bg-red-100 text-red-700' : 'bg-gray-100 text-gray-500'}`}>
+                      <input type="radio" name={`prelim-${currentBid.id}-${idx}`} checked={!check.passed} onChange={() => updatePrelim(currentBid.id, idx, false)} className="sr-only" />
+                      ○ Fail
+                    </label>
+                  </div>
+                </div>
+              ))}
+            </div>
+            {prelimAnyFailed(currentBid.id) && (
+              <div className="mt-3 p-3 bg-red-50 border border-red-200 rounded-lg">
+                <p className="text-xs font-medium text-red-700">
+                  ⚠ If any preliminary criterion FAILS: Bid is disqualified. Technical scoring not required.
+                </p>
+              </div>
+            )}
           </div>
-          <div className="flex gap-2">
-            <button className="px-3 py-1 text-xs font-medium text-zammsa-green bg-white border border-gray-200 rounded-lg hover:bg-gray-50">📄 View Technical Proposal</button>
-            <button className="px-3 py-1 text-xs font-medium text-zammsa-green bg-white border border-gray-200 rounded-lg hover:bg-gray-50">📄 View Certificates</button>
-          </div>
-        </div>
 
-        <div className="space-y-5">
-          {criteria.map((criterion) => {
-            const entry = currentScores[criterion.id] || { score: 0, comment: '' };
-            const weightedScore = entry.score * (criterion.weight / 100);
-            return (
-              <div key={criterion.id} className="flex items-start gap-4 p-4 bg-gray-50 rounded-xl border border-gray-100">
-                <div className="w-48 shrink-0">
-                  <p className="text-sm font-semibold text-gray-900">{criterion.criterion_name}</p>
-                  <p className="text-xs text-gray-500 mt-0.5">Weight: {criterion.weight}%</p>
-                  {criterion.minimum_threshold != null && (
-                    <p className="text-xs text-amber-600 mt-0.5">Min threshold: {criterion.minimum_threshold}%</p>
+          {/* Technical Criteria Scoring */}
+          {prelimAllPassed(currentBid.id) && (
+            <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+              <h2 className="text-lg font-semibold text-gray-900 mb-4">Technical Criteria Scoring</h2>
+              <div className="space-y-4">
+                {criteria.map((criterion) => {
+                  const entry = currentScores[criterion.id] || { score: 0, comment: '' };
+                  const weightedScore = (entry.score || 0) * (criterion.weight / 100);
+                  return (
+                    <div key={criterion.id} className="border border-gray-200 rounded-xl p-4">
+                      <div className="flex items-start justify-between mb-3">
+                        <div>
+                          <p className="text-sm font-semibold text-gray-900">{criterion.order_index}. {criterion.criterion_name}</p>
+                          <p className="text-xs text-gray-500">Weight: {criterion.weight}%</p>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-xs text-gray-500">Weighted</p>
+                          <p className="text-lg font-bold text-zammsa-green">{weightedScore.toFixed(1)}</p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-4">
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs text-gray-500">Score (0-100):</span>
+                          <input
+                            type="number"
+                            min={0}
+                            max={100}
+                            value={entry.score || ''}
+                            onChange={(e) => updateScore(currentBid.id, criterion.id, 'score', Math.min(100, Math.max(0, Number(e.target.value))))}
+                            className="w-20 border border-gray-300 rounded-lg px-3 py-2 text-sm font-bold text-center"
+                            placeholder="0"
+                          />
+                        </div>
+                        <input
+                          value={entry.comment}
+                          onChange={(e) => updateScore(currentBid.id, criterion.id, 'comment', e.target.value)}
+                          className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm"
+                          placeholder="Comments..."
+                        />
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {currentWeightedTotal > 0 && (
+                <div className={`mt-4 p-4 rounded-xl border ${currentWeightedTotal >= threshold ? 'bg-emerald-50 border-emerald-200' : 'bg-red-50 border-red-200'}`}>
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-semibold text-gray-700">Total Weighted Score</p>
+                      <p className="text-xs text-gray-500">Minimum threshold: {threshold}</p>
+                    </div>
+                    <div className="text-right">
+                      <p className={`text-2xl font-bold ${currentWeightedTotal >= threshold ? 'text-emerald-600' : 'text-red-600'}`}>
+                        {currentWeightedTotal.toFixed(1)} / 100
+                      </p>
+                      <p className={`text-xs font-medium ${currentWeightedTotal >= threshold ? 'text-emerald-600' : 'text-red-600'}`}>
+                        {currentWeightedTotal >= threshold ? '✅ Passes threshold' : '🔴 Below threshold'}
+                      </p>
+                    </div>
+                  </div>
+                  {currentWeightedTotal < threshold && (
+                    <p className="text-xs text-red-600 mt-2">This bid will NOT proceed to financial evaluation</p>
                   )}
                 </div>
-                <div className="flex items-center gap-2">
-                  <span className="text-xs text-gray-500">Score:</span>
-                  <input
-                    type="number"
-                    min={0}
-                    max={100}
-                    value={entry.score || ''}
-                    onChange={(e) => updateScore(currentBid.id, criterion.id, 'score', Math.min(100, Math.max(0, Number(e.target.value))))}
-                    className="w-20 border border-gray-300 rounded-lg px-3 py-2 text-sm font-bold text-center"
-                    placeholder="0"
-                  />
-                  <span className="text-xs text-gray-500">/100</span>
-                </div>
-                <div className="flex-1">
-                  <input
-                    value={entry.comment}
-                    onChange={(e) => updateScore(currentBid.id, criterion.id, 'comment', e.target.value)}
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
-                    placeholder="Comments..."
-                  />
-                </div>
-                <div className="text-right shrink-0">
-                  <p className="text-xs text-gray-500">Weighted</p>
-                  <p className="text-lg font-bold text-zammsa-green">{weightedScore.toFixed(1)}</p>
-                </div>
-              </div>
-            );
-          })}
-        </div>
+              )}
+            </div>
+          )}
+        </>
+      )}
 
-        {weightedTotal > 0 && (
-          <div className="mt-5 p-4 bg-zammsa-green/5 border border-zammsa-green/20 rounded-xl">
-            <p className="text-sm font-semibold text-gray-700">
-              Weighted Total: ({formula}) = {criteria.map(c => (currentScores[c.id]?.score || 0) * (c.weight / 100)).map(v => v.toFixed(1)).join('+')} ={' '}
-              <span className="text-zammsa-green font-bold text-lg">{weightedTotal.toFixed(1)}</span>
-            </p>
-            <p className={`text-xs mt-1 font-medium ${weightedTotal >= 70 ? 'text-emerald-600' : 'text-red-600'}`}>
-              Status: {weightedTotal.toFixed(1)} {weightedTotal >= 70 ? '≥ 70 threshold ✅' : '< 70 threshold ❌'}
-            </p>
-          </div>
-        )}
-      </div>
-
+      {/* Navigation */}
       <div className="flex items-center justify-between">
-        <div className="flex gap-2">
+        <div>
           {currentBidIndex > 0 && (
-            <button onClick={() => setCurrentBidIndex(i => i - 1)} className="px-4 py-2 bg-white border border-gray-300 rounded-lg text-sm flex items-center gap-1">
-              <ArrowLeftIcon className="w-4 h-4" /> Previous Bid
+            <button onClick={() => setCurrentBidIndex(i => i - 1)} className="px-4 py-2 bg-white border border-gray-300 rounded-lg text-sm flex items-center gap-1 hover:bg-gray-50">
+              <ArrowLeftIcon className="w-4 h-4" /> Back to Bid List
             </button>
           )}
         </div>
         <div className="flex gap-2">
           <button
             onClick={submitScoresForCurrent}
-            disabled={submitting}
-            className="px-6 py-2 bg-zammsa-green text-white rounded-lg text-sm font-bold disabled:opacity-50"
+            disabled={submitting || !prelimAllPassed(currentBid?.id)}
+            className="px-6 py-2 bg-zammsa-green text-white rounded-lg text-sm font-bold disabled:opacity-50 hover:bg-green-700"
           >
-            {submitting ? 'Saving...' : currentBidIndex < bidList.length - 1 ? 'Save & Next Bid →' : 'Submit All Scores'}
+            {submitting ? 'Saving...' : currentBidIndex < bidList.length - 1 ? 'Save & Next Bid →' : 'Save Scores'}
           </button>
+          {allBidsScored && (
+            <button
+              onClick={() => setShowConfirmSubmit(true)}
+              className="px-6 py-2 bg-blue-600 text-white rounded-lg text-sm font-bold hover:bg-blue-700"
+            >
+              Submit All My Scores
+            </button>
+          )}
         </div>
       </div>
+
+      {/* Submit Confirmation Modal */}
+      {showConfirmSubmit && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30" onClick={() => setShowConfirmSubmit(false)}>
+          <div className="bg-white rounded-2xl shadow-xl p-6 w-full max-w-2xl mx-4" onClick={(e) => e.stopPropagation()}>
+            <h2 className="text-lg font-bold text-gray-900 mb-4">Submit Your Scores — {solicitation?.sol_number || ''}</h2>
+            <p className="text-sm text-gray-500 mb-4">You have scored all {bidList.length} bids. Review before submitting:</p>
+
+            <div className="space-y-3 mb-6">
+              {bidList.map((bid: any) => {
+                const wt = getWeightedTotal(bid.id);
+                return (
+                  <div key={bid.id} className="flex items-center justify-between p-4 bg-gray-50 rounded-xl">
+                    <span className="font-medium text-gray-900">{bid.vendor_name || bid.id}</span>
+                    <div className="text-right">
+                      <span className="font-bold text-gray-900">{wt.toFixed(1)}</span>
+                      <span className={`ml-2 text-xs font-medium px-2 py-0.5 rounded ${wt >= threshold ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'}`}>
+                        {wt >= threshold ? '✅ Passes' : '🔴 Below threshold'}
+                      </span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            <div className="p-4 bg-amber-50 border border-amber-200 rounded-lg mb-6">
+              <p className="text-sm font-medium text-amber-800">⚠ Once submitted your scores are LOCKED. You cannot edit them after submission.</p>
+            </div>
+
+            <div className="flex justify-end gap-3">
+              <button onClick={() => setShowConfirmSubmit(false)} className="px-4 py-2 border border-gray-300 rounded-lg text-sm">Review My Scores</button>
+              <button
+                onClick={submitAllScores}
+                disabled={submitting}
+                className="px-6 py-2 bg-zammsa-green text-white rounded-lg text-sm font-bold disabled:opacity-50"
+              >
+                {submitting ? 'Submitting...' : 'Submit All Scores 🔒'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

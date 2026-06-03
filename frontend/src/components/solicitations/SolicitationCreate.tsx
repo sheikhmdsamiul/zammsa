@@ -153,6 +153,8 @@ const SolicitationCreate: React.FC = () => {
   const handleSubmit = () => {
     if (!requisition) { toast.error('Select a linked requisition'); return; }
     if (!title.trim()) { toast.error('Title is required'); return; }
+    if (!description.trim()) { toast.error('Description is required'); return; }
+    if (!closingDate) { toast.error('Closing date is required'); return; }
     if (!weightValid) { toast.error('Technical criteria weights must total 100%'); return; }
     if (mandatoryCriteria.length === 0) { toast.error('At least one mandatory criterion is required'); return; }
     if (technicalCriteria.length === 0) { toast.error('At least one technical criterion is required'); return; }
@@ -165,17 +167,12 @@ const SolicitationCreate: React.FC = () => {
       description,
       type: solType,
       requisition,
-      department,
       estimated_value: estimatedValue,
       currency,
       budget_code: budgetCode,
-      issue_date: issueDate,
       closing_date: getDateTime(closingDate, closingHour, closingMinute),
-      opening_date: getDateTime(openingDate, openingHour, openingMinute),
       submission_format: submissionFormat,
       bid_validity_days: bidValidity,
-      pre_bid_date: preBidDate,
-      pre_bid_venue: preBidVenue,
       citizen_preference: citizenPreference,
       bid_security_required: bidSecurityRequired,
       bid_security_type: bidSecurityType,
@@ -195,6 +192,12 @@ const SolicitationCreate: React.FC = () => {
       document_fee_enabled: docFeeEnabled,
       document_fee_amount: docFeeEnabled ? docFeeAmount : 0,
     };
+
+    if (department) payload.department = department;
+    if (issueDate) payload.issue_date = issueDate;
+    if (openingDate) payload.opening_date = getDateTime(openingDate, openingHour, openingMinute);
+    if (preBidDate) payload.pre_bid_date = preBidDate;
+    if (preBidVenue) payload.pre_bid_venue = preBidVenue;
 
     if (uploadFiles.length > 0) {
       payload.additional_documents = uploadFiles.map(f => ({ name: f.name, size: f.size }));

@@ -3,6 +3,8 @@ import secrets
 from decimal import Decimal, InvalidOperation
 from django.db.models import Q, Max as MaxAgg
 from django.utils import timezone
+from django.core.mail import send_mail
+from django.conf import settings
 from rest_framework import generics, filters, status
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated, AllowAny
@@ -12,6 +14,7 @@ from django_filters.rest_framework import DjangoFilterBackend
 import django_filters
 
 from .models import BidSubmission, BidDocument, BidSecurity, BidOpening, BidOpeningDetail, PreBidConference
+from accounts.models import User
 from .serializers import (
     BidSubmissionSerializer, BidSubmissionListSerializer, BidDocumentSerializer,
     BidSecuritySerializer, BidOpeningSerializer, BidOpeningDetailSerializer,
@@ -200,12 +203,22 @@ def bid_submit_view(request):
     submission_id = f"BID-{now.strftime('%Y%m%d')}-{secrets.token_hex(3).upper()}"
     receipt_number = f"RCT-{now.strftime('%Y%m%d')}-{secrets.token_hex(4).upper()}"
 
+    line_items_raw = request.data.get('line_items')
+    line_items = []
+    if line_items_raw:
+        try:
+            import json
+            line_items = json.loads(line_items_raw) if isinstance(line_items_raw, str) else line_items_raw
+        except (json.JSONDecodeError, TypeError):
+            pass
+
     bid = BidSubmission.objects.create(
         solicitation=sol,
         supplier=request.user,
         submission_id=submission_id,
         receipt_number=receipt_number,
         bid_price=bid_price,
+        line_items=line_items,
         validity_period_days=request.data.get('validity_period_days') or None,
         security_amount=security_amount,
         security_type=request.data.get('security_type', ''),
@@ -364,6 +377,25 @@ def bid_opening_start_view(request, pk):
     if not bids.exists():
         return Response({'error': 'No bids to open'}, status=400)
 
+    # Resolve witness UUIDs to structured data (name, role, id)
+    raw_witnesses = request.data.get('witnesses', [])
+    resolved_witnesses = []
+    for w in raw_witnesses:
+        if isinstance(w, dict):
+            resolved_witnesses.append(w)
+        elif isinstance(w, str):
+            try:
+                user = User.objects.get(pk=w)
+                resolved_witnesses.append({
+                    'id': str(user.pk),
+                    'name': user.full_name,
+                    'role': user.role,
+                })
+            except User.DoesNotExist:
+                resolved_witnesses.append({'id': w, 'name': w, 'role': 'Witness'})
+        else:
+            resolved_witnesses.append(w)
+
     opening = BidOpening.objects.create(
         solicitation=sol,
         conducted_by=request.user,
@@ -372,7 +404,7 @@ def bid_opening_start_view(request, pk):
         scheduled_opening_time=request.data.get('scheduled_opening_time') or None,
         public_live_link=request.data.get('public_live_link', f'portal.zammsa.gov.zm/opening/{sol.sol_number}-live'),
         viewers_connected=int(request.data.get('viewers_connected', 0) or 0),
-        witnesses=request.data.get('witnesses', []),
+        witnesses=resolved_witnesses,
         witness_signatures=request.data.get('witness_signatures', []),
         observations=request.data.get('observations', ''),
     )
@@ -517,32 +549,114 @@ Minutes Generated: {timezone.now().strftime('%Y-%m-%d %H:%M')}
 
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
-def bid_opening_send_minutes_view(request, pk):
-    """Step 7: Email minutes to all bidding suppliers"""
+def bid_opening_finalize_view(request, pk):
+    """Finalize bid opening: save observations, sign, generate minutes, email bidders, mark completed"""
+    if getattr(request.user, 'role', '') not in BID_OPENING_ROLES:
+        return Response({'error': 'Only procurement officers can finalize bid openings'}, status=403)
+
     try:
         opening = BidOpening.objects.get(pk=pk)
     except BidOpening.DoesNotExist:
         return Response({'error': 'Opening not found'}, status=404)
 
     sol = opening.solicitation
-    bids = BidSubmission.objects.filter(solicitation=sol)
 
+    # 1. Save observations and witness signatures
+    observations = request.data.get('observations', opening.observations)
+    witness_signatures = request.data.get('witness_signatures', opening.witness_signatures)
+    opening.observations = observations
+    opening.witness_signatures = witness_signatures
+    opening.status = 'completed'
+    opening.completed_at = timezone.now()
+
+    # 2. Generate minutes
+    details = opening.opening_details.all().order_by('opened_sequence')
+    witnesses_text = '\n'.join(
+        f'  - {s.get("name", s)}' if isinstance(s, dict) else f'  - {s}'
+        for s in opening.witnesses
+    ) if opening.witnesses else '  None recorded'
+
+    opened_details = [d for d in details if d.is_opened]
+    details_lines = '\n'.join(
+        f'  {d.opened_sequence}. {d.bidder_name or d.bid.supplier.full_name}  |  '
+        f'Price: {"SEALED" if d.financial_sealed else f"ZMW {d.price_read}"}  |  '
+        f'Security: {"VERIFIED" if d.security_verified_read else "PENDING"}  |  '
+        f'Objections: {d.objections or "None"}'
+        for d in opened_details
+    ) if opened_details else '  No bids opened'
+
+    minutes_text = f"""
+ZAMMSA — BID OPENING MINUTES
+=============================
+Solicitation: {sol.sol_number} — {sol.title or 'N/A'}
+Opening Date: {opening.opened_at.strftime('%Y-%m-%d %H:%M')} CAT
+Conducted By: {opening.conducted_by.full_name}
+Officer Title: {opening.conducted_by.get_role_display()}
+Status: Completed
+
+WITNESSES:
+{witnesses_text}
+
+OPENED BIDS:
+{details_lines}
+
+OBSERVATIONS:
+{observations or 'None recorded.'}
+
+Late Bids: {BidSubmission.objects.filter(solicitation=sol, is_late=True).count()}
+Total Bids Received: {BidSubmission.objects.filter(solicitation=sol).count()}
+Valid Bids Opened: {len(opened_details)}
+Minutes Finalized: {timezone.now().strftime('%Y-%m-%d %H:%M')} CAT
+Finalized By: {request.user.full_name} ({request.user.email})
+"""
+
+    minutes_filename = f'opening_minutes_{sol.sol_number}_{opening.opened_at.strftime("%Y%m%d_%H%M")}.txt'
+    opening.minutes_file_path = minutes_filename
+    opening.save(update_fields=[
+        'observations', 'witness_signatures', 'status',
+        'completed_at', 'minutes_file_path',
+    ])
+
+    # 3. Update all opened bids' status to 'opened' (in case any weren't updated)
+    opened_details_qs = opening.opening_details.filter(is_opened=True)
+    for detail in opened_details_qs:
+        if detail.bid and detail.bid.status != 'opened':
+            detail.bid.status = 'opened'
+            detail.bid.opened_at = detail.bid.opened_at or timezone.now()
+            detail.bid.save(update_fields=['status', 'opened_at'])
+
+    # 4. Email minutes to all bidding suppliers
+    bids = BidSubmission.objects.filter(solicitation=sol)
     recipients = []
     for bid in bids:
-        if bid.supplier.email:
-            recipients.append({
-                'supplier': bid.supplier.full_name,
-                'email': bid.supplier.email,
-            })
-
-    if not recipients:
-        return Response({'error': 'No supplier emails found'}, status=400)
+        email = bid.supplier.email
+        name = bid.supplier.full_name
+        if email:
+            recipients.append({'supplier': name, 'email': email})
+            try:
+                send_mail(
+                    subject=f'Bid Opening Minutes — {sol.sol_number}',
+                    message=(
+                        f'Dear {name},\n\n'
+                        f'Please find below the bid opening minutes for solicitation {sol.sol_number} — {sol.title}.\n\n'
+                        f'{minutes_text}\n\n'
+                        f'This is an automated message from the ZAMMSA Procurement System.\n'
+                        f'Contact the procurement office if you have any objections within 3 working days.'
+                    ),
+                    from_email=settings.DEFAULT_FROM_EMAIL,
+                    recipient_list=[email],
+                    fail_silently=True,
+                )
+            except Exception:
+                pass
 
     return Response({
-        'message': f'Minutes sent to {len(recipients)} suppliers',
-        'recipients': recipients,
-        'notes': 'Email sending requires email backend configuration',
+        'message': f'Bid opening finalized and minutes sent to {len(recipients)} supplier(s)',
         'opening_id': str(opening.opening_id),
+        'status': 'completed',
+        'minutes_content': minutes_text,
+        'minutes_file': minutes_filename,
+        'recipients': recipients,
     })
 
 

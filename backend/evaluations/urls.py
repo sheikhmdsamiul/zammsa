@@ -1,6 +1,8 @@
 from django.urls import path
 from . import views
 
+app_name = 'evaluations'
+
 urlpatterns = [
     path('committees/', views.EvaluationCommitteeListView.as_view(), name='committee-list'),
     path('committees/<uuid:pk>/', views.EvaluationCommitteeDetailView.as_view(), name='committee-detail'),

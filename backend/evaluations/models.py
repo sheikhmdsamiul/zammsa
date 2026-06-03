@@ -25,6 +25,7 @@ class EvaluationCommittee(models.Model):
     members = models.JSONField(default=list)
     chairperson = models.ForeignKey(User, on_delete=models.CASCADE, related_name='chaired_committees')
     secretary = models.ForeignKey(User, on_delete=models.CASCADE, related_name='secretary_committees')
+    require_coi = models.BooleanField(default=True, help_text='Require COI declarations from all members before evaluation')
     formed_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -53,12 +54,23 @@ class PreliminaryExam(models.Model):
         return f'{self.bid.submission_id} - {self.criterion}: {status}'
 
 
+DECLARATION_TYPE_CHOICES = [
+    ('no_conflict', 'No Conflict'),
+    ('general_conflict', 'General Conflict'),
+    ('specific_conflict', 'Conflict with Specific Bidder(s)'),
+]
+
+
 class ConflictOfInterest(models.Model):
     coi_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     committee = models.ForeignKey('EvaluationCommittee', on_delete=models.CASCADE, related_name='conflict_declarations')
     member = models.ForeignKey(User, on_delete=models.CASCADE, related_name='coi_declarations')
     declaration = models.TextField(blank=True, help_text='Details of the conflict or reason for declaration')
     has_conflict = models.BooleanField(default=False)
+    declaration_type = models.CharField(max_length=30, choices=DECLARATION_TYPE_CHOICES, default='no_conflict')
+    conflicted_bidders = models.JSONField(default=list, blank=True, help_text='List of bidder IDs or names for specific conflicts')
+    explanation = models.TextField(blank=True, default='', help_text='Explanation required when conflict is declared')
+    confidentiality_agreed = models.BooleanField(default=False, help_text='Member agreed to maintain confidentiality')
     recused = models.BooleanField(default=False, help_text='Auto-set to True when has_conflict=True')
     declared_at = models.DateTimeField(auto_now_add=True)
 
@@ -178,9 +190,14 @@ class BidEvaluationReport(models.Model):
         for c in committees:
             for m in c.members:
                 uid = m.get('user') if isinstance(m, dict) else m
-                required.append(str(uid))
-            required.append(str(c.chairperson.id))
-            required.append(str(c.secretary.id))
+                if uid:
+                    required.append(str(uid))
+            if c.chairperson_id:
+                required.append(str(c.chairperson_id))
+            if c.secretary_id:
+                required.append(str(c.secretary_id))
+        if not required:
+            return False
         signed_ids = {s['member_id'] for s in self.signatures}
         return all(uid in signed_ids for uid in required)
 

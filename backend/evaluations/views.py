@@ -1,6 +1,7 @@
 import uuid
 from decimal import Decimal
-from django.db.models import Q, Avg, Sum
+from django.db import transaction
+from django.db.models import Q, Avg, Sum, Prefetch
 from django.utils import timezone
 from rest_framework import generics, filters, status
 from rest_framework.decorators import api_view, permission_classes
@@ -144,17 +145,31 @@ def coi_declare_view(request, committee_pk):
     if str(request.user.id) not in member_ids and request.user != committee.chairperson and request.user != committee.secretary:
         return Response({'error': 'You are not a member of this committee'}, status=403)
 
+    has_conflict = request.data.get('has_conflict', False)
+    declaration_type = request.data.get('declaration_type', 'no_conflict' if not has_conflict else 'general_conflict')
+    conflicted_bidders = request.data.get('conflicted_bidders', [])
+    explanation = request.data.get('explanation', request.data.get('declaration', ''))
+    confidentiality_agreed = request.data.get('confidentiality_agreed', False)
+
     coi, created = ConflictOfInterest.objects.get_or_create(
         committee=committee,
         member=request.user,
         defaults={
-            'declaration': request.data.get('declaration', ''),
-            'has_conflict': request.data.get('has_conflict', False),
+            'declaration': explanation,
+            'has_conflict': has_conflict,
+            'declaration_type': declaration_type,
+            'conflicted_bidders': conflicted_bidders,
+            'explanation': explanation,
+            'confidentiality_agreed': confidentiality_agreed,
         }
     )
     if not created:
-        coi.declaration = request.data.get('declaration', coi.declaration)
-        coi.has_conflict = request.data.get('has_conflict', coi.has_conflict)
+        coi.declaration = explanation
+        coi.has_conflict = has_conflict
+        coi.declaration_type = declaration_type
+        coi.conflicted_bidders = conflicted_bidders
+        coi.explanation = explanation
+        coi.confidentiality_agreed = confidentiality_agreed
         coi.save()
 
     return Response({
@@ -247,7 +262,8 @@ def technical_score_calculate_averages_view(request, bid_pk):
 
     results = []
     for criterion in criteria:
-        avg = scores.filter(criterion=criterion).aggregate(avg=Avg('raw_score'))['avg'] or Decimal('0')
+        criterion_scores = TechnicalScore.objects.filter(bid=bid, criterion=criterion)
+        avg = criterion_scores.aggregate(avg=Avg('raw_score'))['avg'] or Decimal('0')
         results.append({
             'criterion_id': str(criterion.criterion_id),
             'criterion_name': criterion.criterion_name,
@@ -276,7 +292,7 @@ def technical_score_threshold_check_view(request, bid_pk):
     except BidSubmission.DoesNotExist:
         return Response({'error': 'Bid not found'}, status=404)
 
-    threshold = Decimal(str(request.data.get('threshold', TECHNICAL_THRESHOLD_DEFAULT)))
+    threshold = Decimal(str(request.data.get('threshold') or bid.solicitation.minimum_technical_threshold or TECHNICAL_THRESHOLD_DEFAULT))
     criteria = EvaluationCriterion.objects.filter(solicitation=bid.solicitation, criterion_type='technical')
 
     total_weighted = Decimal('0')
@@ -473,7 +489,7 @@ def list_passed_tech_bids_view(request, solicitation_pk):
     except Solicitation.DoesNotExist:
         return Response({'error': 'Solicitation not found'}, status=404)
 
-    threshold = Decimal(str(request.query_params.get('threshold', TECHNICAL_THRESHOLD_DEFAULT)))
+    threshold = Decimal(str(request.query_params.get('threshold', sol.minimum_technical_threshold or TECHNICAL_THRESHOLD_DEFAULT)))
     criteria = EvaluationCriterion.objects.filter(solicitation=sol, criterion_type='technical')
     total_tech_weight = criteria.aggregate(s=Sum('weight'))['s'] or Decimal('100')
 
@@ -553,7 +569,8 @@ def financial_evaluation_calculate_view(request, bid_pk):
 
     min_price = FinancialEvaluation.objects.filter(bid__solicitation=bid.solicitation).order_by('evaluated_price').first()
     min_evaluated = min_price.evaluated_price if min_price else evaluated_price
-    financial_score = (min_evaluated / evaluated_price) * Decimal('100') if evaluated_price > 0 else Decimal('0')
+    financial_score = (min_evaluated / evaluated_price) * Decimal('100') if evaluated_price > 0 else Decimal('100')
+
 
     evaluation = FinancialEvaluation.objects.create(
         bid=bid,
@@ -610,7 +627,9 @@ def select_winner_view(request, solicitation_pk):
 
 
 class BidEvaluationReportListView(BaseView, generics.ListCreateAPIView):
-    queryset = BidEvaluationReport.objects.select_related('solicitation', 'approved_by', 'created_by').all()
+    queryset = BidEvaluationReport.objects.select_related('solicitation', 'approved_by', 'created_by').prefetch_related(
+        Prefetch('solicitation__evaluation_committees', queryset=EvaluationCommittee.objects.all())
+    ).all()
     serializer_class = BidEvaluationReportSerializer
     filterset_class = BidEvaluationReportFilter
     ordering = ['-created_at']
@@ -762,18 +781,20 @@ def ber_sign_view(request, pk):
     if not is_member:
         return Response({'error': 'Only committee members can sign the BER'}, status=403)
 
-    already_signed = any(s['member_id'] == str(request.user.id) for s in ber.signatures)
-    if already_signed:
-        return Response({'error': 'You have already signed this BER'}, status=400)
+    with transaction.atomic():
+        ber = BidEvaluationReport.objects.select_for_update().get(pk=pk)
+        already_signed = any(s['member_id'] == str(request.user.id) for s in ber.signatures)
+        if already_signed:
+            return Response({'error': 'You have already signed this BER'}, status=400)
 
-    new_sig = {
-        'member_id': str(request.user.id),
-        'member_name': request.user.full_name,
-        'role': member_role,
-        'signed_at': timezone.now().isoformat(),
-    }
-    ber.signatures = ber.signatures + [new_sig]
-    ber.save(update_fields=['signatures'])
+        new_sig = {
+            'member_id': str(request.user.id),
+            'member_name': request.user.full_name,
+            'role': member_role,
+            'signed_at': timezone.now().isoformat(),
+        }
+        ber.signatures = ber.signatures + [new_sig]
+        ber.save(update_fields=['signatures'])
 
     return Response({
         'message': 'BER signed successfully',

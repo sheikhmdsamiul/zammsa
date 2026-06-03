@@ -180,6 +180,8 @@ export interface Bid {
   vendor: string;
   vendor_name: string;
   bid_number: string;
+  submission_id?: string;
+  bidder_name?: string;
   receipt_number?: string;
   status: 'draft' | 'submitted' | 'withdrawn' | 'modified' | 'opened' | 'evaluated';
   bid_amount: number;
@@ -224,6 +226,8 @@ export interface EvaluationCommittee {
   id: string;
   committee_id: string;
   solicitation: string;
+  solicitation_number?: string;
+  solicitation_title?: string;
   members: any[];
   chairperson: string;
   chairperson_name?: string;
@@ -280,6 +284,10 @@ export interface ConflictOfInterest {
   member_email: string;
   declaration: string;
   has_conflict: boolean;
+  declaration_type: 'no_conflict' | 'general_conflict' | 'specific_conflict';
+  conflicted_bidders: string[];
+  explanation: string;
+  confidentiality_agreed: boolean;
   recused: boolean;
   declared_at: string;
 }
@@ -315,6 +323,8 @@ export interface PassedTechBid {
   bid_id: string;
   submission_id: string;
   bidder_name: string;
+  vendor_name?: string;
+  original_price?: number;
   overall_technical_score: number;
   passed: boolean;
   financial_evaluation_id: string | null;
@@ -739,6 +749,7 @@ export interface RegistrationDocument {
 }
 
 export interface VendorDashboardStats {
+  open_tenders: number;
   total_bids: number;
   active_bids: number;
   awarded_contracts: number;

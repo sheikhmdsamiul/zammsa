@@ -44,6 +44,12 @@ export const ADMIN_PANEL_ROLES = [ROLES.SYSTEM_ADMIN] as const;
 export const AUDITOR_PANEL_ROLES = [ROLES.AUDITOR] as const;
 export const PUBLIC_PORTAL_ROLES = [ROLES.PUBLIC_PORTAL_VIEWER] as const;
 
+// Roles eligible to serve on an evaluation committee (per SRS R-05, R-06).
+export const EVALUATION_COMMITTEE_ROLES: readonly string[] = [
+  ROLES.EVALUATION_COMMITTEE_MEMBER,
+  ROLES.EVALUATION_COMMITTEE_CHAIR,
+] as const;
+
 // Backward compatibility for existing imports/usages.
 export const VENDOR_PORTAL_ROLES = SUPPLIER_PORTAL_ROLES;
 

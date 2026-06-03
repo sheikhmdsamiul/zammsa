@@ -20,11 +20,16 @@ export const evaluationsApi = {
   updateCommittee: (committeeId: string, data: Partial<EvaluationCommittee>) =>
     api.patch<EvaluationCommittee>(`/evaluations/committees/${committeeId}/`, data).then((r) => r.data),
 
+  deleteCommittee: (committeeId: string) =>
+    api.delete(`/evaluations/committees/${committeeId}/`),
+
   addMember: (committeeId: string, data: { user: string; role: string }) =>
     api.patch(`/evaluations/committees/${committeeId}/`, { add_member: data }).then((r) => r.data),
 
-  declareCOI: (committeeId: string, data: { declaration: string; has_conflict: boolean }) =>
-    api.post<ConflictOfInterest>(`/evaluations/committees/${committeeId}/declare-coi/`, data).then((r) => r.data),
+  declareCOI: (committeeId: string, data: {
+    declaration?: string; has_conflict?: boolean; declaration_type?: string;
+    conflicted_bidders?: string[]; explanation?: string; confidentiality_agreed?: boolean;
+  }) => api.post<ConflictOfInterest>(`/evaluations/committees/${committeeId}/declare-coi/`, data).then((r) => r.data),
 
   getCOI: (committeeId: string) =>
     api.get<CommitteeCOIState>(`/evaluations/committees/${committeeId}/coi/`).then((r) => r.data),

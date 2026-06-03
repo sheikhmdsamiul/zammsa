@@ -1,20 +1,19 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import { evaluationsApi } from '../../api/evaluations';
 import { bidsApi } from '../../api/bids';
 import { StatusBadge } from '../common/StatusBadge';
 import { LoadingSpinner } from '../common/LoadingSpinner';
 import { useAuth } from '../../hooks/useAuth';
 import { ROLES } from '../../config/rbac';
+import { ExclamationIcon } from '@heroicons/react/outline';
 
 const EvaluationDetail: React.FC = () => {
   const { id } = useParams<{ id: string }>();
-  const queryClient = useQueryClient();
   const { user } = useAuth();
+  const navigate = useNavigate();
 
-  const [coiHasConflict, setCoiHasConflict] = useState(false);
-  const [coiDeclaration, setCoiDeclaration] = useState('');
   const { data: committee, isLoading } = useQuery({
     queryKey: ['evaluation-committee', id],
     queryFn: () => evaluationsApi.getCommittee(id!),
@@ -33,38 +32,43 @@ const EvaluationDetail: React.FC = () => {
     enabled: !!committee?.solicitation,
   });
 
-  const coiMutation = useMutation({
-    mutationFn: () => evaluationsApi.declareCOI(id!, { declaration: coiDeclaration, has_conflict: coiHasConflict }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['coi-committee', id] });
-      setCoiDeclaration('');
-      setCoiHasConflict(false);
-    },
-  });
-
-  const navigate = useNavigate();
   const [view, setView] = useState<'overview' | 'scoring' | 'financial' | 'ber'>('overview');
+
+  // COI Gate - computed before early return for hooks rule
+  const isChairperson = committee?.chairperson === user?.id;
+  const isSecretary = committee?.secretary === user?.id;
+  const isMember = isChairperson || isSecretary || (committee?.members || []).some(
+    (m: any) => (typeof m === 'string' ? m : m.user) === user?.id
+  );
+  const alreadyDeclared = coiState?.declarations?.some(
+    (d: any) => d.member === user?.id || d.user === user?.id || d.user_id === user?.id
+  );
+  const isRecused = coiState?.recused_members?.includes(user?.id || '');
+  const needsCoiDeclaration = isMember && !isRecused && !alreadyDeclared;
+
+  useEffect(() => {
+    if (needsCoiDeclaration && id) {
+      navigate(`/evaluations/${id}/coi`, { replace: true });
+    }
+  }, [needsCoiDeclaration, id, navigate]);
 
   if (isLoading) return <LoadingSpinner className="py-12" />;
   if (!committee) return <p className="text-center text-gray-500 py-12">Committee not found</p>;
 
-  const isChairperson = committee.chairperson === user?.id;
-  const isSecretary = committee.secretary === user?.id;
-  const isMember = isChairperson || isSecretary || (committee.members || []).some(
-    (m: any) => (typeof m === 'string' ? m : m.user) === user?.id
-  );
-  const alreadyDeclared = coiState?.declarations?.some((d: any) => d.member === user?.id);
-  const isRecused = coiState?.recused_members?.includes(user?.id || '');
+  if (needsCoiDeclaration) {
+    return <LoadingSpinner className="py-12" />;
+  }
+
   const memberListMap = new Map<string, any>();
-  const addMember = (id: string, member: any) => {
-    if (!id || memberListMap.has(id)) return;
-    memberListMap.set(id, member);
+  const addMember = (uid: string, member: any) => {
+    if (!uid || memberListMap.has(uid)) return;
+    memberListMap.set(uid, member);
   };
   addMember(committee.chairperson, { user: committee.chairperson, full_name: committee.chairperson_name || committee.chairperson, role: 'Chairperson' });
   addMember(committee.secretary, { user: committee.secretary, full_name: committee.secretary_name || committee.secretary, role: 'Secretary' });
   (committee.members || []).forEach((m: any) => {
-    const id = typeof m === 'string' ? m : m.user;
-    addMember(id, typeof m === 'string' ? { user: m, full_name: m.slice(0, 8) } : m);
+    const uid = typeof m === 'string' ? m : m.user;
+    addMember(uid, typeof m === 'string' ? { user: m, full_name: m.slice(0, 8) } : m);
   });
   const memberList = Array.from(memberListMap.values());
 
@@ -76,7 +80,9 @@ const EvaluationDetail: React.FC = () => {
             <h1 className="text-2xl font-bold text-gray-900">Evaluation Committee</h1>
             <StatusBadge status="active" />
           </div>
-          <p className="text-sm text-gray-500 mt-1">Solicitation: {committee.solicitation}</p>
+          <p className="text-sm text-gray-500 mt-1">
+            {committee.solicitation_number || committee.solicitation} — {committee.solicitation_title || ''}
+          </p>
         </div>
       </div>
 
@@ -85,23 +91,36 @@ const EvaluationDetail: React.FC = () => {
         <div className="flex items-center gap-4">
           <button onClick={() => setView('overview')} className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${view === 'overview' ? 'bg-zammsa-green text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>Overview</button>
           <button onClick={() => setView('scoring')} className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${view === 'scoring' ? 'bg-zammsa-green text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>Technical Scoring</button>
-          <button onClick={() => setView('financial')} className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${view === 'financial' ? 'bg-zammsa-green text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>Financial Evaluation</button>
-          <button onClick={() => setView('ber')} className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${view === 'ber' ? 'bg-zammsa-green text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>BER & Approval</button>
+          {isChairperson && (
+            <>
+              <button onClick={() => setView('financial')} className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${view === 'financial' ? 'bg-zammsa-green text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>Financial Evaluation</button>
+              <button onClick={() => setView('ber')} className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${view === 'ber' ? 'bg-zammsa-green text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>BER & Approval</button>
+            </>
+          )}
           <div className="ml-auto flex gap-2">
-            {isMember && !isRecused && (
-              <button onClick={() => navigate(`/evaluations/${committee.id}/coi`)} className="px-4 py-2 bg-amber-600 text-white rounded-lg text-sm font-bold">Declare COI</button>
-            )}
             {isChairperson && (
               <>
-              <button onClick={() => navigate(`/evaluations/preliminary/${committee.solicitation}`)} className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-bold">Preliminary Exam</button>
-              <button onClick={() => navigate(`/evaluations/${committee.id}/scoring`)} className="px-4 py-2 bg-zammsa-green text-white rounded-lg text-sm font-bold">Score Bids</button>
-              <button onClick={() => navigate(`/evaluations/${committee.solicitation}/financial`)} className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-bold">Financial Eval</button>
-              <button onClick={() => navigate(`/evaluations/ber/${committee.solicitation}`)} className="px-4 py-2 bg-purple-600 text-white rounded-lg text-sm font-bold">Generate BER</button>
+                <button onClick={() => navigate(`/evaluations/preliminary/${committee.solicitation}`)} className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-bold">Preliminary Exam</button>
+                <button onClick={() => navigate(`/evaluations/${id}/scoring`)} className="px-4 py-2 bg-zammsa-green text-white rounded-lg text-sm font-bold">Score Bids</button>
+                <button onClick={() => navigate(`/evaluations/${committee.solicitation}/financial`)} className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-bold">Financial Eval</button>
+                <button onClick={() => navigate(`/evaluations/ber/${committee.solicitation}`)} className="px-4 py-2 bg-purple-600 text-white rounded-lg text-sm font-bold">Generate BER</button>
               </>
             )}
           </div>
         </div>
       </div>
+
+      {isRecused && (
+        <div className="bg-red-50 border border-red-200 rounded-xl p-4 flex items-start gap-3">
+          <ExclamationIcon className="w-5 h-5 text-red-600 shrink-0 mt-0.5" />
+          <div>
+            <p className="text-sm font-medium text-red-800">You have been recused from this evaluation.</p>
+            <p className="text-xs text-red-700 mt-1">
+              Due to a declared conflict of interest, you cannot participate in scoring. The Procurement Officer has been notified.
+            </p>
+          </div>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 space-y-6">
@@ -138,47 +157,65 @@ const EvaluationDetail: React.FC = () => {
             </div>
           </div>
 
-          {isMember && !isRecused && (
+          {isMember && !isRecused && !alreadyDeclared && (
+            <div className="bg-amber-50 border border-amber-200 rounded-xl p-6">
+              <h2 className="text-lg font-semibold text-amber-900 mb-4">Conflict of Interest Declaration Required</h2>
+              <p className="text-sm text-amber-800 mb-4">
+                You must complete a conflict of interest declaration before accessing bid documents.
+              </p>
+              <button
+                onClick={() => navigate(`/evaluations/${id}/coi`)}
+                className="px-6 py-3 bg-amber-600 text-white rounded-xl text-sm font-bold hover:bg-amber-700"
+              >
+                Complete COI Declaration
+              </button>
+            </div>
+          )}
+
+          {isChairperson && alreadyDeclared && !isRecused && (
             <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
-              <h2 className="text-lg font-semibold text-gray-900 mb-4">
-                Conflict of Interest Declaration
-                {alreadyDeclared && <span className="ml-2 text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded">Declared</span>}
-              </h2>
-              {alreadyDeclared ? (
-                <div className="space-y-2">
-                  {coiState?.declarations?.filter((d: any) => d.member === user?.id).map((d: any) => (
-                    <div key={d.id} className="text-sm bg-gray-50 p-3 rounded">
-                      <p><span className="font-medium">Declaration:</span> {d.declaration || 'None'}</p>
-                      <p><span className="font-medium">Has Conflict:</span> {d.has_conflict ? 'Yes' : 'No'}</p>
-                      <p><span className="font-medium">Recused:</span> {d.recused ? 'Yes' : 'No'}</p>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Do you have a conflict of interest?</label>
-                    <div className="flex gap-4">
-                      <label className="flex items-center gap-1 text-sm">
-                        <input type="radio" checked={!coiHasConflict} onChange={() => setCoiHasConflict(false)} className="accent-zammsa-green" /> No
-                      </label>
-                      <label className="flex items-center gap-1 text-sm">
-                        <input type="radio" checked={coiHasConflict} onChange={() => setCoiHasConflict(true)} className="accent-red-500" /> Yes
-                      </label>
-                    </div>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Declaration Details</label>
-                    <textarea value={coiDeclaration} onChange={(e) => setCoiDeclaration(e.target.value)}
-                      className="w-full border rounded px-3 py-2 text-sm" rows={3}
-                      placeholder="Describe any conflict of interest..." />
-                  </div>
-                  <button onClick={() => coiMutation.mutate()} disabled={coiMutation.isPending}
-                    className="bg-zammsa-green text-white px-4 py-2 rounded text-sm hover:bg-green-700 disabled:opacity-50">
-                    {coiMutation.isPending ? 'Declaring...' : 'Submit Declaration'}
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-lg font-semibold text-gray-900">Quick Actions</h2>
+                {alreadyDeclared && !isRecused && (
+                  <button onClick={() => navigate(`/evaluations/${id}/scoring`)}
+                    className="px-4 py-2 bg-zammsa-green text-white rounded-lg text-sm font-bold hover:bg-green-700">
+                    Proceed to Scoring
                   </button>
+                )}
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <button onClick={() => navigate(`/evaluations/${committee.solicitation}/consolidation`)}
+                  className="px-4 py-3 bg-blue-600 text-white rounded-xl text-sm font-bold hover:bg-blue-700">
+                  Score Consolidation
+                </button>
+                <button onClick={() => navigate(`/evaluations/${committee.solicitation}/financial`)}
+                  className="px-4 py-3 bg-blue-600 text-white rounded-xl text-sm font-bold hover:bg-blue-700">
+                  Financial Evaluation
+                </button>
+                <button onClick={() => navigate(`/evaluations/ber/${committee.solicitation}`)}
+                  className="px-4 py-3 bg-purple-600 text-white rounded-xl text-sm font-bold hover:bg-purple-700">
+                  BER Workflow
+                </button>
+                <button onClick={() => navigate(`/evaluations/zpc-approval`)}
+                  className="px-4 py-3 bg-indigo-600 text-white rounded-xl text-sm font-bold hover:bg-indigo-700">
+                  ZPC Approval
+                </button>
+              </div>
+            </div>
+          )}
+
+          {!isChairperson && isMember && alreadyDeclared && !isRecused && (
+            <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h2 className="text-lg font-semibold text-gray-900">COI Declaration Complete</h2>
+                  <p className="text-sm text-gray-500 mt-1">You can now proceed to evaluate bids</p>
                 </div>
-              )}
+                <button onClick={() => navigate(`/evaluations/${id}/scoring`)}
+                  className="px-6 py-3 bg-zammsa-green text-white rounded-xl text-sm font-bold hover:bg-green-700">
+                  Proceed to Scoring
+                </button>
+              </div>
             </div>
           )}
 
@@ -190,7 +227,7 @@ const EvaluationDetail: React.FC = () => {
                   <thead className="bg-gray-50">
                     <tr>
                       <th className="px-3 py-2 text-left font-medium text-gray-500">Member</th>
-                      <th className="px-3 py-2 text-left font-medium text-gray-500">Declaration</th>
+                      <th className="px-3 py-2 text-left font-medium text-gray-500">Type</th>
                       <th className="px-3 py-2 text-center font-medium text-gray-500">Has Conflict</th>
                       <th className="px-3 py-2 text-center font-medium text-gray-500">Recused</th>
                     </tr>
@@ -199,7 +236,7 @@ const EvaluationDetail: React.FC = () => {
                     {coiState.declarations.map((d: any) => (
                       <tr key={d.id} className={d.recused ? 'bg-red-50' : ''}>
                         <td className="px-3 py-2">{d.member_name}</td>
-                        <td className="px-3 py-2 text-gray-600">{d.declaration || '-'}</td>
+                        <td className="px-3 py-2 text-gray-600 text-xs">{d.declaration_type || (d.has_conflict ? 'Conflict' : 'No Conflict')}</td>
                         <td className="px-3 py-2 text-center">
                           <span className={`px-2 py-0.5 rounded text-xs ${d.has_conflict ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'}`}>
                             {d.has_conflict ? 'Yes' : 'No'}
@@ -221,7 +258,7 @@ const EvaluationDetail: React.FC = () => {
           {view === 'scoring' && (
             <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
               <h2 className="text-lg font-semibold text-gray-900 mb-4">Technical Scoring</h2>
-              <p className="text-sm text-gray-500 mb-4">Score each bid independently. Your scores are private until all members submit.</p>
+              <p className="text-sm text-gray-500 mb-4">Your scores are private. You cannot see other members' scores until you submit all your scores.</p>
               <div className="space-y-3">
                 {bidsData?.results?.length ? bidsData.results.map((bid: any) => (
                   <div key={bid.id} className="flex items-center justify-between p-4 bg-gray-50 rounded-xl">
@@ -229,7 +266,7 @@ const EvaluationDetail: React.FC = () => {
                       <span className="text-sm font-medium text-gray-900">{bid.vendor_name || bid.supplier_name || bid.id}</span>
                       <span className="text-xs text-gray-400 ml-2">({bid.bid_id || bid.submission_id})</span>
                     </div>
-                    <button onClick={() => navigate(`/evaluations/${committee.id}/scoring`)} className="px-4 py-2 bg-zammsa-green text-white rounded-lg text-sm font-bold">Score</button>
+                    <button onClick={() => navigate(`/evaluations/${id}/scoring`)} className="px-4 py-2 bg-zammsa-green text-white rounded-lg text-sm font-bold">Score</button>
                   </div>
                 )) : <p className="text-sm text-gray-400">No bids available for scoring.</p>}
               </div>
