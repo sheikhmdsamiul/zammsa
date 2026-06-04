@@ -93,6 +93,12 @@ const Login: React.FC = () => {
     }
   };
 
+  const quickLogin = async (account: (typeof TEST_ACCOUNTS)[number]) => {
+    loginForm.setValue('email', account.email);
+    loginForm.setValue('password', account.pw);
+    await onLogin({ email: account.email, password: account.pw });
+  };
+
   const onMFA = async (data: MFAForm) => {
     setError('');
     setSubmitting(true);
@@ -232,8 +238,9 @@ const Login: React.FC = () => {
                 <button
                   key={a.email}
                   type="button"
-                  onClick={() => { loginForm.setValue('email', a.email); loginForm.setValue('password', a.pw); }}
-                  className="text-left px-2 py-1.5 text-xs rounded border border-gray-200 hover:bg-gray-50 hover:border-zammsa-green truncate"
+                  disabled={submitting}
+                  onClick={() => quickLogin(a)}
+                  className="text-left px-2 py-1.5 text-xs rounded border border-gray-200 hover:bg-gray-50 hover:border-zammsa-green truncate disabled:opacity-50"
                   title={a.label}
                 >
                   <span className="font-medium text-gray-700">{a.label}</span>

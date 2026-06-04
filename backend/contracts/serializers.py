@@ -113,6 +113,36 @@ class ContractSerializer(serializers.ModelSerializer):
     def get_requires_performance_bond(self, obj):
         return obj.requires_performance_bond()
 
+    def to_internal_value(self, data):
+        from suppliers.models import Supplier, VendorApplication
+        from accounts.models import User
+        
+        supplier_val = data.get('supplier')
+        if supplier_val:
+            try:
+                if not Supplier.objects.filter(pk=supplier_val).exists():
+                    user = User.objects.filter(pk=supplier_val).first()
+                    if user and user.role == 'supplier_user':
+                        reg_no = user.employee_id.replace('SUP-', '', 1)
+                        supplier = Supplier.objects.filter(registration_number=reg_no).first()
+                        if not supplier:
+                            app = VendorApplication.objects.filter(email=user.email).first()
+                            supplier = Supplier.objects.create(
+                                registration_number=reg_no,
+                                tin=app.tin if app else f"TIN-{reg_no}",
+                                name=user.full_name,
+                                ceec_category=app.ceec_category if app else 'non_citizen',
+                                status='active'
+                            )
+                        if hasattr(data, '_mutable'):
+                            data = data.copy()
+                        else:
+                            data = dict(data)
+                        data['supplier'] = str(supplier.supplier_id)
+            except Exception:
+                pass
+        return super().to_internal_value(data)
+
     def create(self, validated_data):
         title = self.initial_data.get('title')
         if title and 'title' not in validated_data:

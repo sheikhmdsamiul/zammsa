@@ -377,8 +377,6 @@ def technical_score_submit_view(request):
     })
 
 
-@api_view(['POST'])
-@permission_classes([IsAuthenticated])
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def list_passed_tech_bids_view(request, solicitation_pk):
@@ -425,11 +423,14 @@ def list_passed_tech_bids_view(request, solicitation_pk):
         financial_eval = FinancialEvaluation.objects.filter(bid=bid).first()
         opening_detail = BidOpeningDetail.objects.filter(bid=bid).first()
 
+        from suppliers.models import Supplier as SupplierModel
+        sup = SupplierModel.objects.filter(registration_number=bid.supplier.employee_id.replace('SUP-', '', 1)).first()
+
         results.append({
             'bid_id': str(bid.bid_id),
             'submission_id': bid.submission_id,
             'bidder_name': bid.supplier.full_name,
-            'supplier_id': str(bid.supplier.supplier_id),
+            'supplier_id': str(sup.supplier_id) if sup else str(bid.supplier.id),
             'original_price': float(bid.bid_price or 0),
             'preference_category': financial_eval.preference_category if financial_eval else 'non_citizen',
             'preference_margin': float(financial_eval.preference_applied or 0) if financial_eval else 0,
@@ -449,6 +450,8 @@ def list_passed_tech_bids_view(request, solicitation_pk):
     })
 
 
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
 def calculate_qcbs_view(request, solicitation_pk):
     try:
         sol = Solicitation.objects.get(pk=solicitation_pk)
@@ -499,9 +502,18 @@ def calculate_qcbs_view(request, solicitation_pk):
         tech_scores = TechnicalScore.objects.filter(bid=bid)
 
         total_weighted = Decimal('0')
+        details = []
         for criterion in tech_criteria:
             avg = tech_scores.filter(criterion=criterion).aggregate(avg=Avg('raw_score'))['avg'] or Decimal('0')
-            total_weighted += avg * criterion.weight / Decimal('100')
+            weighted = avg * criterion.weight / Decimal('100')
+            total_weighted += weighted
+            details.append({
+                'criterion_id': str(criterion.criterion_id),
+                'criterion_name': criterion.criterion_name,
+                'average_raw_score': float(avg),
+                'weighted_score': float(weighted),
+                'weight': float(criterion.weight),
+            })
         overall_pct = (total_weighted / total_tech_weight * Decimal('100')) if total_tech_weight > 0 else Decimal('0')
 
         fin_eval = FinancialEvaluation.objects.filter(bid=bid).first()
@@ -530,19 +542,23 @@ def calculate_qcbs_view(request, solicitation_pk):
                 'rank': 0,
             }
         )
+        from suppliers.models import Supplier as SupplierModel
+        sup = SupplierModel.objects.filter(registration_number=bid.supplier.employee_id.replace('SUP-', '', 1)).first()
+        opening_detail = BidOpeningDetail.objects.filter(bid=bid).first()
+
         results.append({
             'bid_id': str(bid.bid_id),
             'submission_id': bid.submission_id,
             'bidder_name': bid.supplier.full_name,
-            'supplier_id': str(bid.supplier.supplier_id),
+            'supplier_id': str(sup.supplier_id) if sup else str(bid.supplier.id),
             'original_price': float(bid.bid_price or 0),
-            'preference_category': financial_eval.preference_category if financial_eval else 'non_citizen',
-            'preference_margin': float(financial_eval.preference_applied or 0) if financial_eval else 0,
+            'preference_category': fin_eval.preference_category if fin_eval else 'non_citizen',
+            'preference_margin': float(fin_eval.preference_applied or 0) if fin_eval else 0,
             'overall_technical_score': float(overall_pct),
-            'passed': passed,
-            'financial_evaluation_id': str(financial_eval.evaluation_id) if financial_eval else None,
-            'evaluated_price': float(financial_eval.evaluated_price) if financial_eval else None,
-            'financial_score': float(financial_eval.financial_score) if financial_eval else None,
+            'passed': True,
+            'financial_evaluation_id': str(fin_eval.evaluation_id) if fin_eval else None,
+            'evaluated_price': float(fin_eval.evaluated_price) if fin_eval else None,
+            'financial_score': float(fin_eval.financial_score) if fin_eval else None,
             'financial_sealed': opening_detail.financial_sealed if opening_detail else True,
             'details': details,
         })
