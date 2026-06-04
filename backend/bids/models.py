@@ -139,6 +139,7 @@ class BidOpening(models.Model):
     scheduled_opening_time = models.DateTimeField(null=True, blank=True)
     started_at = models.DateTimeField(null=True, blank=True)
     completed_at = models.DateTimeField(null=True, blank=True)
+    location = models.CharField(max_length=255, blank=True, default='ZAMMSA Boardroom, Lusaka / Virtual')
     public_live_link = models.CharField(max_length=255, blank=True, default='')
     viewers_connected = models.IntegerField(default=0)
     minutes_file_path = models.CharField(max_length=500, blank=True)

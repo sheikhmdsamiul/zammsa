@@ -26,6 +26,16 @@ from solicitations.models import Solicitation, EvaluationCriterion
 from bids.models import BidSubmission, BidOpening, BidOpeningDetail
 
 
+def _require_bid_opening_completed(solicitation):
+    """Return an error Response if bid opening is not completed for this solicitation, else None."""
+    if not BidOpening.objects.filter(solicitation=solicitation, status='completed').exists():
+        return Response(
+            {'error': 'Bid opening must be completed before proceeding to evaluation activities.'},
+            status=400,
+        )
+    return None
+
+
 class StandardPagination(PageNumberPagination):
     page_size = 25
     page_size_query_param = 'page_size'
@@ -117,6 +127,18 @@ class PreliminaryExamListView(BaseView, generics.ListCreateAPIView):
     serializer_class = PreliminaryExamSerializer
     ordering = ['-exam_id']
 
+    def create(self, request, *args, **kwargs):
+        bid_id = request.data.get('bid')
+        if bid_id:
+            try:
+                bid = BidSubmission.objects.get(pk=bid_id)
+                err = _require_bid_opening_completed(bid.solicitation)
+                if err:
+                    return err
+            except BidSubmission.DoesNotExist:
+                pass
+        return super().create(request, *args, **kwargs)
+
 
 class PreliminaryExamDetailView(generics.RetrieveUpdateDestroyAPIView):
     queryset = PreliminaryExam.objects.all()
@@ -129,6 +151,18 @@ class TechnicalScoreListView(BaseView, generics.ListCreateAPIView):
     serializer_class = TechnicalScoreSerializer
     filterset_class = TechnicalScoreFilter
     ordering = ['-submitted_at']
+
+    def create(self, request, *args, **kwargs):
+        bid_id = request.data.get('bid')
+        if bid_id:
+            try:
+                bid = BidSubmission.objects.get(pk=bid_id)
+                err = _require_bid_opening_completed(bid.solicitation)
+                if err:
+                    return err
+            except BidSubmission.DoesNotExist:
+                pass
+        return super().create(request, *args, **kwargs)
 
 
 class TechnicalScoreDetailView(generics.RetrieveUpdateDestroyAPIView):
@@ -256,6 +290,10 @@ def technical_score_calculate_averages_view(request, bid_pk):
     except BidSubmission.DoesNotExist:
         return Response({'error': 'Bid not found'}, status=404)
 
+    err = _require_bid_opening_completed(bid.solicitation)
+    if err:
+        return err
+
     criteria = EvaluationCriterion.objects.filter(solicitation=bid.solicitation, criterion_type='technical')
     committee_ids = _get_committee_member_ids_for_bid(bid)
 
@@ -342,6 +380,10 @@ def technical_score_submit_view(request):
     except (BidSubmission.DoesNotExist, EvaluationCriterion.DoesNotExist):
         return Response({'error': 'Bid or criterion not found'}, status=404)
 
+    err = _require_bid_opening_completed(bid.solicitation)
+    if err:
+        return err
+
     committee_ids = _get_committee_member_ids_for_bid(bid)
     if str(request.user.id) not in committee_ids:
         return Response({'error': 'You are not an active member of the evaluation committee for this solicitation'}, status=403)
@@ -384,6 +426,10 @@ def list_passed_tech_bids_view(request, solicitation_pk):
         sol = Solicitation.objects.get(pk=solicitation_pk)
     except Solicitation.DoesNotExist:
         return Response({'error': 'Solicitation not found'}, status=404)
+
+    err = _require_bid_opening_completed(sol)
+    if err:
+        return err
 
     committees = EvaluationCommittee.objects.filter(solicitation=sol)
     is_chair = any(str(c.chairperson.id) == str(request.user.id) for c in committees)
@@ -450,13 +496,17 @@ def list_passed_tech_bids_view(request, solicitation_pk):
     })
 
 
-@api_view(['GET'])
+@api_view(['GET', 'POST'])
 @permission_classes([IsAuthenticated])
 def calculate_qcbs_view(request, solicitation_pk):
     try:
         sol = Solicitation.objects.get(pk=solicitation_pk)
     except Solicitation.DoesNotExist:
         return Response({'error': 'Solicitation not found'}, status=404)
+
+    err = _require_bid_opening_completed(sol)
+    if err:
+        return err
 
     committees = EvaluationCommittee.objects.filter(solicitation=sol)
     is_chair = any(str(c.chairperson.id) == str(request.user.id) for c in committees)
@@ -518,9 +568,11 @@ def calculate_qcbs_view(request, solicitation_pk):
 
         fin_eval = FinancialEvaluation.objects.filter(bid=bid).first()
         evaluated_price = evaluated_prices[bid.bid_id]
-        fin_score = (min_evaluated_price / evaluated_price) * Decimal('100') if evaluated_price > 0 else Decimal('100')
 
-        if not fin_eval:
+        if fin_eval:
+            fin_score = fin_eval.financial_score
+        else:
+            fin_score = (min_evaluated_price / evaluated_price) * Decimal('100') if evaluated_price > 0 else Decimal('100')
             fin_eval = FinancialEvaluation.objects.create(
                 bid=bid,
                 original_price=bid.bid_price or 0,
@@ -531,7 +583,7 @@ def calculate_qcbs_view(request, solicitation_pk):
             )
 
         avg_tech = overall_pct
-        total_score = (avg_tech * tech_weight / Decimal('100')) + (fin_score * fin_weight / Decimal('100'))
+        total_score = (avg_tech * tech_weight / Decimal('100')) + (Decimal(str(fin_score)) * fin_weight / Decimal('100'))
 
         CombinedScore.objects.update_or_create(
             bid=bid,
@@ -554,14 +606,21 @@ def calculate_qcbs_view(request, solicitation_pk):
             'original_price': float(bid.bid_price or 0),
             'preference_category': fin_eval.preference_category if fin_eval else 'non_citizen',
             'preference_margin': float(fin_eval.preference_applied or 0) if fin_eval else 0,
-            'overall_technical_score': float(overall_pct),
+            'technical_score': float(overall_pct),
+            'financial_score': float(fin_score),
+            'total_score': float(total_score),
             'passed': True,
             'financial_evaluation_id': str(fin_eval.evaluation_id) if fin_eval else None,
             'evaluated_price': float(fin_eval.evaluated_price) if fin_eval else None,
-            'financial_score': float(fin_eval.financial_score) if fin_eval else None,
             'financial_sealed': opening_detail.financial_sealed if opening_detail else True,
             'details': details,
         })
+
+    # Rank by total_score descending and persist to database
+    results.sort(key=lambda x: x.get('total_score', 0), reverse=True)
+    for i, bid_data in enumerate(results):
+        bid_data['rank'] = i + 1
+        CombinedScore.objects.filter(bid_id=bid_data['bid_id']).update(rank=i + 1)
 
     winner_name = None
     if sol.status == 'awarded':
@@ -570,10 +629,64 @@ def calculate_qcbs_view(request, solicitation_pk):
             winner_name = awarded_bid.supplier.full_name
 
     return Response({
+        'message': 'QCBS calculation completed successfully',
         'solicitation_id': str(sol.solicitation_id),
         'threshold': float(threshold),
-        'bids': results,
+        'tech_weight': float(tech_weight),
+        'fin_weight': float(fin_weight),
+        'results': results,
         'winner_name': winner_name,
+    })
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def authorize_financial_opening_view(request, solicitation_pk):
+    try:
+        sol = Solicitation.objects.get(pk=solicitation_pk)
+    except Solicitation.DoesNotExist:
+        return Response({'error': 'Solicitation not found'}, status=404)
+
+    err = _require_bid_opening_completed(sol)
+    if err:
+        return err
+
+    committees = EvaluationCommittee.objects.filter(solicitation=sol)
+    is_chair = any(str(c.chairperson.id) == str(request.user.id) for c in committees)
+    is_director = request.user.role == 'director_procurement'
+    if not is_chair and not is_director:
+        return Response({'error': 'Only the committee chair or Director of Procurement can authorize financial opening'}, status=403)
+
+    threshold = Decimal(str(sol.minimum_technical_threshold or TECHNICAL_THRESHOLD_DEFAULT))
+    criteria = EvaluationCriterion.objects.filter(solicitation=sol, criterion_type='technical')
+    total_tech_weight = criteria.aggregate(s=Sum('weight'))['s'] or Decimal('100')
+
+    bids = BidSubmission.objects.filter(solicitation=sol, status__in=['submitted', 'opened', 'responsive'])
+    opened_count = 0
+
+    for bid in bids:
+        tech_scores = TechnicalScore.objects.filter(bid=bid, is_final=True)
+        if not tech_scores.exists():
+            continue
+
+        total_weighted = Decimal('0')
+        for criterion in criteria:
+            avg = tech_scores.filter(criterion=criterion).aggregate(avg=Avg('raw_score'))['avg'] or Decimal('0')
+            total_weighted += avg * criterion.weight / Decimal('100')
+        overall_pct = (total_weighted / total_tech_weight * Decimal('100')) if total_tech_weight > 0 else Decimal('0')
+
+        if overall_pct < threshold:
+            continue
+
+        opening_detail = BidOpeningDetail.objects.filter(bid=bid).first()
+        if opening_detail and opening_detail.financial_sealed:
+            opening_detail.financial_sealed = False
+            opening_detail.save(update_fields=['financial_sealed'])
+            opened_count += 1
+
+    return Response({
+        'message': f'Financial envelopes opened for {opened_count} bids',
+        'opened_count': opened_count,
     })
 
 
@@ -584,6 +697,10 @@ def financial_evaluation_calculate_view(request, bid_pk):
         bid = BidSubmission.objects.get(pk=bid_pk)
     except BidSubmission.DoesNotExist:
         return Response({'error': 'Bid not found'}, status=404)
+
+    err = _require_bid_opening_completed(bid.solicitation)
+    if err:
+        return err
 
     original_price = Decimal(str(request.data.get('original_price', bid.bid_price or 0)))
     corrected_price = Decimal(str(request.data.get('corrected_price', original_price)))
@@ -635,15 +752,35 @@ def select_winner_view(request, solicitation_pk):
     except Solicitation.DoesNotExist:
         return Response({'error': 'Solicitation not found'}, status=404)
 
+    err = _require_bid_opening_completed(sol)
+    if err:
+        return err
+
     committees = EvaluationCommittee.objects.filter(solicitation=sol)
     is_chair = any(str(c.chairperson.id) == str(request.user.id) for c in committees)
     is_director = request.user.role == 'director_procurement'
     if not is_chair and not is_director:
         return Response({'error': 'Only the committee chair or Director of Procurement can select a winner'}, status=403)
 
+    if sol.status == 'awarded':
+        return Response({'error': 'This solicitation has already been awarded.'}, status=400)
+
     bid_id = request.data.get('bid_id')
     if not bid_id:
         return Response({'error': 'bid_id is required'}, status=400)
+
+    # Verify QCBS has been calculated (CombinedScore exists) and this bid is top-ranked
+    top_ranked = CombinedScore.objects.filter(
+        bid__solicitation=sol
+    ).order_by('rank').first()
+
+    if not top_ranked:
+        return Response({'error': 'QCBS has not been calculated yet. Calculate QCBS before selecting a winner.'}, status=400)
+
+    if str(top_ranked.bid_id) != str(bid_id):
+        return Response({
+            'error': f'Only the top-ranked bid can be selected as winner. The current top-ranked bid is "{top_ranked.bid.supplier.full_name}".'
+        }, status=400)
 
     try:
         winner = BidSubmission.objects.get(pk=bid_id, solicitation=sol)
@@ -690,10 +827,17 @@ def ber_generate_view(request, solicitation_pk):
     except Solicitation.DoesNotExist:
         return Response({'error': 'Solicitation not found'}, status=404)
 
+    err = _require_bid_opening_completed(sol)
+    if err:
+        return err
+
     committees = EvaluationCommittee.objects.filter(solicitation=sol)
     is_chair = any(str(c.chairperson.id) == str(request.user.id) for c in committees)
     if not is_chair:
         return Response({'error': 'Only the committee chair can generate the BER'}, status=403)
+
+    if not CombinedScore.objects.filter(bid__solicitation=sol).exists():
+        return Response({'error': 'QCBS must be calculated before generating the BER. Calculate QCBS from the Score Consolidation page first.'}, status=400)
 
     if BidEvaluationReport.objects.filter(solicitation=sol).exclude(status='rejected').exists():
         return Response({'error': 'A BER already exists for this solicitation'}, status=400)

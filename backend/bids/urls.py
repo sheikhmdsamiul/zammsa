@@ -19,5 +19,6 @@ urlpatterns = [
     path('openings/<uuid:pk>/finalize/', views.bid_opening_finalize_view, name='opening-finalize'),
     path('openings/<uuid:pk>/send-minutes/', views.bid_opening_finalize_view, name='opening-send-minutes'),
     path('openings/conduct/<uuid:pk>/', views.bid_opening_conduct_view, name='opening-conduct'),
+    path('openings/<uuid:pk>/track-viewer/', views.bid_opening_track_viewer_view, name='opening-track-viewer'),
     path('public/openings/<uuid:pk>/', views.public_bid_opening_view, name='public-opening'),
 ]

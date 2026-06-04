@@ -17,6 +17,7 @@ urlpatterns = [
     path('technical-scores/averages/<uuid:bid_pk>/', views.technical_score_calculate_averages_view, name='technical-score-averages'),
     path('technical-scores/threshold-check/<uuid:bid_pk>/', views.technical_score_threshold_check_view, name='technical-score-threshold'),
     path('financial/calculate/<uuid:bid_pk>/', views.financial_evaluation_calculate_view, name='financial-calculate'),
+    path('financial/authorize-open/<uuid:solicitation_pk>/', views.authorize_financial_opening_view, name='authorize-financial-open'),
     path('financial/passed-bids/<uuid:solicitation_pk>/', views.list_passed_tech_bids_view, name='financial-passed-bids'),
     path('consolidation/<uuid:solicitation_pk>/', views.consolidated_scores_view, name='consolidated-scores'),
     path('combined-scores/', views.CombinedScoreListView.as_view(), name='combined-score-list'),

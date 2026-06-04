@@ -109,11 +109,20 @@ class BudgetEncumbranceListView(BaseView, generics.ListCreateAPIView):
 
 
 class InvoiceListView(BaseView, generics.ListCreateAPIView):
-    queryset = Invoice.objects.select_related('contract', 'supplier').prefetch_related('three_way_matches', 'payments').all()
     filterset_class = InvoiceFilter
     search_fields = ['invoice_number', 'contract__contract_number']
     ordering_fields = ['created_at', 'amount', 'status']
     ordering = ['-created_at']
+
+    def get_queryset(self):
+        queryset = Invoice.objects.select_related('contract', 'supplier').prefetch_related('three_way_matches', 'payments')
+        user = self.request.user
+        if user.role == 'supplier_user':
+            if user.employee_id and user.employee_id.startswith('SUP-'):
+                reg_num = user.employee_id.replace('SUP-', '', 1)
+                return queryset.filter(supplier__registration_number=reg_num)
+            return queryset.none()
+        return queryset.all()
 
     def get_serializer_class(self):
         if self.request.method == 'GET' and not self.request.query_params.get('detail'):
@@ -149,33 +158,49 @@ def invoice_match_view(request, pk):
     except Invoice.DoesNotExist:
         return Response({'error': 'Invoice not found'}, status=404)
 
-    if request.data:
-        po_qty = Decimal(str(request.data.get('po_quantity', 0)))
-        grn_qty = Decimal(str(request.data.get('grn_quantity', 0)))
-        inv_qty = Decimal(str(request.data.get('invoice_quantity', 0)))
-        po_price = Decimal(str(request.data.get('po_price', 0)))
-        inv_price = Decimal(str(request.data.get('invoice_price', 0)))
-    elif inv.grn:
-        po_qty = inv.grn.quantity_received
+    # Robust matching logic
+    po_qty = Decimal('1') # Default for value-based matching
+    po_price = inv.contract.value
+    
+    grn_qty = Decimal('0')
+    grn_price = Decimal('0')
+    
+    if inv.grn:
         grn_qty = inv.grn.quantity_received
-        inv_qty = inv.grn.quantity_received
+        grn_price = inv.grn.unit_price
+        # If we have a GRN, we use its unit price as the target PO price for this item
         po_price = inv.grn.unit_price
+        po_qty = inv.grn.quantity_received # Expecting same qty as GRN
+    
+    inv_qty = Decimal('1')
+    inv_price = inv.amount
+    
+    if request.data:
+        po_qty = Decimal(str(request.data.get('po_quantity', po_qty)))
+        grn_qty = Decimal(str(request.data.get('grn_quantity', grn_qty)))
+        inv_qty = Decimal(str(request.data.get('invoice_quantity', inv_qty)))
+        po_price = Decimal(str(request.data.get('po_price', po_price)))
+        inv_price = Decimal(str(request.data.get('invoice_price', inv_price)))
+    elif inv.grn:
+        inv_qty = grn_qty
         inv_price = (inv.amount / inv_qty) if inv_qty else Decimal('0')
-    else:
-        po_qty = grn_qty = inv_qty = Decimal('0')
-        po_price = Decimal(str(inv.amount or 0))
-        inv_price = Decimal(str(inv.amount or 0))
 
-    if po_qty == grn_qty == inv_qty and po_price == inv_price:
+    # Comparisons
+    qty_match = (po_qty == grn_qty == inv_qty)
+    price_match = (po_price == inv_price)
+    
+    if qty_match and price_match:
         match_status = 'complete'
-    elif po_qty != 0 and po_qty == grn_qty:
+    elif qty_match or price_match:
         match_status = 'partial'
     else:
         match_status = 'no_match'
 
     discrepancies = {}
     if po_qty != inv_qty:
-        discrepancies['quantity_mismatch'] = {'po': float(po_qty), 'invoice': float(inv_qty)}
+        discrepancies['quantity_mismatch_po_inv'] = {'po': float(po_qty), 'invoice': float(inv_qty)}
+    if grn_qty != inv_qty:
+        discrepancies['quantity_mismatch_grn_inv'] = {'grn': float(grn_qty), 'invoice': float(inv_qty)}
     if po_price != inv_price:
         discrepancies['price_mismatch'] = {'po': float(po_price), 'invoice': float(inv_price)}
 
@@ -208,9 +233,10 @@ def invoice_match_view(request, pk):
             'invoice_vs_po': po_price == inv_price,
             'po_vs_grn': po_qty == grn_qty,
             'invoice_vs_grn': grn_qty == inv_qty,
-            'quantity_match': po_qty == grn_qty == inv_qty,
+            'quantity_match': qty_match,
             'invoice_qty': float(inv_qty),
             'grn_qty': float(grn_qty),
+            'po_qty': float(po_qty),
         },
         'discrepancies': discrepancies,
     })

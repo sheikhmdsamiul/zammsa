@@ -24,6 +24,8 @@ const InvoiceApproval: React.FC = () => {
   const [bankRef, setBankRef] = useState('');
   const [paymentAdviceSent, setPaymentAdviceSent] = useState(false);
 
+  const [matchResult, setMatchResult] = useState<any>(null);
+
   const { data: invoice, isLoading } = useQuery({
     queryKey: ['invoice', invoiceId],
     queryFn: () => financeApi.getInvoice(invoiceId!),
@@ -33,9 +35,11 @@ const InvoiceApproval: React.FC = () => {
   const matchMutation = useMutation({
     mutationFn: () => financeApi.matchInvoice(invoiceId!),
     onSuccess: (data: any) => {
+      setMatchResult(data.match);
       toast.success('3-way match completed');
       queryClient.invalidateQueries({ queryKey: ['invoice', invoiceId] });
     },
+    onError: (err: any) => toast.error(err?.response?.data?.error || 'Failed to perform 3-way match'),
   });
 
   const approveMutation = useMutation({
@@ -124,248 +128,388 @@ const InvoiceApproval: React.FC = () => {
     }
   };
 
-  if (isLoading) return <LoadingSpinner className="py-12" />;
+  if (isLoading) return <LoadingSpinner className="py-20" />;
   if (!invoice) return (
-    <div className="max-w-5xl mx-auto py-12 text-center">
-      <DocumentTextIcon className="w-12 h-12 text-gray-300 mx-auto mb-4" />
-      <p className="text-lg font-bold text-gray-500">Invoice not found</p>
+    <div className="max-w-5xl mx-auto py-20 text-center bg-white rounded-3xl shadow-sm border border-gray-100">
+      <DocumentTextIcon className="w-16 h-16 text-gray-200 mx-auto mb-4" />
+      <p className="text-xl font-bold text-gray-500">Invoice not found</p>
+      <button onClick={() => navigate('/finance/invoices')} className="mt-4 text-zammsa-green font-bold hover:underline">Back to Invoices</button>
     </div>
   );
 
   const isPaid = invoice.status === 'paid';
   const isRejected = invoice.status === 'rejected';
+  const displayMatch = matchResult || (invoice.three_way_matches && invoice.three_way_matches.length > 0 ? invoice.three_way_matches[0] : null);
 
   return (
-    <div className="max-w-5xl mx-auto space-y-6">
-      <div className="flex items-center justify-between">
+    <div className="max-w-6xl mx-auto space-y-8 pb-20">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <div className="flex items-center gap-3">
-            <h1 className="text-2xl font-bold text-gray-900">Invoice {invoice.invoice_number}</h1>
+          <button onClick={() => navigate('/finance/invoices')} className="text-sm text-gray-400 hover:text-gray-600 mb-2 flex items-center gap-1 transition-colors">
+            ← Back to Invoices
+          </button>
+          <div className="flex items-center gap-4">
+            <h1 className="text-3xl font-black text-gray-900 tracking-tight">Invoice {invoice.invoice_number}</h1>
             <StatusBadge status={invoice.status} />
           </div>
-          <p className="text-sm text-gray-500 mt-1">Supplier: {invoice.supplier || '-'}</p>
+          <p className="text-lg text-gray-500 mt-1 font-medium">Supplier: <span className="text-gray-900">{invoice.supplier_name || invoice.supplier || '-'}</span></p>
+        </div>
+        
+        <div className="flex items-center gap-3">
+          {invoice.document && (
+            <button className="px-5 py-2.5 bg-white border border-gray-200 text-gray-700 rounded-xl font-bold hover:bg-gray-50 shadow-sm transition-all flex items-center gap-2">
+              <DocumentTextIcon className="w-5 h-5" /> View PDF
+            </button>
+          )}
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2 space-y-6">
-          <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
-            <h2 className="text-lg font-semibold text-gray-900 mb-4">3-Way Match Results</h2>
-            {invoice.grn_details ? (
-              <div className="overflow-x-auto mb-4">
-                <table className="min-w-full text-sm">
-                  <thead>
-                    <tr className="bg-gray-50 border-b border-gray-200">
-                      <th className="px-4 py-3 text-left font-medium text-gray-500">Item</th>
-                      <th className="px-4 py-3 text-right font-medium text-gray-500">PO Ordered</th>
-                      <th className="px-4 py-3 text-right font-medium text-gray-500">GRN Received</th>
-                      <th className="px-4 py-3 text-right font-medium text-gray-500">Invoice Claimed</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-100">
-                    <tr>
-                      <td className="px-4 py-3 font-medium">{invoice.grn_details.item_description || '-'}</td>
-                      <td className="px-4 py-3 text-right">{invoice.po_number ? `${invoice.po_number}` : '-'}</td>
-                      <td className="px-4 py-3 text-right">{invoice.grn_details.grn_number || '-'}</td>
-                      <td className="px-4 py-3 text-right">{invoice.invoice_number}</td>
-                    </tr>
-                  </tbody>
-                </table>
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        <div className="lg:col-span-2 space-y-8">
+          {/* 3-Way Match Section */}
+          <div className="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden">
+            <div className="p-8 border-b border-gray-50 flex items-center justify-between">
+              <div>
+                <h2 className="text-xl font-bold text-gray-900">3-Way Match Verification</h2>
+                <p className="text-sm text-gray-500">Comparing Contract, Receipt, and Invoice</p>
               </div>
-            ) : (
-              <p className="text-sm text-gray-500">No GRN data available for matching.</p>
-            )}
-
-            <div className={`p-4 rounded-lg ${invoice.status === 'pending_matching' ? 'bg-amber-50 border border-amber-200' : 'bg-emerald-50 border border-emerald-200'}`}>
-              <p className="text-sm font-medium">
-                Match Status: <span className="font-bold">{invoice.status === 'pending_matching' ? 'PENDING' : 'Complete'}</span>
-              </p>
+              {!displayMatch && (invoice.status === 'submitted' || invoice.status === 'pending_matching') && (
+                <button 
+                  onClick={() => matchMutation.mutate()} 
+                  disabled={matchMutation.isPending}
+                  className="px-6 py-2.5 bg-zammsa-green text-white rounded-xl font-bold hover:bg-zammsa-green-dark shadow-lg shadow-zammsa-green/20 transition-all"
+                >
+                  {matchMutation.isPending ? 'Verifying...' : 'Run 3-Way Match'}
+                </button>
+              )}
             </div>
 
-            {(invoice.status === 'submitted' || invoice.status === 'pending_matching') && (
-              <button onClick={() => matchMutation.mutate()} disabled={matchMutation.isPending}
-                className="mt-3 px-4 py-2 bg-zammsa-green text-white rounded-lg text-sm font-bold disabled:opacity-50">
-                {matchMutation.isPending ? 'Matching...' : 'Run 3-Way Match'}
-              </button>
-            )}
+            <div className="p-8">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+                <div className="p-5 bg-blue-50/50 border border-blue-100 rounded-2xl">
+                  <span className="text-xs font-bold text-blue-400 uppercase tracking-wider block mb-1">1. Contract / PO</span>
+                  <p className="text-xl font-black text-blue-900">K {Number(invoice.contract_value || invoice.amount).toLocaleString()}</p>
+                  <p className="text-xs text-blue-600 mt-1 font-medium">{invoice.contract_number}</p>
+                </div>
+                <div className="p-5 bg-purple-50/50 border border-purple-100 rounded-2xl">
+                  <span className="text-xs font-bold text-purple-400 uppercase tracking-wider block mb-1">2. Goods Receipt</span>
+                  <p className="text-xl font-black text-purple-900">K {Number(invoice.grn_details?.total_amount || invoice.amount).toLocaleString()}</p>
+                  <p className="text-xs text-purple-600 mt-1 font-medium">{invoice.grn_details?.grn_number || 'Awaiting Receipt'}</p>
+                </div>
+                <div className="p-5 bg-amber-50/50 border border-amber-100 rounded-2xl">
+                  <span className="text-xs font-bold text-amber-400 uppercase tracking-wider block mb-1">3. Supplier Invoice</span>
+                  <p className="text-xl font-black text-amber-900">K {Number(invoice.amount).toLocaleString()}</p>
+                  <p className="text-xs text-amber-600 mt-1 font-medium">{invoice.invoice_number}</p>
+                </div>
+              </div>
+
+              {displayMatch ? (
+                <div className="space-y-6">
+                  {/* Detailed Comparison Table */}
+                  <div className="overflow-hidden border border-gray-100 rounded-2xl">
+                    <table className="min-w-full divide-y divide-gray-100">
+                      <thead className="bg-gray-50/50">
+                        <tr>
+                          <th className="px-6 py-4 text-left text-xs font-bold text-gray-400 uppercase tracking-widest">Metric</th>
+                          <th className="px-6 py-4 text-right text-xs font-bold text-gray-400 uppercase tracking-widest">Contract / PO</th>
+                          <th className="px-6 py-4 text-right text-xs font-bold text-gray-400 uppercase tracking-widest">Goods Receipt</th>
+                          <th className="px-6 py-4 text-right text-xs font-bold text-gray-400 uppercase tracking-widest">Supplier Invoice</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-50">
+                        <tr>
+                          <td className="px-6 py-4 text-sm font-bold text-gray-900">Quantity</td>
+                          <td className="px-6 py-4 text-right text-sm text-gray-600 font-medium">{Number(displayMatch.po_qty || displayMatch.po_quantity || 0).toLocaleString()}</td>
+                          <td className="px-6 py-4 text-right text-sm text-gray-600 font-medium">{Number(displayMatch.grn_qty || displayMatch.grn_quantity || 0).toLocaleString()}</td>
+                          <td className="px-6 py-4 text-right text-sm font-black text-gray-900">{Number(displayMatch.invoice_qty || displayMatch.invoice_quantity || 0).toLocaleString()}</td>
+                        </tr>
+                        <tr>
+                          <td className="px-6 py-4 text-sm font-bold text-gray-900">Unit Price / Value</td>
+                          <td className="px-6 py-4 text-right text-sm text-gray-600 font-medium">K {Number(displayMatch.po_price || invoice.contract_value || 0).toLocaleString()}</td>
+                          <td className="px-6 py-4 text-right text-sm text-gray-600 font-medium">K {Number(displayMatch.po_price || invoice.grn_details?.unit_price || 0).toLocaleString()}</td>
+                          <td className="px-6 py-4 text-right text-sm font-black text-gray-900">K {Number(displayMatch.invoice_price || (invoice.amount / (displayMatch.invoice_qty || displayMatch.invoice_quantity || 1))).toLocaleString()}</td>
+                        </tr>
+                        <tr className="bg-zammsa-green/5">
+                          <td className="px-6 py-4 text-sm font-bold text-zammsa-green">Total Impact</td>
+                          <td className="px-6 py-4 text-right text-sm font-bold text-gray-600">K {Number((displayMatch.po_qty || displayMatch.po_quantity || 1) * (displayMatch.po_price || invoice.contract_value || 0)).toLocaleString()}</td>
+                          <td className="px-6 py-4 text-right text-sm font-bold text-gray-600">K {Number((displayMatch.grn_qty || displayMatch.grn_quantity || 1) * (displayMatch.po_price || invoice.grn_details?.unit_price || 0)).toLocaleString()}</td>
+                          <td className="px-6 py-4 text-right text-sm font-black text-zammsa-green">K {Number(invoice.amount).toLocaleString()}</td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+
+                  <div className="space-y-3">
+                    {[
+                      { label: 'Amount Verification', matched: displayMatch.invoice_vs_po || displayMatch.match_status === 'complete', detail: 'Invoice matches PO value' },
+                      { label: 'Receipt Verification', matched: displayMatch.invoice_vs_grn || displayMatch.match_status === 'complete', detail: 'Invoice matches items received' },
+                      { label: 'Quantity Check', matched: displayMatch.quantity_match || displayMatch.match_status === 'complete', detail: 'Units ordered = Units received = Units billed' },
+                    ].map((item, i) => (
+                    <div key={i} className={`flex items-center justify-between p-4 rounded-2xl border transition-all ${
+                      item.matched ? 'bg-emerald-50/30 border-emerald-100' : 'bg-rose-50/30 border-rose-100'
+                    }`}>
+                      <div className="flex items-center gap-3">
+                        {item.matched ? (
+                          <div className="w-8 h-8 bg-emerald-100 rounded-full flex items-center justify-center">
+                            <CheckCircleIcon className="w-5 h-5 text-emerald-600" />
+                          </div>
+                        ) : (
+                          <div className="w-8 h-8 bg-rose-100 rounded-full flex items-center justify-center">
+                            <XCircleIcon className="w-5 h-5 text-rose-600" />
+                          </div>
+                        )}
+                        <div>
+                          <p className="text-sm font-bold text-gray-900">{item.label}</p>
+                          <p className="text-xs text-gray-500">{item.detail}</p>
+                        </div>
+                      </div>
+                      <span className={`text-xs font-black uppercase tracking-widest ${item.matched ? 'text-emerald-600' : 'text-rose-600'}`}>
+                        {item.matched ? 'Passed' : 'Failed'}
+                      </span>
+                    </div>
+                  ))}
+                  </div>
+                </div>
+              ) : (
+                <div className="text-center py-12 bg-gray-50/50 rounded-2xl border border-dashed border-gray-200">
+                  <ExclamationIcon className="w-10 h-10 text-gray-300 mx-auto mb-2" />
+                  <p className="text-sm text-gray-400 font-medium">3-Way match has not been performed yet.</p>
+                </div>
+              )}
+            </div>
           </div>
 
-          {invoice.status === 'pending_approval' && decision === null && !approved && !isPaid && !isRejected && (
-            <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
-              <h2 className="text-lg font-semibold text-gray-900 mb-4">Your Decision</h2>
-              <div className="space-y-3">
+          {/* Decision Section */}
+          {invoice.status === 'pending_approval' && !approved && !isPaid && !isRejected && (
+            <div className="bg-white rounded-3xl shadow-lg border border-gray-100 p-8 animate-in slide-in-from-bottom-4 duration-500">
+              <h2 className="text-xl font-bold text-gray-900 mb-6">Final Review & Approval</h2>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
                 {[
-                  { value: 'accept', label: 'Accept invoice and proceed with approval.' },
-                  { value: 'correct', label: 'Request supplier resubmit corrected invoice.' },
-                  { value: 'reject', label: 'Reject invoice.' },
+                  { id: 'accept', label: 'Approve', color: 'bg-emerald-50 text-emerald-700 border-emerald-100 hover:bg-emerald-100' },
+                  { id: 'correct', label: 'Request Correction', color: 'bg-amber-50 text-amber-700 border-amber-100 hover:bg-amber-100' },
+                  { id: 'reject', label: 'Reject Invoice', color: 'bg-rose-50 text-rose-700 border-rose-100 hover:bg-rose-100' },
                 ].map((opt) => (
-                  <label key={opt.value} className="flex items-start gap-3 p-4 bg-gray-50 rounded-xl cursor-pointer hover:bg-gray-100">
-                    <input type="radio" name="decision" value={opt.value}
-                      checked={decision === opt.value} onChange={() => setDecision(opt.value as any)}
-                      className="mt-1 text-zammsa-green" />
-                    <span className="text-sm text-gray-700">{opt.label}</span>
-                  </label>
+                  <button 
+                    key={opt.id}
+                    onClick={() => setDecision(opt.id as any)}
+                    className={`p-4 rounded-2xl border font-bold text-sm transition-all flex flex-col items-center gap-2 ${
+                      decision === opt.id ? `ring-4 ring-offset-2 ring-zammsa-green ${opt.color}` : 'bg-white text-gray-500 border-gray-100 hover:bg-gray-50'
+                    }`}
+                  >
+                    <span className={`w-3 h-3 rounded-full ${decision === opt.id ? 'bg-current' : 'bg-gray-200'}`}></span>
+                    {opt.label}
+                  </button>
                 ))}
               </div>
 
-              <div className="mt-4">
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Reason {decision === 'reject' || decision === 'correct' ? '(required)' : '(optional)'}
-                </label>
-                <textarea value={reason} onChange={(e) => setReason(e.target.value)} rows={2}
-                  className="w-full border rounded-lg px-4 py-3 text-sm" placeholder="Enter reason for decision..." />
+              <div className="mb-8">
+                <label className="block text-sm font-bold text-gray-700 mb-2">Reviewer Comments</label>
+                <textarea 
+                  value={reason} 
+                  onChange={(e) => setReason(e.target.value)} 
+                  rows={4}
+                  className="w-full border border-gray-200 rounded-2xl px-5 py-4 text-sm focus:ring-4 focus:ring-zammsa-green/10 outline-none transition-all" 
+                  placeholder="Provide details for your decision..." 
+                />
               </div>
 
-              <button onClick={handleConfirmDecision}
-                disabled={!decision || ((decision === 'reject' || decision === 'correct') && !reason)}
-                className="mt-4 px-6 py-3 bg-zammsa-green text-white rounded-xl text-sm font-bold disabled:opacity-50">
-                Confirm Decision
+              <div className="flex justify-end">
+                <button 
+                  onClick={handleConfirmDecision}
+                  disabled={!decision || ((decision === 'reject' || decision === 'correct') && !reason)}
+                  className="px-10 py-4 bg-gray-900 text-white rounded-2xl font-black text-sm hover:bg-black shadow-xl disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+                >
+                  Confirm & Route
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Approved & Payment Section */}
+          {(approved || invoice.status === 'approved') && !paymentProcessing && !awaitingBankConfirmation && !isPaid && (
+            <div className="bg-emerald-50 border border-emerald-100 rounded-3xl p-8 flex flex-col items-center text-center">
+              <div className="w-16 h-16 bg-white rounded-2xl shadow-sm flex items-center justify-center mb-4">
+                <CheckCircleIcon className="w-10 h-10 text-emerald-500" />
+              </div>
+              <h3 className="text-2xl font-black text-emerald-900 mb-2">Invoice Fully Approved</h3>
+              <p className="text-emerald-700/70 max-w-sm mb-8">This invoice has cleared all internal approvals and is ready for disbursement.</p>
+              
+              <button 
+                onClick={() => setPaymentProcessing(true)}
+                className="px-12 py-4 bg-emerald-600 text-white rounded-2xl font-black shadow-lg shadow-emerald-200 hover:bg-emerald-700 transition-all flex items-center gap-3"
+              >
+                <CashIcon className="w-6 h-6" />
+                Initialize Payment Process
               </button>
             </div>
           )}
 
-          {(approved || invoice.status === 'approved') && !paymentProcessing && !awaitingBankConfirmation && !paymentAdviceSent && (
-            <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-6">
-              <CheckCircleIcon className="w-8 h-8 text-emerald-500 mb-2" />
-              <h3 className="text-lg font-semibold text-emerald-800 mb-4">Invoice Approved</h3>
-              <div className="space-y-3">
-                <div className="flex items-center justify-between p-3 bg-white rounded-lg text-sm">
-                  <span className="text-gray-600">Approval route</span>
-                  <span className="font-medium">{invoice.approval_route || '-'}</span>
+          {/* Payment Processing Form */}
+          {paymentProcessing && (
+            <div className="bg-white rounded-3xl shadow-xl border border-gray-100 p-8 animate-in zoom-in-95 duration-300">
+              <h2 className="text-xl font-bold text-gray-900 mb-6">Payment Configuration</h2>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+                <div>
+                  <label className="block text-sm font-bold text-gray-700 mb-2">Payment Method</label>
+                  <select 
+                    value={paymentMethod} 
+                    onChange={(e) => setPaymentMethod(e.target.value)} 
+                    className="w-full border border-gray-200 rounded-2xl px-5 py-4 text-sm font-bold focus:ring-4 focus:ring-zammsa-green/10 outline-none"
+                  >
+                    <option value="electronic">EFT (Electronic Funds Transfer)</option>
+                    <option value="iso20022">ISO 20022 XML (Direct Bank)</option>
+                    <option value="cheque">Manual Cheque</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-bold text-gray-700 mb-2">Amount to Pay</label>
+                  <div className="relative">
+                    <span className="absolute left-5 top-4 font-bold text-gray-400">K</span>
+                    <input 
+                      type="text" 
+                      readOnly 
+                      value={invoice.amount?.toLocaleString()} 
+                      className="w-full bg-gray-50 border border-gray-100 rounded-2xl pl-10 pr-5 py-4 text-sm font-black text-gray-900" 
+                    />
+                  </div>
                 </div>
               </div>
-              <button onClick={() => setPaymentProcessing(true)}
-                className="mt-4 px-6 py-3 bg-zammsa-green text-white rounded-xl text-sm font-bold">
-                Proceed to Payment
-              </button>
-            </div>
-          )}
 
-          {isPaid && !paymentAdviceSent && !invoice.payment_advice_sent && (
-            <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-6">
-              <h3 className="text-lg font-semibold text-emerald-800 mb-4">Payment Completed</h3>
-              <div className="flex gap-3">
-                <button onClick={() => sendAdviceMutation.mutate()} disabled={sendAdviceMutation.isPending}
-                  className="px-4 py-2 bg-zammsa-green text-white rounded-lg text-sm font-bold disabled:opacity-50">
-                  {sendAdviceMutation.isPending ? 'Sending...' : 'Send Payment Advice'}
+              <div className="flex justify-between items-center bg-gray-50 p-6 rounded-2xl">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center">
+                    <svg className="w-6 h-6 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 14v3m4-3v3m4-3v3M3 21h18M3 10h18M3 7l9-4 9 4M4 10h16v11H4V10z" />
+                    </svg>
+                  </div>
+                  <div>
+                    <p className="text-xs font-bold text-gray-400 uppercase tracking-tighter">Target Account</p>
+                    <p className="text-sm font-bold text-gray-700">{invoice.supplier_bank || 'Standard Chartered ****9821'}</p>
+                  </div>
+                </div>
+                <button 
+                  onClick={() => payMutation.mutate()} 
+                  disabled={payMutation.isPending}
+                  className="px-8 py-4 bg-zammsa-green text-white rounded-2xl font-black text-sm hover:bg-zammsa-green-dark shadow-xl shadow-zammsa-green/20 disabled:opacity-50 transition-all flex items-center gap-2"
+                >
+                  {payMutation.isPending ? 'Processing...' : 'Execute Payment'}
                 </button>
-                {!invoice.erp_posted && (
-                  <button onClick={() => postToErpMutation.mutate()} disabled={postToErpMutation.isPending}
-                    className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-bold disabled:opacity-50">
-                    {postToErpMutation.isPending ? 'Posting...' : 'Post to ERP'}
-                  </button>
-                )}
               </div>
             </div>
           )}
 
-          {paymentAdviceSent && (
-            <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-6 text-center">
-              <CheckCircleIcon className="w-8 h-8 text-emerald-500 mx-auto mb-2" />
-              <p className="text-sm font-bold text-emerald-800">Payment advice sent to supplier</p>
-              {!invoice.erp_posted && (
-                <button onClick={() => postToErpMutation.mutate()} disabled={postToErpMutation.isPending}
-                  className="mt-3 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-bold disabled:opacity-50">
-                  {postToErpMutation.isPending ? 'Posting...' : 'Post to ERP'}
+          {/* Success States: Confirmed, Posted, etc. */}
+          {isPaid && (
+            <div className="bg-emerald-50 border border-emerald-100 rounded-3xl p-10 text-center">
+              <div className="w-20 h-20 bg-emerald-500 rounded-full flex items-center justify-center mx-auto mb-6 shadow-xl shadow-emerald-200">
+                <CheckCircleIcon className="w-12 h-12 text-white" />
+              </div>
+              <h3 className="text-3xl font-black text-gray-900 mb-2">Disbursement Successful</h3>
+              <p className="text-gray-500 max-w-sm mx-auto mb-8">The funds have been transferred and the ledger has been updated.</p>
+              
+              <div className="flex flex-wrap gap-4 justify-center">
+                {!invoice.payment_advice_sent && (
+                  <button 
+                    onClick={() => sendAdviceMutation.mutate()} 
+                    disabled={sendAdviceMutation.isPending}
+                    className="px-6 py-3 bg-white border border-gray-200 text-gray-700 rounded-xl font-bold hover:bg-gray-50 transition-all flex items-center gap-2"
+                  >
+                    {sendAdviceMutation.isPending ? 'Sending...' : 'Send Advice to Supplier'}
+                  </button>
+                )}
+                {!invoice.erp_posted && (
+                  <button 
+                    onClick={() => postToErpMutation.mutate()} 
+                    disabled={postToErpMutation.isPending}
+                    className="px-6 py-3 bg-gray-900 text-white rounded-xl font-bold hover:bg-black transition-all"
+                  >
+                    {postToErpMutation.isPending ? 'Posting...' : 'Post to ERP GL'}
+                  </button>
+                )}
+                <button onClick={() => navigate('/finance/invoices')} className="px-6 py-3 bg-white border border-gray-200 text-gray-700 rounded-xl font-bold hover:bg-gray-50 transition-all">
+                  Return to List
                 </button>
-              )}
-            </div>
-          )}
-
-          {isRejected && (
-            <div className="bg-rose-50 border border-rose-200 rounded-xl p-6">
-              <XCircleIcon className="w-8 h-8 text-rose-500 mb-2" />
-              <h3 className="text-lg font-semibold text-rose-800 mb-2">Invoice Rejected</h3>
-              {invoice.rejection_reason && (
-                <p className="text-sm text-rose-700">Reason: {invoice.rejection_reason}</p>
-              )}
+              </div>
             </div>
           )}
         </div>
 
-        <div className="space-y-6">
-          <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
-            <h2 className="text-lg font-semibold text-gray-900 mb-4">Invoice Details</h2>
-            <dl className="space-y-3 text-sm">
-              <div><dt className="text-gray-500">Amount</dt><dd className="font-bold text-lg">K {invoice.amount?.toLocaleString()}</dd></div>
-              <div><dt className="text-gray-500">Submitted</dt><dd className="font-medium">{invoice.submitted_at ? new Date(invoice.submitted_at).toLocaleDateString() : '-'}</dd></div>
-              <div><dt className="text-gray-500">Due Date</dt><dd className="font-medium">{invoice.due_date ? new Date(invoice.due_date).toLocaleDateString() : '-'}</dd></div>
-              <div><dt className="text-gray-500">Status</dt><dd><StatusBadge status={invoice.status} /></dd></div>
-            </dl>
+        {/* Sidebar Info */}
+        <div className="space-y-8">
+          <div className="bg-gray-900 rounded-3xl p-8 text-white shadow-2xl">
+            <h2 className="text-lg font-bold mb-6 text-gray-400 uppercase tracking-widest">Financial Summary</h2>
+            <div className="space-y-6">
+              <div>
+                <span className="text-xs font-bold text-gray-500 block mb-1">INVOICE AMOUNT</span>
+                <p className="text-3xl font-black">K {invoice.amount?.toLocaleString()}</p>
+              </div>
+              <div className="pt-6 border-t border-gray-800 grid grid-cols-1 gap-4 text-sm">
+                <div className="flex justify-between"><span className="text-gray-500">PO Number</span><span className="font-bold text-gray-300">{invoice.po_number || '-'}</span></div>
+                <div className="flex justify-between"><span className="text-gray-500">Contract</span><span className="font-bold text-gray-300 underline">{invoice.contract_number}</span></div>
+                <div className="flex justify-between"><span className="text-gray-500">Currency</span><span className="font-bold text-gray-300">ZMW</span></div>
+                <div className="flex justify-between"><span className="text-gray-500">Due Date</span><span className="font-bold text-gray-300">{invoice.due_date ? new Date(invoice.due_date).toLocaleDateString() : 'N/A'}</span></div>
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-white rounded-3xl border border-gray-100 p-8 shadow-sm">
+            <h2 className="text-lg font-bold text-gray-900 mb-4">Activity Log</h2>
+            <div className="space-y-6">
+              {[
+                { label: 'Invoice Submitted', date: invoice.submitted_at, status: 'done' },
+                { label: '3-Way Match', date: displayMatch ? invoice.updated_at : null, status: displayMatch ? 'done' : 'pending' },
+                { label: 'Internal Approval', date: invoice.approved_at, status: invoice.approved_at ? 'done' : 'pending' },
+                { label: 'Payment Executed', date: invoice.paid_at, status: invoice.paid_at ? 'done' : 'pending' },
+              ].map((step, i) => (
+                <div key={i} className="flex gap-4">
+                  <div className="flex flex-col items-center">
+                    <div className={`w-3 h-3 rounded-full mt-1.5 ${step.status === 'done' ? 'bg-zammsa-green' : 'bg-gray-200'}`}></div>
+                    {i < 3 && <div className="w-0.5 h-10 bg-gray-100 my-1"></div>}
+                  </div>
+                  <div>
+                    <p className={`text-sm font-bold ${step.status === 'done' ? 'text-gray-900' : 'text-gray-400'}`}>{step.label}</p>
+                    <p className="text-xs text-gray-400">{step.date ? new Date(step.date).toLocaleString() : 'Pending'}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
         </div>
       </div>
 
-      {paymentProcessing && (
-        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
-          <h2 className="text-lg font-semibold text-gray-900 mb-4">Process Payment</h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-            <div className="p-4 bg-gray-50 rounded-xl">
-              <p className="text-xs text-gray-500">Pay To</p>
-              <p className="text-sm font-bold">{invoice.supplier || '-'}</p>
+      {/* Awaiting Bank Confirmation Modal-like View */}
+      {awaitingBankConfirmation && !isPaid && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-[2rem] shadow-2xl max-w-lg w-full p-10 animate-in zoom-in-95 duration-300">
+            <div className="w-20 h-20 bg-blue-50 rounded-2xl flex items-center justify-center mx-auto mb-6">
+              <CashIcon className="w-12 h-12 text-blue-500" />
             </div>
-            <div className="p-4 bg-gray-50 rounded-xl">
-              <p className="text-xs text-gray-500">Amount</p>
-              <p className="text-sm font-bold">K {invoice.amount?.toLocaleString()}</p>
+            <h2 className="text-2xl font-black text-gray-900 text-center mb-2">Awaiting Bank Response</h2>
+            <p className="text-gray-500 text-center mb-8">Payment file has been transmitted. Please enter the bank reference once received.</p>
+            
+            <div className="mb-6">
+              <label className="block text-sm font-bold text-gray-700 mb-2">Bank Reference Number</label>
+              <input 
+                value={bankRef} 
+                onChange={(e) => setBankRef(e.target.value)}
+                className="w-full border-2 border-gray-100 bg-gray-50 rounded-2xl px-5 py-4 text-sm font-black focus:border-zammsa-green outline-none transition-all" 
+                placeholder="e.g. TRF-9921-001-X" 
+              />
             </div>
-          </div>
-
-          <div className="mb-4">
-            <label className="block text-sm font-medium text-gray-700 mb-1">Payment Method</label>
-            <select value={paymentMethod} onChange={(e) => setPaymentMethod(e.target.value)} className="w-full border rounded-lg px-4 py-2 text-sm">
-              <option value="electronic">Electronic Transfer</option>
-              <option value="cheque">Cheque</option>
-              <option value="iso20022">ISO 20022 XML</option>
-            </select>
-          </div>
-
-          <button onClick={() => payMutation.mutate()} disabled={payMutation.isPending}
-            className="px-6 py-3 bg-zammsa-green text-white rounded-xl text-sm font-bold flex items-center gap-2 disabled:opacity-50">
-            <CashIcon className="w-5 h-5" />
-            {payMutation.isPending ? 'Processing...' : 'Generate Payment File and Send to Bank'}
-          </button>
-        </div>
-      )}
-
-      {awaitingBankConfirmation && (
-        <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-8 text-center">
-          <CheckCircleIcon className="w-16 h-16 text-emerald-500 mx-auto mb-4" />
-          <h2 className="text-2xl font-bold text-emerald-800 mb-2">Payment Sent to Bank</h2>
-          <div className="max-w-md mx-auto bg-white rounded-xl p-6 text-left mb-6 space-y-2 text-sm">
-            <div className="flex justify-between"><span className="text-gray-500">Bank Reference</span><span className="font-medium">Awaiting confirmation</span></div>
-            <div className="flex justify-between"><span className="text-gray-500">Amount</span><span className="font-medium">K {invoice.amount?.toLocaleString()}</span></div>
-            <div className="flex justify-between"><span className="text-gray-500">Status</span><span className="font-medium text-amber-600">Sent to bank</span></div>
-          </div>
-          <div className="mb-4">
-            <label className="block text-sm font-medium text-gray-700 mb-1">Bank Confirmation Reference</label>
-            <input value={bankRef} onChange={(e) => setBankRef(e.target.value)}
-              className="w-64 border rounded-lg px-4 py-2 text-sm" placeholder="Enter bank reference..." />
-          </div>
-          <div className="flex gap-3 justify-center">
-            <button onClick={() => confirmMutation.mutate()} disabled={!bankRef || confirmMutation.isPending}
-              className="px-6 py-3 bg-zammsa-green text-white rounded-xl font-bold disabled:opacity-50">
-              {confirmMutation.isPending ? 'Confirming...' : 'Confirm Payment'}
-            </button>
-          </div>
-        </div>
-      )}
-
-      {confirmMutation.isSuccess && (
-        <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-8 text-center">
-          <CheckCircleIcon className="w-16 h-16 text-emerald-500 mx-auto mb-4" />
-          <h2 className="text-2xl font-bold text-emerald-800 mb-2">Payment Confirmed</h2>
-          <p className="text-sm text-emerald-700 mb-4">Bank reference: {bankRef}</p>
-          <div className="flex gap-3 justify-center">
-            <button onClick={() => sendAdviceMutation.mutate()} disabled={sendAdviceMutation.isPending}
-              className="px-6 py-3 bg-zammsa-green text-white rounded-xl font-bold disabled:opacity-50">
-              {sendAdviceMutation.isPending ? 'Sending...' : 'Send Payment Advice'}
-            </button>
-            {!invoice.erp_posted && (
-              <button onClick={() => postToErpMutation.mutate()} disabled={postToErpMutation.isPending}
-                className="px-6 py-3 bg-blue-600 text-white rounded-xl font-bold disabled:opacity-50">
-                {postToErpMutation.isPending ? 'Posting...' : 'Post to ERP'}
+            
+            <div className="flex gap-3">
+              <button 
+                onClick={() => confirmMutation.mutate()} 
+                disabled={!bankRef || confirmMutation.isPending}
+                className="flex-1 py-4 bg-zammsa-green text-white rounded-2xl font-black shadow-lg shadow-zammsa-green/20 disabled:opacity-30 transition-all"
+              >
+                {confirmMutation.isPending ? 'Confirming...' : 'Confirm Disbursement'}
               </button>
-            )}
+              <button onClick={() => setAwaitingBankConfirmation(false)} className="px-6 py-4 text-gray-400 font-bold hover:text-gray-600 transition-colors">
+                Later
+              </button>
+            </div>
           </div>
         </div>
       )}

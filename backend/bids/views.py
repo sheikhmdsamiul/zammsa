@@ -367,8 +367,8 @@ def bid_opening_start_view(request, pk):
     except Solicitation.DoesNotExist:
         return Response({'error': 'Solicitation not found'}, status=404)
 
-    if sol.status != 'closed':
-        return Response({'error': 'Only closed solicitations can be opened'}, status=400)
+    if sol.status not in ('closed', 'published'):
+        return Response({'error': 'Only published or closed solicitations can be opened'}, status=400)
 
     if BidOpening.objects.filter(solicitation=sol, status='in_progress').exists():
         return Response({'error': 'An opening session is already in progress'}, status=400)
@@ -402,6 +402,7 @@ def bid_opening_start_view(request, pk):
         status='in_progress',
         started_at=timezone.now(),
         scheduled_opening_time=request.data.get('scheduled_opening_time') or None,
+        location=request.data.get('location', 'ZAMMSA Boardroom, Lusaka / Virtual'),
         public_live_link=request.data.get('public_live_link', f'portal.zammsa.gov.zm/opening/{sol.sol_number}-live'),
         viewers_connected=int(request.data.get('viewers_connected', 0) or 0),
         witnesses=resolved_witnesses,
@@ -509,7 +510,7 @@ def bid_open_single_view(request, opening_pk, bid_pk):
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def bid_opening_minutes_view(request, pk):
-    """Step 6: Generate/download bid opening minutes"""
+    """Generate/download bid opening minutes"""
     try:
         opening = BidOpening.objects.get(pk=pk)
     except BidOpening.DoesNotExist:
@@ -517,23 +518,40 @@ def bid_opening_minutes_view(request, pk):
 
     details = opening.opening_details.all().order_by('opened_sequence')
     sol = opening.solicitation
+    opened_details = [d for d in details if d.is_opened]
+    total_late = BidSubmission.objects.filter(solicitation=sol, is_late=True).count()
 
-    minutes_text = f"""
-BID OPENING MINUTES
-===================
-Solicitation: {sol.sol_number} - {sol.title}
-Opening Date: {opening.opened_at.strftime('%Y-%m-%d %H:%M')}
-Conducted By: {opening.conducted_by.full_name}
-Status: {opening.get_status_display()}
+    witnesses_text = '\n'.join(
+        f'  - [{s.get("role", "Witness")}] {s.get("name", s)}' if isinstance(s, dict) else f'  - {s}'
+        for s in opening.witnesses
+    ) if opening.witnesses else '  None recorded'
 
-WITNESSES:
-{chr(10).join(f'  - {w}' if isinstance(w, str) else f'  - {w.get("name", w)}' for w in opening.witnesses) if opening.witnesses else '  None recorded'}
-
-OPENED BIDS:
-{chr(10).join(f'  {d.opened_sequence}. {d.bidder_name or d.bid.supplier.full_name}  |  Sequence: {d.opened_sequence}  |  Financial: {"SEALED" if d.financial_sealed else f"ZMW {d.price_read}"}  |  Security: {"VERIFIED" if d.security_verified_read else "PENDING"} ({d.security_amount_read or 0})  |  Objections: {d.objections or "None"}' for d in details if d.is_opened) if details else '  No bids opened'}
-
-Total Bids Opened: {details.filter(is_opened=True).count()}
-Minutes Generated: {timezone.now().strftime('%Y-%m-%d %H:%M')}
+    minutes_content = f"""
+╔══════════════════════════════════════════════════════════════════════════╗
+║                   ZAMMSA — BID OPENING MINUTES                          ║
+╠══════════════════════════════════════════════════════════════════════════╣
+║  Solicitation: {sol.sol_number} — {sol.title or 'N/A'}
+║  Opening Date: {opening.started_at.strftime('%d %B %Y  %H:%M') if opening.started_at else opening.opened_at.strftime('%d %B %Y  %H:%M')} CAT
+║  Location:     {opening.location or 'ZAMMSA Boardroom, Lusaka / Virtual'}
+║  Procurement Officer: {opening.conducted_by.full_name}
+║  Viewers Connected: {opening.viewers_connected}
+║                                                                          ║
+╠══════════════════════════════════════════════════════════════════════════╣
+║  BIDS RECEIVED AND OPENED:                                              ║
+{"\n".join(f'║  {d.opened_sequence}. {d.bidder_name or d.bid.supplier.full_name:<35}  K {d.price_read:>12,.2f}  Security {"VERIFIED" if d.security_verified_read else "PENDING"}' for d in opened_details)}
+║                                                                          ║
+╠══════════════════════════════════════════════════════════════════════════╣
+║  OBSERVATIONS: {opening.observations or 'None recorded.'}
+╠══════════════════════════════════════════════════════════════════════════╣
+║  LATE BIDS: {f'{total_late} received — automatically rejected' if total_late else 'None'}
+╠══════════════════════════════════════════════════════════════════════════╣
+║  WITNESSES:                                                             ║
+{witnesses_text}
+╚══════════════════════════════════════════════════════════════════════════╝
+Bids Received: {BidSubmission.objects.filter(solicitation=sol).count()}
+Valid Opened: {len(opened_details)}
+Minutes Generated: {timezone.now().strftime('%Y-%m-%d %H:%M')} CAT
+Officer: {opening.conducted_by.full_name} ({opening.conducted_by.email})
 """
 
     opening.minutes_file_path = f'opening_minutes_{sol.sol_number}_{opening.opened_at.strftime("%Y%m%d")}.txt'
@@ -542,7 +560,7 @@ Minutes Generated: {timezone.now().strftime('%Y-%m-%d %H:%M')}
     return Response({
         'message': 'Minutes generated',
         'minutes_file': opening.minutes_file_path,
-        'minutes_content': minutes_text,
+        'minutes_content': minutes_content,
         'opening_id': str(opening.opening_id),
     })
 
@@ -572,42 +590,75 @@ def bid_opening_finalize_view(request, pk):
     # 2. Generate minutes
     details = opening.opening_details.all().order_by('opened_sequence')
     witnesses_text = '\n'.join(
-        f'  - {s.get("name", s)}' if isinstance(s, dict) else f'  - {s}'
+        f'  - [{s.get("role", "Witness")}] {s.get("name", s)}' if isinstance(s, dict) else f'  - {s}'
         for s in opening.witnesses
     ) if opening.witnesses else '  None recorded'
 
     opened_details = [d for d in details if d.is_opened]
+    total_late = BidSubmission.objects.filter(solicitation=sol, is_late=True).count()
+    late_bids_list = BidSubmission.objects.filter(solicitation=sol, is_late=True)
+
     details_lines = '\n'.join(
         f'  {d.opened_sequence}. {d.bidder_name or d.bid.supplier.full_name}  |  '
-        f'Price: {"SEALED" if d.financial_sealed else f"ZMW {d.price_read}"}  |  '
+        f'Price: {"SEALED" if d.financial_sealed else f"ZMW {d.price_read:>12,.2f}" if d.price_read else "---"}  |  '
         f'Security: {"VERIFIED" if d.security_verified_read else "PENDING"}  |  '
         f'Objections: {d.objections or "None"}'
         for d in opened_details
     ) if opened_details else '  No bids opened'
 
-    minutes_text = f"""
-ZAMMSA — BID OPENING MINUTES
-=============================
-Solicitation: {sol.sol_number} — {sol.title or 'N/A'}
-Opening Date: {opening.opened_at.strftime('%Y-%m-%d %H:%M')} CAT
-Conducted By: {opening.conducted_by.full_name}
-Officer Title: {opening.conducted_by.get_role_display()}
-Status: Completed
+    late_details = ''
+    if total_late > 0:
+        late_details = '\n'.join(
+            f'  - {b.submission_id or b.receipt_number} from {b.supplier.full_name} at {b.submitted_at.strftime("%H:%M:%S") if b.submitted_at else "unknown"}'
+            for b in late_bids_list
+        )
 
-WITNESSES:
+    witness_sigs = ''
+    for s in opening.witness_signatures:
+        if isinstance(s, dict):
+            witness_sigs += f'  - {s.get("name", "Unknown")} ({s.get("role", "Witness")}) — Signed at {s.get("signed_at", "unknown")}\n'
+    if not witness_sigs:
+        witness_sigs = '  Pending signatures\n'
+
+    minutes_content = f"""
+╔══════════════════════════════════════════════════════════════════════════╗
+║                   ZAMMSA — BID OPENING MINUTES                          ║
+╠══════════════════════════════════════════════════════════════════════════╣
+║                                                                          ║
+║  Solicitation: {sol.sol_number} — {sol.title or 'N/A'}
+║  Opening Date: {opening.started_at.strftime('%d %B %Y  %H:%M') if opening.started_at else opening.opened_at.strftime('%d %B %Y  %H:%M')} CAT
+║  Location:     {opening.location or 'ZAMMSA Boardroom, Lusaka / Virtual'}
+║  Procurement Officer: {opening.conducted_by.full_name}
+║  Viewers:      {opening.viewers_connected}
+║                                                                          ║
+╠══════════════════════════════════════════════════════════════════════════╣
+║  BIDS RECEIVED AND OPENED:                                              ║
+║                                                                          ║
+{"\n".join(f'║  {d.opened_sequence}. {d.bidder_name or d.bid.supplier.full_name:<35}  K {d.price_read:>12,.2f}  Security {"VERIFIED" if d.security_verified_read else "PENDING"}' for d in opened_details)}
+║                                                                          ║
+╠══════════════════════════════════════════════════════════════════════════╣
+║  OBSERVATIONS:                                                          ║
+║  {observations or 'None recorded.'}
+║                                                                          ║
+╠══════════════════════════════════════════════════════════════════════════╣
+║  LATE BIDS: {f'{total_late} received — automatically rejected.' if total_late else 'None.'}
+{late_details}
+╠══════════════════════════════════════════════════════════════════════════╣
+║  WITNESSES:                                                             ║
 {witnesses_text}
+║                                                                          ║
+║  DIGITAL SIGNATURES:                                                    ║
+{witness_sigs}
+╚══════════════════════════════════════════════════════════════════════════╝
 
-OPENED BIDS:
-{details_lines}
-
-OBSERVATIONS:
-{observations or 'None recorded.'}
-
-Late Bids: {BidSubmission.objects.filter(solicitation=sol, is_late=True).count()}
-Total Bids Received: {BidSubmission.objects.filter(solicitation=sol).count()}
+Procurement Officer: {opening.conducted_by.full_name} ({opening.conducted_by.email})
+Bids Received: {BidSubmission.objects.filter(solicitation=sol).count()}
 Valid Bids Opened: {len(opened_details)}
 Minutes Finalized: {timezone.now().strftime('%Y-%m-%d %H:%M')} CAT
 Finalized By: {request.user.full_name} ({request.user.email})
+
+This is an automated message from the ZAMMSA Procurement System.
+Contact the procurement office if you have any objections within 3 working days.
 """
 
     minutes_filename = f'opening_minutes_{sol.sol_number}_{opening.opened_at.strftime("%Y%m%d_%H%M")}.txt'
@@ -639,7 +690,7 @@ Finalized By: {request.user.full_name} ({request.user.email})
                     message=(
                         f'Dear {name},\n\n'
                         f'Please find below the bid opening minutes for solicitation {sol.sol_number} — {sol.title}.\n\n'
-                        f'{minutes_text}\n\n'
+                        f'{minutes_content}\n\n'
                         f'This is an automated message from the ZAMMSA Procurement System.\n'
                         f'Contact the procurement office if you have any objections within 3 working days.'
                     ),
@@ -654,7 +705,7 @@ Finalized By: {request.user.full_name} ({request.user.email})
         'message': f'Bid opening finalized and minutes sent to {len(recipients)} supplier(s)',
         'opening_id': str(opening.opening_id),
         'status': 'completed',
-        'minutes_content': minutes_text,
+        'minutes_content': minutes_content,
         'minutes_file': minutes_filename,
         'recipients': recipients,
     })
@@ -698,6 +749,23 @@ def bid_opening_conduct_view(request, pk):
         'message': f'{bids.count()} bids opened successfully',
         'opening_id': str(opening.opening_id),
         'details': BidOpeningSerializer(opening).data,
+    })
+
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def bid_opening_track_viewer_view(request, pk):
+    """Track a viewer connecting to the public bid opening"""
+    try:
+        opening = BidOpening.objects.get(pk=pk)
+    except BidOpening.DoesNotExist:
+        return Response({'error': 'Opening not found'}, status=404)
+
+    opening.viewers_connected = (opening.viewers_connected or 0) + 1
+    opening.save(update_fields=['viewers_connected'])
+
+    return Response({
+        'viewers_connected': opening.viewers_connected,
     })
 
 

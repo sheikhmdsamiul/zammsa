@@ -487,12 +487,29 @@ export interface GoodsReceiptNote {
   source: string;
 }
 
+export interface ThreeWayMatch {
+  match_id: string;
+  invoice: string;
+  po_quantity: number;
+  grn_quantity: number;
+  invoice_quantity: number;
+  po_price: number;
+  invoice_price: number;
+  match_status: MatchStatus;
+  discrepancies: Record<string, any>;
+}
+
 export interface Invoice {
   invoice_id: string;
+  id?: string; // Standardized ID
   contract: string;
+  contract_number?: string;
+  contract_value?: number;
   po_number: string;
   grn: string | null;
   supplier: string;
+  supplier_name?: string;
+  supplier_bank?: string;
   invoice_number: string;
   amount: number;
   due_date: string | null;
@@ -511,6 +528,7 @@ export interface Invoice {
   updated_at: string;
   grn_details?: GoodsReceiptNote;
   suggested_approval_route?: ApprovalRoute;
+  three_way_matches?: ThreeWayMatch[];
 }
 
 export interface Payment {
