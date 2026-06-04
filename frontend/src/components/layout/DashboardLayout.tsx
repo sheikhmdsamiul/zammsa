@@ -138,7 +138,7 @@ function useSidebarItems(userRole: string | undefined): NavItem[] {
         children: [
           { label: 'Requisitions', path: '/requisitions' },
           { label: 'Invoice Payments', path: '/finance/invoices' },
-          { label: 'Contract Signing', path: '/contracts' },
+          { label: 'Contract Signing', path: '/contracts?queue=dg_signature' },
         ]
       },
       { label: 'Executive Overview', path: '/dashboard', icon: <ChartBarIcon className={iconClass} />,
@@ -155,6 +155,7 @@ function useSidebarItems(userRole: string | undefined): NavItem[] {
     [ROLES.CONTRACT_MANAGER]: [
       { label: 'Dashboard', path: '/dashboard', icon: <ChartBarIcon className={iconClass} /> },
       { label: 'My Contracts', path: '/contracts', icon: <DocumentIcon className={iconClass} />, badge: 4 },
+      { label: 'Signing & Security', path: '/contracts/performance-security', icon: <ShieldCheckIcon className={iconClass} /> },
       { label: 'Milestones', path: '/contracts/milestones', icon: <ClockIcon className={iconClass} />, badge: 1 },
       { label: 'Amendments', path: '/contracts/amendments', icon: <PencilIcon className={iconClass} /> },
       { label: 'Liquidated Damages', path: '/contracts/liquidated-damages', icon: <ExclamationIcon className={iconClass} /> },

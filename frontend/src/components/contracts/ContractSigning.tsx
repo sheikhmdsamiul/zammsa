@@ -1,226 +1,263 @@
-import React, { useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import React, { useMemo } from 'react';
+import { Link, useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { contractsApi } from '../../api/contracts';
 import { StatusBadge } from '../common/StatusBadge';
 import { LoadingSpinner } from '../common/LoadingSpinner';
+import { PageHeader } from '../common/PageHeader';
+import { ContractSigningSteps } from './ContractSigningSteps';
+import { useAuth } from '../../hooks/useAuth';
+import { ROLES } from '../../config/rbac';
+import {
+  formatContractValue,
+  formatDate,
+  canDGCountersign,
+  canValidatePerformanceSecurity,
+} from './contractUtils';
 import toast from 'react-hot-toast';
 import {
-  CheckCircleIcon, ShieldCheckIcon,
-  UploadIcon, DocumentTextIcon,
+  CheckCircleIcon,
+  ShieldCheckIcon,
+  ArrowLeftIcon,
+  ExclamationIcon,
 } from '@heroicons/react/outline';
 
 const ContractSigning: React.FC = () => {
   const { id } = useParams<{ id: string }>();
-  const queryClient = useQueryClient();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  const { user } = useAuth();
+  const role = user?.role || '';
 
-  const [supplierSigned, setSupplierSigned] = useState(false);
-  const [dgSigned, setDgSigned] = useState(false);
-  const [securityUploaded, setSecurityUploaded] = useState(false);
-  const [securityId, setSecurityId] = useState<string | null>(null);
-  const [securityFile, setSecurityFile] = useState<File | null>(null);
-  const [securityValidated, setSecurityValidated] = useState(false);
+  const isDG = role === ROLES.DIRECTOR_GENERAL;
+  const isContractManager =
+    role === ROLES.CONTRACT_MANAGER ||
+    role === ROLES.PROCUREMENT_MANAGER ||
+    role === ROLES.DIRECTOR_PROCUREMENT ||
+    role === ROLES.SYSTEM_ADMIN;
+  const isProcurementOfficer = role === ROLES.PROCUREMENT_OFFICER || role === ROLES.SYSTEM_ADMIN;
+  const canCountersign = isDG;
+  const canValidate = isContractManager;
 
-  const { data: contract, isLoading } = useQuery({
+  const { data: contract, isLoading, isError } = useQuery({
     queryKey: ['contract', id],
     queryFn: () => contractsApi.get(id!),
     enabled: !!id,
   });
 
-  const signSupplierMutation = useMutation({
-    mutationFn: () => contractsApi.signSupplier(id!),
-    onSuccess: () => {
-      setSupplierSigned(true);
-      queryClient.invalidateQueries({ queryKey: ['contract', id] });
-      toast.success('Contract signed by supplier');
-    },
-    onError: (err: any) => toast.error(err?.response?.data?.error || 'Failed to sign as supplier'),
-  });
-
   const countersignMutation = useMutation({
     mutationFn: () => contractsApi.countersign(id!),
     onSuccess: (data: any) => {
-      setDgSigned(true);
       queryClient.invalidateQueries({ queryKey: ['contract', id] });
+      queryClient.invalidateQueries({ queryKey: ['contracts'] });
       toast.success('Contract countersigned by Director General');
       if (data?.performance_security_required) {
-        toast('Performance security is required', { icon: 'info' });
+        toast('Supplier must upload performance security in the vendor portal', { icon: 'info' });
       }
     },
     onError: (err: any) => toast.error(err?.response?.data?.error || 'Failed to countersign'),
   });
 
-  const uploadSecurityMutation = useMutation({
-    mutationFn: (data: { security_type: string; amount: number; issuing_bank: string; reference_number?: string; expiry_date?: string }) =>
-      contractsApi.uploadSecurity(id!, data),
-    onSuccess: (data: any) => {
-      setSecurityId(data?.id || data?.security_id || '');
-      setSecurityUploaded(true);
-      toast.success('Performance security uploaded');
-    },
-    onError: (err: any) => toast.error(err?.response?.data?.error || 'Failed to upload security'),
-  });
+  const perfSecurity = useMemo(() => {
+    if (!contract?.securities?.length) return null;
+    return (
+      contract.securities.find((s) => s.security_type === 'performance') || contract.securities[0]
+    );
+  }, [contract?.securities]);
+
+  const securityId = perfSecurity?.id || perfSecurity?.security_id;
 
   const validateMutation = useMutation({
     mutationFn: () => contractsApi.validateSecurity(id!, securityId!, true),
     onSuccess: () => {
-      setSecurityValidated(true);
       queryClient.invalidateQueries({ queryKey: ['contract', id] });
-      toast.success('Performance security validated. Contract activated.');
+      queryClient.invalidateQueries({ queryKey: ['contracts'] });
+      toast.success('Performance security validated. Contract is now active.');
     },
     onError: (err: any) => toast.error(err?.response?.data?.error || 'Failed to validate security'),
   });
 
-  const handleFileUpload = (file: File) => {
-    setSecurityFile(file);
-    if (!contract) return;
-    uploadSecurityMutation.mutate({
-      security_type: 'performance',
-      amount: Math.round((contract.value || 0) * 0.05),
-      issuing_bank: '',
-      reference_number: file.name,
-    });
-  };
+  if (isLoading) return <LoadingSpinner className="py-24" />;
+  if (isError || !contract) {
+    return (
+      <div className="max-w-3xl mx-auto py-24 text-center">
+        <p className="text-lg font-bold text-gray-500">Contract not found</p>
+        <Link to="/contracts" className="text-zammsa-green font-bold mt-4 inline-block">
+          Back to contracts
+        </Link>
+      </div>
+    );
+  }
 
-  if (isLoading) return <LoadingSpinner className="py-12" />;
-  if (!contract) return (
-    <div className="max-w-4xl mx-auto py-12 text-center">
-      <DocumentTextIcon className="w-12 h-12 text-gray-300 mx-auto mb-4" />
-      <p className="text-lg font-bold text-gray-500">Contract not found</p>
-    </div>
-  );
-
-  const contractValue = contract.value || 0;
-  const perfSecurityAmount = contractValue * 0.05;
-  const perfBondRequired = contract.requires_performance_bond;
-  const endDateDisplay = contract.end_date
-    ? new Date(contract.end_date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
-    : 'TBD';
-
-  const securityExpiryDate = contract.end_date
-    ? new Date(new Date(contract.end_date).getTime() + 90 * 24 * 60 * 60 * 1000)
-        .toLocaleDateString('en-GB', { day: '2-digit', month: 'long', year: 'numeric' })
-    : '90 days after contract end';
+  const bondRequired = contract.requires_performance_bond || contract.performance_security_required;
+  const showDGPanel = canCountersign && canDGCountersign(contract);
+  const showValidatePanel = canValidate && canValidatePerformanceSecurity(contract);
+  const dgDone = contract.signed_by_authority;
+  const supplierDone = contract.signed_by_vendor;
 
   return (
-    <div className="max-w-4xl mx-auto space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <div className="flex items-center gap-3">
-            <h1 className="text-2xl font-bold text-gray-900">Contract Signing and Activation</h1>
-            <StatusBadge status={dgSigned && securityValidated ? 'active' : 'pending_acceptance'} />
+    <div className="pb-12 max-w-6xl mx-auto space-y-8">
+      <PageHeader
+        title="Contract Signing & Activation"
+        description={`${contract.contract_number} · ${contract.vendor_name}`}
+        breadcrumbs={[
+          { label: 'Contracts', path: '/contracts' },
+          { label: contract.contract_number },
+          { label: 'Signing' },
+        ]}
+        actions={
+          <div className="flex items-center gap-2">
+            <Link
+              to={`/contracts/${id}`}
+              className="p-2.5 border border-gray-200 rounded-xl text-gray-500 hover:text-gray-900"
+            >
+              <ArrowLeftIcon className="w-5 h-5" />
+            </Link>
+            <StatusBadge status={contract.status} />
           </div>
-          <p className="text-sm text-gray-500 mt-1">{contract.contract_number} | {contract.vendor_name}</p>
-        </div>
-      </div>
+        }
+      />
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div className="space-y-6">
-          <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
-            <h2 className="text-lg font-semibold text-gray-900 mb-4">Supplier Signs Contract</h2>
-            <div className="space-y-4">
-              <div className="p-4 bg-gray-50 rounded-lg">
-                <p className="text-sm font-medium text-gray-900">{contract.contract_number}</p>
-                <p className="text-sm text-gray-500">Value: K {contractValue.toLocaleString()} | Duration: to {endDateDisplay}</p>
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="lg:col-span-2 space-y-6">
+          {/* Supplier — vendor portal only */}
+          <section className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
+            <h2 className="text-lg font-bold text-gray-900 mb-2">Supplier signature</h2>
+            <p className="text-sm text-gray-500 mb-4">
+              Performed by the awarded supplier in the <strong>Vendor Portal</strong> — not on this screen.
+            </p>
+            {supplierDone ? (
+              <div className="flex items-center gap-2 p-4 bg-emerald-50 border border-emerald-200 rounded-xl text-emerald-800">
+                <CheckCircleIcon className="w-5 h-5" />
+                <span className="text-sm font-bold">
+                  Signed by supplier on {formatDate(contract.signed_vendor_date)}
+                </span>
               </div>
-              {contract.signed_by_vendor || supplierSigned ? (
-                <div className="flex items-center gap-2 text-emerald-600 font-medium">
-                  <CheckCircleIcon className="w-5 h-5" /> Signed by Supplier
-                </div>
-              ) : (
-                <button onClick={() => signSupplierMutation.mutate()} disabled={signSupplierMutation.isPending}
-                  className="w-full px-4 py-3 bg-zammsa-green text-white rounded-xl text-sm font-bold disabled:opacity-50">
-                  {signSupplierMutation.isPending ? 'Signing...' : 'Apply Supplier Digital Signature'}
-                </button>
-              )}
-            </div>
-          </div>
+            ) : (
+              <div className="p-4 bg-blue-50 border border-blue-200 rounded-xl text-sm text-blue-900">
+                <p className="font-bold">Waiting for supplier</p>
+                <p className="mt-1 text-blue-800">
+                  Ask the supplier to log in at the vendor portal → My Contracts → open this contract → Sign
+                  Contract.
+                </p>
+              </div>
+            )}
+          </section>
 
-          {(contract.signed_by_vendor || supplierSigned) && !contract.signed_by_authority && !dgSigned && (
-            <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
-              <h2 className="text-lg font-semibold text-gray-900 mb-4">DG Countersignature</h2>
-              <p className="text-sm text-gray-500 mb-4">Supplier signed: {contract.vendor_name}</p>
-              {contract.signed_by_authority || dgSigned ? (
-                <div className="flex items-center gap-2 text-emerald-600 font-medium">
-                  <CheckCircleIcon className="w-5 h-5" /> Countersigned by Director General
+          {/* DG countersignature */}
+          {(isDG || isProcurementOfficer || isContractManager) && (
+            <section className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
+              <h2 className="text-lg font-bold text-gray-900 mb-2">Director General countersignature</h2>
+              {dgDone ? (
+                <div className="flex items-center gap-2 p-4 bg-emerald-50 border border-emerald-200 rounded-xl text-emerald-800">
+                  <CheckCircleIcon className="w-5 h-5" />
+                  <span className="text-sm font-bold">
+                    Countersigned on {formatDate(contract.signed_authority_date)}
+                  </span>
+                </div>
+              ) : !supplierDone ? (
+                <p className="text-sm text-gray-500">Available after the supplier signs.</p>
+              ) : !canCountersign ? (
+                <div className="p-4 bg-gray-50 border border-gray-200 rounded-xl text-sm text-gray-600">
+                  Only the Director General can apply the countersignature. Log in as{' '}
+                  <span className="font-mono">dg@zammsa.gov.zm</span> to complete this step.
+                </div>
+              ) : showDGPanel ? (
+                <div className="space-y-4">
+                  <p className="text-sm text-gray-600">
+                    Value: {formatContractValue(contract.value, contract.currency)} · Supplier:{' '}
+                    {contract.vendor_name}
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => countersignMutation.mutate()}
+                    disabled={countersignMutation.isPending}
+                    className="w-full sm:w-auto px-6 py-3 bg-zammsa-green text-white rounded-xl text-sm font-bold disabled:opacity-50"
+                  >
+                    {countersignMutation.isPending ? 'Signing...' : 'Apply DG Countersignature'}
+                  </button>
                 </div>
               ) : (
-                <button onClick={() => countersignMutation.mutate()} disabled={countersignMutation.isPending}
-                  className="w-full px-4 py-3 bg-zammsa-green text-white rounded-xl text-sm font-bold disabled:opacity-50">
-                  {countersignMutation.isPending ? 'Signing...' : 'Apply Director General Countersignature'}
-                </button>
+                <div className="p-4 bg-amber-50 border border-amber-200 rounded-xl text-sm text-amber-800 flex gap-2">
+                  <ExclamationIcon className="w-5 h-5 shrink-0" />
+                  Standstill must be complete before countersignature.
+                </div>
               )}
-            </div>
+            </section>
           )}
-        </div>
 
-        <div className="space-y-6">
-          {(contract.signed_by_authority || dgSigned) && (
-            <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
-              <h2 className="text-lg font-semibold text-gray-900 mb-4">Performance Security</h2>
-              <div className="space-y-4">
-                <div className="p-4 bg-gray-50 rounded-lg">
-                  <p className="text-sm text-gray-600">Required Amount: <strong className="text-gray-900">K {Math.round(perfSecurityAmount).toLocaleString()}</strong> (5% of K {contractValue.toLocaleString()})</p>
-                  <p className="text-sm text-gray-600">Valid Until: {securityExpiryDate}</p>
-                  <p className="text-sm text-gray-600">Acceptable: Bank Guarantee or Performance Bond</p>
-                  {!perfBondRequired && (
-                    <p className="text-xs text-amber-600 mt-1">Performance bond may not be required for contracts under K 1,000,000</p>
+          {/* Performance security validation */}
+          {bondRequired && (isContractManager || isDG || isProcurementOfficer) && (
+            <section className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
+              <h2 className="text-lg font-bold text-gray-900 mb-2 flex items-center gap-2">
+                <ShieldCheckIcon className="w-5 h-5 text-zammsa-green" />
+                Performance security
+              </h2>
+              {contract.performance_security_validated ? (
+                <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-xl text-emerald-800 text-sm font-bold">
+                  Bond validated — contract is active.
+                </div>
+              ) : !contract.performance_security_uploaded ? (
+                <p className="text-sm text-gray-500">
+                  Supplier uploads the bond in the vendor portal after DG countersignature.
+                </p>
+              ) : !canValidate ? (
+                <p className="text-sm text-gray-500">
+                  Bond uploaded. A Contract Manager must validate it (
+                  <span className="font-mono">contract@zammsa.gov.zm</span>).
+                </p>
+              ) : showValidatePanel && securityId ? (
+                <div className="space-y-4">
+                  {perfSecurity && (
+                    <dl className="grid grid-cols-2 gap-3 text-sm bg-gray-50 p-4 rounded-xl">
+                      <div>
+                        <dt className="text-gray-500">Amount</dt>
+                        <dd className="font-bold">{formatContractValue(perfSecurity.amount, contract.currency)}</dd>
+                      </div>
+                      <div>
+                        <dt className="text-gray-500">Bank</dt>
+                        <dd className="font-bold">{perfSecurity.issuing_bank}</dd>
+                      </div>
+                      <div>
+                        <dt className="text-gray-500">Reference</dt>
+                        <dd className="font-mono text-xs">{perfSecurity.reference_number}</dd>
+                      </div>
+                      <div>
+                        <dt className="text-gray-500">Expiry</dt>
+                        <dd className="font-bold">{formatDate(perfSecurity.expiry_date)}</dd>
+                      </div>
+                    </dl>
                   )}
+                  <button
+                    type="button"
+                    onClick={() => validateMutation.mutate()}
+                    disabled={validateMutation.isPending}
+                    className="px-6 py-3 bg-zammsa-green text-white rounded-xl text-sm font-bold disabled:opacity-50"
+                  >
+                    {validateMutation.isPending ? 'Validating...' : 'Validate performance security'}
+                  </button>
                 </div>
+              ) : null}
+            </section>
+          )}
 
-                {!securityUploaded && !contract.performance_security_uploaded ? (
-                  <div>
-                    <label className="flex items-center gap-3 px-4 py-6 border-2 border-dashed border-gray-300 rounded-xl cursor-pointer hover:border-zammsa-green/50">
-                      <UploadIcon className="w-6 h-6 text-gray-400" />
-                      <span className="text-sm text-gray-500">Upload Performance Security Document</span>
-                      <input type="file" className="hidden" accept=".pdf,.jpg,.png" onChange={(e) => {
-                        const f = e.target.files?.[0];
-                        if (f) handleFileUpload(f);
-                      }} />
-                    </label>
-                  </div>
-                ) : (
-                  <div className="space-y-3">
-                    <div className="flex items-center justify-between p-3 bg-emerald-50 rounded-lg">
-                      <div className="flex items-center gap-2">
-                        <CheckCircleIcon className="w-5 h-5 text-emerald-500" />
-                        <span className="text-sm font-medium">{securityFile?.name || 'Performance bond uploaded'}</span>
-                      </div>
-                      <StatusBadge status="verified" />
-                    </div>
-
-                    <div className="p-4 bg-amber-50 border border-amber-200 rounded-lg">
-                      <p className="text-sm font-medium text-amber-800 mb-2">Validation Checks</p>
-                      <div className="space-y-2 text-sm text-amber-700">
-                        <p className="flex items-center gap-1"><CheckCircleIcon className="w-4 h-4" /> Amount: K {Math.round(perfSecurityAmount).toLocaleString()}</p>
-                        <p className="flex items-center gap-1"><CheckCircleIcon className="w-4 h-4" /> Form: Bank Guarantee</p>
-                        <p className="flex items-center gap-1"><CheckCircleIcon className="w-4 h-4" /> Validity period</p>
-                      </div>
-                    </div>
-
-                    {!securityValidated && !contract.performance_security_validated && (
-                      <button onClick={() => validateMutation.mutate()} disabled={validateMutation.isPending || !securityId}
-                        className="w-full px-4 py-3 bg-zammsa-green text-white rounded-xl text-sm font-bold disabled:opacity-50">
-                        {validateMutation.isPending ? 'Validating...' : 'Approve Performance Security'}
-                      </button>
-                    )}
-
-                    {(securityValidated || contract.performance_security_validated) && (
-                      <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-lg text-center">
-                        <CheckCircleIcon className="w-8 h-8 text-emerald-500 mx-auto mb-2" />
-                        <p className="text-sm font-bold text-emerald-800">Contract Status: Active</p>
-                        <button onClick={() => navigate(`/contracts/${id}`)}
-                          className="mt-3 px-4 py-2 bg-zammsa-green text-white rounded-lg text-sm">
-                          View Active Contract
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
+          {contract.status === 'active' && (
+            <div className="text-center p-6 bg-emerald-50 border border-emerald-200 rounded-2xl">
+              <CheckCircleIcon className="w-10 h-10 text-emerald-500 mx-auto mb-2" />
+              <p className="font-bold text-emerald-900">Contract is active</p>
+              <button
+                type="button"
+                onClick={() => navigate(`/contracts/${id}`)}
+                className="mt-4 px-6 py-2 bg-zammsa-green text-white rounded-lg text-sm font-bold"
+              >
+                View contract
+              </button>
             </div>
           )}
+        </div>
+
+        <div>
+          <ContractSigningSteps contract={contract} />
         </div>
       </div>
     </div>

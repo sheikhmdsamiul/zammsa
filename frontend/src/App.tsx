@@ -389,7 +389,14 @@ function App() {
                     </ProtectedRoute>
                   } />
                   <Route path="contracts/:id/signing" element={
-                    <ProtectedRoute roles={[ROLES.PROCUREMENT_OFFICER, ROLES.CONTRACT_MANAGER, ROLES.DIRECTOR_GENERAL]}>
+                    <ProtectedRoute roles={[
+                      ROLES.PROCUREMENT_OFFICER,
+                      ROLES.PROCUREMENT_MANAGER,
+                      ROLES.DIRECTOR_PROCUREMENT,
+                      ROLES.CONTRACT_MANAGER,
+                      ROLES.DIRECTOR_GENERAL,
+                      ROLES.SYSTEM_ADMIN,
+                    ]}>
                       <ContractSigning />
                     </ProtectedRoute>
                   } />

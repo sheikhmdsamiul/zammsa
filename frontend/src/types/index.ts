@@ -367,6 +367,8 @@ export interface Contract {
   id: string;
   title: string;
   contract_number: string;
+  contract_type?: string;
+  solicitation_number?: string;
   solicitation: string;
   vendor: string;
   vendor_name: string;
@@ -387,6 +389,7 @@ export interface Contract {
   closure_checklists: any[];
   contract_manager: string | null;
   award_date: string | null;
+  completed_at?: string | null;
   award_notice_published: boolean;
   award_notice_published_at: string | null;
   waiting_period_days: number;

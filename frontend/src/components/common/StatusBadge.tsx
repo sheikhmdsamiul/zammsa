@@ -18,6 +18,8 @@ const statusStyles: Record<string, { bg: string; text: string; dot: string }> = 
   published: { bg: 'bg-indigo-50', text: 'text-indigo-700', dot: 'bg-indigo-400' },
   closed: { bg: 'bg-gray-100', text: 'text-gray-700', dot: 'bg-gray-400' },
   awarded: { bg: 'bg-purple-50', text: 'text-purple-700', dot: 'bg-purple-400' },
+  pending_acceptance: { bg: 'bg-amber-50', text: 'text-amber-700', dot: 'bg-amber-400' },
+  archived: { bg: 'bg-gray-100', text: 'text-gray-600', dot: 'bg-gray-400' },
   paid: { bg: 'bg-emerald-50', text: 'text-emerald-700', dot: 'bg-emerald-400' },
   processing: { bg: 'bg-blue-50', text: 'text-blue-700', dot: 'bg-blue-400' },
   sent: { bg: 'bg-indigo-50', text: 'text-indigo-700', dot: 'bg-indigo-400' },

@@ -21,6 +21,54 @@ from datetime import timedelta
 
 CONTRACT_GENERATION_ROLES = ('procurement_officer', 'system_admin')
 CONTRACT_MANAGER_ROLES = ('contract_manager', 'procurement_manager', 'director_procurement', 'system_admin')
+STANDSTILL_MANAGE_ROLES = CONTRACT_GENERATION_ROLES + ('contract_manager', 'procurement_manager')
+SUPPLIER_CONTRACT_ROLES = ('supplier_user',)
+
+
+def _supplier_contract_filter(user):
+    """Contracts visible to a supplier portal user."""
+    from suppliers.models import VendorApplication
+    filters = Q(winning_bid__supplier=user)
+    if user.employee_id and str(user.employee_id).startswith('SUP-'):
+        reg = str(user.employee_id).replace('SUP-', '', 1)
+        filters |= Q(supplier__registration_number=reg)
+    app = VendorApplication.objects.filter(email=user.email).first()
+    if app and app.registration_number:
+        filters |= Q(supplier__registration_number=app.registration_number)
+    return filters
+
+
+def _user_can_access_contract(user, contract):
+    role = getattr(user, 'role', '')
+    if role == 'supplier_user':
+        return Contract.objects.filter(pk=contract.pk).filter(_supplier_contract_filter(user)).exists()
+    return True
+
+
+def _contracts_queryset_for_user(user, queryset=None):
+    qs = queryset if queryset is not None else Contract.objects.all()
+    if getattr(user, 'role', '') == 'supplier_user':
+        return qs.filter(_supplier_contract_filter(user)).distinct()
+    return qs
+
+
+def _standstill_active(contract):
+    """True while today is before waiting_period_end (proceed on or after end date)."""
+    if not contract.waiting_period_end:
+        return False
+    return timezone.now().date() < contract.waiting_period_end
+
+
+def _parse_date(value):
+    if not value:
+        return None
+    if hasattr(value, 'year'):
+        return value
+    from datetime import datetime
+    try:
+        return datetime.strptime(str(value)[:10], '%Y-%m-%d').date()
+    except (ValueError, TypeError):
+        return None
 
 
 def _add_working_days(start_date, days):
@@ -75,6 +123,21 @@ class ContractListView(BaseView, generics.ListCreateAPIView):
     ordering_fields = ['created_at', 'value', 'start_date', 'end_date']
     ordering = ['-created_at']
 
+    def get_queryset(self):
+        qs = super().get_queryset()
+        qs = _contracts_queryset_for_user(self.request.user, qs)
+        if self.request.query_params.get('pending_dg_signature') == 'true':
+            qs = qs.filter(signed_by_vendor=True, signed_by_authority=False)
+        if self.request.query_params.get('pending_security_validation') == 'true':
+            qs = qs.filter(
+                performance_security_required=True,
+                performance_security_uploaded=True,
+                performance_security_validated=False,
+            )
+        if self.request.query_params.get('pending_supplier_signature') == 'true':
+            qs = qs.filter(signed_by_vendor=False, award_notice_published=True)
+        return qs
+
     def get_serializer_class(self):
         if self.request.method == 'GET' and not self.request.query_params.get('detail'):
             return ContractListSerializer
@@ -85,6 +148,9 @@ class ContractDetailView(generics.RetrieveUpdateDestroyAPIView):
     queryset = Contract.objects.select_related('supplier', 'solicitation', 'winning_bid').prefetch_related('securities', 'amendments', 'milestones', 'appeals', 'closure_checklists').all()
     serializer_class = ContractSerializer
     permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        return _contracts_queryset_for_user(self.request.user, super().get_queryset())
 
 
 @api_view(['POST'])
@@ -98,33 +164,125 @@ def contract_publish_award_view(request, pk):
     except Contract.DoesNotExist:
         return Response({'error': 'Contract not found'}, status=404)
 
+    days = request.data.get('waiting_period_days')
+    if days is not None:
+        try:
+            contract.waiting_period_days = max(0, int(days))
+        except (TypeError, ValueError):
+            return Response({'error': 'waiting_period_days must be a number'}, status=400)
+
+    start_override = _parse_date(request.data.get('waiting_period_start'))
+    end_override = _parse_date(request.data.get('waiting_period_end'))
+
     contract.award_notice_published = True
     contract.award_notice_published_at = timezone.now()
-    contract.waiting_period_start = timezone.now().date()
-    contract.waiting_period_end = _add_working_days(timezone.now().date(), contract.waiting_period_days)
+    contract.waiting_period_start = start_override or timezone.now().date()
+    if end_override:
+        contract.waiting_period_end = end_override
+    else:
+        contract.waiting_period_end = _add_working_days(
+            contract.waiting_period_start, contract.waiting_period_days
+        )
     contract.status = 'draft'
     contract.save()
 
     return Response({
         'message': 'Award notice published. Waiting period started.',
+        'waiting_period_start': contract.waiting_period_start,
         'waiting_period_end': contract.waiting_period_end,
+        'waiting_period_days': contract.waiting_period_days,
+        'standstill_expired': not _standstill_active(contract),
+    })
+
+
+@api_view(['POST', 'PATCH'])
+@permission_classes([IsAuthenticated])
+def contract_set_standstill_view(request, pk):
+    """Manually configure standstill dates (e.g. shorten period for testing)."""
+    if getattr(request.user, 'role', '') not in STANDSTILL_MANAGE_ROLES:
+        return Response({'error': 'Not permitted to adjust standstill period'}, status=403)
+
+    try:
+        contract = Contract.objects.get(pk=pk)
+    except Contract.DoesNotExist:
+        return Response({'error': 'Contract not found'}, status=404)
+
+    if request.data.get('waiting_period_days') is not None:
+        try:
+            contract.waiting_period_days = max(0, int(request.data['waiting_period_days']))
+        except (TypeError, ValueError):
+            return Response({'error': 'waiting_period_days must be a number'}, status=400)
+
+    if request.data.get('expire_now'):
+        today = timezone.now().date()
+        contract.waiting_period_end = today
+        if not contract.waiting_period_start:
+            contract.waiting_period_start = today
+        if not contract.award_notice_published:
+            contract.award_notice_published = True
+            contract.award_notice_published_at = timezone.now()
+    else:
+        start = _parse_date(request.data.get('waiting_period_start'))
+        end = _parse_date(request.data.get('waiting_period_end'))
+        if start:
+            contract.waiting_period_start = start
+        if end:
+            contract.waiting_period_end = end
+
+    if request.data.get('recalculate_end') and contract.waiting_period_start is not None:
+        contract.waiting_period_end = _add_working_days(
+            contract.waiting_period_start, contract.waiting_period_days
+        )
+
+    if request.data.get('publish_award') and not contract.award_notice_published:
+        contract.award_notice_published = True
+        contract.award_notice_published_at = timezone.now()
+        if not contract.waiting_period_start:
+            contract.waiting_period_start = timezone.now().date()
+        if not contract.waiting_period_end:
+            contract.waiting_period_end = _add_working_days(
+                contract.waiting_period_start, contract.waiting_period_days
+            )
+
+    contract.save()
+    serializer = ContractSerializer(contract)
+
+    return Response({
+        'message': 'Standstill period updated',
+        'contract': serializer.data,
+        'standstill_expired': not _standstill_active(contract),
+        'waiting_period_start': contract.waiting_period_start,
+        'waiting_period_end': contract.waiting_period_end,
+        'waiting_period_days': contract.waiting_period_days,
     })
 
 
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def contract_supplier_sign_view(request, pk):
+    if getattr(request.user, 'role', '') not in SUPPLIER_CONTRACT_ROLES:
+        return Response({'error': 'Only supplier users can sign contracts'}, status=403)
+
     try:
         contract = Contract.objects.get(pk=pk)
     except Contract.DoesNotExist:
         return Response({'error': 'Contract not found'}, status=404)
 
+    if not _user_can_access_contract(request.user, contract):
+        return Response({'error': 'You do not have access to this contract'}, status=403)
+
+    if contract.signed_by_vendor:
+        return Response({'error': 'Contract already signed by supplier'}, status=400)
+
     if contract.appeal_pending:
         return Response({'error': 'Cannot sign contract while an appeal is pending'}, status=400)
     if not contract.award_notice_published:
         return Response({'error': 'Award notice must be published before supplier signature'}, status=400)
-    if contract.waiting_period_end and timezone.now().date() < contract.waiting_period_end:
-        return Response({'error': 'Standstill period has not expired'}, status=400)
+    if _standstill_active(contract):
+        return Response({
+            'error': 'Standstill period has not expired',
+            'waiting_period_end': contract.waiting_period_end,
+        }, status=400)
 
     contract.signed_by_vendor = True
     contract.signed_vendor_date = timezone.now().date()
@@ -149,8 +307,11 @@ def contract_countersign_view(request, pk):
         return Response({'error': 'Supplier must sign before Director General countersignature'}, status=400)
     if contract.appeal_pending:
         return Response({'error': 'Cannot countersign contract while an appeal is pending'}, status=400)
-    if contract.waiting_period_end and timezone.now().date() < contract.waiting_period_end:
-        return Response({'error': 'Standstill period has not expired'}, status=400)
+    if _standstill_active(contract):
+        return Response({
+            'error': 'Standstill period has not expired',
+            'waiting_period_end': contract.waiting_period_end,
+        }, status=400)
 
     contract.signed_by_authority = True
     contract.signed_authority_date = timezone.now().date()
@@ -174,21 +335,35 @@ def contract_countersign_view(request, pk):
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def contract_upload_security_view(request, pk):
+    role = getattr(request.user, 'role', '')
+    if role not in SUPPLIER_CONTRACT_ROLES:
+        return Response({'error': 'Only supplier users can upload performance security'}, status=403)
+
     try:
         contract = Contract.objects.get(pk=pk)
     except Contract.DoesNotExist:
         return Response({'error': 'Contract not found'}, status=404)
 
+    if not _user_can_access_contract(request.user, contract):
+        return Response({'error': 'You do not have access to this contract'}, status=403)
+
+    if not contract.signed_by_vendor:
+        return Response({'error': 'Supplier must sign the contract before uploading security'}, status=400)
+
     security_type = request.data.get('security_type', 'performance')
     amount = Decimal(str(request.data.get('amount', 0)))
     issuing_bank = request.data.get('issuing_bank', '')
     reference_number = request.data.get('reference_number', '')
-    expiry_date = request.data.get('expiry_date')
+    expiry_date = _parse_date(request.data.get('expiry_date'))
+    if not expiry_date and contract.end_date:
+        expiry_date = contract.end_date + timedelta(days=90)
+    if not expiry_date:
+        expiry_date = timezone.now().date() + timedelta(days=365)
 
     if not amount or not issuing_bank:
         return Response({'error': 'Amount and issuing bank are required'}, status=400)
 
-    ContractSecurity.objects.create(
+    security = ContractSecurity.objects.create(
         contract=contract,
         security_type=security_type,
         amount=amount,
@@ -201,12 +376,20 @@ def contract_upload_security_view(request, pk):
     contract.performance_security_uploaded = True
     contract.save()
 
-    return Response({'message': 'Security uploaded, pending validation'})
+    return Response({
+        'message': 'Security uploaded, pending validation',
+        'id': str(security.pk),
+        'security_id': str(security.pk),
+        'security': ContractSecuritySerializer(security).data,
+    })
 
 
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def contract_validate_security_view(request, pk, security_pk):
+    if getattr(request.user, 'role', '') not in CONTRACT_MANAGER_ROLES:
+        return Response({'error': 'Only contract management roles can validate performance security'}, status=403)
+
     try:
         contract = Contract.objects.get(pk=pk)
         security = ContractSecurity.objects.get(pk=security_pk, contract=contract)
@@ -346,7 +529,7 @@ def contract_activate_after_waiting_view(request, pk):
     if not contract.award_notice_published:
         return Response({'error': 'Award notice not yet published'}, status=400)
 
-    if contract.waiting_period_end and timezone.now().date() < contract.waiting_period_end:
+    if _standstill_active(contract):
         return Response({
             'error': 'Standstill period has not expired',
             'waiting_period_end': contract.waiting_period_end,

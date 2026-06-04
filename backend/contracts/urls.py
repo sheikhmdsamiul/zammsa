@@ -5,6 +5,7 @@ urlpatterns = [
     path('', views.ContractListView.as_view(), name='contract-list'),
     path('<uuid:pk>/', views.ContractDetailView.as_view(), name='contract-detail'),
     path('<uuid:pk>/publish-award/', views.contract_publish_award_view, name='contract-publish-award'),
+    path('<uuid:pk>/set-standstill/', views.contract_set_standstill_view, name='contract-set-standstill'),
     path('<uuid:pk>/sign-supplier/', views.contract_supplier_sign_view, name='contract-sign-supplier'),
     path('<uuid:pk>/countersign/', views.contract_countersign_view, name='contract-countersign'),
     path('<uuid:pk>/upload-security/', views.contract_upload_security_view, name='contract-upload-security'),

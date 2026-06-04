@@ -14,8 +14,26 @@ export const contractsApi = {
   update: (id: string, data: Partial<Contract>) =>
     api.patch<Contract>(`/contracts/${id}/`, data).then((r) => r.data),
 
-  publishAward: (id: string) =>
-    api.post<any>(`/contracts/${id}/publish-award/`).then((r) => r.data),
+  publishAward: (
+    id: string,
+    data?: {
+      waiting_period_days?: number;
+      waiting_period_start?: string;
+      waiting_period_end?: string;
+    },
+  ) => api.post<any>(`/contracts/${id}/publish-award/`, data || {}).then((r) => r.data),
+
+  setStandstill: (
+    id: string,
+    data: {
+      waiting_period_days?: number;
+      waiting_period_start?: string;
+      waiting_period_end?: string;
+      expire_now?: boolean;
+      recalculate_end?: boolean;
+      publish_award?: boolean;
+    },
+  ) => api.post<any>(`/contracts/${id}/set-standstill/`, data).then((r) => r.data),
 
   signSupplier: (id: string) =>
     api.post<any>(`/contracts/${id}/sign-supplier/`).then((r) => r.data),
