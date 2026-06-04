@@ -8449,3 +8449,643 @@ django.db.utils.ProgrammingError: column eval_committee.require_coi does not exi
 LINE 1: ...chairperson_id", "eval_committee"."secretary_id", "eval_comm...
                                                              ^
 ERROR 2026-06-03 08:54:18,997 basehttp 154150 123726287779520 "GET /api/v1/evaluations/committees/?page_size=50 HTTP/1.1" 500 239755
+ERROR 2026-06-04 07:22:05,682 log 88384 139466513577664 Internal Server Error: /api/v1/evaluations/consolidation/3b897004-59aa-4d0c-8c6e-1145825f6d24/
+Traceback (most recent call last):
+  File "/home/sheikh-samiul/.pyenv/versions/3.12.8/lib/python3.12/site-packages/django/core/handlers/exception.py", line 55, in inner
+    response = get_response(request)
+               ^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/.pyenv/versions/3.12.8/lib/python3.12/site-packages/django/core/handlers/base.py", line 197, in _get_response
+    response = wrapped_callback(request, *callback_args, **callback_kwargs)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/.pyenv/versions/3.12.8/lib/python3.12/site-packages/django/views/decorators/csrf.py", line 65, in _view_wrapper
+    return view_func(request, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/.pyenv/versions/3.12.8/lib/python3.12/site-packages/django/views/generic/base.py", line 104, in view
+    return self.dispatch(request, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/.pyenv/versions/3.12.8/lib/python3.12/site-packages/rest_framework/views.py", line 509, in dispatch
+    response = self.handle_exception(exc)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/.pyenv/versions/3.12.8/lib/python3.12/site-packages/rest_framework/views.py", line 469, in handle_exception
+    self.raise_uncaught_exception(exc)
+  File "/home/sheikh-samiul/.pyenv/versions/3.12.8/lib/python3.12/site-packages/rest_framework/views.py", line 480, in raise_uncaught_exception
+    raise exc
+  File "/home/sheikh-samiul/.pyenv/versions/3.12.8/lib/python3.12/site-packages/rest_framework/views.py", line 506, in dispatch
+    response = handler(request, *args, **kwargs)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/.pyenv/versions/3.12.8/lib/python3.12/site-packages/rest_framework/decorators.py", line 50, in handler
+    return func(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/evaluations/views.py", line 994, in consolidated_scores_view
+    for u in User.objects.filter(pk__in=raw_member_ids):
+             ^^^^
+NameError: name 'User' is not defined
+ERROR 2026-06-04 07:22:05,684 basehttp 88384 139466513577664 "GET /api/v1/evaluations/consolidation/3b897004-59aa-4d0c-8c6e-1145825f6d24/ HTTP/1.1" 500 119182
+ERROR 2026-06-04 07:22:06,793 log 88384 139466513577664 Internal Server Error: /api/v1/evaluations/consolidation/3b897004-59aa-4d0c-8c6e-1145825f6d24/
+Traceback (most recent call last):
+  File "/home/sheikh-samiul/.pyenv/versions/3.12.8/lib/python3.12/site-packages/django/core/handlers/exception.py", line 55, in inner
+    response = get_response(request)
+               ^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/.pyenv/versions/3.12.8/lib/python3.12/site-packages/django/core/handlers/base.py", line 197, in _get_response
+    response = wrapped_callback(request, *callback_args, **callback_kwargs)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/.pyenv/versions/3.12.8/lib/python3.12/site-packages/django/views/decorators/csrf.py", line 65, in _view_wrapper
+    return view_func(request, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/.pyenv/versions/3.12.8/lib/python3.12/site-packages/django/views/generic/base.py", line 104, in view
+    return self.dispatch(request, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/.pyenv/versions/3.12.8/lib/python3.12/site-packages/rest_framework/views.py", line 509, in dispatch
+    response = self.handle_exception(exc)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/.pyenv/versions/3.12.8/lib/python3.12/site-packages/rest_framework/views.py", line 469, in handle_exception
+    self.raise_uncaught_exception(exc)
+  File "/home/sheikh-samiul/.pyenv/versions/3.12.8/lib/python3.12/site-packages/rest_framework/views.py", line 480, in raise_uncaught_exception
+    raise exc
+  File "/home/sheikh-samiul/.pyenv/versions/3.12.8/lib/python3.12/site-packages/rest_framework/views.py", line 506, in dispatch
+    response = handler(request, *args, **kwargs)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/.pyenv/versions/3.12.8/lib/python3.12/site-packages/rest_framework/decorators.py", line 50, in handler
+    return func(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/evaluations/views.py", line 994, in consolidated_scores_view
+    for u in User.objects.filter(pk__in=raw_member_ids):
+             ^^^^
+NameError: name 'User' is not defined
+ERROR 2026-06-04 07:22:06,796 basehttp 88384 139466513577664 "GET /api/v1/evaluations/consolidation/3b897004-59aa-4d0c-8c6e-1145825f6d24/ HTTP/1.1" 500 119182
+ERROR 2026-06-04 07:22:15,083 log 88384 139466591090368 Internal Server Error: /api/v1/evaluations/consolidation/3b897004-59aa-4d0c-8c6e-1145825f6d24/
+Traceback (most recent call last):
+  File "/home/sheikh-samiul/.pyenv/versions/3.12.8/lib/python3.12/site-packages/django/core/handlers/exception.py", line 55, in inner
+    response = get_response(request)
+               ^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/.pyenv/versions/3.12.8/lib/python3.12/site-packages/django/core/handlers/base.py", line 197, in _get_response
+    response = wrapped_callback(request, *callback_args, **callback_kwargs)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/.pyenv/versions/3.12.8/lib/python3.12/site-packages/django/views/decorators/csrf.py", line 65, in _view_wrapper
+    return view_func(request, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/.pyenv/versions/3.12.8/lib/python3.12/site-packages/django/views/generic/base.py", line 104, in view
+    return self.dispatch(request, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/.pyenv/versions/3.12.8/lib/python3.12/site-packages/rest_framework/views.py", line 509, in dispatch
+    response = self.handle_exception(exc)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/.pyenv/versions/3.12.8/lib/python3.12/site-packages/rest_framework/views.py", line 469, in handle_exception
+    self.raise_uncaught_exception(exc)
+  File "/home/sheikh-samiul/.pyenv/versions/3.12.8/lib/python3.12/site-packages/rest_framework/views.py", line 480, in raise_uncaught_exception
+    raise exc
+  File "/home/sheikh-samiul/.pyenv/versions/3.12.8/lib/python3.12/site-packages/rest_framework/views.py", line 506, in dispatch
+    response = handler(request, *args, **kwargs)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/.pyenv/versions/3.12.8/lib/python3.12/site-packages/rest_framework/decorators.py", line 50, in handler
+    return func(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/evaluations/views.py", line 994, in consolidated_scores_view
+    for u in User.objects.filter(pk__in=raw_member_ids):
+             ^^^^
+NameError: name 'User' is not defined
+ERROR 2026-06-04 07:22:15,085 basehttp 88384 139466591090368 "GET /api/v1/evaluations/consolidation/3b897004-59aa-4d0c-8c6e-1145825f6d24/ HTTP/1.1" 500 119182
+ERROR 2026-06-04 07:22:16,225 log 88384 139466591090368 Internal Server Error: /api/v1/evaluations/consolidation/3b897004-59aa-4d0c-8c6e-1145825f6d24/
+Traceback (most recent call last):
+  File "/home/sheikh-samiul/.pyenv/versions/3.12.8/lib/python3.12/site-packages/django/core/handlers/exception.py", line 55, in inner
+    response = get_response(request)
+               ^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/.pyenv/versions/3.12.8/lib/python3.12/site-packages/django/core/handlers/base.py", line 197, in _get_response
+    response = wrapped_callback(request, *callback_args, **callback_kwargs)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/.pyenv/versions/3.12.8/lib/python3.12/site-packages/django/views/decorators/csrf.py", line 65, in _view_wrapper
+    return view_func(request, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/.pyenv/versions/3.12.8/lib/python3.12/site-packages/django/views/generic/base.py", line 104, in view
+    return self.dispatch(request, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/.pyenv/versions/3.12.8/lib/python3.12/site-packages/rest_framework/views.py", line 509, in dispatch
+    response = self.handle_exception(exc)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/.pyenv/versions/3.12.8/lib/python3.12/site-packages/rest_framework/views.py", line 469, in handle_exception
+    self.raise_uncaught_exception(exc)
+  File "/home/sheikh-samiul/.pyenv/versions/3.12.8/lib/python3.12/site-packages/rest_framework/views.py", line 480, in raise_uncaught_exception
+    raise exc
+  File "/home/sheikh-samiul/.pyenv/versions/3.12.8/lib/python3.12/site-packages/rest_framework/views.py", line 506, in dispatch
+    response = handler(request, *args, **kwargs)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/.pyenv/versions/3.12.8/lib/python3.12/site-packages/rest_framework/decorators.py", line 50, in handler
+    return func(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/evaluations/views.py", line 994, in consolidated_scores_view
+    for u in User.objects.filter(pk__in=raw_member_ids):
+             ^^^^
+NameError: name 'User' is not defined
+ERROR 2026-06-04 07:22:16,228 basehttp 88384 139466591090368 "GET /api/v1/evaluations/consolidation/3b897004-59aa-4d0c-8c6e-1145825f6d24/ HTTP/1.1" 500 119182
+ERROR 2026-06-04 07:23:05,794 log 88384 139466513577664 Internal Server Error: /api/v1/evaluations/consolidation/3b897004-59aa-4d0c-8c6e-1145825f6d24/
+Traceback (most recent call last):
+  File "/home/sheikh-samiul/.pyenv/versions/3.12.8/lib/python3.12/site-packages/django/core/handlers/exception.py", line 55, in inner
+    response = get_response(request)
+               ^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/.pyenv/versions/3.12.8/lib/python3.12/site-packages/django/core/handlers/base.py", line 197, in _get_response
+    response = wrapped_callback(request, *callback_args, **callback_kwargs)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/.pyenv/versions/3.12.8/lib/python3.12/site-packages/django/views/decorators/csrf.py", line 65, in _view_wrapper
+    return view_func(request, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/.pyenv/versions/3.12.8/lib/python3.12/site-packages/django/views/generic/base.py", line 104, in view
+    return self.dispatch(request, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/.pyenv/versions/3.12.8/lib/python3.12/site-packages/rest_framework/views.py", line 509, in dispatch
+    response = self.handle_exception(exc)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/.pyenv/versions/3.12.8/lib/python3.12/site-packages/rest_framework/views.py", line 469, in handle_exception
+    self.raise_uncaught_exception(exc)
+  File "/home/sheikh-samiul/.pyenv/versions/3.12.8/lib/python3.12/site-packages/rest_framework/views.py", line 480, in raise_uncaught_exception
+    raise exc
+  File "/home/sheikh-samiul/.pyenv/versions/3.12.8/lib/python3.12/site-packages/rest_framework/views.py", line 506, in dispatch
+    response = handler(request, *args, **kwargs)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/.pyenv/versions/3.12.8/lib/python3.12/site-packages/rest_framework/decorators.py", line 50, in handler
+    return func(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/evaluations/views.py", line 994, in consolidated_scores_view
+    for u in User.objects.filter(pk__in=raw_member_ids):
+             ^^^^
+NameError: name 'User' is not defined
+ERROR 2026-06-04 07:23:05,796 basehttp 88384 139466513577664 "GET /api/v1/evaluations/consolidation/3b897004-59aa-4d0c-8c6e-1145825f6d24/ HTTP/1.1" 500 119182
+ERROR 2026-06-04 07:23:06,915 log 88384 139466513577664 Internal Server Error: /api/v1/evaluations/consolidation/3b897004-59aa-4d0c-8c6e-1145825f6d24/
+Traceback (most recent call last):
+  File "/home/sheikh-samiul/.pyenv/versions/3.12.8/lib/python3.12/site-packages/django/core/handlers/exception.py", line 55, in inner
+    response = get_response(request)
+               ^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/.pyenv/versions/3.12.8/lib/python3.12/site-packages/django/core/handlers/base.py", line 197, in _get_response
+    response = wrapped_callback(request, *callback_args, **callback_kwargs)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/.pyenv/versions/3.12.8/lib/python3.12/site-packages/django/views/decorators/csrf.py", line 65, in _view_wrapper
+    return view_func(request, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/.pyenv/versions/3.12.8/lib/python3.12/site-packages/django/views/generic/base.py", line 104, in view
+    return self.dispatch(request, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/.pyenv/versions/3.12.8/lib/python3.12/site-packages/rest_framework/views.py", line 509, in dispatch
+    response = self.handle_exception(exc)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/.pyenv/versions/3.12.8/lib/python3.12/site-packages/rest_framework/views.py", line 469, in handle_exception
+    self.raise_uncaught_exception(exc)
+  File "/home/sheikh-samiul/.pyenv/versions/3.12.8/lib/python3.12/site-packages/rest_framework/views.py", line 480, in raise_uncaught_exception
+    raise exc
+  File "/home/sheikh-samiul/.pyenv/versions/3.12.8/lib/python3.12/site-packages/rest_framework/views.py", line 506, in dispatch
+    response = handler(request, *args, **kwargs)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/.pyenv/versions/3.12.8/lib/python3.12/site-packages/rest_framework/decorators.py", line 50, in handler
+    return func(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/evaluations/views.py", line 994, in consolidated_scores_view
+    for u in User.objects.filter(pk__in=raw_member_ids):
+             ^^^^
+NameError: name 'User' is not defined
+ERROR 2026-06-04 07:23:06,918 basehttp 88384 139466513577664 "GET /api/v1/evaluations/consolidation/3b897004-59aa-4d0c-8c6e-1145825f6d24/ HTTP/1.1" 500 119182
+ERROR 2026-06-04 07:23:15,523 log 88384 139466591090368 Internal Server Error: /api/v1/evaluations/consolidation/3b897004-59aa-4d0c-8c6e-1145825f6d24/
+Traceback (most recent call last):
+  File "/home/sheikh-samiul/.pyenv/versions/3.12.8/lib/python3.12/site-packages/django/core/handlers/exception.py", line 55, in inner
+    response = get_response(request)
+               ^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/.pyenv/versions/3.12.8/lib/python3.12/site-packages/django/core/handlers/base.py", line 197, in _get_response
+    response = wrapped_callback(request, *callback_args, **callback_kwargs)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/.pyenv/versions/3.12.8/lib/python3.12/site-packages/django/views/decorators/csrf.py", line 65, in _view_wrapper
+    return view_func(request, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/.pyenv/versions/3.12.8/lib/python3.12/site-packages/django/views/generic/base.py", line 104, in view
+    return self.dispatch(request, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/.pyenv/versions/3.12.8/lib/python3.12/site-packages/rest_framework/views.py", line 509, in dispatch
+    response = self.handle_exception(exc)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/.pyenv/versions/3.12.8/lib/python3.12/site-packages/rest_framework/views.py", line 469, in handle_exception
+    self.raise_uncaught_exception(exc)
+  File "/home/sheikh-samiul/.pyenv/versions/3.12.8/lib/python3.12/site-packages/rest_framework/views.py", line 480, in raise_uncaught_exception
+    raise exc
+  File "/home/sheikh-samiul/.pyenv/versions/3.12.8/lib/python3.12/site-packages/rest_framework/views.py", line 506, in dispatch
+    response = handler(request, *args, **kwargs)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/.pyenv/versions/3.12.8/lib/python3.12/site-packages/rest_framework/decorators.py", line 50, in handler
+    return func(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/evaluations/views.py", line 994, in consolidated_scores_view
+    for u in User.objects.filter(pk__in=raw_member_ids):
+             ^^^^
+NameError: name 'User' is not defined
+ERROR 2026-06-04 07:23:15,525 basehttp 88384 139466591090368 "GET /api/v1/evaluations/consolidation/3b897004-59aa-4d0c-8c6e-1145825f6d24/ HTTP/1.1" 500 119182
+ERROR 2026-06-04 07:23:16,616 log 88384 139466513577664 Internal Server Error: /api/v1/evaluations/consolidation/3b897004-59aa-4d0c-8c6e-1145825f6d24/
+Traceback (most recent call last):
+  File "/home/sheikh-samiul/.pyenv/versions/3.12.8/lib/python3.12/site-packages/django/core/handlers/exception.py", line 55, in inner
+    response = get_response(request)
+               ^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/.pyenv/versions/3.12.8/lib/python3.12/site-packages/django/core/handlers/base.py", line 197, in _get_response
+    response = wrapped_callback(request, *callback_args, **callback_kwargs)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/.pyenv/versions/3.12.8/lib/python3.12/site-packages/django/views/decorators/csrf.py", line 65, in _view_wrapper
+    return view_func(request, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/.pyenv/versions/3.12.8/lib/python3.12/site-packages/django/views/generic/base.py", line 104, in view
+    return self.dispatch(request, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/.pyenv/versions/3.12.8/lib/python3.12/site-packages/rest_framework/views.py", line 509, in dispatch
+    response = self.handle_exception(exc)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/.pyenv/versions/3.12.8/lib/python3.12/site-packages/rest_framework/views.py", line 469, in handle_exception
+    self.raise_uncaught_exception(exc)
+  File "/home/sheikh-samiul/.pyenv/versions/3.12.8/lib/python3.12/site-packages/rest_framework/views.py", line 480, in raise_uncaught_exception
+    raise exc
+  File "/home/sheikh-samiul/.pyenv/versions/3.12.8/lib/python3.12/site-packages/rest_framework/views.py", line 506, in dispatch
+    response = handler(request, *args, **kwargs)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/.pyenv/versions/3.12.8/lib/python3.12/site-packages/rest_framework/decorators.py", line 50, in handler
+    return func(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/evaluations/views.py", line 994, in consolidated_scores_view
+    for u in User.objects.filter(pk__in=raw_member_ids):
+             ^^^^
+NameError: name 'User' is not defined
+ERROR 2026-06-04 07:23:16,618 basehttp 88384 139466513577664 "GET /api/v1/evaluations/consolidation/3b897004-59aa-4d0c-8c6e-1145825f6d24/ HTTP/1.1" 500 119182
+ERROR 2026-06-04 07:35:58,035 log 101922 140033977738944 Internal Server Error: /api/v1/evaluations/financial/authorize-open/3b897004-59aa-4d0c-8c6e-1145825f6d24/
+Traceback (most recent call last):
+  File "/home/sheikh-samiul/.pyenv/versions/3.12.8/lib/python3.12/site-packages/django/core/handlers/exception.py", line 55, in inner
+    response = get_response(request)
+               ^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/.pyenv/versions/3.12.8/lib/python3.12/site-packages/django/core/handlers/base.py", line 197, in _get_response
+    response = wrapped_callback(request, *callback_args, **callback_kwargs)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/.pyenv/versions/3.12.8/lib/python3.12/site-packages/django/views/decorators/csrf.py", line 65, in _view_wrapper
+    return view_func(request, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/.pyenv/versions/3.12.8/lib/python3.12/site-packages/django/views/generic/base.py", line 104, in view
+    return self.dispatch(request, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/.pyenv/versions/3.12.8/lib/python3.12/site-packages/rest_framework/views.py", line 509, in dispatch
+    response = self.handle_exception(exc)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/.pyenv/versions/3.12.8/lib/python3.12/site-packages/rest_framework/views.py", line 469, in handle_exception
+    self.raise_uncaught_exception(exc)
+  File "/home/sheikh-samiul/.pyenv/versions/3.12.8/lib/python3.12/site-packages/rest_framework/views.py", line 480, in raise_uncaught_exception
+    raise exc
+  File "/home/sheikh-samiul/.pyenv/versions/3.12.8/lib/python3.12/site-packages/rest_framework/views.py", line 506, in dispatch
+    response = handler(request, *args, **kwargs)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/.pyenv/versions/3.12.8/lib/python3.12/site-packages/rest_framework/decorators.py", line 50, in handler
+    return func(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/evaluations/views.py", line 509, in authorize_financial_opening_view
+    opening, _ = BidOpening.objects.get_or_create(
+                 ^^^^^^^^^^
+NameError: name 'BidOpening' is not defined
+ERROR 2026-06-04 07:35:58,041 basehttp 101922 140033977738944 "POST /api/v1/evaluations/financial/authorize-open/3b897004-59aa-4d0c-8c6e-1145825f6d24/ HTTP/1.1" 500 117410
+ERROR 2026-06-04 07:36:51,557 log 101922 140033977738944 Internal Server Error: /api/v1/evaluations/financial/authorize-open/3b897004-59aa-4d0c-8c6e-1145825f6d24/
+Traceback (most recent call last):
+  File "/home/sheikh-samiul/.pyenv/versions/3.12.8/lib/python3.12/site-packages/django/core/handlers/exception.py", line 55, in inner
+    response = get_response(request)
+               ^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/.pyenv/versions/3.12.8/lib/python3.12/site-packages/django/core/handlers/base.py", line 197, in _get_response
+    response = wrapped_callback(request, *callback_args, **callback_kwargs)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/.pyenv/versions/3.12.8/lib/python3.12/site-packages/django/views/decorators/csrf.py", line 65, in _view_wrapper
+    return view_func(request, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/.pyenv/versions/3.12.8/lib/python3.12/site-packages/django/views/generic/base.py", line 104, in view
+    return self.dispatch(request, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/.pyenv/versions/3.12.8/lib/python3.12/site-packages/rest_framework/views.py", line 509, in dispatch
+    response = self.handle_exception(exc)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/.pyenv/versions/3.12.8/lib/python3.12/site-packages/rest_framework/views.py", line 469, in handle_exception
+    self.raise_uncaught_exception(exc)
+  File "/home/sheikh-samiul/.pyenv/versions/3.12.8/lib/python3.12/site-packages/rest_framework/views.py", line 480, in raise_uncaught_exception
+    raise exc
+  File "/home/sheikh-samiul/.pyenv/versions/3.12.8/lib/python3.12/site-packages/rest_framework/views.py", line 506, in dispatch
+    response = handler(request, *args, **kwargs)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/.pyenv/versions/3.12.8/lib/python3.12/site-packages/rest_framework/decorators.py", line 50, in handler
+    return func(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/evaluations/views.py", line 509, in authorize_financial_opening_view
+    opening, _ = BidOpening.objects.get_or_create(
+                 ^^^^^^^^^^
+NameError: name 'BidOpening' is not defined
+ERROR 2026-06-04 07:36:51,562 basehttp 101922 140033977738944 "POST /api/v1/evaluations/financial/authorize-open/3b897004-59aa-4d0c-8c6e-1145825f6d24/ HTTP/1.1" 500 117410
+ERROR 2026-06-04 07:52:54,386 log 115883 127803323315904 Internal Server Error: /api/v1/evaluations/qcbs/3b897004-59aa-4d0c-8c6e-1145825f6d24/
+Traceback (most recent call last):
+  File "/home/sheikh-samiul/.pyenv/versions/3.12.8/lib/python3.12/site-packages/django/db/models/query.py", line 948, in get_or_create
+    return self.get(**kwargs), False
+           ^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/.pyenv/versions/3.12.8/lib/python3.12/site-packages/django/db/models/query.py", line 649, in get
+    raise self.model.DoesNotExist(
+evaluations.models.CombinedScore.DoesNotExist: CombinedScore matching query does not exist.
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/home/sheikh-samiul/.pyenv/versions/3.12.8/lib/python3.12/site-packages/django/db/backends/utils.py", line 105, in _execute
+    return self.cursor.execute(sql, params)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/.pyenv/versions/3.12.8/lib/python3.12/site-packages/psycopg/cursor.py", line 732, in execute
+    raise ex.with_traceback(None)
+psycopg.errors.NotNullViolation: null value in column "rank" of relation "eval_combined_score" violates not-null constraint
+DETAIL:  Failing row contains (13628454-84a5-4fc7-9c9e-51fcf17e3a9b, 82.47, 100.00, 82.47, null, 43f2f60a-1d13-4d6c-b5f8-93b7536c9cd1).
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/home/sheikh-samiul/.pyenv/versions/3.12.8/lib/python3.12/site-packages/django/core/handlers/exception.py", line 55, in inner
+    response = get_response(request)
+               ^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/.pyenv/versions/3.12.8/lib/python3.12/site-packages/django/core/handlers/base.py", line 197, in _get_response
+    response = wrapped_callback(request, *callback_args, **callback_kwargs)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/.pyenv/versions/3.12.8/lib/python3.12/site-packages/django/views/decorators/csrf.py", line 65, in _view_wrapper
+    return view_func(request, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/.pyenv/versions/3.12.8/lib/python3.12/site-packages/django/views/generic/base.py", line 104, in view
+    return self.dispatch(request, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/.pyenv/versions/3.12.8/lib/python3.12/site-packages/rest_framework/views.py", line 509, in dispatch
+    response = self.handle_exception(exc)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/.pyenv/versions/3.12.8/lib/python3.12/site-packages/rest_framework/views.py", line 469, in handle_exception
+    self.raise_uncaught_exception(exc)
+  File "/home/sheikh-samiul/.pyenv/versions/3.12.8/lib/python3.12/site-packages/rest_framework/views.py", line 480, in raise_uncaught_exception
+    raise exc
+  File "/home/sheikh-samiul/.pyenv/versions/3.12.8/lib/python3.12/site-packages/rest_framework/views.py", line 506, in dispatch
+    response = handler(request, *args, **kwargs)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/.pyenv/versions/3.12.8/lib/python3.12/site-packages/rest_framework/decorators.py", line 50, in handler
+    return func(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/evaluations/views.py", line 451, in calculate_qcbs_view
+    CombinedScore.objects.update_or_create(
+  File "/home/sheikh-samiul/.pyenv/versions/3.12.8/lib/python3.12/site-packages/django/db/models/manager.py", line 87, in manager_method
+    return getattr(self.get_queryset(), name)(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/.pyenv/versions/3.12.8/lib/python3.12/site-packages/django/db/models/query.py", line 986, in update_or_create
+    obj, created = self.select_for_update().get_or_create(
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/.pyenv/versions/3.12.8/lib/python3.12/site-packages/django/db/models/query.py", line 955, in get_or_create
+    return self.create(**params), True
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/.pyenv/versions/3.12.8/lib/python3.12/site-packages/django/db/models/query.py", line 679, in create
+    obj.save(force_insert=True, using=self.db)
+  File "/home/sheikh-samiul/.pyenv/versions/3.12.8/lib/python3.12/site-packages/django/db/models/base.py", line 822, in save
+    self.save_base(
+  File "/home/sheikh-samiul/.pyenv/versions/3.12.8/lib/python3.12/site-packages/django/db/models/base.py", line 909, in save_base
+    updated = self._save_table(
+              ^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/.pyenv/versions/3.12.8/lib/python3.12/site-packages/django/db/models/base.py", line 1071, in _save_table
+    results = self._do_insert(
+              ^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/.pyenv/versions/3.12.8/lib/python3.12/site-packages/django/db/models/base.py", line 1112, in _do_insert
+    return manager._insert(
+           ^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/.pyenv/versions/3.12.8/lib/python3.12/site-packages/django/db/models/manager.py", line 87, in manager_method
+    return getattr(self.get_queryset(), name)(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/.pyenv/versions/3.12.8/lib/python3.12/site-packages/django/db/models/query.py", line 1847, in _insert
+    return query.get_compiler(using=using).execute_sql(returning_fields)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/.pyenv/versions/3.12.8/lib/python3.12/site-packages/django/db/models/sql/compiler.py", line 1823, in execute_sql
+    cursor.execute(sql, params)
+  File "/home/sheikh-samiul/.pyenv/versions/3.12.8/lib/python3.12/site-packages/django/db/backends/utils.py", line 122, in execute
+    return super().execute(sql, params)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/.pyenv/versions/3.12.8/lib/python3.12/site-packages/django/db/backends/utils.py", line 79, in execute
+    return self._execute_with_wrappers(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/.pyenv/versions/3.12.8/lib/python3.12/site-packages/django/db/backends/utils.py", line 92, in _execute_with_wrappers
+    return executor(sql, params, many, context)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/.pyenv/versions/3.12.8/lib/python3.12/site-packages/django/db/backends/utils.py", line 100, in _execute
+    with self.db.wrap_database_errors:
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/.pyenv/versions/3.12.8/lib/python3.12/site-packages/django/db/utils.py", line 91, in __exit__
+    raise dj_exc_value.with_traceback(traceback) from exc_value
+  File "/home/sheikh-samiul/.pyenv/versions/3.12.8/lib/python3.12/site-packages/django/db/backends/utils.py", line 105, in _execute
+    return self.cursor.execute(sql, params)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/.pyenv/versions/3.12.8/lib/python3.12/site-packages/psycopg/cursor.py", line 732, in execute
+    raise ex.with_traceback(None)
+django.db.utils.IntegrityError: null value in column "rank" of relation "eval_combined_score" violates not-null constraint
+DETAIL:  Failing row contains (13628454-84a5-4fc7-9c9e-51fcf17e3a9b, 82.47, 100.00, 82.47, null, 43f2f60a-1d13-4d6c-b5f8-93b7536c9cd1).
+ERROR 2026-06-04 07:52:54,391 basehttp 115883 127803323315904 "POST /api/v1/evaluations/qcbs/3b897004-59aa-4d0c-8c6e-1145825f6d24/ HTTP/1.1" 500 238404
+ERROR 2026-06-04 07:53:29,357 log 115883 127803323315904 Internal Server Error: /api/v1/evaluations/qcbs/3b897004-59aa-4d0c-8c6e-1145825f6d24/
+Traceback (most recent call last):
+  File "/home/sheikh-samiul/.pyenv/versions/3.12.8/lib/python3.12/site-packages/django/db/models/query.py", line 948, in get_or_create
+    return self.get(**kwargs), False
+           ^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/.pyenv/versions/3.12.8/lib/python3.12/site-packages/django/db/models/query.py", line 649, in get
+    raise self.model.DoesNotExist(
+evaluations.models.CombinedScore.DoesNotExist: CombinedScore matching query does not exist.
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/home/sheikh-samiul/.pyenv/versions/3.12.8/lib/python3.12/site-packages/django/db/backends/utils.py", line 105, in _execute
+    return self.cursor.execute(sql, params)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/.pyenv/versions/3.12.8/lib/python3.12/site-packages/psycopg/cursor.py", line 732, in execute
+    raise ex.with_traceback(None)
+psycopg.errors.NotNullViolation: null value in column "rank" of relation "eval_combined_score" violates not-null constraint
+DETAIL:  Failing row contains (e1ec48c7-bf04-4c3b-838e-a41c94abc2a2, 82.47, 100.00, 82.47, null, 43f2f60a-1d13-4d6c-b5f8-93b7536c9cd1).
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/home/sheikh-samiul/.pyenv/versions/3.12.8/lib/python3.12/site-packages/django/core/handlers/exception.py", line 55, in inner
+    response = get_response(request)
+               ^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/.pyenv/versions/3.12.8/lib/python3.12/site-packages/django/core/handlers/base.py", line 197, in _get_response
+    response = wrapped_callback(request, *callback_args, **callback_kwargs)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/.pyenv/versions/3.12.8/lib/python3.12/site-packages/django/views/decorators/csrf.py", line 65, in _view_wrapper
+    return view_func(request, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/.pyenv/versions/3.12.8/lib/python3.12/site-packages/django/views/generic/base.py", line 104, in view
+    return self.dispatch(request, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/.pyenv/versions/3.12.8/lib/python3.12/site-packages/rest_framework/views.py", line 509, in dispatch
+    response = self.handle_exception(exc)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/.pyenv/versions/3.12.8/lib/python3.12/site-packages/rest_framework/views.py", line 469, in handle_exception
+    self.raise_uncaught_exception(exc)
+  File "/home/sheikh-samiul/.pyenv/versions/3.12.8/lib/python3.12/site-packages/rest_framework/views.py", line 480, in raise_uncaught_exception
+    raise exc
+  File "/home/sheikh-samiul/.pyenv/versions/3.12.8/lib/python3.12/site-packages/rest_framework/views.py", line 506, in dispatch
+    response = handler(request, *args, **kwargs)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/.pyenv/versions/3.12.8/lib/python3.12/site-packages/rest_framework/decorators.py", line 50, in handler
+    return func(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/evaluations/views.py", line 451, in calculate_qcbs_view
+    CombinedScore.objects.update_or_create(
+  File "/home/sheikh-samiul/.pyenv/versions/3.12.8/lib/python3.12/site-packages/django/db/models/manager.py", line 87, in manager_method
+    return getattr(self.get_queryset(), name)(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/.pyenv/versions/3.12.8/lib/python3.12/site-packages/django/db/models/query.py", line 986, in update_or_create
+    obj, created = self.select_for_update().get_or_create(
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/.pyenv/versions/3.12.8/lib/python3.12/site-packages/django/db/models/query.py", line 955, in get_or_create
+    return self.create(**params), True
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/.pyenv/versions/3.12.8/lib/python3.12/site-packages/django/db/models/query.py", line 679, in create
+    obj.save(force_insert=True, using=self.db)
+  File "/home/sheikh-samiul/.pyenv/versions/3.12.8/lib/python3.12/site-packages/django/db/models/base.py", line 822, in save
+    self.save_base(
+  File "/home/sheikh-samiul/.pyenv/versions/3.12.8/lib/python3.12/site-packages/django/db/models/base.py", line 909, in save_base
+    updated = self._save_table(
+              ^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/.pyenv/versions/3.12.8/lib/python3.12/site-packages/django/db/models/base.py", line 1071, in _save_table
+    results = self._do_insert(
+              ^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/.pyenv/versions/3.12.8/lib/python3.12/site-packages/django/db/models/base.py", line 1112, in _do_insert
+    return manager._insert(
+           ^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/.pyenv/versions/3.12.8/lib/python3.12/site-packages/django/db/models/manager.py", line 87, in manager_method
+    return getattr(self.get_queryset(), name)(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/.pyenv/versions/3.12.8/lib/python3.12/site-packages/django/db/models/query.py", line 1847, in _insert
+    return query.get_compiler(using=using).execute_sql(returning_fields)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/.pyenv/versions/3.12.8/lib/python3.12/site-packages/django/db/models/sql/compiler.py", line 1823, in execute_sql
+    cursor.execute(sql, params)
+  File "/home/sheikh-samiul/.pyenv/versions/3.12.8/lib/python3.12/site-packages/django/db/backends/utils.py", line 122, in execute
+    return super().execute(sql, params)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/.pyenv/versions/3.12.8/lib/python3.12/site-packages/django/db/backends/utils.py", line 79, in execute
+    return self._execute_with_wrappers(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/.pyenv/versions/3.12.8/lib/python3.12/site-packages/django/db/backends/utils.py", line 92, in _execute_with_wrappers
+    return executor(sql, params, many, context)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/.pyenv/versions/3.12.8/lib/python3.12/site-packages/django/db/backends/utils.py", line 100, in _execute
+    with self.db.wrap_database_errors:
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/.pyenv/versions/3.12.8/lib/python3.12/site-packages/django/db/utils.py", line 91, in __exit__
+    raise dj_exc_value.with_traceback(traceback) from exc_value
+  File "/home/sheikh-samiul/.pyenv/versions/3.12.8/lib/python3.12/site-packages/django/db/backends/utils.py", line 105, in _execute
+    return self.cursor.execute(sql, params)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/.pyenv/versions/3.12.8/lib/python3.12/site-packages/psycopg/cursor.py", line 732, in execute
+    raise ex.with_traceback(None)
+django.db.utils.IntegrityError: null value in column "rank" of relation "eval_combined_score" violates not-null constraint
+DETAIL:  Failing row contains (e1ec48c7-bf04-4c3b-838e-a41c94abc2a2, 82.47, 100.00, 82.47, null, 43f2f60a-1d13-4d6c-b5f8-93b7536c9cd1).
+ERROR 2026-06-04 07:53:29,360 basehttp 115883 127803323315904 "POST /api/v1/evaluations/qcbs/3b897004-59aa-4d0c-8c6e-1145825f6d24/ HTTP/1.1" 500 238407
+ERROR 2026-06-04 07:55:23,746 log 115883 127803323315904 Internal Server Error: /api/v1/evaluations/qcbs/3b897004-59aa-4d0c-8c6e-1145825f6d24/
+Traceback (most recent call last):
+  File "/home/sheikh-samiul/.pyenv/versions/3.12.8/lib/python3.12/site-packages/django/db/models/query.py", line 948, in get_or_create
+    return self.get(**kwargs), False
+           ^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/.pyenv/versions/3.12.8/lib/python3.12/site-packages/django/db/models/query.py", line 649, in get
+    raise self.model.DoesNotExist(
+evaluations.models.CombinedScore.DoesNotExist: CombinedScore matching query does not exist.
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/home/sheikh-samiul/.pyenv/versions/3.12.8/lib/python3.12/site-packages/django/db/backends/utils.py", line 105, in _execute
+    return self.cursor.execute(sql, params)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/.pyenv/versions/3.12.8/lib/python3.12/site-packages/psycopg/cursor.py", line 732, in execute
+    raise ex.with_traceback(None)
+psycopg.errors.NotNullViolation: null value in column "rank" of relation "eval_combined_score" violates not-null constraint
+DETAIL:  Failing row contains (6e259281-8a57-49e6-babd-dda5e9b6a863, 82.47, 100.00, 82.47, null, 43f2f60a-1d13-4d6c-b5f8-93b7536c9cd1).
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/home/sheikh-samiul/.pyenv/versions/3.12.8/lib/python3.12/site-packages/django/core/handlers/exception.py", line 55, in inner
+    response = get_response(request)
+               ^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/.pyenv/versions/3.12.8/lib/python3.12/site-packages/django/core/handlers/base.py", line 197, in _get_response
+    response = wrapped_callback(request, *callback_args, **callback_kwargs)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/.pyenv/versions/3.12.8/lib/python3.12/site-packages/django/views/decorators/csrf.py", line 65, in _view_wrapper
+    return view_func(request, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/.pyenv/versions/3.12.8/lib/python3.12/site-packages/django/views/generic/base.py", line 104, in view
+    return self.dispatch(request, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/.pyenv/versions/3.12.8/lib/python3.12/site-packages/rest_framework/views.py", line 509, in dispatch
+    response = self.handle_exception(exc)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/.pyenv/versions/3.12.8/lib/python3.12/site-packages/rest_framework/views.py", line 469, in handle_exception
+    self.raise_uncaught_exception(exc)
+  File "/home/sheikh-samiul/.pyenv/versions/3.12.8/lib/python3.12/site-packages/rest_framework/views.py", line 480, in raise_uncaught_exception
+    raise exc
+  File "/home/sheikh-samiul/.pyenv/versions/3.12.8/lib/python3.12/site-packages/rest_framework/views.py", line 506, in dispatch
+    response = handler(request, *args, **kwargs)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/.pyenv/versions/3.12.8/lib/python3.12/site-packages/rest_framework/decorators.py", line 50, in handler
+    return func(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/evaluations/views.py", line 451, in calculate_qcbs_view
+    CombinedScore.objects.update_or_create(
+  File "/home/sheikh-samiul/.pyenv/versions/3.12.8/lib/python3.12/site-packages/django/db/models/manager.py", line 87, in manager_method
+    return getattr(self.get_queryset(), name)(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/.pyenv/versions/3.12.8/lib/python3.12/site-packages/django/db/models/query.py", line 986, in update_or_create
+    obj, created = self.select_for_update().get_or_create(
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/.pyenv/versions/3.12.8/lib/python3.12/site-packages/django/db/models/query.py", line 955, in get_or_create
+    return self.create(**params), True
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/.pyenv/versions/3.12.8/lib/python3.12/site-packages/django/db/models/query.py", line 679, in create
+    obj.save(force_insert=True, using=self.db)
+  File "/home/sheikh-samiul/.pyenv/versions/3.12.8/lib/python3.12/site-packages/django/db/models/base.py", line 822, in save
+    self.save_base(
+  File "/home/sheikh-samiul/.pyenv/versions/3.12.8/lib/python3.12/site-packages/django/db/models/base.py", line 909, in save_base
+    updated = self._save_table(
+              ^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/.pyenv/versions/3.12.8/lib/python3.12/site-packages/django/db/models/base.py", line 1071, in _save_table
+    results = self._do_insert(
+              ^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/.pyenv/versions/3.12.8/lib/python3.12/site-packages/django/db/models/base.py", line 1112, in _do_insert
+    return manager._insert(
+           ^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/.pyenv/versions/3.12.8/lib/python3.12/site-packages/django/db/models/manager.py", line 87, in manager_method
+    return getattr(self.get_queryset(), name)(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/.pyenv/versions/3.12.8/lib/python3.12/site-packages/django/db/models/query.py", line 1847, in _insert
+    return query.get_compiler(using=using).execute_sql(returning_fields)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/.pyenv/versions/3.12.8/lib/python3.12/site-packages/django/db/models/sql/compiler.py", line 1823, in execute_sql
+    cursor.execute(sql, params)
+  File "/home/sheikh-samiul/.pyenv/versions/3.12.8/lib/python3.12/site-packages/django/db/backends/utils.py", line 122, in execute
+    return super().execute(sql, params)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/.pyenv/versions/3.12.8/lib/python3.12/site-packages/django/db/backends/utils.py", line 79, in execute
+    return self._execute_with_wrappers(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/.pyenv/versions/3.12.8/lib/python3.12/site-packages/django/db/backends/utils.py", line 92, in _execute_with_wrappers
+    return executor(sql, params, many, context)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/.pyenv/versions/3.12.8/lib/python3.12/site-packages/django/db/backends/utils.py", line 100, in _execute
+    with self.db.wrap_database_errors:
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/.pyenv/versions/3.12.8/lib/python3.12/site-packages/django/db/utils.py", line 91, in __exit__
+    raise dj_exc_value.with_traceback(traceback) from exc_value
+  File "/home/sheikh-samiul/.pyenv/versions/3.12.8/lib/python3.12/site-packages/django/db/backends/utils.py", line 105, in _execute
+    return self.cursor.execute(sql, params)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/.pyenv/versions/3.12.8/lib/python3.12/site-packages/psycopg/cursor.py", line 732, in execute
+    raise ex.with_traceback(None)
+django.db.utils.IntegrityError: null value in column "rank" of relation "eval_combined_score" violates not-null constraint
+DETAIL:  Failing row contains (6e259281-8a57-49e6-babd-dda5e9b6a863, 82.47, 100.00, 82.47, null, 43f2f60a-1d13-4d6c-b5f8-93b7536c9cd1).
+ERROR 2026-06-04 07:55:23,749 basehttp 115883 127803323315904 "POST /api/v1/evaluations/qcbs/3b897004-59aa-4d0c-8c6e-1145825f6d24/ HTTP/1.1" 500 238407
+ERROR 2026-06-04 11:11:24,772 exception 308311 140258065836928 Invalid HTTP_HOST header: 'testserver'. You may need to add 'testserver' to ALLOWED_HOSTS.
+Traceback (most recent call last):
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/core/handlers/exception.py", line 55, in inner
+    response = get_response(request)
+               ^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/utils/deprecation.py", line 128, in __call__
+    response = self.process_request(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/middleware/common.py", line 48, in process_request
+    host = request.get_host()
+           ^^^^^^^^^^^^^^^^^^
+  File "/home/sheikh-samiul/Projects/zammsa-django-react/backend/envfile/lib/python3.12/site-packages/django/http/request.py", line 151, in get_host
+    raise DisallowedHost(msg)
+django.core.exceptions.DisallowedHost: Invalid HTTP_HOST header: 'testserver'. You may need to add 'testserver' to ALLOWED_HOSTS.

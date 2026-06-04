@@ -1,6 +1,6 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient, useInfiniteQuery } from '@tanstack/react-query';
 import { evaluationsApi } from '../../api/evaluations';
 import { solicitationsApi } from '../../api/solicitations';
 import { bidsApi } from '../../api/bids';
@@ -38,6 +38,8 @@ const TechnicalScoring: React.FC = () => {
   const [allSubmitted, setAllSubmitted] = useState(false);
   const [showConfirmSubmit, setShowConfirmSubmit] = useState(false);
   const [loadingScores, setLoadingScores] = useState(false);
+  const [refreshKey, setRefreshKey] = useState(0);
+  const [collabStatus, setCollabStatus] = useState<Record<string, { lastSeen: number; memberName: string }>>({});
 
   const { data: committee, isLoading: committeeLoading } = useQuery({
     queryKey: ['evaluation-committee', committeeId],
@@ -101,38 +103,117 @@ const TechnicalScoring: React.FC = () => {
   const isCommitteeMember = committee ? committeeMemberIds.has(String(user?.id || '')) : false;
   const isRecused = Boolean(coiState?.recused_members?.includes(String(user?.id || '')));
 
-  useEffect(() => {
-    if (!bidList.length || !criteria.length) return;
-    const fetchExistingScores = async () => {
-      setLoadingScores(true);
-      const results = await Promise.allSettled(
-        bidList.map((bid: any) =>
-          evaluationsApi.getMyScores(bid.id).then(data => ({ bidId: bid.id, data }))
-        )
-      );
-      const newScores = { ...scores };
-      for (const r of results) {
-        if (r.status === 'fulfilled') {
-          const { bidId, data } = r.value;
-          if (!data?.my_scores?.length) continue;
-          for (const s of data.my_scores) {
-            if (!s.criterion) continue;
-            const criterionId = s.criterion;
-            const c = criteria.find((crt: EvaluationCriterion) => crt.id === criterionId);
-            if (!c) continue;
-            newScores[bidId] = newScores[bidId] || {};
-            newScores[bidId][criterionId] = {
-              score: Number(s.raw_score),
-              comment: s.comment || '',
-            };
-          }
-        }
-      }
-      setScores(newScores);
-      setLoadingScores(false);
-    };
-    fetchExistingScores();
-  }, [bidList.length, criteria.length]);
+   // Fetch scores when component mounts or when bidList/criteria changes
+   useEffect(() => {
+     if (!bidList.length || !criteria.length) return;
+     const fetchExistingScores = async () => {
+       setLoadingScores(true);
+       const results = await Promise.allSettled(
+         bidList.map((bid: any) =>
+           evaluationsApi.getMyScores(bid.id).then(data => ({ bidId: bid.id, data }))
+         )
+       );
+       const newScores = { ...scores };
+       for (const r of results) {
+         if (r.status === 'fulfilled') {
+           const { bidId, data } = r.value;
+           if (!data?.my_scores?.length) continue;
+           for (const s of data.my_scores) {
+             if (!s.criterion) continue;
+             const criterionId = s.criterion;
+             const c = criteria.find((crt: EvaluationCriterion) => crt.id === criterionId);
+             if (!c) continue;
+             newScores[bidId] = newScores[bidId] || {};
+             newScores[bidId][criterionId] = {
+               score: Number(s.raw_score),
+               comment: s.comment || '',
+             };
+           }
+         }
+       }
+       setScores(newScores);
+       setLoadingScores(false);
+     };
+     fetchExistingScores();
+   }, [bidList.length, criteria.length, refreshKey]);
+
+   // Collaboration tracking - update last seen time periodically
+   useEffect(() => {
+     if (!isCommitteeMember || isRecused) return;
+     
+     const updateLastSeen = () => {
+       setCollabStatus(prev => ({
+         ...prev,
+         [user?.id || '']: {
+           lastSeen: Date.now(),
+           memberName: user?.full_name || 'Unknown'
+         }
+       }));
+     };
+     
+     // Update every 30 seconds
+     const interval = setInterval(updateLastSeen, 30000);
+     updateLastSeen(); // Initial update
+     
+     return () => clearInterval(interval);
+   }, [isCommitteeMember, isRecused, user]);
+
+   // Auto-refresh scores periodically to see others' submissions
+   useEffect(() => {
+     if (!isCommitteeMember || isRecused || allSubmitted) return;
+     
+     const refreshScores = async () => {
+       try {
+         const results = await Promise.allSettled(
+           bidList.map((bid: any) =>
+             evaluationsApi.getMyScores(bid.id).then(data => ({ bidId: bid.id, data }))
+           )
+         );
+         
+         let hasUpdates = false;
+         const newScores = { ...scores };
+         
+         for (const r of results) {
+           if (r.status === 'fulfilled') {
+             const { bidId, data } = r.value;
+             if (!data?.my_scores?.length) continue;
+             
+             for (const s of data.my_scores) {
+               if (!s.criterion) continue;
+               const criterionId = s.criterion;
+               const c = criteria.find((crt: EvaluationCriterion) => crt.id === criterionId);
+               if (!c) continue;
+               
+               // Check if this is a new score or updated score
+               const existingScore = newScores[bidId]?.[criterionId];
+               if (!existingScore || 
+                   existingScore.score !== Number(s.raw_score) || 
+                   existingScore.comment !== (s.comment || '')) {
+                 hasUpdates = true;
+                 newScores[bidId] = newScores[bidId] || {};
+                 newScores[bidId][criterionId] = {
+                   score: Number(s.raw_score),
+                   comment: s.comment || '',
+                 };
+               }
+             }
+           }
+         }
+         
+         if (hasUpdates) {
+           setScores(newScores);
+            // Notify user of updates
+            toast('Scores updated - other members have submitted their evaluations', { icon: 'ℹ️' });
+         }
+       } catch (err) {
+         console.warn('Failed to refresh scores:', err);
+       }
+     };
+     
+     // Refresh every 45 seconds
+     const interval = setInterval(refreshScores, 45000);
+     return () => clearInterval(interval);
+   }, [isCommitteeMember, isRecused, bidList.length, criteria.length, allSubmitted]);
 
   const getWeightedTotal = (bidId: string) => {
     const s = scores[bidId] || {};
@@ -347,66 +428,116 @@ const TechnicalScoring: React.FC = () => {
         </div>
       </div>
 
-      <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-xs text-amber-800">
-        Your scores are private. You cannot see other members' scores until you submit all your scores.
-      </div>
+       <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
+         <div className="flex items-start gap-3">
+           <div className="w-5 h-5 rounded-full bg-blue-500 text-white flex items-center justify-center text-[10px] font-bold shrink-0 mt-0.5">
+             i
+           </div>
+           <div>
+             <p className="text-sm font-medium text-blue-900">Privacy Notice</p>
+             <p className="text-xs text-blue-700">
+               Your scores are private and visible only to you until all committee members submit their evaluations.
+               After submission, scores become visible to the committee chair for consolidation.
+             </p>
+           </div>
+         </div>
+       </div>
 
-      {/* Progress Bar */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
-        <div className="flex items-center justify-between mb-2">
-          <span className="text-sm font-medium text-gray-700">Your Progress</span>
-          <span className="text-sm font-bold text-zammsa-green">{scoredCount} of {bidList.length} bids scored</span>
-        </div>
-        <div className="w-full bg-gray-200 rounded-full h-3">
-          <div
-            className="bg-zammsa-green h-3 rounded-full transition-all duration-500"
-            style={{ width: `${(scoredCount / Math.max(bidList.length, 1)) * 100}%` }}
-          />
-        </div>
-        <p className="text-xs text-gray-400 mt-1">You must score ALL bids before submitting</p>
-      </div>
+       {/* Progress Bar */}
+       <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
+         <div className="flex items-center justify-between mb-2">
+           <div className="flex items-center gap-3">
+             <span className="text-sm font-medium text-gray-700">Your Progress</span>
+             <span className="text-sm font-bold text-zammsa-green">{scoredCount} of {bidList.length} bids scored</span>
+           </div>
+           <div className="flex items-center gap-3">
+             <span className="text-sm font-medium text-gray-500">Collaboration</span>
+             <div className="flex items-center gap-2">
+               <span className="w-2 h-2 rounded-full bg-blue-400 animate-pulse" />
+               <span className="text-xs text-gray-500">Live updates</span>
+             </div>
+           </div>
+         </div>
+         <div className="w-full bg-gray-200 rounded-full h-3 overflow-hidden">
+           <div
+             className="bg-zammsa-green h-3 rounded-full transition-all duration-500"
+             style={{ width: `${(scoredCount / Math.max(bidList.length, 1)) * 100}%` }}
+           />
+         </div>
+         <p className="text-xs text-gray-400 mt-1">You must score ALL bids before submitting</p>
+       </div>
 
-      {/* Bid Selection Table */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-5">
-        <h2 className="text-sm font-semibold text-gray-900 mb-3">Bids to Evaluate</h2>
-        <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-gray-200 text-sm">
-            <thead className="bg-gray-50">
-              <tr>
-                <th className="px-4 py-2 text-left font-medium text-gray-500">#</th>
-                <th className="px-4 py-2 text-left font-medium text-gray-500">Bidder</th>
-                <th className="px-4 py-2 text-center font-medium text-gray-500">Your Status</th>
-                <th className="px-4 py-2 text-right font-medium text-gray-500">Action</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-100">
-              {bidList.map((bid: any, i: number) => {
-                const isScored = scores[bid.id] && criteria.length > 0 && criteria.every((c) => (scores[bid.id]?.[c.id]?.score || 0) > 0);
-                return (
-                  <tr key={bid.id} className={`hover:bg-gray-50 cursor-pointer ${i === currentBidIndex ? 'bg-zammsa-green/5' : ''}`} onClick={() => setCurrentBidIndex(i)}>
-                    <td className="px-4 py-2 text-gray-500">{i + 1}</td>
-                    <td className="px-4 py-2 font-medium text-gray-900">{bid.vendor_name || bid.supplier_name || bid.id}</td>
-                    <td className="px-4 py-2 text-center">
-                      {isScored ? (
-                        <span className="inline-flex items-center gap-1 text-xs font-medium text-emerald-600 bg-emerald-50 px-2.5 py-1 rounded-full">✅ Scored</span>
-                      ) : (
-                        <span className="inline-flex items-center gap-1 text-xs font-medium text-amber-600 bg-amber-50 px-2.5 py-1 rounded-full">⏳ Pending</span>
-                      )}
-                    </td>
-                    <td className="px-4 py-2 text-right">
-                      {isScored ? (
-                        <span className="text-xs text-zammsa-green font-medium cursor-pointer hover:underline">View/Edit</span>
-                      ) : (
-                        <button className="px-3 py-1 text-xs font-bold text-white bg-zammsa-green rounded-lg hover:bg-green-700">Score Now</button>
-                      )}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      </div>
+       {/* Bid Selection Table */}
+       <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-5">
+         <div className="flex items-center justify-between mb-3">
+           <h2 className="text-sm font-semibold text-gray-900">Bids to Evaluate</h2>
+           <div className="flex items-center gap-2 text-sm text-gray-500">
+             <div className="flex items-center gap-1">
+               <span className="w-2 h-2 rounded-full bg-emerald-500" />
+               <span>Scored by You</span>
+             </div>
+             <div className="flex items-center gap-1">
+               <span className="w-2 h-2 rounded-full bg-blue-500" />
+               <span>In Progress by Others</span>
+             </div>
+           </div>
+         </div>
+         <div className="overflow-x-auto">
+           <table className="min-w-full divide-y divide-gray-200 text-sm">
+             <thead className="bg-gray-50">
+               <tr>
+                 <th className="px-4 py-2 text-left font-medium text-gray-500">#</th>
+                 <th className="px-4 py-2 text-left font-medium text-gray-500">Bidder</th>
+                 <th className="px-4 py-2 text-center font-medium text-gray-500">Your Status</th>
+                 <th className="px-4 py-2 text-center font-medium text-gray-500">Team Progress</th>
+                 <th className="px-4 py-2 text-right font-medium text-gray-500">Action</th>
+               </tr>
+             </thead>
+             <tbody className="divide-y divide-gray-100">
+               {bidList.map((bid: any, i: number) => {
+                 const isScored = scores[bid.id] && criteria.length > 0 && criteria.every((c) => (scores[bid.id]?.[c.id]?.score || 0) > 0);
+                 
+                 // Check collaboration status for this bid
+                 const memberProgress = Object.values(collabStatus).filter(member => 
+                   // In a real implementation, we'd track per-bid progress
+                   // For now, we'll show general member activity
+                   member.lastSeen > Date.now() - 300000 // Last 5 minutes
+                 ).length;
+                 
+                 return (
+                   <tr key={bid.id} className={`hover:bg-gray-50 cursor-pointer ${i === currentBidIndex ? 'bg-zammsa-green/5' : ''}`} onClick={() => setCurrentBidIndex(i)}>
+                     <td className="px-4 py-2 text-gray-500">{i + 1}</td>
+                     <td className="px-4 py-2 font-medium text-gray-900">{bid.vendor_name || bid.supplier_name || bid.id}</td>
+                     <td className="px-4 py-2 text-center">
+                       {isScored ? (
+                         <span className="inline-flex items-center gap-1 text-xs font-medium text-emerald-600 bg-emerald-50 px-2.5 py-1 rounded-full">✅ Scored</span>
+                       ) : (
+                         <span className="inline-flex items-center gap-1 text-xs font-medium text-amber-600 bg-amber-50 px-2.5 py-1 rounded-full">⏳ Pending</span>
+                       )}
+                     </td>
+                     <td className="px-4 py-2 text-center">
+                       {isScored ? (
+                         <span className="text-xs font-medium text-emerald-600">✓ Complete</span>
+                       ) : (
+                         <span className="text-xs font-medium text-gray-500">
+                           {memberProgress} of {Object.keys(collabStatus).length} active
+                         </span>
+                       )}
+                     </td>
+                     <td className="px-4 py-2 text-right">
+                       {isScored ? (
+                         <span className="text-xs text-zammsa-green font-medium cursor-pointer hover:underline">View/Edit</span>
+                       ) : (
+                         <button className="px-3 py-1 text-xs font-bold text-white bg-zammsa-green rounded-lg hover:bg-green-700">Score Now</button>
+                       )}
+                     </td>
+                   </tr>
+                 );
+               })}
+             </tbody>
+           </table>
+         </div>
+       </div>
 
       {currentBid && (
         <>

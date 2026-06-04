@@ -2,6 +2,8 @@ import uuid
 from decimal import Decimal
 from django.db import transaction
 from django.db.models import Q, Avg, Sum, Prefetch
+from django.template.loader import render_to_string
+from django.http import HttpResponse
 from django.utils import timezone
 from rest_framework import generics, filters, status
 from rest_framework.decorators import api_view, permission_classes
@@ -10,7 +12,9 @@ from rest_framework.response import Response
 from rest_framework.pagination import PageNumberPagination
 from django_filters.rest_framework import DjangoFilterBackend
 import django_filters
+import pdfkit
 from accounts.permissions import CanManageEvaluationCommittees
+from accounts.models import User
 
 from .models import EvaluationCommittee, ConflictOfInterest, PreliminaryExam, TechnicalScore, FinancialEvaluation, CombinedScore, BidEvaluationReport, PostQualification
 from .serializers import (
@@ -19,7 +23,7 @@ from .serializers import (
     PostQualificationSerializer,
 )
 from solicitations.models import Solicitation, EvaluationCriterion
-from bids.models import BidSubmission, BidOpeningDetail
+from bids.models import BidSubmission, BidOpening, BidOpeningDetail
 
 
 class StandardPagination(PageNumberPagination):
@@ -375,112 +379,6 @@ def technical_score_submit_view(request):
 
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
-def calculate_qcbs_view(request, solicitation_pk):
-    try:
-        sol = Solicitation.objects.get(pk=solicitation_pk)
-    except Solicitation.DoesNotExist:
-        return Response({'error': 'Solicitation not found'}, status=404)
-
-    criteria = EvaluationCriterion.objects.filter(solicitation=sol)
-    tech_weight = criteria.filter(criterion_type='technical').aggregate(s=Sum('weight'))['s'] or Decimal('80')
-    fin_weight = Decimal('100') - tech_weight
-
-    bids = BidSubmission.objects.filter(solicitation=sol, status__in=['opened', 'responsive'])
-    results = []
-
-    for bid in bids:
-        tech_scores = TechnicalScore.objects.filter(bid=bid)
-        if not tech_scores.exists():
-            continue
-
-        fin_eval = FinancialEvaluation.objects.filter(bid=bid).first()
-        if not fin_eval:
-            continue
-
-        avg_tech = tech_scores.aggregate(avg=Avg('weighted_score'))['avg'] or Decimal('0')
-        fin_score = fin_eval.financial_score
-
-        total_score = (avg_tech * tech_weight / Decimal('100')) + (fin_score * fin_weight / Decimal('100'))
-
-        CombinedScore.objects.update_or_create(
-            bid=bid,
-            defaults={
-                'technical_score': avg_tech,
-                'financial_score': fin_score,
-                'total_score': total_score,
-            }
-        )
-        results.append({
-            'bid_id': str(bid.bid_id),
-            'submission_id': bid.submission_id,
-            'bidder_name': bid.supplier.full_name,
-            'technical_score': float(avg_tech),
-            'financial_score': float(fin_score),
-            'total_score': float(total_score),
-        })
-
-    results.sort(key=lambda x: x['total_score'], reverse=True)
-    for idx, r in enumerate(results, start=1):
-        CombinedScore.objects.filter(bid_id=r['bid_id']).update(rank=idx)
-        r['rank'] = idx
-
-    return Response({
-        'message': 'QCBS calculation complete',
-        'tech_weight': float(tech_weight),
-        'fin_weight': float(fin_weight),
-        'results': results,
-    })
-
-
-class FinancialEvaluationListView(BaseView, generics.ListCreateAPIView):
-    queryset = FinancialEvaluation.objects.select_related('bid').all()
-    serializer_class = FinancialEvaluationSerializer
-    filterset_class = FinancialEvaluationFilter
-    ordering = ['-evaluation_id']
-
-
-class FinancialEvaluationDetailView(generics.RetrieveUpdateDestroyAPIView):
-    queryset = FinancialEvaluation.objects.all()
-    serializer_class = FinancialEvaluationSerializer
-    permission_classes = [IsAuthenticated]
-
-
-@api_view(['POST'])
-@permission_classes([IsAuthenticated])
-def authorize_financial_opening_view(request, solicitation_pk):
-    try:
-        sol = Solicitation.objects.get(pk=solicitation_pk)
-    except Solicitation.DoesNotExist:
-        return Response({'error': 'Solicitation not found'}, status=404)
-
-    committees = EvaluationCommittee.objects.filter(solicitation=sol)
-    is_chair = any(str(c.chairperson.id) == str(request.user.id) for c in committees)
-    if not is_chair:
-        return Response({'error': 'Only the committee chair can authorize financial envelope opening'}, status=403)
-
-    opening_details = BidOpeningDetail.objects.filter(
-        opening__solicitation=sol,
-        financial_sealed=True,
-    ).select_related('bid')
-
-    if not opening_details.exists():
-        return Response({'error': 'No sealed financial envelopes found for this solicitation'}, status=400)
-
-    opened_count = 0
-    for detail in opening_details:
-        detail.financial_sealed = False
-        detail.save()
-        bid = detail.bid
-        bid.financial_envelope_encrypted = False
-        bid.save(update_fields=['financial_envelope_encrypted'])
-        opened_count += 1
-
-    return Response({
-        'message': f'Financial envelopes unsealed for {opened_count} bids',
-        'opened_count': opened_count,
-    })
-
-
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def list_passed_tech_bids_view(request, solicitation_pk):
@@ -489,11 +387,17 @@ def list_passed_tech_bids_view(request, solicitation_pk):
     except Solicitation.DoesNotExist:
         return Response({'error': 'Solicitation not found'}, status=404)
 
+    committees = EvaluationCommittee.objects.filter(solicitation=sol)
+    is_chair = any(str(c.chairperson.id) == str(request.user.id) for c in committees)
+    is_procurement = request.user.role in ('director_procurement', 'procurement_manager', 'procurement_officer')
+    if not is_chair and not is_procurement:
+        return Response({'error': 'Only the committee chair or procurement staff can view passed bids'}, status=403)
+
     threshold = Decimal(str(request.query_params.get('threshold', sol.minimum_technical_threshold or TECHNICAL_THRESHOLD_DEFAULT)))
     criteria = EvaluationCriterion.objects.filter(solicitation=sol, criterion_type='technical')
     total_tech_weight = criteria.aggregate(s=Sum('weight'))['s'] or Decimal('100')
 
-    bids = BidSubmission.objects.filter(solicitation=sol, status__in=['opened', 'responsive'])
+    bids = BidSubmission.objects.filter(solicitation=sol, status__in=['submitted', 'opened', 'responsive', 'awarded'])
     results = []
 
     for bid in bids:
@@ -525,6 +429,7 @@ def list_passed_tech_bids_view(request, solicitation_pk):
             'bid_id': str(bid.bid_id),
             'submission_id': bid.submission_id,
             'bidder_name': bid.supplier.full_name,
+            'supplier_id': str(bid.supplier.supplier_id),
             'original_price': float(bid.bid_price or 0),
             'preference_category': financial_eval.preference_category if financial_eval else 'non_citizen',
             'preference_margin': float(financial_eval.preference_applied or 0) if financial_eval else 0,
@@ -541,6 +446,118 @@ def list_passed_tech_bids_view(request, solicitation_pk):
         'solicitation_id': str(sol.solicitation_id),
         'threshold': float(threshold),
         'bids': results,
+    })
+
+
+def calculate_qcbs_view(request, solicitation_pk):
+    try:
+        sol = Solicitation.objects.get(pk=solicitation_pk)
+    except Solicitation.DoesNotExist:
+        return Response({'error': 'Solicitation not found'}, status=404)
+
+    committees = EvaluationCommittee.objects.filter(solicitation=sol)
+    is_chair = any(str(c.chairperson.id) == str(request.user.id) for c in committees)
+    is_director = request.user.role == 'director_procurement'
+    if not is_chair and not is_director:
+        return Response({'error': 'Only the committee chair or Director of Procurement can calculate QCBS'}, status=403)
+
+    criteria = EvaluationCriterion.objects.filter(solicitation=sol)
+    tech_weight = Decimal('80')
+    fin_weight = Decimal('20')
+
+    threshold = Decimal(str(sol.minimum_technical_threshold or TECHNICAL_THRESHOLD_DEFAULT))
+    tech_criteria = criteria.filter(criterion_type='technical')
+    total_tech_weight = tech_criteria.aggregate(s=Sum('weight'))['s'] or Decimal('100')
+
+    bids = BidSubmission.objects.filter(solicitation=sol, status__in=['submitted', 'opened', 'responsive', 'awarded'])
+    results = []
+
+    # Pre-compute evaluated prices for all tech-passing bids
+    eligible_bids = []
+    evaluated_prices = {}
+    for bid in bids:
+        tech_scores = TechnicalScore.objects.filter(bid=bid)
+        if not tech_scores.exists():
+            continue
+        total_weighted = Decimal('0')
+        for criterion in tech_criteria:
+            avg = tech_scores.filter(criterion=criterion).aggregate(avg=Avg('raw_score'))['avg'] or Decimal('0')
+            total_weighted += avg * criterion.weight / Decimal('100')
+        overall_pct = (total_weighted / total_tech_weight * Decimal('100')) if total_tech_weight > 0 else Decimal('0')
+        if overall_pct < threshold:
+            continue
+        eligible_bids.append(bid)
+        fin_eval = FinancialEvaluation.objects.filter(bid=bid).first()
+        if fin_eval:
+            evaluated_prices[bid.bid_id] = fin_eval.evaluated_price
+        else:
+            evaluated_prices[bid.bid_id] = Decimal(str(bid.bid_price or 0))
+
+    min_evaluated_price = min(evaluated_prices.values()) if evaluated_prices else Decimal('0')
+
+    for bid in eligible_bids:
+        tech_scores = TechnicalScore.objects.filter(bid=bid)
+
+        total_weighted = Decimal('0')
+        for criterion in tech_criteria:
+            avg = tech_scores.filter(criterion=criterion).aggregate(avg=Avg('raw_score'))['avg'] or Decimal('0')
+            total_weighted += avg * criterion.weight / Decimal('100')
+        overall_pct = (total_weighted / total_tech_weight * Decimal('100')) if total_tech_weight > 0 else Decimal('0')
+
+        fin_eval = FinancialEvaluation.objects.filter(bid=bid).first()
+        evaluated_price = evaluated_prices[bid.bid_id]
+        fin_score = (min_evaluated_price / evaluated_price) * Decimal('100') if evaluated_price > 0 else Decimal('100')
+
+        if not fin_eval:
+            fin_eval = FinancialEvaluation.objects.create(
+                bid=bid,
+                original_price=bid.bid_price or 0,
+                corrected_price=bid.bid_price or 0,
+                evaluated_price=evaluated_price,
+                financial_score=fin_score,
+                preference_category='0',
+            )
+
+        avg_tech = overall_pct
+        total_score = (avg_tech * tech_weight / Decimal('100')) + (fin_score * fin_weight / Decimal('100'))
+
+        CombinedScore.objects.update_or_create(
+            bid=bid,
+            defaults={
+                'technical_score': avg_tech,
+                'financial_score': fin_score,
+                'total_score': total_score,
+                'rank': 0,
+            }
+        )
+        results.append({
+            'bid_id': str(bid.bid_id),
+            'submission_id': bid.submission_id,
+            'bidder_name': bid.supplier.full_name,
+            'supplier_id': str(bid.supplier.supplier_id),
+            'original_price': float(bid.bid_price or 0),
+            'preference_category': financial_eval.preference_category if financial_eval else 'non_citizen',
+            'preference_margin': float(financial_eval.preference_applied or 0) if financial_eval else 0,
+            'overall_technical_score': float(overall_pct),
+            'passed': passed,
+            'financial_evaluation_id': str(financial_eval.evaluation_id) if financial_eval else None,
+            'evaluated_price': float(financial_eval.evaluated_price) if financial_eval else None,
+            'financial_score': float(financial_eval.financial_score) if financial_eval else None,
+            'financial_sealed': opening_detail.financial_sealed if opening_detail else True,
+            'details': details,
+        })
+
+    winner_name = None
+    if sol.status == 'awarded':
+        awarded_bid = BidSubmission.objects.filter(solicitation=sol, status='awarded').first()
+        if awarded_bid and awarded_bid.supplier:
+            winner_name = awarded_bid.supplier.full_name
+
+    return Response({
+        'solicitation_id': str(sol.solicitation_id),
+        'threshold': float(threshold),
+        'bids': results,
+        'winner_name': winner_name,
     })
 
 
@@ -572,18 +589,20 @@ def financial_evaluation_calculate_view(request, bid_pk):
     financial_score = (min_evaluated / evaluated_price) * Decimal('100') if evaluated_price > 0 else Decimal('100')
 
 
-    evaluation = FinancialEvaluation.objects.create(
+    evaluation, _ = FinancialEvaluation.objects.update_or_create(
         bid=bid,
-        original_price=original_price,
-        corrected_price=corrected_price,
-        currency_converted_price=currency_converted_price,
-        source_currency=source_currency,
-        conversion_rate=conversion_rate,
-        preference_applied=preference_margin,
-        preference_category=preference_category,
-        arithmetic_corrections=arithmetic_corrections,
-        evaluated_price=evaluated_price,
-        financial_score=financial_score,
+        defaults={
+            'original_price': original_price,
+            'corrected_price': corrected_price,
+            'currency_converted_price': currency_converted_price,
+            'source_currency': source_currency,
+            'conversion_rate': conversion_rate,
+            'preference_applied': preference_margin,
+            'preference_category': preference_category,
+            'arithmetic_corrections': arithmetic_corrections,
+            'evaluated_price': evaluated_price,
+            'financial_score': financial_score,
+        }
     )
 
     return Response({
@@ -599,6 +618,12 @@ def select_winner_view(request, solicitation_pk):
         sol = Solicitation.objects.get(pk=solicitation_pk)
     except Solicitation.DoesNotExist:
         return Response({'error': 'Solicitation not found'}, status=404)
+
+    committees = EvaluationCommittee.objects.filter(solicitation=sol)
+    is_chair = any(str(c.chairperson.id) == str(request.user.id) for c in committees)
+    is_director = request.user.role == 'director_procurement'
+    if not is_chair and not is_director:
+        return Response({'error': 'Only the committee chair or Director of Procurement can select a winner'}, status=403)
 
     bid_id = request.data.get('bid_id')
     if not bid_id:
@@ -864,8 +889,9 @@ def ber_submit_view(request, pk):
         return Response({'error': 'All committee members must sign before submitting'}, status=400)
 
     ber.status = 'submitted'
+    ber.submitted_at = timezone.now()
     ber.save()
-    return Response({'message': 'BER submitted for ZPC approval', 'status': ber.status})
+    return Response({'message': 'BER submitted for ZPC approval', 'status': ber.status, 'submitted_at': ber.submitted_at.isoformat()})
 
 
 @api_view(['POST'])
@@ -890,7 +916,12 @@ def ber_approve_view(request, pk):
     ber.solicitation.status = 'awarded'
     ber.solicitation.save()
 
-    return Response({'message': 'BER approved. Solicitation awarded.', 'status': ber.status})
+    return Response({
+        'message': 'BER approved. Solicitation awarded.',
+        'status': ber.status,
+        'ber_id': str(ber.ber_id),
+        'solicitation_id': str(ber.solicitation.solicitation_id),
+    })
 
 
 @api_view(['POST'])
@@ -916,6 +947,189 @@ def ber_reject_view(request, pk):
     })
 
 
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def consolidated_scores_view(request, solicitation_pk):
+    try:
+        sol = Solicitation.objects.get(pk=solicitation_pk)
+    except Solicitation.DoesNotExist:
+        return Response({'error': 'Solicitation not found'}, status=404)
+
+    committees = EvaluationCommittee.objects.filter(solicitation=sol)
+    is_chair = any(str(c.chairperson.id) == str(request.user.id) for c in committees)
+    is_director = request.user.role == 'director_procurement'
+    if not is_chair and not is_director:
+        return Response({'error': 'Only the committee chair or Director of Procurement can view consolidated scores'}, status=403)
+
+    criteria = EvaluationCriterion.objects.filter(solicitation=sol, criterion_type='technical')
+    total_tech_weight = criteria.aggregate(s=Sum('weight'))['s'] or Decimal('100')
+    threshold = Decimal(str(sol.minimum_technical_threshold or 70))
+
+    bids = BidSubmission.objects.filter(solicitation=sol, status__in=['submitted', 'opened', 'responsive', 'awarded'])
+    
+    all_member_list = []
+    member_ids_set = set()
+    committees_list = []
+    user_cache: dict[str, User] = {}
+    raw_member_ids: list[str] = []
+    for c in committees:
+        for m in c.members:
+            uid = m.get('user') if isinstance(m, dict) else m
+            if uid and str(uid) not in member_ids_set:
+                member_ids_set.add(str(uid))
+                raw_member_ids.append(str(uid))
+        if c.chairperson_id and str(c.chairperson.id) not in member_ids_set:
+            member_ids_set.add(str(c.chairperson.id))
+        if c.secretary_id and str(c.secretary.id) not in member_ids_set:
+            member_ids_set.add(str(c.secretary.id))
+
+    if raw_member_ids:
+        for u in User.objects.filter(pk__in=raw_member_ids):
+            user_cache[str(u.pk)] = u
+
+    member_ids_set.clear()
+
+    for c in committees:
+        member_list = []
+        for m in c.members:
+            uid = m.get('user') if isinstance(m, dict) else m
+            if uid and str(uid) not in member_ids_set:
+                member_ids_set.add(str(uid))
+                user_obj = user_cache.get(str(uid))
+                member_name = user_obj.full_name if user_obj else str(uid)[:8]
+                member_role = m.get('role', 'member') if isinstance(m, dict) else 'member'
+                member_list.append({
+                    'id': str(uid),
+                    'name': member_name,
+                    'role': member_role,
+                })
+        if c.chairperson_id and str(c.chairperson.id) not in member_ids_set:
+            member_ids_set.add(str(c.chairperson.id))
+            member_list.append({'id': str(c.chairperson.id), 'name': c.chairperson.full_name, 'role': 'chairperson'})
+        if c.secretary_id and str(c.secretary.id) not in member_ids_set:
+            member_ids_set.add(str(c.secretary.id))
+            member_list.append({'id': str(c.secretary.id), 'name': c.secretary.full_name, 'role': 'secretary'})
+        committees_list.append({
+            'committee_id': str(c.committee_id),
+            'chairperson_name': c.chairperson.full_name,
+            'secretary_name': c.secretary.full_name,
+            'members': member_list,
+            'formed_at': c.formed_at.isoformat() if c.formed_at else None,
+        })
+        all_member_list.extend(member_list)
+
+    results = []
+    for bid in bids:
+        tech_scores = TechnicalScore.objects.filter(bid=bid).select_related('evaluator', 'criterion')
+        if not tech_scores.exists():
+            continue
+
+        total_weighted = Decimal('0')
+        details = []
+        members_data = []
+        scores_by_member = {}
+        members_submitted = set()
+
+        for criterion in criteria:
+            criterion_scores = tech_scores.filter(criterion=criterion)
+            if not criterion_scores.exists():
+                continue
+
+            criterion_avg = Decimal('0')
+            criterion_scores_list = []
+
+            for cs in criterion_scores:
+                evaluator_id = str(cs.evaluator.id)
+                if evaluator_id not in scores_by_member:
+                    scores_by_member[evaluator_id] = {'name': cs.evaluator.full_name, 'scores': []}
+                scores_by_member[evaluator_id]['scores'].append({
+                    'criterion_id': str(criterion.criterion_id),
+                    'criterion_name': criterion.criterion_name,
+                    'raw_score': float(cs.raw_score),
+                    'weighted_score': float(cs.weighted_score),
+                    'evaluator_id': evaluator_id,
+                })
+                members_submitted.add(evaluator_id)
+
+                criterion_avg += cs.raw_score
+                criterion_scores_list.append({
+                    'evaluator_id': evaluator_id,
+                    'evaluator_name': cs.evaluator.full_name,
+                    'raw_score': float(cs.raw_score),
+                    'weighted_score': float(cs.weighted_score),
+                })
+
+            criterion_avg = criterion_avg / criterion_scores.count() if criterion_scores.count() > 0 else Decimal('0')
+            criterion_weighted = criterion_avg * criterion.weight / Decimal('100')
+            total_weighted += criterion_weighted
+
+            details.append({
+                'criterion_id': str(criterion.criterion_id),
+                'criterion_name': criterion.criterion_name,
+                'average_raw_score': float(criterion_avg),
+                'weighted_score': float(criterion_weighted),
+                'weight': float(criterion.weight),
+                'scores_by_evaluator': criterion_scores_list,
+            })
+
+        overall_pct = (total_weighted / total_tech_weight * Decimal('100')) if total_tech_weight > 0 else Decimal('0')
+
+        financial_eval = FinancialEvaluation.objects.filter(bid=bid).first()
+        opening_detail = BidOpeningDetail.objects.filter(bid=bid).first()
+
+        members_data = [
+            {
+                'id': m['id'],
+                'name': m['name'],
+                'role': m['role'],
+                'submitted': m['id'] in members_submitted,
+                'scores': scores_by_member.get(m['id'], {}).get('scores', []),
+            }
+            for m in all_member_list
+        ]
+
+        results.append({
+            'bid_id': str(bid.bid_id),
+            'submission_id': bid.submission_id,
+            'bidder_name': bid.supplier.full_name,
+            'original_price': float(bid.bid_price or 0),
+            'preference_category': financial_eval.preference_category if financial_eval else 'non_citizen',
+            'preference_margin': float(financial_eval.preference_applied or 0) if financial_eval else 0,
+            'overall_technical_score': float(overall_pct),
+            'passed': overall_pct >= threshold,
+            'financial_evaluation_id': str(financial_eval.evaluation_id) if financial_eval else None,
+            'evaluated_price': float(financial_eval.evaluated_price) if financial_eval else None,
+            'financial_score': float(financial_eval.financial_score) if financial_eval else None,
+            'financial_sealed': opening_detail.financial_sealed if opening_detail else True,
+            'details': details,
+            'members': members_data,
+            'all_members_submitted': len(members_submitted) >= len([m for m in all_member_list if m['id']]),
+            'members_submitted_count': len(members_submitted),
+            'total_members': len([m for m in all_member_list if m['id']]),
+        })
+
+    results.sort(key=lambda x: x['overall_technical_score'], reverse=True)
+
+    return Response({
+        'solicitation_id': str(sol.solicitation_id),
+        'solicitation_number': sol.sol_number,
+        'solicitation_title': sol.title,
+        'minimum_technical_threshold': float(threshold),
+        'total_bids': len(results),
+        'passed_bids': len([r for r in results if r['passed']]),
+        'committees': committees_list,
+        'criteria': [
+            {
+                'criterion_id': str(c.criterion_id),
+                'criterion_name': c.criterion_name,
+                'weight': float(c.weight),
+            }
+            for c in criteria
+        ],
+        'bids': results,
+    })
+
+
 class CombinedScoreListView(BaseView, generics.ListAPIView):
     queryset = CombinedScore.objects.select_related('bid').all()
     serializer_class = CombinedScoreSerializer
@@ -932,3 +1146,91 @@ class PostQualificationDetailView(generics.RetrieveUpdateDestroyAPIView):
     queryset = PostQualification.objects.all()
     serializer_class = PostQualificationSerializer
     permission_classes = [IsAuthenticated]
+
+
+def ber_pdf_view(request, pk):
+    from rest_framework_simplejwt.authentication import JWTAuthentication
+    from rest_framework.exceptions import AuthenticationFailed
+
+    try:
+        jwt_auth = JWTAuthentication()
+        user, _ = jwt_auth.authenticate(request)
+        if user is None:
+            return HttpResponse('Unauthorized', status=401)
+    except (AuthenticationFailed, AttributeError, TypeError):
+        return HttpResponse('Unauthorized', status=401)
+
+    try:
+        ber = BidEvaluationReport.objects.get(pk=pk)
+    except BidEvaluationReport.DoesNotExist:
+        return HttpResponse('BER not found', status=404)
+
+    content = ber.report_content
+    context = {
+        'ber': content,
+        'tech_data': content.get('technical_evaluation', []),
+        'signatures': ber.signatures or [],
+        'ber_status': ber.status,
+        'ber_id': str(ber.ber_id),
+        'created_at': ber.created_at.isoformat() if ber.created_at else '',
+    }
+
+    committees = content.get('evaluation_committees', [])
+    for c in committees:
+        chair_id = ''
+        sec_id = ''
+        for m in c.get('member_ids', []):
+            uid = m.get('id') if isinstance(m, dict) else m
+            u = User.objects.filter(id=uid).first()
+            name = u.full_name if u else str(uid)[:8]
+            if name == c.get('chairperson_name'):
+                chair_id = uid
+            elif name == c.get('secretary_name'):
+                sec_id = uid
+        members = []
+        for m in c.get('member_ids', []):
+            uid = m.get('id') if isinstance(m, dict) else m
+            if uid in (chair_id, sec_id):
+                continue
+            u = User.objects.filter(id=uid).first()
+            members.append({'id': uid, 'name': u.full_name if u else str(uid)[:8]})
+        c['member_ids'] = members
+    context['committees'] = committees
+
+    winner = content.get('winner')
+    if winner and winner.get('submission_id'):
+        from bids.models import BidSubmission
+        wb = BidSubmission.objects.filter(submission_id=winner['submission_id']).first()
+        if wb:
+            tech_data = context.get('tech_data', [])
+            for td in tech_data:
+                if td.get('submission_id') == winner['submission_id']:
+                    winner['evaluated_price'] = td.get('evaluated_price')
+                    winner['combined_total_score'] = td.get('combined_total_score')
+                    break
+    context['winner'] = winner
+
+    fmt = request.GET.get('format', 'pdf')
+    html = render_to_string('evaluations/ber_pdf.html', context)
+
+    if fmt == 'html':
+        return HttpResponse(html, content_type='text/html; charset=utf-8')
+
+    try:
+        options = {
+            'page-size': 'A4',
+            'margin-top': '15mm',
+            'margin-right': '12mm',
+            'margin-bottom': '20mm',
+            'margin-left': '12mm',
+            'encoding': 'UTF-8',
+            'no-outline': None,
+            'enable-local-file-access': None,
+        }
+        pdf = pdfkit.from_string(html, False, options=options)
+        sol_number = content.get("solicitation", {}).get("sol_number", str(ber.ber_id))
+        response = HttpResponse(pdf, content_type='application/pdf')
+        response['Content-Disposition'] = f'attachment; filename="BER-{sol_number}.pdf"'
+        return response
+    except Exception:
+        return HttpResponse(html, content_type='text/html; charset=utf-8')

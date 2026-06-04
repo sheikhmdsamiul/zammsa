@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { contractsApi } from '../../api/contracts';
@@ -15,7 +15,6 @@ const StandstillMonitor: React.FC = () => {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
 
-  const [published, setPublished] = useState(false);
   const [appealModal, setAppealModal] = useState(false);
   const [appealGrounds, setAppealGrounds] = useState('');
 
@@ -25,10 +24,14 @@ const StandstillMonitor: React.FC = () => {
     enabled: !!id,
   });
 
+  const standstillPeriodExpired = useMemo(() => {
+    if (!contract?.award_notice_published || !contract?.waiting_period_end) return false;
+    return new Date(contract.waiting_period_end) <= new Date();
+  }, [contract?.award_notice_published, contract?.waiting_period_end]);
+
   const publishMutation = useMutation({
     mutationFn: () => contractsApi.publishAward(id!),
     onSuccess: () => {
-      setPublished(true);
       queryClient.invalidateQueries({ queryKey: ['contract', id] });
       toast.success('Award notice published. Standstill period started.');
     },
@@ -40,6 +43,8 @@ const StandstillMonitor: React.FC = () => {
     onSuccess: () => {
       toast.success('Appeal logged');
       setAppealModal(false);
+      setAppealGrounds('');
+      queryClient.invalidateQueries({ queryKey: ['contract', id] });
     },
     onError: () => toast.error('Failed to log appeal'),
   });
@@ -62,6 +67,7 @@ const StandstillMonitor: React.FC = () => {
     </div>
   );
 
+  const noticePublished = contract.award_notice_published;
   const standstillStart = contract.award_notice_published_at
     ? new Date(contract.award_notice_published_at).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
     : '---';
@@ -72,26 +78,27 @@ const StandstillMonitor: React.FC = () => {
 
   const waitingDays = contract.waiting_period_days || 10;
 
-  const standstillElapsedPct = contract.award_notice_published_at && contract.waiting_period_end
-    ? Math.min(100, Math.round(((Date.now() - new Date(contract.award_notice_published_at).getTime()) / (new Date(contract.waiting_period_end).getTime() - new Date(contract.award_notice_published_at).getTime())) * 100))
+  const standstillElapsedPct = noticePublished && contract.waiting_period_end
+    ? Math.min(100, Math.round(((Date.now() - new Date(contract.award_notice_published_at!).getTime()) /
+        (new Date(contract.waiting_period_end).getTime() - new Date(contract.award_notice_published_at!).getTime())) * 100))
     : 0;
 
   const appealLogged = contract.appeal_pending;
-  const standstillExpired = published && !appealLogged;
+  const canActivate = noticePublished && standstillPeriodExpired && !appealLogged;
 
   return (
     <div className="max-w-4xl mx-auto space-y-6">
       <div className="flex items-center justify-between">
         <div>
           <div className="flex items-center gap-3">
-            <h1 className="text-2xl font-bold text-gray-900">Contract Award & Standstill</h1>
-            <StatusBadge status={published ? 'active' : 'draft'} />
+            <h1 className="text-2xl font-bold text-gray-900">Contract Award and Standstill</h1>
+            <StatusBadge status={noticePublished ? 'active' : 'draft'} />
           </div>
           <p className="text-sm text-gray-500 mt-1">{contract.contract_number} | {contract.vendor_name}</p>
         </div>
       </div>
 
-      {!published && (
+      {!noticePublished && (
         <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
           <h2 className="text-lg font-semibold text-gray-900 mb-4">Contract Award Notice</h2>
           <div className="bg-gray-50 border border-gray-200 rounded-lg p-6 mb-6">
@@ -99,28 +106,17 @@ const StandstillMonitor: React.FC = () => {
             <p className="text-sm text-gray-600 mb-1">Reference: {contract.contract_number}</p>
             <p className="text-sm text-gray-600 mb-1">Awarded to: {contract.vendor_name}</p>
             <p className="text-sm text-gray-600 mb-1">Award Value: K {contract.value?.toLocaleString()}</p>
-            <p className="text-sm text-gray-500 mt-3">This award is subject to a mandatory 10-working-day standstill period during which aggrieved bidders may submit a formal appeal.</p>
-          </div>
-
-          <div className="space-y-3">
-            <label className="flex items-center gap-2 text-sm">
-              <input type="checkbox" defaultChecked className="text-zammsa-green rounded" />
-              ZAMMSA Public Portal
-            </label>
-            <label className="flex items-center gap-2 text-sm">
-              <input type="checkbox" defaultChecked className="text-zammsa-green rounded" />
-              ZPPA e-GP Portal
-            </label>
+            <p className="text-sm text-gray-500 mt-3">This award is subject to a mandatory {waitingDays}-working-day standstill period during which aggrieved bidders may submit a formal appeal.</p>
           </div>
 
           <button onClick={() => publishMutation.mutate()} disabled={publishMutation.isPending}
             className="mt-6 px-6 py-3 bg-zammsa-green text-white rounded-xl text-sm font-bold disabled:opacity-50">
-            {publishMutation.isPending ? 'Publishing...' : 'Publish Award Notice & Start Standstill'}
+            {publishMutation.isPending ? 'Publishing...' : 'Publish Award Notice and Start Standstill'}
           </button>
         </div>
       )}
 
-      {published && (
+      {noticePublished && (
         <>
           <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
             <h2 className="text-lg font-semibold text-gray-900 mb-4">Standstill Period</h2>
@@ -139,31 +135,42 @@ const StandstillMonitor: React.FC = () => {
               </div>
               <div className="p-4 bg-gray-50 rounded-xl text-center">
                 <p className="text-xs text-gray-500 font-medium">Remaining</p>
-                <p className="text-sm font-bold text-gray-900 mt-1">{published ? `${waitingDays} working days` : '---'}</p>
+                <p className="text-sm font-bold text-gray-900 mt-1">{standstillPeriodExpired ? 'Expired' : `${waitingDays} working days`}</p>
               </div>
             </div>
 
             <div className="w-full bg-gray-200 rounded-full h-2 mb-6">
-              <div className="bg-zammsa-green h-2 rounded-full transition-all" style={{ width: `${standstillElapsedPct}%` }} />
+              <div className={`h-2 rounded-full transition-all ${standstillPeriodExpired ? 'bg-emerald-500' : 'bg-zammsa-green'}`}
+                style={{ width: `${standstillElapsedPct}%` }} />
             </div>
 
-            <div className="flex items-center justify-between p-4 bg-emerald-50 border border-emerald-200 rounded-lg">
-              <div className="flex items-center gap-2">
-                <CheckCircleIcon className="w-5 h-5 text-emerald-600" />
-                <span className="text-sm font-medium text-emerald-800">Appeals Received: 0 — No issues</span>
+            {appealLogged ? (
+              <div className="flex items-center justify-between p-4 bg-amber-50 border border-amber-200 rounded-lg">
+                <div className="flex items-center gap-2">
+                  <ExclamationIcon className="w-5 h-5 text-amber-600" />
+                  <span className="text-sm font-medium text-amber-800">Appeal pending - standstill extended</span>
+                </div>
+                <StatusBadge status="pending" />
               </div>
-              <StatusBadge status="active" />
-            </div>
+            ) : (
+              <div className="flex items-center justify-between p-4 bg-emerald-50 border border-emerald-200 rounded-lg">
+                <div className="flex items-center gap-2">
+                  <CheckCircleIcon className="w-5 h-5 text-emerald-600" />
+                  <span className="text-sm font-medium text-emerald-800">No appeals filed</span>
+                </div>
+                <StatusBadge status="active" />
+              </div>
+            )}
           </div>
 
           <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
             <h2 className="text-lg font-semibold text-gray-900 mb-4">Notifications Sent</h2>
             <div className="space-y-3">
               {[
-                { label: `Winner (${contract.vendor_name})`, desc: 'Award notification sent', done: contract.award_notice_published },
+                { label: `Winner (${contract.vendor_name})`, desc: 'Award notification sent', done: noticePublished },
                 { label: 'Unsuccessful bidders', desc: 'Notification status pending', done: false },
-                { label: 'ZAMMSA Public Portal', desc: contract.award_notice_published ? 'Award notice published' : 'Not yet published', done: contract.award_notice_published },
-                { label: 'ZPPA e-GP Portal', desc: contract.award_notice_published ? 'Award notice forwarded' : 'Not yet forwarded', done: contract.award_notice_published },
+                { label: 'ZAMMSA Public Portal', desc: noticePublished ? 'Award notice published' : 'Not yet published', done: noticePublished },
+                { label: 'ZPPA e-GP Portal', desc: noticePublished ? 'Award notice forwarded' : 'Not yet forwarded', done: noticePublished },
               ].map((n, i) => (
                 <div key={i} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
                   <div>
@@ -189,17 +196,19 @@ const StandstillMonitor: React.FC = () => {
             </div>
           )}
 
-          {standstillExpired && !appealModal && (
-            <div className="flex justify-end gap-3">
+          <div className="flex justify-end gap-3">
+            {!appealLogged && (
               <button onClick={() => setAppealModal(true)} className="px-4 py-2 bg-amber-600 text-white rounded-lg text-sm font-bold">
                 Log Incoming Appeal
               </button>
+            )}
+            {canActivate && (
               <button onClick={() => activateMutation.mutate()} disabled={activateMutation.isPending}
                 className="px-6 py-2 bg-zammsa-green text-white rounded-lg text-sm font-bold">
-                Standstill Expired — Generate Contract
+                {activateMutation.isPending ? 'Activating...' : 'Proceed to Contract Signing'}
               </button>
-            </div>
-          )}
+            )}
+          </div>
         </>
       )}
     </div>

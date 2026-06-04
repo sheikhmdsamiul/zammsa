@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Bid Evaluation Report - {{ ber.solicitation.sol_number }}</title>
+<style>
+  @page { size: A4; margin: 20mm 15mm; }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: 'Helvetica', 'Arial', sans-serif; font-size: 11pt; color: #1a1a1a; line-height: 1.5; }
+  .header { text-align: center; border-bottom: 3px solid #1a5c3a; padding-bottom: 15px; margin-bottom: 20px; }
+  .header h1 { font-size: 16pt; color: #1a5c3a; margin-bottom: 4px; }
+  .header h2 { font-size: 13pt; color: #333; font-weight: normal; }
+  .header .meta { font-size: 9pt; color: #666; margin-top: 4px; }
+  h2 { font-size: 13pt; color: #1a5c3a; margin: 20px 0 10px; border-bottom: 1px solid #ccc; padding-bottom: 4px; }
+  h3 { font-size: 11pt; color: #333; margin: 12px 0 6px; }
+  table { width: 100%; border-collapse: collapse; margin: 8px 0 16px; font-size: 9pt; }
+  th { background: #1a5c3a; color: #fff; padding: 6px 8px; text-align: left; font-weight: 600; }
+  td { padding: 5px 8px; border-bottom: 1px solid #ddd; }
+  tr:nth-child(even) td { background: #f9f9f9; }
+  .r { text-align: right; }
+  .c { text-align: center; }
+  .info-grid { display: flex; flex-wrap: wrap; gap: 0; margin: 8px 0 16px; }
+  .info-item { flex: 1; min-width: 200px; padding: 6px 12px; border: 1px solid #ddd; }
+  .info-item .label { font-size: 8pt; color: #666; text-transform: uppercase; letter-spacing: 0.5px; }
+  .info-item .value { font-size: 10pt; font-weight: 600; color: #1a1a1a; }
+  .winner-box { background: #e8f5e9; border: 2px solid #1a5c3a; border-radius: 4px; padding: 12px 16px; margin: 10px 0; }
+  .winner-box .label { font-size: 8pt; color: #1a5c3a; text-transform: uppercase; }
+  .winner-box .name { font-size: 14pt; font-weight: 700; color: #1a5c3a; }
+  .signatures { margin-top: 30px; page-break-inside: avoid; }
+  .sig-row { display: flex; justify-content: space-between; margin-top: 40px; }
+  .sig-block { text-align: center; min-width: 180px; }
+  .sig-line { width: 180px; border-top: 1px solid #333; margin-top: 35px; padding-top: 4px; font-size: 9pt; }
+  .footer { text-align: center; font-size: 8pt; color: #999; margin-top: 30px; border-top: 1px solid #eee; padding-top: 8px; }
+  .rank-1 { font-weight: 700; color: #1a5c3a; }
+  .section-note { font-size: 9pt; color: #666; margin-bottom: 8px; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>ZAMMSA — BID EVALUATION REPORT</h1>
+  <h2>Quality and Cost Based Selection (QCBS)</h2>
+  <div class="meta">Report No: BER-{{ ber_id|slice:":8" }}</div>
+  <div class="meta">Generated: {{ ber.generated_at|default:created_at }}</div>
+</div>
+
+<div class="info-grid">
+  <div class="info-item">
+    <div class="label">Solicitation No</div>
+    <div class="value">{{ ber.solicitation.sol_number|default:ber.solicitation.sol_number }}</div>
+  </div>
+  <div class="info-item">
+    <div class="label">Title</div>
+    <div class="value">{{ ber.solicitation.title }}</div>
+  </div>
+  <div class="info-item">
+    <div class="label">Procurement Method</div>
+    <div class="value">{{ ber.solicitation.method|default:"QCBS (Two-Envelope)" }}</div>
+  </div>
+  <div class="info-item">
+    <div class="label">Estimated Value</div>
+    <div class="value">ZMW {{ ber.solicitation.estimated_value|floatformat:2|default:"—" }}</div>
+  </div>
+</div>
+
+{% if ber.solicitation.description %}
+<p style="margin: 8px 0 16px; font-size: 9pt;">{{ ber.solicitation.description }}</p>
+{% endif %}
+
+<h2>SECTION 1: Bids Received</h2>
+<div class="section-note">Total bids received and evaluated.</div>
+<table>
+  <thead>
+    <tr>
+      <th style="width:40px">#</th>
+      <th>Bidder</th>
+      <th class="r">Bid Price (ZMW)</th>
+      <th class="c">Status</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for bid in tech_data %}
+    <tr>
+      <td class="c">{{ forloop.counter }}</td>
+      <td>{{ bid.bidder_name }}</td>
+      <td class="r">{{ bid.evaluated_price|floatformat:2|default:"—" }}</td>
+      <td class="c">
+        {% if bid.overall_technical_score >= 70 %}
+        <span style="color:#1a5c3a;">Passed Tech</span>
+        {% else %}
+        <span style="color:#c62828;">Failed Tech</span>
+        {% endif %}
+      </td>
+    </tr>
+    {% empty %}
+    <tr><td colspan="4" class="c" style="color:#999;">No bids received</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+
+<h2>SECTION 2: Technical Evaluation</h2>
+<div class="section-note">Average scores per criterion. Minimum passing threshold: 70%.</div>
+
+{% for bid in tech_data %}
+<h3>{{ bid.bidder_name }}</h3>
+{% if bid.criterion_details %}
+<table>
+  <thead>
+    <tr>
+      <th>Criterion</th>
+      <th class="r">Weight (%)</th>
+      <th class="r">Average Raw Score</th>
+      <th class="r">Weighted Score</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for c in bid.criterion_details %}
+    <tr>
+      <td>{{ c.criterion_name }}</td>
+      <td class="r">{{ c.weight|floatformat:1 }}</td>
+      <td class="r">{{ c.average_raw_score|floatformat:2 }}</td>
+      <td class="r">{{ c.weighted_score|floatformat:2 }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<p style="font-size:9pt;color:#999;">No technical criteria data available.</p>
+{% endif %}
+<p style="font-size:9pt;"><strong>Overall Technical Score:</strong> {{ bid.overall_technical_score|floatformat:2 }}%</p>
+{% endfor %}
+
+<h2>SECTION 3: Financial Evaluation</h2>
+<div class="section-note">Evaluated prices, preference margins (where applicable), and financial scores.</div>
+<table>
+  <thead>
+    <tr>
+      <th>Bidder</th>
+      <th class="r">Evaluated Price (ZMW)</th>
+      <th class="r">Preference Margin</th>
+      <th class="r">Financial Score</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for bid in tech_data %}
+    <tr>
+      <td>{{ bid.bidder_name }}</td>
+      <td class="r">{{ bid.evaluated_price|floatformat:2|default:"—" }}</td>
+      <td class="r">{{ bid.preference_applied|floatformat:2|default:"—" }}</td>
+      <td class="r">{{ bid.financial_score|floatformat:2|default:"—" }}</td>
+    </tr>
+    {% empty %}
+    <tr><td colspan="4" class="c" style="color:#999;">No financial data</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+
+<h2>SECTION 4: Combined Evaluation (QCBS)</h2>
+<div class="section-note">Weighted combination of technical (80%) and financial (20%) scores.</div>
+<table>
+  <thead>
+    <tr>
+      <th style="width:50px">Rank</th>
+      <th>Bidder</th>
+      <th class="r">Technical</th>
+      <th class="r">Financial</th>
+      <th class="r">Combined</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for bid in tech_data|dictsort:"rank" %}
+    <tr>
+      <td class="c {% if bid.rank == 1 %}rank-1{% endif %}">{{ bid.rank|default:"—" }}</td>
+      <td>{{ bid.bidder_name }}</td>
+      <td class="r">{{ bid.combined_technical_score|floatformat:2|default:"—" }}</td>
+      <td class="r">{{ bid.financial_score|floatformat:2|default:"—" }}</td>
+      <td class="r">{{ bid.combined_total_score|floatformat:2|default:"—" }}</td>
+    </tr>
+    {% empty %}
+    <tr><td colspan="5" class="c" style="color:#999;">No QCBS data available</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+
+{% if winner %}
+<h2>SECTION 5: Recommendation</h2>
+<div class="winner-box">
+  <div class="label">Recommended Supplier</div>
+  <div class="name">{{ winner.bidder_name }}</div>
+  <p style="margin-top:8px;font-size:10pt;">
+    Submission ID: <strong>{{ winner.submission_id }}</strong><br>
+    The Evaluation Committee recommends awarding the contract to
+    <strong>{{ winner.bidder_name }}</strong> based on the QCBS evaluation results.
+    {% if winner.evaluated_price %}Contract Value: ZMW {{ winner.evaluated_price|floatformat:2 }}{% endif %}
+  </p>
+</div>
+{% endif %}
+
+<h2>SECTION 6: Evaluation Committee</h2>
+{% for committee in committees %}
+<table>
+  <thead>
+    <tr>
+      <th style="width:40px">#</th>
+      <th>Name</th>
+      <th>Role</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr><td>1</td><td>{{ committee.chairperson_name }}</td><td>Chairperson</td></tr>
+    <tr><td>2</td><td>{{ committee.secretary_name }}</td><td>Secretary</td></tr>
+    {% for m in committee.member_ids %}
+    <tr><td>{{ forloop.counter|add:2 }}</td><td>{{ m.name }}</td><td>Member</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% empty %}
+<p style="font-size:9pt;color:#999;">No committee information available.</p>
+{% endfor %}
+
+{% if signatures %}
+<div class="signatures">
+  <h2>Digital Signatures</h2>
+  <table>
+    <thead>
+      <tr>
+        <th>Name</th>
+        <th>Role</th>
+        <th>Signed At</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for sig in signatures %}
+      <tr>
+        <td>{{ sig.member_name }}</td>
+        <td>{{ sig.role }}</td>
+        <td>{{ sig.signed_at }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+
+<div class="footer">
+  ZAMMSA — Bid Evaluation Report &mdash; Generated {{ ber.generated_at|default:created_at }}<br>
+  This report is an official document of the Zambia Medicines and Medical Supplies Agency.
+</div>
+
+</body>
+</html>

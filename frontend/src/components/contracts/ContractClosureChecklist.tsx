@@ -19,11 +19,12 @@ const ContractClosureChecklist: React.FC = () => {
     enabled: !!id,
   });
 
+  // Field names match the backend ClosureChecklist model exactly
   const [checks, setChecks] = useState<Record<string, boolean>>({
-    all_items_delivered: true,
-    final_inspection: true,
-    acceptance_certificate: true,
-    all_invoices_approved: true,
+    all_deliverables_received: true,
+    final_inspection_passed: true,
+    acceptance_certificate_issued: true,
+    all_payments_processed: true,
     liquidated_damages_deducted: true,
     retention_released: true,
     no_outstanding_disputes: true,
@@ -36,10 +37,10 @@ const ContractClosureChecklist: React.FC = () => {
   const [completed, setCompleted] = useState(false);
 
   const checklistItems = [
-    { key: 'all_items_delivered', label: 'All items delivered per GRN' },
-    { key: 'final_inspection', label: 'Final inspection completed and goods accepted' },
-    { key: 'acceptance_certificate', label: 'Acceptance certificate issued' },
-    { key: 'all_invoices_approved', label: 'All invoices received and approved' },
+    { key: 'all_deliverables_received', label: 'All items delivered per GRN' },
+    { key: 'final_inspection_passed', label: 'Final inspection completed and goods accepted' },
+    { key: 'acceptance_certificate_issued', label: 'Acceptance certificate issued' },
+    { key: 'all_payments_processed', label: 'All invoices received and approved' },
     { key: 'liquidated_damages_deducted', label: 'Liquidated damages deducted (if applicable)' },
     { key: 'retention_released', label: 'Retention released (30 days post-acceptance)' },
     { key: 'no_outstanding_disputes', label: 'No outstanding invoices or disputes' },

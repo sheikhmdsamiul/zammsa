@@ -10,10 +10,10 @@ import { ROLES } from '../../config/rbac';
 import toast from 'react-hot-toast';
 import {
   CheckCircleIcon, DocumentTextIcon,
-  ShieldCheckIcon, XCircleIcon,
+  ShieldCheckIcon, XCircleIcon, DownloadIcon, EyeIcon,
 } from '@heroicons/react/outline';
 
-type RankingRow = {
+interface RankingRow {
   rank: number;
   name: string;
   price: number;
@@ -23,7 +23,8 @@ type RankingRow = {
   financialScore: number;
   passed: boolean;
   details: any[];
-};
+  evaluatedPrice: number;
+}
 
 const BERWorkflow: React.FC = () => {
   const { solId } = useParams<{ solId: string }>();
@@ -48,12 +49,6 @@ const BERWorkflow: React.FC = () => {
     enabled: !!solId,
   });
 
-  const { data: passedBidsData } = useQuery({
-    queryKey: ['passed-tech-bids-ber', solId],
-    queryFn: () => evaluationsApi.listPassedTechBids(solId!),
-    enabled: !!solId,
-  });
-
   const { data: berListData, isLoading: berLoading } = useQuery({
     queryKey: ['ber-for-solicitation', solId],
     queryFn: () => evaluationsApi.listBERs({ solicitation: solId, page_size: 10 }),
@@ -64,7 +59,63 @@ const BERWorkflow: React.FC = () => {
   const primaryCommittee = committees[0];
   const currentBer = berListData?.results?.[0] || null;
   const reportContent = currentBer?.report_content || {};
-  const passedBids = passedBidsData?.bids || [];
+  const isChair = primaryCommittee?.chairperson === user?.id;
+
+  const { data: passedBidsData } = useQuery({
+    queryKey: ['passed-tech-bids-ber', solId],
+    queryFn: () => evaluationsApi.listPassedTechBids(solId!),
+    enabled: !!solId && !currentBer && !!isChair,
+  });
+
+  const { data: qcbsData } = useQuery({
+    queryKey: ['qcbs-ber', solId],
+    queryFn: () => evaluationsApi.calculateQCBS(solId!),
+    enabled: !!solId && !currentBer && !!isChair,
+  });
+
+  const passedBids = useMemo<any[]>(() => {
+    if (currentBer && reportContent?.technical_evaluation) {
+      return (reportContent.technical_evaluation as any[]).map((te: any) => ({
+        bid_id: te.submission_id,
+        submission_id: te.submission_id,
+        bidder_name: te.bidder_name,
+        evaluated_price: te.evaluated_price,
+        overall_technical_score: te.overall_technical_score,
+        financial_score: te.financial_score,
+        passed: true,
+        original_price: te.evaluated_price,
+        bid_price: te.evaluated_price,
+        preference_category: te.preference_applied,
+        details: te.criterion_details || [],
+      }));
+    }
+    return passedBidsData?.bids || [];
+  }, [currentBer, reportContent, passedBidsData]);
+
+  const qcbsBids = useMemo(() => {
+    if (currentBer && reportContent?.technical_evaluation) {
+      return (reportContent.technical_evaluation as any[]).map((te: any) => ({
+        bid_id: te.submission_id,
+        submission_id: te.submission_id,
+        combined_total_score: te.combined_total_score,
+        rank: te.rank,
+        financial_score: te.financial_score,
+      }));
+    }
+    return qcbsData?.results || [];
+  }, [currentBer, reportContent, qcbsData]);
+
+  const qcbsMap = useMemo(() => {
+    const map = new Map<string, { combined_score: number; rank: number; financial_score: number }>();
+    (Array.isArray(qcbsBids) ? qcbsBids : []).forEach((entry: any) => {
+      map.set(entry.bid_id || entry.submission_id, {
+        combined_score: entry.combined_total_score || entry.total_score || 0,
+        rank: entry.rank || 999,
+        financial_score: entry.financial_score || 0,
+      });
+    });
+    return map;
+  }, [qcbsBids]);
 
   const committeeMembers = useMemo(() => {
     const memberMap = new Map<string, { id: string; name: string; role: string }>();
@@ -87,30 +138,43 @@ const BERWorkflow: React.FC = () => {
 
   const rankingRows = useMemo<RankingRow[]>(() => {
     return passedBids
-      .map((bid: any) => ({
-        rank: bid.passed ? (bid.overall_technical_score || 0) > 70 ? 1 : 999 : 999,
-        name: bid.bidder_name || bid.vendor_name || bid.submission_id || 'Unknown',
-        price: bid.original_price || bid.bid_price || 0,
-        ceec: bid.preference_category || 'non_citizen',
-        combinedScore: 0,
-        technicalScore: bid.overall_technical_score || 0,
-        financialScore: bid.financial_score || 0,
-        passed: bid.passed,
-        details: bid.details || [],
-      }))
+      .map((bid: any) => {
+        const bidId = bid.bid_id || bid.submission_id || '';
+        const qcbs = qcbsMap.get(bidId);
+        return {
+          rank: qcbs?.rank || 999,
+          name: bid.bidder_name || bid.vendor_name || bid.submission_id || 'Unknown',
+          price: bid.original_price || bid.bid_price || 0,
+          ceec: bid.preference_category || 'non_citizen',
+          combinedScore: qcbs?.combined_score || 0,
+          technicalScore: bid.overall_technical_score || 0,
+          financialScore: qcbs?.financial_score || bid.financial_score || 0,
+          passed: bid.passed,
+          details: bid.details || [],
+          evaluatedPrice: bid.evaluated_price || 0,
+        };
+      })
       .sort((a: RankingRow, b: RankingRow) => {
         if (a.passed !== b.passed) return a.passed ? -1 : 1;
-        return b.technicalScore - a.technicalScore;
+        return (a.rank || 999) - (b.rank || 999);
       })
-      .map((row: RankingRow, idx: number) => ({ ...row, rank: idx + 1 }));
-  }, [passedBids]);
+      .map((row: RankingRow, idx: number) => ({ ...row, displayRank: idx + 1 }));
+  }, [passedBids, qcbsMap]);
 
   const winner = useMemo(() => {
     const winnerBid = passedBids.find((b: any) => b.passed);
+    const bidId = winnerBid?.bid_id || winnerBid?.submission_id || '';
+    const qcbs = qcbsMap.get(bidId);
     return winnerBid
-      ? { name: winnerBid.bidder_name || winnerBid.vendor_name || '', price: winnerBid.original_price || 0 }
+      ? {
+          name: winnerBid.bidder_name || winnerBid.vendor_name || '',
+          price: qcbs?.combined_score
+            ? winnerBid.evaluated_price || winnerBid.original_price || 0
+            : winnerBid.original_price || 0,
+          combinedScore: qcbs?.combined_score || 0,
+        }
       : null;
-  }, [passedBids]);
+  }, [passedBids, qcbsMap]);
 
   useEffect(() => {
     if (!currentBer) return;
@@ -161,10 +225,24 @@ const BERWorkflow: React.FC = () => {
 
   const allSigned = committeeMembers.length > 0 && committeeMembers.every((m) => signed[m.id]);
   const userCanSign = committeeMembers.some(m => m.id === user?.id) && !signed[user?.id || ''];
-  const isChair = primaryCommittee?.chairperson === user?.id;
   const isFinalised = berSubmitted || currentBer?.status === 'approved' || currentBer?.status === 'rejected';
 
   const berStatus = currentBer?.status || (berGenerated ? 'draft' : 'pending');
+
+  const statusSteps = [
+    { label: 'Draft', active: berStatus === 'draft' },
+    { label: 'Signatures', active: berStatus === 'draft' && Object.keys(signed).length > 0 },
+    { label: 'All Signed', active: allSigned && !berSubmitted },
+    { label: 'ZPC Submitted', active: berSubmitted },
+  ];
+
+  const getStepIndex = () => {
+    if (berSubmitted) return 4;
+    if (allSigned) return 3;
+    if (Object.keys(signed).length > 0) return 2;
+    if (berStatus === 'draft') return 1;
+    return 0;
+  };
 
   return (
     <div className="max-w-6xl mx-auto space-y-6">
@@ -190,28 +268,24 @@ const BERWorkflow: React.FC = () => {
         )}
       </div>
 
-      {/* Status progress bar */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-5">
         <div className="flex items-center justify-between">
           {['Draft', 'Signatures Pending', 'All Signed', 'ZPC Submitted'].map((step, i) => {
-            let active = false;
-            if (step === 'Draft' && berStatus === 'draft') active = true;
-            if (step === 'Signatures Pending' && berStatus === 'draft' && Object.keys(signed).length > 0) active = true;
-            if (step === 'All Signed' && allSigned && !berSubmitted) active = true;
-            if (step === 'ZPC Submitted' && berSubmitted) active = true;
+            const stepIdx = getStepIndex();
+            const isActive = stepIdx >= i + 1;
+            const isCurrent = stepIdx === i + 1;
 
             return (
               <div key={step} className="flex items-center gap-2">
-                <span className={`w-3 h-3 rounded-full ${active ? 'bg-zammsa-green' : 'bg-gray-300'}`} />
-                <span className={`text-xs font-medium ${active ? 'text-zammsa-green' : 'text-gray-400'}`}>{step}</span>
-                {i < 3 && <span className="text-gray-300 mx-2">─</span>}
+                <span className={`w-3 h-3 rounded-full ${isActive ? 'bg-zammsa-green' : isCurrent ? 'bg-zammsa-green/60' : 'bg-gray-300'}`} />
+                <span className={`text-xs font-medium ${isActive ? 'text-zammsa-green' : 'text-gray-400'}`}>{step}</span>
+                {i < 3 && <span className="text-gray-300 mx-2">-</span>}
               </div>
             );
           })}
         </div>
       </div>
 
-      {/* Section 1: Procurement Details */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
         <h2 className="text-lg font-semibold text-gray-900 mb-4">SECTION 1: Procurement Details</h2>
         <dl className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
@@ -234,7 +308,6 @@ const BERWorkflow: React.FC = () => {
         </dl>
       </div>
 
-      {/* Section 2: Bids Received */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
         <h2 className="text-lg font-semibold text-gray-900 mb-4">SECTION 2: Bids Received</h2>
         <div className="overflow-x-auto">
@@ -257,8 +330,8 @@ const BERWorkflow: React.FC = () => {
                   </td>
                   <td className="px-4 py-2 text-center">
                     {row.passed
-                      ? <span className="text-xs font-medium text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded">✅ Evaluated</span>
-                      : <span className="text-xs font-medium text-red-600 bg-red-50 px-2 py-0.5 rounded">❌ Failed Tech</span>
+                      ? <span className="text-xs font-medium text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded">Evaluated</span>
+                      : <span className="text-xs font-medium text-red-600 bg-red-50 px-2 py-0.5 rounded">Failed Tech</span>
                     }
                   </td>
                 </tr>
@@ -273,35 +346,40 @@ const BERWorkflow: React.FC = () => {
         </div>
       </div>
 
-      {/* Section 3: Evaluation Summary */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
-        <h2 className="text-lg font-semibold text-gray-900 mb-4">SECTION 3: Evaluation Summary</h2>
+        <h2 className="text-lg font-semibold text-gray-900 mb-4">SECTION 3: Evaluation Summary (QCBS)</h2>
         <div className="overflow-x-auto">
           <table className="min-w-full divide-y divide-gray-200 text-sm">
             <thead className="bg-gray-50">
               <tr>
-                <th className="px-4 py-2 text-left font-medium text-gray-500">#</th>
+                <th className="px-4 py-2 text-left font-medium text-gray-500">Rank</th>
                 <th className="px-4 py-2 text-left font-medium text-gray-500">Bidder</th>
-                <th className="px-4 py-2 text-center font-medium text-gray-500">QCBS Score</th>
-                <th className="px-4 py-2 text-center font-medium text-gray-500">Rank</th>
+                <th className="px-4 py-2 text-center font-medium text-gray-500">Technical</th>
+                <th className="px-4 py-2 text-center font-medium text-gray-500">Financial</th>
+                <th className="px-4 py-2 text-center font-medium text-gray-500">QCBS Combined</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
               {rankingRows.filter(r => r.passed).map((row, i) => (
                 <tr key={i} className={i === 0 ? 'bg-emerald-50' : 'hover:bg-gray-50'}>
-                  <td className="px-4 py-2 text-gray-500">{i + 1}</td>
-                  <td className="px-4 py-2 font-medium text-gray-900">{row.name}</td>
-                  <td className="px-4 py-2 text-center font-mono font-bold text-zammsa-green">
-                    {row.technicalScore.toFixed(2)}
+                  <td className="px-4 py-2 text-center font-bold">
+                    {i === 0 ? (
+                      <span className="bg-emerald-600 text-white text-xs px-2 py-0.5 rounded-full">1st</span>
+                    ) : (
+                      <span className="text-gray-500">{i + 1}</span>
+                    )}
                   </td>
-                  <td className="px-4 py-2 text-center">
-                    {i === 0 ? <span className="text-lg">🏆 1st</span> : <span className="text-gray-500">{i + 1}nd</span>}
+                  <td className="px-4 py-2 font-medium text-gray-900">{row.name}</td>
+                  <td className="px-4 py-2 text-center font-mono">{row.technicalScore.toFixed(2)}</td>
+                  <td className="px-4 py-2 text-center font-mono">{row.financialScore.toFixed(2)}</td>
+                  <td className="px-4 py-2 text-center font-mono font-bold text-zammsa-green">
+                    {row.combinedScore > 0 ? row.combinedScore.toFixed(2) : '-'}
                   </td>
                 </tr>
               ))}
               {rankingRows.filter(r => r.passed).length === 0 && (
                 <tr>
-                  <td colSpan={4} className="px-4 py-6 text-center text-sm text-gray-400">No passing bids</td>
+                  <td colSpan={5} className="px-4 py-6 text-center text-sm text-gray-400">No passing bids</td>
                 </tr>
               )}
             </tbody>
@@ -309,7 +387,6 @@ const BERWorkflow: React.FC = () => {
         </div>
       </div>
 
-      {/* Section 4: Recommendation */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
         <h2 className="text-lg font-semibold text-gray-900 mb-4">SECTION 4: Recommendation</h2>
         {winner ? (
@@ -324,8 +401,8 @@ const BERWorkflow: React.FC = () => {
                 <dd className="font-semibold text-blue-900 mt-0.5">ZMW {Number(winner.price).toLocaleString()}</dd>
               </div>
               <div>
-                <dt className="text-xs text-blue-500">Justification</dt>
-                <dd className="font-semibold text-blue-900 mt-0.5">Highest QCBS combined score</dd>
+                <dt className="text-xs text-blue-500">QCBS Combined Score</dt>
+                <dd className="font-semibold text-blue-900 mt-0.5">{winner.combinedScore > 0 ? winner.combinedScore.toFixed(2) : 'N/A'}</dd>
               </div>
             </dl>
           </div>
@@ -334,7 +411,6 @@ const BERWorkflow: React.FC = () => {
         )}
       </div>
 
-      {/* Section 5: Digital Signatures */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
         <h2 className="text-lg font-semibold text-gray-900 mb-4">SECTION 5: Digital Signatures</h2>
         <p className="text-xs text-gray-500 mb-4">All committee members must sign before ZPC submission</p>
@@ -360,7 +436,7 @@ const BERWorkflow: React.FC = () => {
                       </span>
                     ) : (
                       <span className="inline-flex items-center gap-1 text-xs font-medium text-amber-600 bg-amber-50 px-2.5 py-1 rounded-full">
-                        ⏳ Pending
+                        Pending
                       </span>
                     )}
                   </td>
@@ -400,19 +476,48 @@ const BERWorkflow: React.FC = () => {
       </div>
 
       {berGenerated && (
-        <div className="flex gap-3">
+        <div className="flex gap-3 flex-wrap">
           <button
             onClick={() => navigate(`/evaluations/${solId}/financial`)}
             className="px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg text-sm"
           >
-            ← Back to Financial
+            Back to Financial
+          </button>
+          <button
+            onClick={() => {
+              if (!berId) return;
+              evaluationsApi.downloadBER(berId).then((blob: Blob) => {
+                const url = window.URL.createObjectURL(blob);
+                window.open(url, '_blank');
+                setTimeout(() => window.URL.revokeObjectURL(url), 60000);
+              }).catch(() => toast.error('Failed to load BER'));
+            }}
+            className="px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg text-sm flex items-center gap-2"
+          >
+            <EyeIcon className="w-4 h-4" /> View BER
+          </button>
+          <button
+            onClick={() => {
+              if (!berId) return;
+              evaluationsApi.downloadBER(berId).then((blob: Blob) => {
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `BER-${solId?.slice(0, 8)}.pdf`;
+                a.click();
+                window.URL.revokeObjectURL(url);
+              }).catch(() => toast.error('Failed to download BER'));
+            }}
+            className="px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg text-sm flex items-center gap-2"
+          >
+            <DownloadIcon className="w-4 h-4" /> Download PDF
           </button>
           {currentBer?.status === 'approved' && (
             <button
-              onClick={() => navigate(`/contracts/award-notices`)}
+              onClick={() => navigate(`/contracts/generate?ber_id=${berId}&sol_id=${solId}`)}
               className="px-6 py-3 bg-emerald-600 text-white rounded-xl text-sm font-bold"
             >
-              Go to Contract Award
+              Generate Contract
             </button>
           )}
         </div>
@@ -423,8 +528,7 @@ const BERWorkflow: React.FC = () => {
           <CheckCircleIcon className="w-12 h-12 text-emerald-500 mx-auto mb-3" />
           <h2 className="text-xl font-bold text-emerald-800 mb-1">BER Approved</h2>
           <p className="text-sm text-emerald-700">
-            BER status: ZPC Approved. Award Notice ready to publish.
-            The evaluation phase is complete.
+            BER status: ZPC Approved. Proceed to contract generation.
           </p>
         </div>
       )}

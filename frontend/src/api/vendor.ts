@@ -74,6 +74,8 @@ export const vendorApi = {
       api.get<Contract>(`/contracts/${id}/`).then((r) => r.data),
     sign: (id: string) =>
       api.post<any>(`/contracts/${id}/sign-supplier/`).then((r) => r.data),
+    uploadSecurity: (id: string, data: { security_type?: string; amount: number; issuing_bank: string; reference_number?: string; expiry_date?: string }) =>
+      api.post<any>(`/contracts/${id}/upload-security/`, data).then((r) => r.data),
   },
 
   invoices: {

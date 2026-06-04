@@ -13,6 +13,14 @@ import {
   ShieldCheckIcon, ExclamationIcon, CheckCircleIcon, ClockIcon,
 } from '@heroicons/react/outline';
 
+interface PerformanceBond {
+  amount: string | null;
+  expiry_date: string | null;
+  status: string;
+  issuing_bank: string;
+  reference_number: string;
+}
+
 const PerformanceSecurity: React.FC = () => {
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
@@ -25,31 +33,43 @@ const PerformanceSecurity: React.FC = () => {
 
   const contracts = data?.results || [];
 
-  const required = contracts.filter((c: any) => c.performance_bond_required && !c.performance_bond_amount).length;
-  const uploaded = contracts.filter((c: any) => c.performance_bond_required && c.performance_bond_amount && c.status === 'active').length;
+  // Use correct model fields: performance_security_required, performance_security_uploaded
+  // Bond amount/expiry come from the nested performance_bond computed field
+  const required = contracts.filter((c: any) => c.performance_security_required && !c.performance_security_uploaded).length;
+  const uploaded = contracts.filter((c: any) => c.performance_security_uploaded && c.performance_security_validated && c.status === 'active').length;
   const expiring = contracts.filter((c: any) => {
-    if (!c.performance_bond_expiry) return false;
-    const daysLeft = Math.ceil((new Date(c.performance_bond_expiry).getTime() - Date.now()) / (1000 * 60 * 60 * 24));
+    const bond: PerformanceBond | null = c.performance_bond;
+    if (!bond?.expiry_date) return false;
+    const daysLeft = Math.ceil((new Date(bond.expiry_date).getTime() - Date.now()) / (1000 * 60 * 60 * 24));
     return daysLeft > 0 && daysLeft <= 30;
   }).length;
   const expired = contracts.filter((c: any) => {
-    if (!c.performance_bond_expiry) return false;
-    return new Date(c.performance_bond_expiry) < new Date();
+    const bond: PerformanceBond | null = c.performance_bond;
+    if (!bond?.expiry_date) return false;
+    return new Date(bond.expiry_date) < new Date();
   }).length;
 
   const columns = [
     { key: 'contract_number', label: 'Contract', render: (v: string) => <span className="font-medium">{v || '---'}</span> },
     { key: 'title', label: 'Title', render: (v: string) => <span className="text-gray-600 truncate max-w-[180px] block">{v || '-'}</span> },
     { key: 'vendor_name', label: 'Supplier', render: (v: string) => v || '-' },
-    { key: 'performance_bond_amount', label: 'Bond Amount', render: (v: number, row: any) => (
-      <span>{v ? `K ${v.toLocaleString()}` : row.performance_bond_required ? <span className="text-amber-600 text-xs">Required</span> : <span className="text-gray-400">N/A</span>}</span>
-    )},
-    { key: 'performance_bond_expiry', label: 'Expiry', render: (v: string) => {
-      if (!v) return <span className="text-gray-400">-</span>;
-      const days = Math.ceil((new Date(v).getTime() - Date.now()) / (1000 * 60 * 60 * 24));
+    { key: 'performance_bond', label: 'Bond Amount', render: (_v: any, row: any) => {
+      const bond: PerformanceBond | null = row.performance_bond;
+      if (bond?.amount) {
+        return <span>K {parseFloat(bond.amount).toLocaleString()}</span>;
+      }
+      if (row.performance_security_required) {
+        return <span className="text-amber-600 text-xs">Required</span>;
+      }
+      return <span className="text-gray-400">N/A</span>;
+    }},
+    { key: 'performance_bond_expiry', label: 'Expiry', render: (_v: any, row: any) => {
+      const bond: PerformanceBond | null = row.performance_bond;
+      if (!bond?.expiry_date) return <span className="text-gray-400">-</span>;
+      const days = Math.ceil((new Date(bond.expiry_date).getTime() - Date.now()) / (1000 * 60 * 60 * 24));
       return (
         <span className={days <= 0 ? 'text-rose-600 font-medium' : days <= 30 ? 'text-amber-600 font-medium' : ''}>
-          {new Date(v).toLocaleDateString()} {days <= 0 ? '(Expired)' : days <= 30 ? `(${days}d)` : ''}
+          {new Date(bond.expiry_date).toLocaleDateString()} {days <= 0 ? '(Expired)' : days <= 30 ? `(${days}d)` : ''}
         </span>
       );
     }},

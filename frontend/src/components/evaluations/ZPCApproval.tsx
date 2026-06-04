@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { evaluationsApi } from '../../api/evaluations';
 import { DataTable } from '../common/DataTable';
@@ -15,6 +16,7 @@ import {
 
 const ZPCApproval: React.FC = () => {
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
   const { user } = useAuth();
 
   const [actionModal, setActionModal] = useState<{ berId: string; action: 'approve' | 'reject' } | null>(null);
@@ -23,22 +25,25 @@ const ZPCApproval: React.FC = () => {
 
   const { data: bers, isLoading } = useQuery({
     queryKey: ['zpc-ber-list'],
-    queryFn: () => evaluationsApi.listBERs({ status: 'submitted' }),
-  });
-
-  const { data: allBers } = useQuery({
-    queryKey: ['all-ber-list'],
     queryFn: () => evaluationsApi.listBERs({ page_size: 100 }),
   });
 
   const approveMutation = useMutation({
     mutationFn: (reportId: string) => evaluationsApi.approveBER(reportId, { comment }),
-    onSuccess: () => {
+    onSuccess: (data: any) => {
       toast.success('BER approved');
       queryClient.invalidateQueries({ queryKey: ['zpc-ber-list'] });
       setActionModal(null);
       setComment('');
       setReviewPanel(null);
+      const isProcurementRole = user?.role === 'procurement_officer' || user?.role === 'procurement_manager' || user?.role === 'director_procurement';
+      if (isProcurementRole) {
+        const berId = data?.ber_id || data?.id;
+        const solId = data?.solicitation_id || data?.solicitation;
+        if (berId && solId) {
+          navigate(`/contracts/generate?ber_id=${berId}&sol_id=${solId}`);
+        }
+      }
     },
     onError: () => toast.error('Failed to approve BER'),
   });
@@ -57,9 +62,9 @@ const ZPCApproval: React.FC = () => {
   });
 
   const pending = (bers?.results || []).filter((b: any) => b.status === 'submitted').length;
-  const approved = (allBers?.results || []).filter((b: any) => b.status === 'approved').length;
-  const rejected = (allBers?.results || []).filter((b: any) => b.status === 'rejected').length;
-  const total = allBers?.count || 0;
+  const approved = (bers?.results || []).filter((b: any) => b.status === 'approved').length;
+  const rejected = (bers?.results || []).filter((b: any) => b.status === 'rejected').length;
+  const total = bers?.count || 0;
 
   const columns = [
     { key: 'id', label: 'BER Ref', render: (_: any, row: any) => (
@@ -124,7 +129,7 @@ const ZPCApproval: React.FC = () => {
       {/* BER Queue */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-100">
         <div className="border-b border-gray-100 px-4 py-3">
-          <h2 className="text-lg font-semibold text-gray-900">BERs Awaiting ZPC Approval</h2>
+          <h2 className="text-lg font-semibold text-gray-900">Bid Evaluation Reports</h2>
         </div>
         {isLoading ? <LoadingSpinner className="py-12" /> : (
           <DataTable columns={columns} data={bers?.results || []} onRowClick={(row) => setReviewPanel(row)} />
@@ -132,8 +137,8 @@ const ZPCApproval: React.FC = () => {
         {(!bers?.results?.length) && !isLoading && (
           <div className="py-12 text-center text-gray-400">
             <CheckCircleIcon className="w-12 h-12 mx-auto mb-2" />
-            <p className="font-medium">No BERs pending approval</p>
-            <p className="text-sm mt-1">All evaluation reports have been reviewed</p>
+            <p className="font-medium">No Bid Evaluation Reports found</p>
+            <p className="text-sm mt-1">BERs will appear here once they are generated and submitted</p>
           </div>
         )}
       </div>
@@ -206,17 +211,31 @@ const ZPCApproval: React.FC = () => {
               </div>
 
               <div className="flex gap-2 mt-4">
-                <button className="px-4 py-2 bg-zammsa-green text-white rounded-lg text-xs font-bold">
+                <button
+                  onClick={() => {
+                    if (!reviewPanel.id) return;
+                    evaluationsApi.downloadBER(reviewPanel.id).then((blob: Blob) => {
+                      const url = window.URL.createObjectURL(blob);
+                      window.open(url, '_blank');
+                      setTimeout(() => window.URL.revokeObjectURL(url), 60000);
+                    }).catch(() => toast.error('Failed to load BER PDF'));
+                  }}
+                  className="px-4 py-2 bg-zammsa-green text-white rounded-lg text-xs font-bold"
+                >
                   View Full BER PDF
                 </button>
-                <button onClick={() => setActionModal({ berId: reviewPanel.id, action: 'approve' })}
-                  className="px-4 py-2 bg-emerald-500 text-white rounded-lg text-xs font-bold">
-                  Approve BER
-                </button>
-                <button onClick={() => setActionModal({ berId: reviewPanel.id, action: 'reject' })}
-                  className="px-4 py-2 bg-rose-500 text-white rounded-lg text-xs font-bold">
-                  Reject BER
-                </button>
+                {reviewPanel.status === 'submitted' && (
+                  <>
+                    <button onClick={() => setActionModal({ berId: reviewPanel.id, action: 'approve' })}
+                      className="px-4 py-2 bg-emerald-500 text-white rounded-lg text-xs font-bold">
+                      Approve BER
+                    </button>
+                    <button onClick={() => setActionModal({ berId: reviewPanel.id, action: 'reject' })}
+                      className="px-4 py-2 bg-rose-500 text-white rounded-lg text-xs font-bold">
+                      Reject BER
+                    </button>
+                  </>
+                )}
                 <button onClick={() => setReviewPanel(null)}
                   className="px-4 py-2 border border-gray-300 rounded-lg text-xs font-medium text-gray-700">
                   Close

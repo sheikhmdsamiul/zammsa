@@ -472,7 +472,17 @@ const EvaluationDashboard: React.FC = () => {
                         ) : a.status === 'scoring' ? (
                           <button onClick={() => navigate(`/evaluations/${a.id}/scoring`)} className="px-3 py-1 text-xs font-medium text-zammsa-green bg-zammsa-green/5 border border-zammsa-green/20 rounded-lg hover:bg-zammsa-green/10">Score Bids</button>
                         ) : (
-                          <span className="text-xs text-gray-400">—</span>
+                          <div className="flex gap-2 justify-end">
+                            <span className="text-xs text-gray-400">—</span>
+                          </div>
+                        )}
+                        {a.solicitation_id && (
+                          <button
+                            onClick={() => navigate(`/evaluations/ber/${a.solicitation_id}`)}
+                            className="px-3 py-1 text-xs font-medium text-purple-700 bg-purple-50 border border-purple-200 rounded-lg hover:bg-purple-100"
+                          >
+                            View BER
+                          </button>
                         )}
                       </td>
                     </tr>

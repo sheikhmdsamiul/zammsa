@@ -373,7 +373,9 @@ def contract_closure_checklist_view(request, pk):
 
     for field in ['all_deliverables_received', 'final_inspection_passed', 'all_payments_processed',
                   'performance_security_released', 'snagging_items_resolved', 'staff_warranty_training_done',
-                  'as_built_docs_received']:
+                  'as_built_docs_received', 'acceptance_certificate_issued', 'liquidated_damages_deducted',
+                  'retention_released', 'no_outstanding_disputes', 'no_pending_amendments',
+                  'supplier_evaluation_completed', 'all_docs_saved']:
         val = request.data.get(field)
         if val is not None:
             setattr(checklist, field, val)

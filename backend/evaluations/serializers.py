@@ -112,6 +112,8 @@ class BidEvaluationReportSerializer(serializers.ModelSerializer):
     id = serializers.UUIDField(source='ber_id', read_only=True)
     approved_by_name = serializers.CharField(source='approved_by.full_name', read_only=True, allow_null=True)
     created_by_name = serializers.CharField(source='created_by.full_name', read_only=True, allow_null=True)
+    solicitation_title = serializers.CharField(source='solicitation.title', read_only=True, default='')
+    solicitation_number = serializers.CharField(source='solicitation.sol_number', read_only=True, default='')
     all_signed = serializers.SerializerMethodField()
     signed_count = serializers.SerializerMethodField()
     required_count = serializers.SerializerMethodField()
@@ -119,7 +121,7 @@ class BidEvaluationReportSerializer(serializers.ModelSerializer):
     class Meta:
         model = BidEvaluationReport
         fields = '__all__'
-        read_only_fields = ('ber_id', 'created_at', 'updated_at', 'approved_at')
+        read_only_fields = ('ber_id', 'created_at', 'updated_at', 'approved_at', 'submitted_at')
 
     def get_all_signed(self, obj):
         return obj.has_all_signed()

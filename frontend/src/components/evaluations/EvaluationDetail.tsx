@@ -94,18 +94,20 @@ const EvaluationDetail: React.FC = () => {
           {isChairperson && (
             <>
               <button onClick={() => setView('financial')} className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${view === 'financial' ? 'bg-zammsa-green text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>Financial Evaluation</button>
-              <button onClick={() => setView('ber')} className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${view === 'ber' ? 'bg-zammsa-green text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>BER & Approval</button>
             </>
           )}
+          <button onClick={() => setView('ber')} className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${view === 'ber' ? 'bg-zammsa-green text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>BER & Approval</button>
           <div className="ml-auto flex gap-2">
             {isChairperson && (
               <>
                 <button onClick={() => navigate(`/evaluations/preliminary/${committee.solicitation}`)} className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-bold">Preliminary Exam</button>
                 <button onClick={() => navigate(`/evaluations/${id}/scoring`)} className="px-4 py-2 bg-zammsa-green text-white rounded-lg text-sm font-bold">Score Bids</button>
                 <button onClick={() => navigate(`/evaluations/${committee.solicitation}/financial`)} className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-bold">Financial Eval</button>
-                <button onClick={() => navigate(`/evaluations/ber/${committee.solicitation}`)} className="px-4 py-2 bg-purple-600 text-white rounded-lg text-sm font-bold">Generate BER</button>
               </>
             )}
+            <button onClick={() => navigate(`/evaluations/ber/${committee.solicitation}`)} className="px-4 py-2 bg-purple-600 text-white rounded-lg text-sm font-bold">
+              {isChairperson ? 'Generate BER' : 'View BER'}
+            </button>
           </div>
         </div>
       </div>

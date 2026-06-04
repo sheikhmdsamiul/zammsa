@@ -1,3 +1,4 @@
+// DEPRECATED: This component is not routed in App.tsx. Use InvoiceApproval.tsx instead.
 import React, { useState, useEffect } from 'react';
 import { financeApi } from '../../api/finance';
 import { LoadingSpinner } from '../common/LoadingSpinner';
@@ -17,6 +18,8 @@ interface QueueItem {
 const ApprovalQueue: React.FC = () => {
   const [queue, setQueue] = useState<QueueItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [rejectModal, setRejectModal] = useState<{ open: boolean; id: string }>({ open: false, id: '' });
+  const [rejectReason, setRejectReason] = useState('');
 
   useEffect(() => {
     const loadQueue = async () => {
@@ -54,13 +57,22 @@ const ApprovalQueue: React.FC = () => {
     }
   };
 
-  const handleReject = async (id: string) => {
-    const reason = prompt('Rejection reason:');
-    if (!reason) return;
+  const openRejectModal = (id: string) => {
+    setRejectReason('');
+    setRejectModal({ open: true, id });
+  };
+
+  const handleReject = async () => {
+    if (!rejectReason.trim()) {
+      toast.error('Please provide a rejection reason');
+      return;
+    }
     try {
-      await financeApi.rejectInvoice(id, reason);
+      await financeApi.rejectInvoice(rejectModal.id, rejectReason.trim());
       toast.success('Invoice rejected');
-      setQueue(prev => prev.filter(item => item.id !== id));
+      setQueue(prev => prev.filter(item => item.id !== rejectModal.id));
+      setRejectModal({ open: false, id: '' });
+      setRejectReason('');
     } catch {
       toast.error('Failed to reject invoice');
     }
@@ -127,7 +139,7 @@ const ApprovalQueue: React.FC = () => {
                         ✓ Approve
                       </button>
                       <button
-                        onClick={() => handleReject(item.id)}
+                        onClick={() => openRejectModal(item.id)}
                         className="inline-flex items-center gap-1 px-4 py-1.5 bg-rose-50 text-rose-700 text-xs font-bold rounded-lg hover:bg-rose-100 border border-rose-200"
                       >
                         ✕ Reject
@@ -140,6 +152,41 @@ const ApprovalQueue: React.FC = () => {
           </table>
         </div>
       </div>
+
+      {/* Reject Reason Modal */}
+      {rejectModal.open && (
+        <div className="fixed inset-0 z-50 overflow-y-auto">
+          <div className="flex items-center justify-center min-h-screen px-4">
+            <div className="fixed inset-0 bg-black bg-opacity-40 transition-opacity" onClick={() => setRejectModal({ open: false, id: '' })} />
+            <div className="relative bg-white rounded-2xl shadow-xl max-w-md w-full p-6 z-10">
+              <h3 className="text-lg font-bold text-gray-900 mb-2">Reject Invoice</h3>
+              <p className="text-sm text-gray-500 mb-4">Provide a reason for rejecting this invoice.</p>
+              <textarea
+                value={rejectReason}
+                onChange={(e) => setRejectReason(e.target.value)}
+                rows={4}
+                className="w-full border border-gray-300 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-rose-500 focus:border-rose-500 outline-none"
+                placeholder="Enter rejection reason..."
+              />
+              <div className="flex justify-end gap-3 mt-6">
+                <button
+                  onClick={() => setRejectModal({ open: false, id: '' })}
+                  className="px-5 py-2.5 text-sm font-semibold text-gray-700 bg-gray-100 rounded-xl hover:bg-gray-200"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleReject}
+                  disabled={!rejectReason.trim()}
+                  className="px-5 py-2.5 text-sm font-semibold text-white bg-rose-600 rounded-xl hover:bg-rose-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Reject Invoice
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

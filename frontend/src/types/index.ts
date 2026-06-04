@@ -325,6 +325,8 @@ export interface PassedTechBid {
   bidder_name: string;
   vendor_name?: string;
   original_price?: number;
+  preference_category?: string;
+  preference_margin?: number;
   overall_technical_score: number;
   passed: boolean;
   financial_evaluation_id: string | null;
@@ -381,7 +383,7 @@ export interface Contract {
   milestones: ContractMilestone[];
   amendments: ContractAmendment[];
   appeals: any[];
-  securities: any[];
+  securities: ContractSecurity[];
   closure_checklists: any[];
   contract_manager: string | null;
   award_date: string | null;
@@ -395,6 +397,7 @@ export interface Contract {
   performance_security_uploaded: boolean;
   performance_security_validated: boolean;
   requires_performance_bond: boolean;
+  performance_bond: PerformanceBond | null;
   archived_at: string | null;
   retention_expiry: string | null;
   legal_hold: boolean;
@@ -402,6 +405,27 @@ export interface Contract {
   updated_at: string;
 }
 
+
+
+export interface ContractSecurity {
+  id?: string;
+  security_id?: string;
+  contract: string;
+  security_type: string;
+  amount: string;
+  issuing_bank: string;
+  reference_number: string;
+  expiry_date: string | null;
+  status: string;
+}
+
+export interface PerformanceBond {
+  amount: string | null;
+  expiry_date: string | null;
+  status: string;
+  issuing_bank: string;
+  reference_number: string;
+}
 export interface ContractMilestone {
   id: string;
   contract: string;
@@ -832,6 +856,96 @@ export interface ContractManagerDashboardData {
   active_contracts: { id: string; title: string; vendor: string; value: number; end_date: string; status: string }[];
   upcoming_milestones: { id: string; contract: string; title: string; due_date: string; days_remaining: number }[];
   alerts: { type: string; message: string; severity: string }[];
+}
+
+export interface ConsolidatedMember {
+  id: string;
+  name: string;
+  role: 'member' | 'chairperson' | 'secretary';
+  submitted: boolean;
+  scores: any[];
+}
+
+export interface ConsolidatedDetail {
+  criterion_id: string;
+  criterion_name: string;
+  average_raw_score: number;
+  weighted_score: number;
+  weight: number;
+  scores_by_evaluator: {
+    evaluator_id: string;
+    evaluator_name: string;
+    raw_score: number;
+    weighted_score: number;
+  }[];
+}
+
+export interface ConsolidatedBid {
+  bidId: string;
+  submissionId: string;
+  bidderName: string;
+  originalPrice: number;
+  preferenceCategory: string;
+  preferenceMargin: number;
+  overallTechnicalScore: number;
+  passed: boolean;
+  financialEvaluationId?: string;
+  evaluatedPrice?: number;
+  financialScore?: number;
+  financialSealed: boolean;
+  details: ConsolidatedDetail[];
+  members: ConsolidatedMember[];
+  allMembersSubmitted: boolean;
+  membersSubmittedCount: number;
+  totalMembers: number;
+}
+
+export interface ConsolidatedScoresResponse {
+  solicitation_id: string;
+  solicitation_number: string;
+  solicitation_title: string;
+  minimum_technical_threshold: number;
+  total_bids: number;
+  passed_bids: number;
+  committees: any[];
+  criteria: EvaluationCriterion[];
+  bids: ConsolidatedBid[];
+}
+
+export interface QCBSResult {
+  bid_id: string;
+  submission_id: string;
+  bidder_name: string;
+  technical_score: number;
+  financial_score: number;
+  total_score: number;
+  rank?: number;
+}
+
+export interface QCBSResponse {
+  message: string;
+  tech_weight: number;
+  fin_weight: number;
+  results: QCBSResult[];
+}
+
+export interface SelectWinnerResponse {
+  message: string;
+  winner_id: string;
+  winner_name: string;
+  solicitation_status: string;
+}
+
+export interface AuthorizeOpeningResponse {
+  message: string;
+  opened_count: number;
+}
+
+export interface PassedTechBidsResponse {
+  solicitation_id: string;
+  threshold: number;
+  bids: PassedTechBid[];
+  winner_name?: string | null;
 }
 
 export interface AuditorDashboardData {

@@ -174,6 +174,7 @@ class BidEvaluationReport(models.Model):
     created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='ber_creators')
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+    submitted_at = models.DateTimeField(null=True, blank=True)
     approved_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:

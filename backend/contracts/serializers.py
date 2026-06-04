@@ -70,10 +70,24 @@ class ContractListSerializer(serializers.ModelSerializer):
     vendor_name = serializers.CharField(source='supplier.name', read_only=True)
     vendor = serializers.CharField(source='supplier.name', read_only=True)
     solicitation_number = serializers.CharField(source='solicitation.sol_number', read_only=True)
+    performance_bond = serializers.SerializerMethodField()
 
     class Meta:
         model = Contract
-        fields = ('id', 'contract_id', 'contract_number', 'title', 'vendor_name', 'vendor', 'contract_type', 'value', 'currency', 'start_date', 'end_date', 'status', 'award_date', 'created_at', 'solicitation_number', 'vendor')
+        fields = ('id', 'contract_id', 'contract_number', 'title', 'vendor_name', 'vendor', 'contract_type', 'value', 'currency', 'start_date', 'end_date', 'status', 'award_date', 'created_at', 'solicitation_number', 'vendor', 'performance_security_required', 'performance_security_uploaded', 'performance_security_validated', 'performance_bond')
+
+    def get_performance_bond(self, obj):
+        perf_securities = [s for s in obj.securities.all() if s.security_type == 'performance']
+        if perf_securities:
+            s = perf_securities[0]
+            return {
+                'amount': str(s.amount),
+                'expiry_date': s.expiry_date.isoformat() if s.expiry_date else None,
+                'status': s.status,
+                'issuing_bank': s.issuing_bank,
+                'reference_number': s.reference_number,
+            }
+        return None
 
 
 class ContractSerializer(serializers.ModelSerializer):

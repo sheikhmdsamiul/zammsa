@@ -1,9 +1,17 @@
 import api from './client';
-import { EvaluationCommittee, PaginatedResponse, ConflictOfInterest, CommitteeCOIState, MyScoresResponse, ScoreAverageResult, ScoreThresholdResult, PassedTechBid, CombinedScoreResult } from '../types';
+import {
+  EvaluationCommittee, PaginatedResponse, ConflictOfInterest, CommitteeCOIState,
+  MyScoresResponse, ScoreAverageResult, ScoreThresholdResult, PassedTechBid,
+  CombinedScoreResult, ConsolidatedScoresResponse, QCBSResponse,
+  SelectWinnerResponse, AuthorizeOpeningResponse, PassedTechBidsResponse,
+} from '../types';
 
 export const evaluationsApi = {
   list: (params?: Record<string, any>) =>
     api.get<PaginatedResponse<any>>('/evaluations/technical-scores/', { params }).then((r) => r.data),
+
+  getConsolidatedScores: (solicitationId: string) =>
+    api.get<ConsolidatedScoresResponse>(`/evaluations/consolidation/${solicitationId}/`).then((r) => r.data),
 
   get: (id: string) =>
     api.get<any>(`/evaluations/technical-scores/${id}/`).then((r) => r.data),
@@ -47,10 +55,10 @@ export const evaluationsApi = {
     api.post<ScoreThresholdResult>(`/evaluations/technical-scores/threshold-check/${bidId}/`, { threshold: threshold || 70 }).then((r) => r.data),
 
   authorizeFinancialOpening: (solicitationId: string) =>
-    api.post<{ message: string; opened_count: number }>(`/evaluations/financial/authorize-open/${solicitationId}/`).then((r) => r.data),
+    api.post<AuthorizeOpeningResponse>(`/evaluations/financial/authorize-open/${solicitationId}/`).then((r) => r.data),
 
   listPassedTechBids: (solicitationId: string, threshold?: number) =>
-    api.get<{ solicitation_id: string; threshold: number; bids: PassedTechBid[] }>(`/evaluations/financial/passed-bids/${solicitationId}/`, { params: { threshold: threshold || 70 } }).then((r) => r.data),
+    api.get<PassedTechBidsResponse>(`/evaluations/financial/passed-bids/${solicitationId}/`, { params: { threshold: threshold || 70 } }).then((r) => r.data),
 
   calculateFinancial: (bidId: string, data: {
     original_price: number; corrected_price?: number; source_currency?: string;
@@ -59,10 +67,10 @@ export const evaluationsApi = {
   }) => api.post(`/evaluations/financial/calculate/${bidId}/`, data).then((r) => r.data),
 
   calculateQCBS: (solicitationId: string) =>
-    api.post<{ message: string; tech_weight: number; fin_weight: number; results: CombinedScoreResult[] }>(`/evaluations/qcbs/${solicitationId}/`).then((r) => r.data),
+    api.post<QCBSResponse>(`/evaluations/qcbs/${solicitationId}/`).then((r) => r.data),
 
   selectWinner: (solicitationId: string, bidId: string) =>
-    api.post<{ message: string; winner_id: string; winner_name: string; solicitation_status: string }>(`/evaluations/award/${solicitationId}/`, { bid_id: bidId }).then((r) => r.data),
+    api.post<SelectWinnerResponse>(`/evaluations/award/${solicitationId}/`, { bid_id: bidId }).then((r) => r.data),
 
   openFinancialEnvelopes: (solicitationId: string) =>
     api.post(`/evaluations/financial/`, { solicitation: solicitationId }).then((r) => r.data),
@@ -86,11 +94,14 @@ export const evaluationsApi = {
     api.post<any>(`/evaluations/reports/${reportId}/reject/`, data).then((r) => r.data),
 
   downloadBER: (reportId: string) =>
-    api.get(`/evaluations/reports/${reportId}/`, { responseType: 'blob' }),
+    api.get(`/evaluations/reports/${reportId}/pdf/?format=pdf`, { responseType: 'blob' }).then((r) => r.data),
 
   listPostQuals: (params?: Record<string, any>) =>
     api.get<PaginatedResponse<any>>('/evaluations/post-qualifications/', { params }).then((r) => r.data),
 
   listBERs: (params?: Record<string, any>) =>
     api.get<PaginatedResponse<any>>('/evaluations/reports/', { params }).then((r) => r.data),
+
+  getBER: (reportId: string) =>
+    api.get<any>(`/evaluations/reports/${reportId}/`).then((r) => r.data),
 };

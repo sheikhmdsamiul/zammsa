@@ -81,6 +81,7 @@ const PostQualification = React.lazy(() => import('./components/evaluations/Post
 const ZPCApproval = React.lazy(() => import('./components/evaluations/ZPCApproval'));
 
 const ContractsList = React.lazy(() => import('./components/contracts/ContractsList'));
+// DEPRECATED: Direct creation route now redirects to ContractGeneration
 const ContractCreate = React.lazy(() => import('./components/contracts/ContractCreate'));
 const ContractDetail = React.lazy(() => import('./components/contracts/ContractDetail'));
 const ContractGeneration = React.lazy(() => import('./components/contracts/ContractGeneration'));
@@ -328,11 +329,11 @@ function App() {
                   } />
                   <Route path="contracts/create" element={
                     <ProtectedRoute roles={[ROLES.PROCUREMENT_OFFICER, ROLES.SYSTEM_ADMIN]}>
-                      <ContractCreate />
+                      <ContractGeneration />
                     </ProtectedRoute>
                   } />
                   <Route path="contracts/generate" element={
-                    <ProtectedRoute roles={[ROLES.PROCUREMENT_OFFICER, ROLES.PROCUREMENT_MANAGER, ROLES.DIRECTOR_PROCUREMENT]}>
+                    <ProtectedRoute roles={[ROLES.PROCUREMENT_OFFICER, ROLES.PROCUREMENT_MANAGER, ROLES.DIRECTOR_PROCUREMENT, ROLES.ZPC_MEMBER]}>
                       <ContractGeneration />
                     </ProtectedRoute>
                   } />

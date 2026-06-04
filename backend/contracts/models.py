@@ -147,6 +147,14 @@ class ClosureChecklist(models.Model):
     snagging_items_resolved = models.BooleanField(default=False)
     staff_warranty_training_done = models.BooleanField(default=False)
     as_built_docs_received = models.BooleanField(default=False)
+    # Extended checklist fields to match frontend ContractClosureChecklist component
+    acceptance_certificate_issued = models.BooleanField(default=False)
+    liquidated_damages_deducted = models.BooleanField(default=False)
+    retention_released = models.BooleanField(default=False)
+    no_outstanding_disputes = models.BooleanField(default=False)
+    no_pending_amendments = models.BooleanField(default=False)
+    supplier_evaluation_completed = models.BooleanField(default=False)
+    all_docs_saved = models.BooleanField(default=False)
     notes = models.TextField(blank=True)
     completed_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='closure_checklists')
     completed_at = models.DateTimeField(null=True, blank=True)
@@ -169,6 +177,13 @@ class ClosureChecklist(models.Model):
             self.snagging_items_resolved,
             self.staff_warranty_training_done,
             self.as_built_docs_received,
+            self.acceptance_certificate_issued,
+            self.liquidated_damages_deducted,
+            self.retention_released,
+            self.no_outstanding_disputes,
+            self.no_pending_amendments,
+            self.supplier_evaluation_completed,
+            self.all_docs_saved,
         ])
 
 
