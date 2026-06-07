@@ -36,6 +36,34 @@ def _require_bid_opening_completed(solicitation):
     return None
 
 
+def _committee_membership_ids(committee):
+    member_ids = set()
+    for member in committee.members or []:
+        uid = member.get('user') if isinstance(member, dict) else member
+        if uid:
+            member_ids.add(str(uid))
+    if committee.chairperson_id:
+        member_ids.add(str(committee.chairperson_id))
+    if committee.secretary_id:
+        member_ids.add(str(committee.secretary_id))
+    return member_ids
+
+
+def _require_coi_clearance(solicitation):
+    committees = EvaluationCommittee.objects.filter(solicitation=solicitation, require_coi=True)
+    for committee in committees:
+        expected_ids = _committee_membership_ids(committee)
+        declarations = ConflictOfInterest.objects.filter(committee=committee)
+        declared_ids = {str(uid) for uid in declarations.values_list('member_id', flat=True)}
+        missing = expected_ids - declared_ids
+        if missing:
+            return Response({
+                'error': 'All evaluation committee members must submit conflict declarations before evaluation can proceed.',
+                'missing_member_ids': sorted(missing),
+            }, status=400)
+    return None
+
+
 class StandardPagination(PageNumberPagination):
     page_size = 25
     page_size_query_param = 'page_size'
@@ -383,6 +411,9 @@ def technical_score_submit_view(request):
     err = _require_bid_opening_completed(bid.solicitation)
     if err:
         return err
+    err = _require_coi_clearance(bid.solicitation)
+    if err:
+        return err
 
     committee_ids = _get_committee_member_ids_for_bid(bid)
     if str(request.user.id) not in committee_ids:
@@ -428,6 +459,9 @@ def list_passed_tech_bids_view(request, solicitation_pk):
         return Response({'error': 'Solicitation not found'}, status=404)
 
     err = _require_bid_opening_completed(sol)
+    if err:
+        return err
+    err = _require_coi_clearance(sol)
     if err:
         return err
 
@@ -505,6 +539,9 @@ def calculate_qcbs_view(request, solicitation_pk):
         return Response({'error': 'Solicitation not found'}, status=404)
 
     err = _require_bid_opening_completed(sol)
+    if err:
+        return err
+    err = _require_coi_clearance(sol)
     if err:
         return err
 
@@ -650,6 +687,9 @@ def authorize_financial_opening_view(request, solicitation_pk):
     err = _require_bid_opening_completed(sol)
     if err:
         return err
+    err = _require_coi_clearance(sol)
+    if err:
+        return err
 
     committees = EvaluationCommittee.objects.filter(solicitation=sol)
     is_chair = any(str(c.chairperson.id) == str(request.user.id) for c in committees)
@@ -755,6 +795,9 @@ def select_winner_view(request, solicitation_pk):
     err = _require_bid_opening_completed(sol)
     if err:
         return err
+    err = _require_coi_clearance(sol)
+    if err:
+        return err
 
     committees = EvaluationCommittee.objects.filter(solicitation=sol)
     is_chair = any(str(c.chairperson.id) == str(request.user.id) for c in committees)
@@ -769,18 +812,26 @@ def select_winner_view(request, solicitation_pk):
     if not bid_id:
         return Response({'error': 'bid_id is required'}, status=400)
 
-    # Verify QCBS has been calculated (CombinedScore exists) and this bid is top-ranked
+    # Verify that evaluation has produced a defensible top-ranked bid.
     top_ranked = CombinedScore.objects.filter(
         bid__solicitation=sol
     ).order_by('rank').first()
 
-    if not top_ranked:
-        return Response({'error': 'QCBS has not been calculated yet. Calculate QCBS before selecting a winner.'}, status=400)
-
-    if str(top_ranked.bid_id) != str(bid_id):
-        return Response({
-            'error': f'Only the top-ranked bid can be selected as winner. The current top-ranked bid is "{top_ranked.bid.supplier.full_name}".'
-        }, status=400)
+    if top_ranked:
+        if str(top_ranked.bid_id) != str(bid_id):
+            return Response({
+                'error': f'Only the top-ranked bid can be selected as winner. The current top-ranked bid is "{top_ranked.bid.supplier.full_name}".'
+            }, status=400)
+    else:
+        lowest_financial = FinancialEvaluation.objects.filter(
+            bid__solicitation=sol
+        ).select_related('bid__supplier').order_by('evaluated_price').first()
+        if not lowest_financial:
+            return Response({'error': 'Financial evaluation has not been calculated yet.'}, status=400)
+        if str(lowest_financial.bid_id) != str(bid_id):
+            return Response({
+                'error': f'Only the lowest evaluated responsive bid can be selected as winner. The current lowest evaluated bid is "{lowest_financial.bid.supplier.full_name}".'
+            }, status=400)
 
     try:
         winner = BidSubmission.objects.get(pk=bid_id, solicitation=sol)
@@ -794,7 +845,7 @@ def select_winner_view(request, solicitation_pk):
     sol.save(update_fields=['status'])
 
     other_bids = BidSubmission.objects.filter(solicitation=sol).exclude(pk=bid_id)
-    other_bids.update(status='withdrawn')
+    other_bids.update(status='responsive')
 
     return Response({
         'message': f'Winner selected: {winner.submission_id}',

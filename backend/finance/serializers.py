@@ -1,7 +1,7 @@
 from rest_framework import serializers
 from django.core.files.storage import default_storage
 from django.utils import timezone
-from .models import BudgetAllocation, BudgetEncumbrance, GoodsReceiptNote, Invoice, ThreeWayMatch, Payment, LetterOfCredit
+from .models import BudgetAllocation, BudgetEncumbrance, GoodsReceiptNote, Invoice, ThreeWayMatch, Payment, LetterOfCredit, RetentionRelease
 from suppliers.models import Supplier
 
 
@@ -134,3 +134,13 @@ class LetterOfCreditSerializer(serializers.ModelSerializer):
     class Meta:
         model = LetterOfCredit
         fields = '__all__'
+
+
+class RetentionReleaseSerializer(serializers.ModelSerializer):
+    id = serializers.UUIDField(source='release_id', read_only=True)
+    released_by_name = serializers.CharField(source='released_by.full_name', read_only=True)
+
+    class Meta:
+        model = RetentionRelease
+        fields = '__all__'
+        read_only_fields = ('release_id', 'released_at')

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { contractsApi } from '../../api/contracts';
@@ -8,6 +8,20 @@ import toast from 'react-hot-toast';
 import {
   CheckCircleIcon, XCircleIcon,
 } from '@heroicons/react/outline';
+
+const checklistFields = [
+  'all_deliverables_received',
+  'final_inspection_passed',
+  'acceptance_certificate_issued',
+  'all_payments_processed',
+  'liquidated_damages_deducted',
+  'retention_released',
+  'no_outstanding_disputes',
+  'performance_security_released',
+  'no_pending_amendments',
+  'supplier_evaluation_completed',
+  'all_docs_saved',
+] as const;
 
 const ContractClosureChecklist: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -19,22 +33,42 @@ const ContractClosureChecklist: React.FC = () => {
     enabled: !!id,
   });
 
-  // Field names match the backend ClosureChecklist model exactly
-  const [checks, setChecks] = useState<Record<string, boolean>>({
-    all_deliverables_received: true,
-    final_inspection_passed: true,
-    acceptance_certificate_issued: true,
-    all_payments_processed: true,
-    liquidated_damages_deducted: true,
-    retention_released: true,
-    no_outstanding_disputes: true,
-    performance_security_released: true,
-    no_pending_amendments: true,
-    supplier_evaluation_completed: true,
-    all_docs_saved: true,
-  });
+  const emptyChecks = useMemo(() => checklistFields.reduce((acc, key) => {
+    acc[key] = false;
+    return acc;
+  }, {} as Record<(typeof checklistFields)[number], boolean>), []);
+
+  const [checks, setChecks] = useState<Record<string, boolean>>(emptyChecks);
   const [closureNotes, setClosureNotes] = useState('');
   const [completed, setCompleted] = useState(false);
+
+  const checklistCount = contract?.closure_checklists?.length || 0;
+  const existingChecklist = checklistCount ? contract!.closure_checklists[checklistCount - 1] : undefined;
+
+  useEffect(() => {
+    if (!existingChecklist) {
+      setChecks(emptyChecks);
+      setClosureNotes('');
+      setCompleted(false);
+      return;
+    }
+
+    setChecks({
+      all_deliverables_received: Boolean(existingChecklist.all_deliverables_received),
+      final_inspection_passed: Boolean(existingChecklist.final_inspection_passed),
+      acceptance_certificate_issued: Boolean(existingChecklist.acceptance_certificate_issued),
+      all_payments_processed: Boolean(existingChecklist.all_payments_processed),
+      liquidated_damages_deducted: Boolean(existingChecklist.liquidated_damages_deducted),
+      retention_released: Boolean(existingChecklist.retention_released),
+      no_outstanding_disputes: Boolean(existingChecklist.no_outstanding_disputes),
+      performance_security_released: Boolean(existingChecklist.performance_security_released),
+      no_pending_amendments: Boolean(existingChecklist.no_pending_amendments),
+      supplier_evaluation_completed: Boolean(existingChecklist.supplier_evaluation_completed),
+      all_docs_saved: Boolean(existingChecklist.all_docs_saved),
+    });
+    setClosureNotes(existingChecklist.notes || '');
+    setCompleted(Boolean(existingChecklist.is_complete || existingChecklist.status === 'completed' || contract?.status === 'completed'));
+  }, [contract, existingChecklist, emptyChecks]);
 
   const checklistItems = [
     { key: 'all_deliverables_received', label: 'All items delivered per GRN' },
@@ -60,7 +94,7 @@ const ContractClosureChecklist: React.FC = () => {
       setCompleted(true);
       toast.success('Contract closed successfully');
     },
-    onError: () => toast.error('Failed to close contract'),
+    onError: (err: any) => toast.error(err?.response?.data?.error || 'Failed to close contract'),
   });
 
   const archiveMutation = useMutation({
@@ -69,7 +103,7 @@ const ContractClosureChecklist: React.FC = () => {
       toast.success('Contract archived successfully');
       navigate('/contracts');
     },
-    onError: () => toast.error('Failed to archive contract'),
+    onError: (err: any) => toast.error(err?.response?.data?.error || 'Failed to archive contract'),
   });
 
   if (isLoading) return <LoadingSpinner className="py-12" />;
@@ -80,7 +114,7 @@ const ContractClosureChecklist: React.FC = () => {
         <div>
           <div className="flex items-center gap-3">
             <h1 className="text-2xl font-bold text-gray-900">Contract Closure</h1>
-            <StatusBadge status={completed ? 'completed' : 'active'} />
+            <StatusBadge status={completed ? 'completed' : contract?.status || 'active'} />
           </div>
           <p className="text-sm text-gray-500 mt-1">{contract?.contract_number || '---'} | {contract?.vendor_name || '---'}</p>
         </div>

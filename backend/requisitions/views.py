@@ -119,13 +119,14 @@ def _check_budget_and_encumber(req):
                     'shortfall': float(req.estimated_total) - float(ba.available),
                 })
             else:
-                # Keep a single active encumbrance per requisition to avoid duplicate holds.
                 if not BudgetEncumbrance.objects.filter(requisition=req, status='active').exists():
                     BudgetEncumbrance.objects.create(
                         requisition=req,
                         amount=req.estimated_total,
                         status='active',
                     )
+                    ba.encumbered_amount += req.estimated_total
+                    ba.save(update_fields=['encumbered_amount'])
                 req.budget_validated = True
                 req.encumbrance_ref = f"ENC-{req.req_number}"
                 req.save(update_fields=['budget_validated', 'encumbrance_ref'])

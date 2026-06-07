@@ -7,6 +7,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.pagination import PageNumberPagination
 from django_filters.rest_framework import DjangoFilterBackend
+from django.conf import settings
 import django_filters
 
 from .models import Contract, ContractSecurity, ContractAmendment, ContractMilestone, LiquidatedDamages, ContractTermination, Appeal, ClosureChecklist
@@ -18,6 +19,7 @@ from .serializers import (
 )
 from django.utils import timezone
 from datetime import timedelta
+from accounts.audit import log_audit_action
 
 CONTRACT_GENERATION_ROLES = ('procurement_officer', 'system_admin')
 CONTRACT_MANAGER_ROLES = ('contract_manager', 'procurement_manager', 'director_procurement', 'system_admin')
@@ -145,7 +147,18 @@ class ContractListView(BaseView, generics.ListCreateAPIView):
 
 
 class ContractDetailView(generics.RetrieveUpdateDestroyAPIView):
-    queryset = Contract.objects.select_related('supplier', 'solicitation', 'winning_bid').prefetch_related('securities', 'amendments', 'milestones', 'appeals', 'closure_checklists').all()
+    queryset = Contract.objects.select_related('supplier', 'solicitation', 'winning_bid').prefetch_related(
+        'securities',
+        'amendments',
+        'milestones',
+        'appeals',
+        'closure_checklists',
+        'invoices',
+        'goods_receipt_notes',
+        'payments',
+        'retention_releases',
+        'supplier_performances',
+    ).all()
     serializer_class = ContractSerializer
     permission_classes = [IsAuthenticated]
 
@@ -167,7 +180,10 @@ def contract_publish_award_view(request, pk):
     days = request.data.get('waiting_period_days')
     if days is not None:
         try:
-            contract.waiting_period_days = max(0, int(days))
+            days_val = int(days)
+            if days_val < 10:
+                return Response({'error': 'Waiting period must be at least 10 working days'}, status=400)
+            contract.waiting_period_days = days_val
         except (TypeError, ValueError):
             return Response({'error': 'waiting_period_days must be a number'}, status=400)
 
@@ -185,6 +201,12 @@ def contract_publish_award_view(request, pk):
         )
     contract.status = 'draft'
     contract.save()
+
+    ip = request.META.get('REMOTE_ADDR', '')
+    log_audit_action(
+        user=request.user, action='CONTRACT_PUBLISH_AWARD', module='contracts',
+        record_id=str(contract.contract_id), ip_address=ip,
+    )
 
     return Response({
         'message': 'Award notice published. Waiting period started.',
@@ -214,6 +236,8 @@ def contract_set_standstill_view(request, pk):
             return Response({'error': 'waiting_period_days must be a number'}, status=400)
 
     if request.data.get('expire_now'):
+        if not settings.DEBUG:
+            return Response({'error': 'expire_now is only available in DEBUG mode'}, status=400)
         today = timezone.now().date()
         contract.waiting_period_end = today
         if not contract.waiting_period_start:
@@ -325,6 +349,12 @@ def contract_countersign_view(request, pk):
 
     contract.save()
 
+    ip = request.META.get('REMOTE_ADDR', '')
+    log_audit_action(
+        user=request.user, action='CONTRACT_COUNTERSIGN', module='contracts',
+        record_id=str(contract.contract_id), ip_address=ip,
+    )
+
     return Response({
         'message': 'Contract countersigned by Director General',
         'status': contract.status,
@@ -362,6 +392,20 @@ def contract_upload_security_view(request, pk):
 
     if not amount or not issuing_bank:
         return Response({'error': 'Amount and issuing bank are required'}, status=400)
+
+    security_pct = (amount / contract.value) * 100 if contract.value > 0 else 0
+    if security_pct < 5 or security_pct > 10:
+        return Response({
+            'error': f'Performance security must be between 5% and 10% of contract value ({contract.value})',
+            'amount': float(amount),
+            'contract_value': float(contract.value),
+            'percentage': float(security_pct),
+        }, status=400)
+
+    if expiry_date < contract.end_date:
+        return Response({
+            'error': f'Security expiry ({expiry_date}) must be at or after contract end date ({contract.end_date})',
+        }, status=400)
 
     security = ContractSecurity.objects.create(
         contract=contract,
@@ -572,6 +616,11 @@ def contract_closure_checklist_view(request, pk):
         contract.status = 'completed'
         contract.completed_at = timezone.now().date()
         contract.save()
+        ip = request.META.get('REMOTE_ADDR', '')
+        log_audit_action(
+            user=request.user, action='CONTRACT_CLOSED', module='contracts',
+            record_id=str(contract.contract_id), ip_address=ip,
+        )
 
     checklist.save()
 
@@ -618,17 +667,44 @@ def contract_calculate_ld_view(request, pk):
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def contract_archive_view(request, pk):
+    if getattr(request.user, 'role', '') not in CONTRACT_MANAGER_ROLES + ('records_manager',):
+        return Response({'error': 'Only contract management or records roles can archive contracts'}, status=403)
+
     try:
         contract = Contract.objects.get(pk=pk)
     except Contract.DoesNotExist:
         return Response({'error': 'Contract not found'}, status=404)
+
+    if contract.status == 'archived':
+        return Response({
+            'message': 'Contract is already archived',
+            'archive_filename': f'ZAMMSA-{contract.contract_number}-ARCHIVE.zip.enc',
+            'encryption': 'AES-256',
+            'legal_hold': contract.legal_hold,
+            'retention_expiry': contract.retention_expiry,
+        })
+
+    if contract.status not in ('completed', 'closed'):
+        return Response({'error': 'Only completed or closed contracts can be archived'}, status=400)
+    if contract.completed_at:
+        earliest_archive_date = contract.completed_at + timedelta(days=30)
+        if timezone.now().date() < earliest_archive_date and not request.data.get('force'):
+            return Response({
+                'error': 'Contract can only be archived 30 days after completion unless force=true is supplied by an authorized records workflow.',
+                'earliest_archive_date': earliest_archive_date,
+            }, status=400)
 
     contract.status = 'archived'
     contract.archived_at = timezone.now()
     contract.retention_expiry = timezone.now().date() + timedelta(days=365 * 7)
     contract.save()
 
-    # BR-CPP-12: Also archive the linked CPP
+    ip = request.META.get('REMOTE_ADDR', '')
+    log_audit_action(
+        user=request.user, action='CONTRACT_ARCHIVED', module='contracts',
+        record_id=str(contract.contract_id), ip_address=ip,
+    )
+
     try:
         requisition = contract.solicitation.requisition
         if requisition:
@@ -646,6 +722,9 @@ def contract_archive_view(request, pk):
 
     return Response({
         'message': 'Contract archived with linked CPP. Retention set to 7 years.',
+        'archive_filename': f'ZAMMSA-{contract.contract_number}-ARCHIVE.zip.enc',
+        'encryption': 'AES-256',
+        'legal_hold': contract.legal_hold,
         'retention_expiry': contract.retention_expiry,
     })
 

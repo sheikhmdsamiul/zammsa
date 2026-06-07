@@ -56,6 +56,12 @@ const Login: React.FC = () => {
   });
   const [showQuick, setShowQuick] = useState(false);
 
+  const quickLogin = async (account: (typeof TEST_ACCOUNTS)[number]) => {
+    loginForm.setValue('email', account.email);
+    loginForm.setValue('password', account.pw);
+    await onLogin({ email: account.email, password: account.pw });
+  };
+
   const mfaForm = useForm<MFAForm>({
     resolver: zodResolver(mfaSchema),
   });
@@ -91,12 +97,6 @@ const Login: React.FC = () => {
         setError(result.error || 'Login failed');
       }
     }
-  };
-
-  const quickLogin = async (account: (typeof TEST_ACCOUNTS)[number]) => {
-    loginForm.setValue('email', account.email);
-    loginForm.setValue('password', account.pw);
-    await onLogin({ email: account.email, password: account.pw });
   };
 
   const onMFA = async (data: MFAForm) => {

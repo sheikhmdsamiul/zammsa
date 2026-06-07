@@ -188,7 +188,7 @@ const BidDetail: React.FC = () => {
           </div>
 
           {/* Bid Items */}
-          {!!bid.items?.length && (
+          {!!bid.line_items?.length && (
             <div className="bg-white rounded-3xl border border-gray-200 shadow-sm p-6">
               <h2 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-4">Bid Items</h2>
               <div className="overflow-x-auto">
@@ -203,7 +203,7 @@ const BidDetail: React.FC = () => {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-100">
-                    {bid.items?.map((item: any) => (
+                    {bid.line_items?.map((item: any) => (
                       <tr key={item.id}>
                         <td className="px-3 py-3 text-sm font-semibold text-gray-900">{item.item_code}</td>
                         <td className="px-3 py-3 text-sm text-gray-700">{item.description}</td>

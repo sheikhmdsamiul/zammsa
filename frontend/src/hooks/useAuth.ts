@@ -33,7 +33,7 @@ export function useLogin() {
         if (res.must_change_password) {
           navigate('/change-password');
         } else if (res.user.role === ROLES.SUPPLIER_USER) {
-          navigate('/vendor');
+          navigate('/vendor/dashboard');
         } else if (res.user.role === ROLES.SUPPLIER_RELATIONSHIP_MANAGER) {
           navigate('/supplier-relations');
         } else {

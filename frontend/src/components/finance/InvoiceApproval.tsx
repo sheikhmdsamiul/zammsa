@@ -53,6 +53,28 @@ const InvoiceApproval: React.FC = () => {
     onError: (err: any) => toast.error(err?.response?.data?.error || 'Failed to approve invoice'),
   });
 
+  const acceptPartialMutation = useMutation({
+    mutationFn: () => {
+      if (!invoice) throw new Error('Invoice not loaded');
+      const grnQty = Number(displayMatch?.grn_qty || displayMatch?.grn_quantity || 0);
+      const invoiceQty = Number(displayMatch?.invoice_qty || displayMatch?.invoice_quantity || 0);
+      const invoiceUnitPrice = Number(displayMatch?.invoice_price || (invoiceQty ? invoice.amount / invoiceQty : invoice.amount));
+      const adjustedAmount = grnQty > 0 && invoiceUnitPrice > 0
+        ? Math.min(invoice.amount, grnQty * invoiceUnitPrice)
+        : invoice.amount;
+      return financeApi.acceptPartialInvoice(invoiceId!, {
+        approved_amount: Number(adjustedAmount.toFixed(2)),
+        notes: reason || 'Partial receipt accepted for adjusted payment.',
+      });
+    },
+    onSuccess: (data: any) => {
+      toast.success(data.message || 'Partial invoice accepted');
+      queryClient.invalidateQueries({ queryKey: ['invoice', invoiceId] });
+      setDecision(null);
+    },
+    onError: (err: any) => toast.error(err?.response?.data?.error || 'Failed to accept partial invoice'),
+  });
+
   const rejectMutation = useMutation({
     mutationFn: () => financeApi.rejectInvoice(invoiceId!, reason),
     onSuccess: () => {
@@ -278,6 +300,29 @@ const InvoiceApproval: React.FC = () => {
               )}
             </div>
           </div>
+
+          {invoice.status === 'pending_matching' && displayMatch?.match_status === 'partial' && !isPaid && !isRejected && (
+            <div className="bg-amber-50 border border-amber-200 rounded-3xl p-8">
+              <h2 className="text-xl font-bold text-amber-900 mb-2">Partial Match Review</h2>
+              <p className="text-sm text-amber-800 mb-4">
+                Goods received are lower than invoiced. Accepting partial routes an adjusted amount through approvals.
+              </p>
+              <textarea
+                value={reason}
+                onChange={(e) => setReason(e.target.value)}
+                rows={3}
+                className="w-full border border-amber-200 rounded-2xl px-5 py-4 text-sm focus:ring-4 focus:ring-amber-500/10 outline-none"
+                placeholder="Example: Pay for received quantities only; supplier to deliver the balance."
+              />
+              <button
+                onClick={() => acceptPartialMutation.mutate()}
+                disabled={acceptPartialMutation.isPending}
+                className="mt-4 px-8 py-4 bg-amber-600 text-white rounded-2xl font-black text-sm hover:bg-amber-700 disabled:opacity-50 transition-all"
+              >
+                {acceptPartialMutation.isPending ? 'Routing...' : 'Accept Partial & Route Approval'}
+              </button>
+            </div>
+          )}
 
           {/* Decision Section */}
           {invoice.status === 'pending_approval' && !approved && !isPaid && !isRejected && (

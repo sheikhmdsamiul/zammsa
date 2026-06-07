@@ -169,14 +169,11 @@ class ClosureChecklist(models.Model):
         return f'Closure {self.contract.contract_number}'
 
     def is_complete(self):
-        return all([
+        common_complete = all([
             self.all_deliverables_received,
             self.final_inspection_passed,
             self.all_payments_processed,
             self.performance_security_released,
-            self.snagging_items_resolved,
-            self.staff_warranty_training_done,
-            self.as_built_docs_received,
             self.acceptance_certificate_issued,
             self.liquidated_damages_deducted,
             self.retention_released,
@@ -184,6 +181,18 @@ class ClosureChecklist(models.Model):
             self.no_pending_amendments,
             self.supplier_evaluation_completed,
             self.all_docs_saved,
+        ])
+        works_fields_required = any([
+            self.snagging_items_resolved,
+            self.staff_warranty_training_done,
+            self.as_built_docs_received,
+        ]) or self.contract.contract_type == 'exc'
+        if not works_fields_required:
+            return common_complete
+        return common_complete and all([
+            self.snagging_items_resolved,
+            self.staff_warranty_training_done,
+            self.as_built_docs_received,
         ])
 
 

@@ -10,6 +10,7 @@ urlpatterns = [
     path('invoices/<uuid:pk>/submit/', views.invoice_submit_view, name='invoice-submit'),
     path('invoices/<uuid:pk>/match/', views.invoice_match_view, name='invoice-match'),
     path('invoices/<uuid:pk>/approve/', views.invoice_approve_view, name='invoice-approve'),
+    path('invoices/<uuid:pk>/accept-partial/', views.invoice_accept_partial_view, name='invoice-accept-partial'),
     path('invoices/<uuid:pk>/reject/', views.invoice_reject_view, name='invoice-reject'),
     path('invoices/<uuid:pk>/pay/', views.payment_process_view, name='invoice-pay'),
     path('invoices/<uuid:pk>/bank-confirm/', views.payment_bank_confirm_view, name='invoice-bank-confirm'),
@@ -25,4 +26,5 @@ urlpatterns = [
     path('budget-allocations/sync-from-erp/', views.budget_sync_from_erp_view, name='budget-sync-erp'),
     path('budget-allocations/summary/', views.budget_summary_view, name='budget-summary'),
     path('letters-of-credit/<uuid:pk>/drawdown/', views.lc_drawdown_view, name='loc-drawdown'),
+    path('retention/release/<uuid:pk>/', views.retention_release_view, name='retention-release'),
 ]

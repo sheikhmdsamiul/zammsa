@@ -47,6 +47,9 @@ export const financeApi = {
   approveInvoice: (id: string) =>
     api.post<{ message: string; status: string; approval_route: string }>(`/finance/invoices/${id}/approve/`).then((r) => r.data),
 
+  acceptPartialInvoice: (id: string, data: { approved_amount: number; notes?: string }) =>
+    api.post<{ message: string; status: string; approved_amount: number; approval_route: string }>(`/finance/invoices/${id}/accept-partial/`, data).then((r) => r.data),
+
   rejectInvoice: (id: string, rejection_reason?: string) =>
     api.post<{ message: string; status: string }>(`/finance/invoices/${id}/reject/`, { rejection_reason }).then((r) => r.data),
 
@@ -82,4 +85,7 @@ export const financeApi = {
 
   listGrns: (params?: Record<string, any>) =>
     api.get<PaginatedResponse<GoodsReceiptNote>>('/finance/grns/', { params }).then((r) => r.data),
+
+  releaseRetention: (contractId: string, data: { amount: number; acceptance_certificate_ref?: string; notes?: string; override?: boolean }) =>
+    api.post<any>(`/finance/retention/release/${contractId}/`, data).then((r) => r.data),
 };

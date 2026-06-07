@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { bidsApi } from '../../api/bids';
@@ -23,6 +23,20 @@ const OpeningSetup: React.FC = () => {
   const [publicLink, setPublicLink] = useState('');
   const [notes, setNotes] = useState('');
 
+  const formatLocalDateTime = (date: Date) => {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    const hours = date.getHours();
+    const minutes = String(date.getMinutes()).padStart(2, '0');
+    const ampm = hours >= 12 ? 'PM' : 'AM';
+    const normalizedHour = String(((hours + 11) % 12) + 1).padStart(2, '0');
+    return {
+      date: `${year}-${month}-${day}`,
+      time: `${normalizedHour}:${minutes} ${ampm}`,
+    };
+  };
+
   const { data: solsData, isLoading: solsLoading } = useQuery({
     queryKey: ['solicitations-for-opening', 1, 100],
     queryFn: () => solicitationsApi.list({ page: 1, page_size: 100 }),
@@ -38,6 +52,45 @@ const OpeningSetup: React.FC = () => {
 
   const selectedSolicitation = solicitations.find((s: any) => s.id === selectedSol);
 
+  useEffect(() => {
+    if (!selectedSolicitation) return;
+
+    const sourceDate = selectedSolicitation.opening_date || selectedSolicitation.closing_date;
+    if (!sourceDate) return;
+
+    const parsed = new Date(sourceDate);
+    if (Number.isNaN(parsed.getTime())) return;
+
+    const { date, time } = formatLocalDateTime(parsed);
+    setOpeningDate(date);
+    setOpeningTime(time);
+  }, [selectedSolicitation]);
+
+  const setOpeningToNow = () => {
+    const adjusted = new Date(Date.now() - 2 * 60 * 1000);
+    const { date, time } = formatLocalDateTime(adjusted);
+    setOpeningDate(date);
+    setOpeningTime(time);
+    toast.success('Opening time set to now');
+  };
+
+  const getScheduledDateTime = () => {
+    if (!openingDate || !openingTime) return null;
+
+    const [hm, ap = 'AM'] = openingTime.split(' ');
+    const [hourPart, minutePart = '00'] = hm.split(':');
+    let hour = parseInt(hourPart, 10);
+
+    if (Number.isNaN(hour)) return null;
+    if (ap === 'PM' && hour < 12) hour += 12;
+    if (ap === 'AM' && hour === 12) hour = 0;
+
+    const candidate = new Date(`${openingDate}T${String(hour).padStart(2, '0')}:${minutePart}:00`);
+    if (Number.isNaN(candidate.getTime())) return null;
+
+    return candidate.toISOString();
+  };
+
   const { data: solBids } = useQuery({
     queryKey: ['sol-bids-count', selectedSol],
     queryFn: () => bidsApi.list({ solicitation: selectedSol, page_size: 1 }),
@@ -48,14 +101,9 @@ const OpeningSetup: React.FC = () => {
 
   const startOpeningMutation = useMutation({
     mutationFn: () => {
-      let scheduledTime: string | undefined;
-      if (openingDate && openingTime) {
-        const [hm, ap] = openingTime.split(' ');
-        let [h, m] = hm.split(':');
-        let hour = parseInt(h);
-        if (ap === 'PM' && hour < 12) hour += 12;
-        if (ap === 'AM' && hour === 12) hour = 0;
-        scheduledTime = new Date(`${openingDate}T${String(hour).padStart(2, '0')}:${m}`).toISOString();
+      const scheduledTime = getScheduledDateTime();
+      if (!scheduledTime) {
+        throw new Error('Opening date and time are required');
       }
       return bidsApi.startOpeningSession(selectedSol, {
         witnesses: [witness1, witness2],
@@ -83,6 +131,12 @@ const OpeningSetup: React.FC = () => {
   const handleStartOpening = () => {
     if (!selectedSol) { toast.error('Please select a solicitation'); return; }
     if (!openingDate || !openingTime) { toast.error('Opening date and time are required'); return; }
+    const scheduledTime = getScheduledDateTime();
+    if (!scheduledTime) { toast.error('Opening date and time are invalid'); return; }
+    if (new Date(scheduledTime).getTime() > Date.now()) {
+      toast.error('Set the opening time to now or earlier to start immediately');
+      return;
+    }
     startOpeningMutation.mutate();
   };
 
@@ -155,9 +209,21 @@ const OpeningSetup: React.FC = () => {
         {step === 2 && (
           <div className="space-y-6">
             <h2 className="text-lg font-semibold text-gray-900">Configure Opening Session</h2>
+            <p className="text-sm text-gray-500">
+              Adjust the schedule below if you need to move the opening time before starting the session.
+            </p>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Opening Date *</label>
+                <div className="flex items-center justify-between gap-2 mb-1">
+                  <label className="block text-sm font-medium text-gray-700">Opening Date *</label>
+                  <button
+                    type="button"
+                    onClick={setOpeningToNow}
+                    className="text-xs font-semibold text-zammsa-green hover:text-zammsa-green-dark"
+                  >
+                    Use current time
+                  </button>
+                </div>
                 <input type="date" value={openingDate} onChange={(e) => setOpeningDate(e.target.value)}
                   className="w-full border rounded-lg px-3 py-2 text-sm" />
               </div>
@@ -232,6 +298,9 @@ const OpeningSetup: React.FC = () => {
                   </select>
                 </div>
               </div>
+              <p className="text-xs text-gray-500">
+                If the schedule is still in the future, the backend will block the start request. Use the shortcut above to set the opening to the current moment for testing.
+              </p>
             </div>
 
             <div>

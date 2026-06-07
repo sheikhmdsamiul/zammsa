@@ -65,8 +65,8 @@ export const contractsApi = {
   calculateLD: (id: string, data: { days_delayed: number; daily_rate: number }) =>
     api.post<any>(`/contracts/${id}/calculate-ld/`, data).then((r) => r.data),
 
-  archive: (id: string) =>
-    api.post<any>(`/contracts/${id}/archive/`).then((r) => r.data),
+  archive: (id: string, data?: { force?: boolean }) =>
+    api.post<any>(`/contracts/${id}/archive/`, data || {}).then((r) => r.data),
 
   amend: (id: string, data: { reason: string; description: string; financial_impact: number; legal_opinion_ref?: string }) =>
     api.post<any>(`/contracts/${id}/amend/`, data).then((r) => r.data),

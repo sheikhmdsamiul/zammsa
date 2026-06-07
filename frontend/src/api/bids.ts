@@ -16,8 +16,10 @@ export const bidsApi = {
 
   delete: (id: string) => api.delete(`/bids/${id}/`),
 
-  submit: (id: string) =>
-    api.patch(`/bids/${id}/`, { status: 'submitted' }).then((r) => r.data),
+  submit: (data: FormData) =>
+    api.post('/bids/submit/', data, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    }).then((r) => r.data),
 
   withdraw: (id: string) =>
     api.patch(`/bids/${id}/`, { status: 'withdrawn' }).then((r) => r.data),

@@ -197,6 +197,9 @@ class Payment(models.Model):
     invoice = models.ForeignKey(Invoice, on_delete=models.CASCADE, related_name='payments')
     contract = models.ForeignKey(Contract, on_delete=models.CASCADE, null=True, blank=True, related_name='payments')
     amount = models.DecimalField(max_digits=20, decimal_places=2)
+    retained_amount = models.DecimalField(max_digits=20, decimal_places=2, default=0,
+        help_text='Retention withheld (5-10% per BR-FIN-02)')
+    retention_released = models.BooleanField(default=False)
     payment_method = models.CharField(max_length=20, choices=PAYMENT_METHOD_CHOICES)
     reference = models.CharField(max_length=200, blank=True, default='')
     iso20022_file_ref = models.CharField(max_length=200, blank=True)
@@ -213,6 +216,25 @@ class Payment(models.Model):
 
     def __str__(self):
         return f'{self.invoice.invoice_number} - {self.amount}'
+
+
+class RetentionRelease(models.Model):
+    release_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    contract = models.ForeignKey(Contract, on_delete=models.CASCADE, related_name='retention_releases')
+    amount = models.DecimalField(max_digits=20, decimal_places=2)
+    released_at = models.DateTimeField(auto_now_add=True)
+    released_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True)
+    acceptance_certificate_ref = models.CharField(max_length=100, blank=True)
+    notes = models.TextField(blank=True)
+
+    class Meta:
+        db_table = 'fin_retention_release'
+        verbose_name = 'Retention Release'
+        verbose_name_plural = 'Retention Releases'
+        ordering = ['-released_at']
+
+    def __str__(self):
+        return f'{self.contract.contract_number} - {self.amount}'
 
 
 class LetterOfCredit(models.Model):

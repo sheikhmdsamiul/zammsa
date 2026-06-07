@@ -101,6 +101,7 @@ class ContractSerializer(serializers.ModelSerializer):
     closure_checklists = ClosureChecklistSerializer(many=True, read_only=True)
     supplier_name = serializers.CharField(source='supplier.name', read_only=True)
     requires_performance_bond = serializers.SerializerMethodField()
+    operational_phases = serializers.SerializerMethodField()
 
     class Meta:
         model = Contract
@@ -112,6 +113,136 @@ class ContractSerializer(serializers.ModelSerializer):
 
     def get_requires_performance_bond(self, obj):
         return obj.requires_performance_bond()
+
+    def get_operational_phases(self, obj):
+        invoices = list(getattr(obj, 'invoices').all())
+        goods_receipts = list(getattr(obj, 'goods_receipt_notes').all())
+        payments = list(getattr(obj, 'payments').all())
+        retention_releases = list(getattr(obj, 'retention_releases').all())
+        supplier_performances = list(getattr(obj, 'supplier_performances').all())
+        closure_checklists = list(getattr(obj, 'closure_checklists').all())
+        latest_closure = closure_checklists[-1] if closure_checklists else None
+
+        active_or_beyond = obj.status in ('active', 'completed', 'terminated', 'closed', 'archived')
+        archived = bool(obj.archived_at)
+        has_grn = bool(goods_receipts)
+        has_invoice = bool(invoices)
+        invoice_reviewed = any(inv.status in ('pending_matching', 'pending_approval', 'approved', 'paid') for inv in invoices)
+        invoice_approved = any(inv.status in ('pending_approval', 'approved', 'paid') for inv in invoices)
+        invoice_paid = any(inv.status == 'paid' for inv in invoices)
+        payment_started = any(pay.status in ('processing', 'sent', 'confirmed') for pay in payments)
+        payment_complete = any(pay.status == 'confirmed' for pay in payments) or invoice_paid
+        retention_complete = bool(retention_releases) or any(getattr(pay, 'retention_released', False) for pay in payments)
+        performance_complete = bool(supplier_performances)
+        closure_complete = bool(
+            latest_closure and (
+                getattr(latest_closure, 'status', '') == 'completed' or getattr(latest_closure, 'is_complete', lambda: False)()
+            )
+        ) or obj.status in ('completed', 'closed', 'archived')
+
+        def phase(code, label, role, state, evidence, detail, path=None):
+            return {
+                'code': code,
+                'label': label,
+                'role': role,
+                'state': state,
+                'evidence': evidence,
+                'detail': detail,
+                'path': path,
+            }
+
+        return [
+            phase(
+                'A',
+                'Contract Execution & Monitoring',
+                'R-12',
+                'complete' if archived or obj.status in ('completed', 'closed') else 'current' if active_or_beyond else 'upcoming',
+                'Contract is active or already closed',
+                'R-12 tracks execution, delivery oversight, deviations, and milestone follow-up.',
+                f'/contracts/{obj.contract_id}/performance',
+            ),
+            phase(
+                'B',
+                'Delivery & Goods Receipt',
+                'WMS + R-12',
+                'complete' if has_grn else 'current' if active_or_beyond else 'upcoming',
+                f'{len(goods_receipts)} goods receipt note(s)',
+                'Warehouse and contract management confirm delivery against the contract.',
+                f'/contracts/{obj.contract_id}/milestones',
+            ),
+            phase(
+                'C',
+                'Invoice Submission',
+                'R-11',
+                'complete' if has_invoice else 'current' if has_grn and active_or_beyond else 'upcoming',
+                f'{len(invoices)} invoice(s) on file',
+                'Supplier submits invoices after accepted delivery milestones.',
+                f'/finance/invoices?contract={obj.contract_id}',
+            ),
+            phase(
+                'D',
+                '3-Way Match & Finance Review',
+                'R-07',
+                'complete' if invoice_reviewed else 'current' if has_invoice and active_or_beyond else 'upcoming',
+                f'{len(invoices)} invoice(s) reviewed for matching',
+                'Finance compares PO, GRN, and invoice values before approval.',
+                f'/finance/matching?contract={obj.contract_id}',
+            ),
+            phase(
+                'E',
+                'Payment Approval Chain',
+                'R-07, R-02, R-10',
+                'complete' if invoice_approved else 'current' if invoice_reviewed and active_or_beyond else 'upcoming',
+                f'{len(payments)} payment record(s) linked',
+                'Approval follows the internal payment chain before release to bank.',
+                f'/finance/approvals?contract={obj.contract_id}',
+            ),
+            phase(
+                'F',
+                'Payment Processing',
+                'R-07 + Bank',
+                'complete' if payment_complete else 'current' if invoice_approved and active_or_beyond else 'upcoming',
+                f'{len([p for p in payments if p.status in ("processing", "sent", "confirmed")])} processed payment(s)',
+                'Payments are transmitted through the bank and confirmed in finance.',
+                f'/finance/payments?contract={obj.contract_id}',
+            ),
+            phase(
+                'G',
+                'Retention Management',
+                'R-12',
+                'complete' if retention_complete else 'current' if payment_complete and active_or_beyond else 'upcoming',
+                'Retention release or withholding recorded' if retention_complete else 'Retention still held',
+                'Retention is monitored until the contractual release conditions are met.',
+                f'/finance/retention?contract={obj.contract_id}',
+            ),
+            phase(
+                'H',
+                'Supplier Performance Evaluation',
+                'R-12',
+                'complete' if performance_complete else 'current' if active_or_beyond else 'upcoming',
+                f'{len(supplier_performances)} evaluation(s) recorded',
+                'Contract management captures supplier performance against delivery outcomes.',
+                f'/contracts/{obj.contract_id}/supplier-performance',
+            ),
+            phase(
+                'I',
+                'Contract Closure',
+                'R-12',
+                'complete' if closure_complete else 'current' if active_or_beyond and performance_complete else 'upcoming',
+                f'{len(closure_checklists)} closure checklist(s)',
+                'Closure checklist confirms all obligations, disputes, and documents are settled.',
+                f'/contracts/{obj.contract_id}/closure',
+            ),
+            phase(
+                'J',
+                'Archiving',
+                'System automated',
+                'complete' if archived else 'current' if obj.status == 'closed' else 'upcoming',
+                'Encrypted archive package created' if archived else 'Awaiting archive trigger',
+                'Records management applies the retention policy and archives the contract package.',
+                f'/contracts/{obj.contract_id}/archive',
+            ),
+        ]
 
     def to_internal_value(self, data):
         from suppliers.models import Supplier, VendorApplication

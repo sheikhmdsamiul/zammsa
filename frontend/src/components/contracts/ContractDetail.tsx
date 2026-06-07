@@ -112,7 +112,7 @@ const ContractDetail: React.FC = () => {
       className: 'bg-emerald-600 hover:bg-emerald-700 text-white',
     },
     {
-      show: c.status === 'closed',
+      show: ['completed', 'closed'].includes(c.status),
       label: 'Archive',
       path: `/contracts/${id}/archive`,
       className: 'bg-gray-600 hover:bg-gray-700 text-white',

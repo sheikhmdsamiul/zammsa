@@ -200,7 +200,7 @@ export interface Bid {
   financial_doc_url?: string;
   submission_timestamp?: string;
   documents: Attachment[];
-  items: BidItem[];
+  line_items: BidItem[];
   submitted_at: string | null;
   opened_at: string | null;
   created_at: string;
@@ -404,8 +404,19 @@ export interface Contract {
   archived_at: string | null;
   retention_expiry: string | null;
   legal_hold: boolean;
+  operational_phases?: ContractOperationalPhase[];
   created_at: string;
   updated_at: string;
+}
+
+export interface ContractOperationalPhase {
+  code: 'A' | 'B' | 'C' | 'D' | 'E' | 'F' | 'G' | 'H' | 'I' | 'J';
+  label: string;
+  role: string;
+  state: 'complete' | 'current' | 'upcoming';
+  evidence?: string;
+  detail?: string;
+  path?: string;
 }
 
 
@@ -614,13 +625,14 @@ export interface Supplier {
 
 export interface DashboardStats {
   total_procurements: number;
-  pending_approvals: number;
-  active_contracts: number;
   total_value: number;
-  procurement_by_department: Record<string, number>;
-  procurement_by_method: Record<string, number>;
-  monthly_trend: { month: string; count: number; value: number }[];
-  recent_activities: Activity[];
+  avg_processing_days: number;
+  completion_rate: number;
+  active_procurements: number;
+  by_method: { method: string; count: number; value: number }[];
+  by_department: { department: string; count: number; value: number }[];
+  by_status: { status: string; count: number; value: number }[];
+  by_supplier_category: { supplier_category: string; count: number; value: number }[];
 }
 
 export interface Activity {

@@ -1,6 +1,7 @@
 from decimal import Decimal
 import hashlib
 import hmac
+from datetime import timedelta
 from xml.etree.ElementTree import Element, SubElement, tostring
 from django.conf import settings
 from django.db.models import Q, Sum
@@ -13,16 +14,21 @@ from rest_framework.pagination import PageNumberPagination
 from django_filters.rest_framework import DjangoFilterBackend
 import django_filters
 
-from .models import BudgetAllocation, BudgetEncumbrance, GoodsReceiptNote, Invoice, ThreeWayMatch, Payment, LetterOfCredit, INVOICE_APPROVAL_ROUTES
+from .models import BudgetAllocation, BudgetEncumbrance, GoodsReceiptNote, Invoice, ThreeWayMatch, Payment, LetterOfCredit, RetentionRelease, INVOICE_APPROVAL_ROUTES
 from .serializers import (
     BudgetAllocationSerializer, BudgetEncumbranceSerializer, GoodsReceiptNoteSerializer,
     InvoiceSerializer, InvoiceListSerializer, ThreeWayMatchSerializer,
-    PaymentSerializer, LetterOfCreditSerializer,
+    PaymentSerializer, LetterOfCreditSerializer, RetentionReleaseSerializer,
 )
+from accounts.audit import log_audit_action
 from contracts.models import Contract
 
 FINANCE_PAYMENT_ROLES = ('finance_officer', 'budget_controller', 'system_admin')
 APPROVAL_FLOW = ('finance_officer', 'department_head', 'director_general')
+
+
+def _bool_from_request(value):
+    return value in ('true', 'True', True, '1', 1)
 
 
 def _verify_hmac_signature(request, secret_setting_name):
@@ -282,6 +288,11 @@ def invoice_approve_view(request, pk):
         inv.approved_at = timezone.now()
         inv.approval_route = final_route
         inv.save(update_fields=['status', 'approved_at', 'approval_route', 'updated_at'])
+        ip = request.META.get('REMOTE_ADDR', '')
+        log_audit_action(
+            user=request.user, action='INVOICE_APPROVED', module='finance',
+            record_id=str(inv.invoice_id), ip_address=ip,
+        )
         return Response({'message': 'Invoice approved for payment', 'status': inv.status, 'approval_route': final_route})
 
     next_step = APPROVAL_FLOW[APPROVAL_FLOW.index(current_step) + 1]
@@ -291,6 +302,52 @@ def invoice_approve_view(request, pk):
         'message': f'Invoice approved and routed to {dict(INVOICE_APPROVAL_ROUTES).get(next_step, next_step)}',
         'status': inv.status,
         'approval_route': next_step,
+    })
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def invoice_accept_partial_view(request, pk):
+    if request.user.role not in FINANCE_PAYMENT_ROLES:
+        return Response({'error': 'Only finance officers can accept partial match discrepancies'}, status=403)
+
+    try:
+        inv = Invoice.objects.get(pk=pk)
+    except Invoice.DoesNotExist:
+        return Response({'error': 'Invoice not found'}, status=404)
+
+    match = inv.three_way_matches.order_by('-match_id').first()
+    if not match or match.match_status != 'partial':
+        return Response({'error': 'Only invoices with a partial 3-way match can be accepted for adjusted payment'}, status=400)
+
+    approved_amount = Decimal(str(request.data.get('approved_amount', inv.amount)))
+    if approved_amount <= 0:
+        return Response({'error': 'approved_amount must be positive'}, status=400)
+    if approved_amount > inv.amount:
+        return Response({'error': 'approved_amount cannot exceed invoice amount'}, status=400)
+
+    discrepancies = match.discrepancies or {}
+    discrepancies['partial_review'] = {
+        'accepted': True,
+        'approved_amount': float(approved_amount),
+        'original_invoice_amount': float(inv.amount),
+        'note': request.data.get('notes', ''),
+        'reviewed_by': str(request.user.id),
+        'reviewed_at': timezone.now().isoformat(),
+    }
+    match.discrepancies = discrepancies
+    match.save(update_fields=['discrepancies'])
+
+    inv.amount = approved_amount
+    inv.status = 'pending_approval'
+    inv.approval_route = 'finance_officer'
+    inv.save(update_fields=['amount', 'status', 'approval_route', 'updated_at'])
+
+    return Response({
+        'message': 'Partial match accepted. Invoice routed for adjusted approval.',
+        'status': inv.status,
+        'approved_amount': float(inv.amount),
+        'approval_route': inv.approval_route,
     })
 
 
@@ -435,6 +492,17 @@ def payment_process_view(request, pk):
     if inv.status != 'approved':
         return Response({'error': 'Invoice must be approved for payment before processing'}, status=400)
 
+    has_complete_match = ThreeWayMatch.objects.filter(invoice=inv, match_status='complete').exists()
+    has_accepted_partial = any(
+        (m.discrepancies or {}).get('partial_review', {}).get('accepted')
+        for m in ThreeWayMatch.objects.filter(invoice=inv, match_status='partial')
+    )
+    if not has_complete_match and not has_accepted_partial:
+        return Response({
+            'error': '3-way match must be complete or a partial discrepancy must be accepted before payment can be processed',
+            'invoice': inv.invoice_number,
+        }, status=400)
+
     payment_method = request.data.get('payment_method', 'electronic')
     amount = Decimal(str(request.data.get('amount', inv.amount)))
     if amount <= 0:
@@ -442,10 +510,18 @@ def payment_process_view(request, pk):
     if amount > inv.amount:
         return Response({'error': 'Payment amount cannot exceed invoice amount'}, status=400)
 
+    apply_retention = _bool_from_request(request.data.get('apply_retention', True))
+    retention_rate = Decimal('0.05')
+    retained_amount = Decimal('0')
+    if apply_retention:
+        retained_amount = (amount * retention_rate).quantize(Decimal('0.01'))
+        amount -= retained_amount
+
     pmt = Payment.objects.create(
         invoice=inv,
         contract=inv.contract,
         amount=amount,
+        retained_amount=retained_amount,
         payment_method=payment_method,
         status='processing',
     )
@@ -644,6 +720,51 @@ def lc_drawdown_view(request, pk):
         'lc_id': str(lc.loc_id),
         'amount': float(amount),
         'status': lc.status,
+    })
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def retention_release_view(request, pk):
+    try:
+        contract = Contract.objects.get(pk=pk)
+    except Contract.DoesNotExist:
+        return Response({'error': 'Contract not found'}, status=404)
+
+    if request.user.role not in FINANCE_PAYMENT_ROLES:
+        return Response({'error': 'Only finance officers can release retention'}, status=403)
+
+    if contract.completed_at:
+        releasable_on = contract.completed_at + timedelta(days=30)
+        if timezone.now().date() < releasable_on and not _bool_from_request(request.data.get('override')):
+            return Response({
+                'error': 'Retention cannot be released before 30 days after final acceptance/completion',
+                'releasable_on': releasable_on,
+            }, status=400)
+
+    amount = Decimal(str(request.data.get('amount', 0)))
+    if amount <= 0:
+        return Response({'error': 'Release amount must be positive'}, status=400)
+
+    cert_ref = request.data.get('acceptance_certificate_ref', '')
+    notes = request.data.get('notes', '')
+
+    release = RetentionRelease.objects.create(
+        contract=contract,
+        amount=amount,
+        released_by=request.user,
+        acceptance_certificate_ref=cert_ref,
+        notes=notes,
+    )
+
+    Payment.objects.filter(contract=contract).update(retention_released=True)
+    from contracts.models import ClosureChecklist
+    ClosureChecklist.objects.filter(contract=contract).update(retention_released=True)
+
+    return Response({
+        'message': 'Retention released successfully',
+        'amount': float(amount),
+        'release': RetentionReleaseSerializer(release).data,
     })
 
 
