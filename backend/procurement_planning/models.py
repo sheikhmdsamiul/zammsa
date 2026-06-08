@@ -244,9 +244,9 @@ class CPPRisk(models.Model):
 class ProcurementMilestone(models.Model):
     VARIANCE_FLAG_CHOICES = [
         ('green', 'On Time / Early'),
-        ('yellow', '1-5 Days Late'),
-        ('orange', '6-14 Days Late'),
-        ('red', '>14 Days Late / At Risk'),
+        ('yellow', '1-7 Days Late'),
+        ('orange', '8-14 Days Late'),
+        ('red', '>14 Days Late / Critical'),
     ]
 
     milestone_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
@@ -271,7 +271,7 @@ class ProcurementMilestone(models.Model):
             self.variance_days = delta
             if delta <= 0:
                 self.variance_flag = 'green'
-            elif delta <= 5:
+            elif delta <= 7:
                 self.variance_flag = 'yellow'
             elif delta <= 14:
                 self.variance_flag = 'orange'

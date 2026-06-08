@@ -256,21 +256,58 @@ const SupplierExecutionTrack: React.FC = () => {
             </div>
             {(d && d.milestones.length > 0) ? (
               <div className="space-y-3">
-                {d.milestones.map((m, i) => (
-                  <div key={m.milestone_id || i} className="flex items-center gap-4 py-2 border-b border-gray-50 last:border-0">
-                    {milestoneStatusIcon(m.status)}
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-semibold text-gray-900 truncate">{m.milestone_name}</p>
-                      <p className="text-xs text-gray-500">Due: {new Date(m.due_date).toLocaleDateString()}</p>
-                    </div>
-                    <span className={`text-xs font-bold px-2.5 py-1 rounded-full ${
-                      m.status === 'completed' ? 'bg-emerald-50 text-emerald-700' :
-                      m.status === 'delivered' ? 'bg-blue-50 text-blue-700' :
-                      m.status === 'pending' ? 'bg-amber-50 text-amber-700' :
-                      'bg-gray-50 text-gray-600'
-                    }`}>{m.status}</span>
-                  </div>
-                ))}
+                {d.milestones
+                  .slice()
+                  .sort((a, b) => (a.sequence_number || 0) - (b.sequence_number || 0))
+                  .map((m) => {
+                    const plannedDate = m.planned_date || m.due_date;
+                    const variance = m.variance_days ?? (m.actual_date && plannedDate ?
+                      Math.ceil((new Date(m.actual_date).getTime() - new Date(plannedDate).getTime()) / (1000 * 60 * 60 * 24)) : null);
+                    const varianceFlag = m.variance_flag;
+                    
+                    const getVarianceColor = (flag?: string) => {
+                      if (!flag) return 'bg-gray-100 text-gray-600';
+                      switch (flag) {
+                        case 'green': return 'bg-emerald-50 text-emerald-700';
+                        case 'yellow': return 'bg-amber-50 text-amber-700';
+                        case 'orange': return 'bg-orange-50 text-orange-700';
+                        case 'red': return 'bg-rose-50 text-rose-700';
+                        default: return 'bg-gray-100 text-gray-600';
+                      }
+                    };
+                    
+                    const getVarianceLabel = (days?: number | null, flag?: string) => {
+                      if (days === null || days === undefined) return '—';
+                      if (days <= 0) return `On time (${days}d)`;
+                      if (days <= 7) return `${days}d late`;
+                      if (days <= 14) return `${days}d late`;
+                      return `${days}d late`;
+                    };
+                    
+                      return (
+                        <div key={m.milestone_id} className="flex items-center gap-4 py-2 border-b border-gray-50 last:border-0">
+                        {milestoneStatusIcon(m.status)}
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-semibold text-gray-900 truncate">{m.milestone_name}</p>
+                          <p className="text-xs text-gray-500">
+                            Planned: {new Date(plannedDate).toLocaleDateString()}
+                            {m.actual_date && <span className="ml-2">| Actual: {new Date(m.actual_date).toLocaleDateString()}</span>}
+                          </p>
+                        </div>
+                        {variance !== null && variance !== undefined && (
+                          <span className={`text-xs font-bold px-2.5 py-1 rounded-full ${getVarianceColor(varianceFlag)}`}>
+                            {getVarianceLabel(variance, varianceFlag)}
+                          </span>
+                        )}
+                        <span className={`text-xs font-bold px-2.5 py-1 rounded-full ${
+                          m.status === 'completed' ? 'bg-emerald-50 text-emerald-700' :
+                          m.status === 'delivered' ? 'bg-blue-50 text-blue-700' :
+                          m.status === 'pending' ? 'bg-amber-50 text-amber-700' :
+                          'bg-gray-50 text-gray-600'
+                        }`}>{m.status}</span>
+                      </div>
+                    );
+                  })}
               </div>
             ) : (
               <p className="text-gray-400 text-sm py-6 text-center">No milestones defined</p>

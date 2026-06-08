@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import { financeApi } from '../../api/finance';
 import { LoadingSpinner } from '../common/LoadingSpinner';
 import toast from 'react-hot-toast';
@@ -65,20 +66,28 @@ const GRNDeliveryLog: React.FC = () => {
     <div className="max-w-7xl mx-auto space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">GRN & Delivery Log</h1>
+          <h1 className="text-2xl font-bold text-gray-900">Official GRN & Delivery Log</h1>
           <p className="text-sm text-gray-500 mt-1">
-            Track goods received and manage delivery confirmation
+            Track verified goods receipt notes and delivery confirmation
           </p>
         </div>
-        <div className="flex items-center gap-4 text-sm text-gray-600">
-          <span className="inline-flex items-center gap-1">
-            <span className="w-3 h-3 rounded-full bg-emerald-500"></span>
-            Total GRNs: {grns.length}
-          </span>
-          <span className="inline-flex items-center gap-1">
-            <span className="w-3 h-3 rounded-full bg-blue-500"></span>
-            Total Value: {new Intl.NumberFormat('en-GB', { style: 'currency', currency: 'ZMW' }).format(totalAmount)}
-          </span>
+        <div className="flex items-center gap-3">
+          <Link
+            to="/finance"
+            className="px-4 py-2 rounded-xl border border-gray-200 text-sm font-bold text-gray-700 hover:bg-gray-50"
+          >
+            Finance Dashboard
+          </Link>
+          <div className="flex items-center gap-4 text-sm text-gray-600">
+            <span className="inline-flex items-center gap-1">
+              <span className="w-3 h-3 rounded-full bg-emerald-500"></span>
+              Total GRNs: {grns.length}
+            </span>
+            <span className="inline-flex items-center gap-1">
+              <span className="w-3 h-3 rounded-full bg-blue-500"></span>
+              Total Value: {new Intl.NumberFormat('en-GB', { style: 'currency', currency: 'ZMW' }).format(totalAmount)}
+            </span>
+          </div>
         </div>
       </div>
 

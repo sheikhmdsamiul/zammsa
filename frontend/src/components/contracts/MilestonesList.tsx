@@ -22,7 +22,7 @@ const MilestonesList: React.FC = () => {
     {
       key: 'milestone_name', label: 'Milestone', sortable: true,
       render: (v: string, row: any) => (
-        <Link to={`/contracts/${row.contract}/milestones`} className="text-zammsa-green hover:underline font-medium">
+        <Link to={`/contracts/${row.contract}`} className="text-zammsa-green hover:underline font-medium">
           {v}
         </Link>
       ),
@@ -31,7 +31,34 @@ const MilestonesList: React.FC = () => {
       key: 'contract', label: 'Contract',
       render: (v: string) => v ? v.substring(0, 8) + '...' : '-',
     },
+    { key: 'planned_date', label: 'Planned Date', sortable: true, render: (v: string) => v ? new Date(v).toLocaleDateString('en-GB') : (v ? new Date(v).toLocaleDateString('en-GB') : '-') },
     { key: 'due_date', label: 'Due Date', sortable: true, render: (v: string) => v ? new Date(v).toLocaleDateString('en-GB') : '-' },
+    { key: 'actual_date', label: 'Actual Date', sortable: true, render: (v: string) => v ? new Date(v).toLocaleDateString('en-GB') : '-' },
+    {
+      key: 'variance', label: 'Variance',
+      render: (v: any, row: any) => {
+        const days = row.variance_days;
+        const flag = row.variance_flag;
+        if (days === null || days === undefined) return <span className="text-gray-400">—</span>;
+        const getColor = (flag?: string) => {
+          if (!flag) return 'bg-gray-100 text-gray-600';
+          switch (flag) {
+            case 'green': return 'bg-emerald-50 text-emerald-700';
+            case 'yellow': return 'bg-amber-50 text-amber-700';
+            case 'orange': return 'bg-orange-50 text-orange-700';
+            case 'red': return 'bg-rose-50 text-rose-700';
+            default: return 'bg-gray-100 text-gray-600';
+          }
+        };
+        const getLabel = (days: number, flag?: string) => {
+          if (days <= 0) return `On time (${days}d)`;
+          if (days <= 7) return `${days}d late`;
+          if (days <= 14) return `${days}d late`;
+          return `${days}d late`;
+        };
+        return <span className={`text-xs font-bold px-2 py-0.5 rounded ${getColor(flag)}`}>{getLabel(days, flag)}</span>;
+      },
+    },
     { key: 'completed_at', label: 'Completed', render: (v: string) => v ? new Date(v).toLocaleDateString('en-GB') : '-' },
     {
       key: 'status', label: 'Status',

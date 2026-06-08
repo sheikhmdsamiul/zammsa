@@ -27,7 +27,7 @@ const SupplierDeliveryLog: React.FC = () => {
   const queryClient = useQueryClient();
 
   const [selectedContract, setSelectedContract] = React.useState(contractId || '');
-  const [grnNumber, setGrnNumber] = React.useState('');
+  const [adviceNumber, setAdviceNumber] = React.useState('');
   const [items, setItems] = React.useState<DeliveryItem[]>([{ ...emptyItem }]);
   const [notes, setNotes] = React.useState('');
 
@@ -69,9 +69,9 @@ const SupplierDeliveryLog: React.FC = () => {
   const totalQty = items.reduce((s, i) => s + (i.quantity_delivered || 0), 0);
 
   const deliveryMutation = useMutation({
-    mutationFn: () => vendorApi.invoices.logDelivery({
+    mutationFn: () => vendorApi.invoices.submitDeliveryAdvice({
       contract_id: selectedContract,
-      grn_number: grnNumber || undefined,
+      advice_number: adviceNumber || undefined,
       items: items.map(i => ({
         ...i,
         quantity_ordered: i.quantity_ordered || 0,
@@ -81,11 +81,11 @@ const SupplierDeliveryLog: React.FC = () => {
     }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['vendor-contracts'] });
-      toast.success('Delivery logged successfully');
-      navigate('/vendor/contracts', { replace: true });
+      toast.success('Delivery advice submitted successfully');
+      navigate(`/vendor/contracts/${selectedContract}/execution`, { replace: true });
     },
     onError: (err: any) => {
-      toast.error(err?.response?.data?.error || 'Failed to log delivery');
+      toast.error(err?.response?.data?.error || 'Failed to submit delivery advice');
     },
   });
 
@@ -106,14 +106,14 @@ const SupplierDeliveryLog: React.FC = () => {
           <ArrowLeftIcon className="w-5 h-5" />
         </Link>
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Log Delivery</h1>
-          <p className="text-sm text-gray-500 mt-0.5">Record goods delivered against an active contract</p>
+          <h1 className="text-2xl font-bold text-gray-900">Submit Delivery Advice</h1>
+          <p className="text-sm text-gray-500 mt-0.5">Notify the receiving team that goods have been delivered against an active contract</p>
         </div>
       </div>
 
       <form onSubmit={handleSubmit}>
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-8 mb-6">
-          <h2 className="text-lg font-bold text-gray-900 mb-6">Contract & Delivery Reference</h2>
+          <h2 className="text-lg font-bold text-gray-900 mb-6">Contract & Delivery Advice Reference</h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
             <div>
               <label className="block text-sm font-semibold text-gray-700 mb-2">Contract <span className="text-rose-500">*</span></label>
@@ -129,8 +129,8 @@ const SupplierDeliveryLog: React.FC = () => {
               </select>
             </div>
             <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">Delivery Note Number</label>
-              <input value={grnNumber} onChange={(e) => setGrnNumber(e.target.value)}
+              <label className="block text-sm font-semibold text-gray-700 mb-2">Delivery Advice Number</label>
+              <input value={adviceNumber} onChange={(e) => setAdviceNumber(e.target.value)}
                 className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-zammsa-green/20 focus:border-zammsa-green outline-none"
                 placeholder="Auto-generated if left blank" />
             </div>
@@ -224,7 +224,7 @@ const SupplierDeliveryLog: React.FC = () => {
             {deliveryMutation.isPending ? (
               <><div className="animate-spin h-4 w-4 border-2 border-white border-t-transparent rounded-full" /> Submitting...</>
             ) : (
-              'Log Delivery'
+              'Submit Advice'
             )}
           </button>
         </div>

@@ -306,8 +306,18 @@ def performance_evaluate_view(request, supplier_pk):
     overall = Decimal(str(request.data.get('overall_score', 0)))
     improvement_notes = request.data.get('improvement_notes', '')
 
+    contract = None
+    contract_id = request.data.get('contract_id', '')
+    if contract_id:
+        try:
+            from contracts.models import Contract
+            contract = Contract.objects.get(pk=contract_id)
+        except (Contract.DoesNotExist, Exception):
+            pass
+
     perf = SupplierPerformance.objects.create(
         supplier=supplier,
+        contract=contract,
         evaluation_date=timezone.now().date(),
         metrics=metrics,
         overall_score=overall,

@@ -192,6 +192,15 @@ const ContractsList: React.FC = () => {
               Standstill
             </button>
           )}
+          {row.status === 'active' && (
+            <button
+              type="button"
+              onClick={() => navigate(`/contracts/${row.id}/delivery`)}
+              className="px-2.5 py-1.5 text-xs font-bold text-blue-600 hover:bg-blue-50 rounded-lg"
+            >
+              Delivery
+            </button>
+          )}
           {(row as { signed_by_vendor?: boolean; signed_by_authority?: boolean }).signed_by_vendor &&
             !(row as { signed_by_authority?: boolean }).signed_by_authority &&
             isDG && (

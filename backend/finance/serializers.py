@@ -1,8 +1,9 @@
 from rest_framework import serializers
 from django.core.files.storage import default_storage
+from django.db import connection
 from django.utils import timezone
 from .models import (
-    BudgetAllocation, BudgetEncumbrance, GoodsReceiptNote, GRNLineItem,
+    BudgetAllocation, BudgetEncumbrance, DeliveryAdvice, GoodsReceiptNote, GRNLineItem,
     Invoice, InvoiceLineItem, ThreeWayMatch, Payment, LetterOfCredit, RetentionRelease,
 )
 from suppliers.models import Supplier
@@ -26,6 +27,22 @@ class BudgetEncumbranceSerializer(serializers.ModelSerializer):
         fields = '__all__'
 
 
+class DeliveryAdviceSerializer(serializers.ModelSerializer):
+    id = serializers.UUIDField(source='advice_id', read_only=True)
+    contract_number = serializers.CharField(source='contract.contract_number', read_only=True)
+    supplier_name = serializers.CharField(source='supplier.name', read_only=True)
+    official_grn_number = serializers.SerializerMethodField()
+
+    class Meta:
+        model = DeliveryAdvice
+        fields = '__all__'
+        read_only_fields = ('advice_id', 'submitted_at', 'verified_at')
+
+    def get_official_grn_number(self, obj):
+        grn = obj.official_grns.order_by('-received_date').first()
+        return grn.grn_number if grn else ''
+
+
 class GRNLineItemSerializer(serializers.ModelSerializer):
     id = serializers.UUIDField(source='line_item_id', read_only=True)
 
@@ -37,12 +54,17 @@ class GRNLineItemSerializer(serializers.ModelSerializer):
 
 class GoodsReceiptNoteSerializer(serializers.ModelSerializer):
     id = serializers.UUIDField(source='grn_id', read_only=True)
-    line_items = GRNLineItemSerializer(many=True, read_only=True)
+    line_items = serializers.SerializerMethodField()
 
     class Meta:
         model = GoodsReceiptNote
         fields = '__all__'
         read_only_fields = ('grn_id', 'received_date')
+
+    def get_line_items(self, obj):
+        if 'fin_grn_line_item' not in connection.introspection.table_names():
+            return []
+        return GRNLineItemSerializer(obj.line_items.all(), many=True).data
 
 
 class InvoiceLineItemSerializer(serializers.ModelSerializer):
@@ -79,7 +101,13 @@ class InvoiceListSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Invoice
-        fields = ('id', 'invoice_id', 'invoice_number', 'contract_number', 'supplier_name', 'amount', 'status', 'approval_route', 'due_date', 'paid_date', 'submitted_at', 'approved_at', 'paid_at', 'created_at')
+        fields = (
+            'id', 'invoice_id', 'invoice_number', 'contract_number', 'supplier_name',
+            'amount', 'original_amount', 'undelivered_amount', 'liquidated_damages_amount',
+            'net_before_retention', 'retention_amount', 'net_payable_amount',
+            'status', 'approval_route', 'due_date', 'paid_date', 'submitted_at',
+            'approved_at', 'paid_at', 'created_at',
+        )
 
 
 class InvoiceSerializer(serializers.ModelSerializer):

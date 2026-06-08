@@ -5,6 +5,8 @@ from datetime import timedelta
 from xml.etree.ElementTree import Element, SubElement, tostring
 from django.conf import settings
 from django.db.models import Q, Sum
+from django.db import connection
+from django.utils.dateparse import parse_date
 from django.utils import timezone
 from rest_framework import generics, filters, status
 from rest_framework.decorators import api_view, permission_classes
@@ -15,19 +17,19 @@ from django_filters.rest_framework import DjangoFilterBackend
 import django_filters
 
 from .models import (
-    BudgetAllocation, BudgetEncumbrance, GoodsReceiptNote, GRNLineItem,
+    BudgetAllocation, BudgetEncumbrance, DeliveryAdvice, GoodsReceiptNote, GRNLineItem,
     Invoice, InvoiceLineItem, ThreeWayMatch, Payment, LetterOfCredit,
     RetentionRelease, INVOICE_APPROVAL_ROUTES,
 )
 from .serializers import (
     BudgetAllocationSerializer, BudgetEncumbranceSerializer,
-    GoodsReceiptNoteSerializer, GRNLineItemSerializer,
+    DeliveryAdviceSerializer, GoodsReceiptNoteSerializer, GRNLineItemSerializer,
     InvoiceSerializer, InvoiceListSerializer, InvoiceLineItemSerializer,
     ThreeWayMatchSerializer, PaymentSerializer, LetterOfCreditSerializer,
     RetentionReleaseSerializer,
 )
 from accounts.audit import log_audit_action
-from contracts.models import Contract, ContractMilestone
+from contracts.models import Contract, ContractMilestone, LiquidatedDamages
 
 FINANCE_PAYMENT_ROLES = ('finance_officer', 'budget_controller', 'system_admin')
 APPROVAL_FLOW = ('finance_officer', 'department_head', 'director_general')
@@ -62,6 +64,124 @@ def _next_invoice_approval_step(invoice):
     if invoice.approval_route in APPROVAL_FLOW:
         return invoice.approval_route
     return 'finance_officer'
+
+
+def _build_grn_from_items(
+    *,
+    contract,
+    po_number,
+    grn_number,
+    items_data,
+    received_by,
+    notes='',
+    source='webhook',
+    raw_webhook=None,
+    delivery_advice=None,
+    verification_method='',
+    verified_by='',
+    quantity_key='quantity_received',
+):
+    total_qty = Decimal('0')
+    total_amount = Decimal('0')
+    item_desc_parts = []
+
+    for it in items_data:
+        qty = Decimal(str(it.get(quantity_key, it.get('quantity_received', it.get('quantity_delivered', 0)))))
+        total_qty += qty
+        total_amount += Decimal(str(it.get('total_amount', 0)))
+        item_desc_parts.append(it.get('item_name', it.get('item_code', '')))
+
+    unit_price = total_amount / total_qty if total_qty else Decimal('0')
+    item_desc = ', '.join(item_desc_parts[:3])
+    if len(item_desc_parts) > 3:
+        item_desc += f' (+{len(item_desc_parts) - 3} more)'
+
+    grn_status = 'complete'
+    if any(Decimal(str(it.get(quantity_key, it.get('quantity_received', it.get('quantity_delivered', 0))))) < Decimal(str(it.get('quantity_ordered', 0))) for it in items_data):
+        grn_status = 'partial'
+    if any(str(it.get('condition', 'good')).lower() in ('damaged', 'rejected') for it in items_data):
+        grn_status = 'rejected'
+
+    grn = GoodsReceiptNote.objects.create(
+        contract=contract,
+        delivery_advice=delivery_advice,
+        po_number=po_number,
+        grn_number=grn_number,
+        item_description=item_desc,
+        quantity_received=total_qty,
+        unit_price=unit_price,
+        total_amount=total_amount,
+        status=grn_status,
+        received_by=received_by,
+        verified_by=verified_by,
+        verified_at=timezone.now() if verified_by else None,
+        verification_method=verification_method,
+        notes=notes,
+        zamra_certificate_verified=bool((raw_webhook or {}).get('zamra_certificate_verified', False)),
+        cold_chain_maintained=bool((raw_webhook or {}).get('cold_chain_maintained', True)),
+        temperature_log_attached=bool((raw_webhook or {}).get('temperature_log_attached', False)),
+        source=source,
+        raw_webhook=raw_webhook or {},
+    )
+
+    for idx, it in enumerate(items_data, start=1):
+        received_qty = Decimal(str(it.get(quantity_key, it.get('quantity_received', it.get('quantity_delivered', 0)))))
+        GRNLineItem.objects.create(
+            grn=grn,
+            line_number=idx,
+            item_code=it.get('item_code', ''),
+            item_name=it.get('item_name', ''),
+            quantity_ordered=Decimal(str(it.get('quantity_ordered', received_qty))),
+            quantity_received=received_qty,
+            condition=str(it.get('condition', 'good')).lower(),
+            batch_number=it.get('batch_number', ''),
+            expiry_date=parse_date(str(it.get('expiry_date', ''))) if it.get('expiry_date') else None,
+            unit_price=Decimal(str(it.get('unit_price', 0))),
+            total_amount=Decimal(str(it.get('total_amount', 0))),
+        )
+
+    return grn
+
+
+def _latest_ld_amount(contract):
+    total = LiquidatedDamages.objects.filter(
+        contract=contract,
+        status__in=('assessed', 'applied'),
+    ).aggregate(total=Sum('applied_amount'))['total'] or Decimal('0')
+    return total
+
+
+def _apply_invoice_finance_review(invoice, approved_amount, undelivered_amount=Decimal('0')):
+    original_amount = invoice.original_amount or invoice.amount
+    ld_amount = _latest_ld_amount(invoice.contract)
+    net_before_retention = max(approved_amount - ld_amount, Decimal('0'))
+    retention_rate = invoice.contract.retention_rate
+    retention_amount = (net_before_retention * retention_rate).quantize(Decimal('0.01'))
+    net_payable = max(net_before_retention - retention_amount, Decimal('0'))
+
+    invoice.original_amount = original_amount
+    invoice.undelivered_amount = undelivered_amount.quantize(Decimal('0.01'))
+    invoice.liquidated_damages_amount = ld_amount.quantize(Decimal('0.01'))
+    invoice.net_before_retention = net_before_retention.quantize(Decimal('0.01'))
+    invoice.retention_amount = retention_amount
+    invoice.net_payable_amount = net_payable
+    invoice.amount = net_payable
+    invoice.status = 'pending_approval'
+    invoice.approval_route = 'finance_officer'
+    invoice.save(update_fields=[
+        'original_amount', 'undelivered_amount', 'liquidated_damages_amount',
+        'net_before_retention', 'retention_amount', 'net_payable_amount',
+        'amount', 'status', 'approval_route', 'updated_at',
+    ])
+    return {
+        'original_amount': original_amount,
+        'approved_amount': approved_amount,
+        'undelivered_amount': invoice.undelivered_amount,
+        'liquidated_damages_amount': invoice.liquidated_damages_amount,
+        'net_before_retention': invoice.net_before_retention,
+        'retention_amount': invoice.retention_amount,
+        'net_payable_amount': invoice.net_payable_amount,
+    }
 
 
 class StandardPagination(PageNumberPagination):
@@ -291,15 +411,20 @@ def invoice_match_view(request, pk):
         discrepancies={'line_matches': line_matches, **total_discrepancies},
     )
 
+    finance_review = None
     if match_status == 'complete':
-        inv.status = 'pending_approval'
+        finance_review = _apply_invoice_finance_review(inv, inv.original_amount or inv.amount)
     else:
         inv.status = 'pending_matching'
-    inv.save()
+        inv.approval_route = None
+        inv.save()
+
+    status_label = 'Ready for Approval' if match_status == 'complete' else 'Discrepancy - Requires Review'
 
     return Response({
         'message': f'3-way match completed: {match_status}',
         'match_status': match_status,
+        'workflow_status': status_label,
         'match': {
             'overall_match': match_status == 'complete',
             'flag_for_review': match_status != 'complete',
@@ -307,6 +432,10 @@ def invoice_match_view(request, pk):
             'line_matches': line_matches,
             'quantity_match': overall_qty_match,
             'price_match': overall_price_match,
+            'finance_review': {
+                key: float(value) if isinstance(value, Decimal) else value
+                for key, value in (finance_review or {}).items()
+            },
         },
         'discrepancies': total_discrepancies,
     })
@@ -338,6 +467,23 @@ def invoice_approve_view(request, pk):
     if inv.status != 'pending_approval':
         return Response({'error': 'Invoice must be ready for approval before approval can continue'}, status=400)
 
+    contract = inv.contract
+
+    # Self-approval prohibition (Phase E.3):
+    # R-07 (finance_officer) cannot approve payment for a contract they manage as R-12
+    if request.user.role == 'finance_officer' and contract.contract_manager_id == request.user.id:
+        return Response({
+            'error': 'Self-approval prohibited: Finance Officer (R-07) cannot approve payment for a contract they also manage as Contract Manager (R-12).',
+        }, status=403)
+
+    # R-02 (department_head) cannot approve payment for a requisition raised by their own department
+    if request.user.role == 'department_head' and contract.solicitation and contract.solicitation.requisition:
+        req_dept_name = getattr(contract.solicitation.requisition.department, 'name', '') or ''
+        if request.user.department and req_dept_name and request.user.department.lower() == req_dept_name.lower():
+            return Response({
+                'error': 'Self-approval prohibited: Department Head (R-02) cannot approve payment for a requisition raised by their own department.',
+            }, status=403)
+
     final_route = inv.determine_approval_route()
     current_step = _next_invoice_approval_step(inv)
 
@@ -348,7 +494,7 @@ def invoice_approve_view(request, pk):
         }, status=403)
 
     if current_step == final_route:
-        inv.status = 'approved'
+        inv.status = 'fully_approved'
         inv.approved_at = timezone.now()
         inv.approval_route = final_route
         inv.save(update_fields=['status', 'approved_at', 'approval_route', 'updated_at'])
@@ -357,7 +503,7 @@ def invoice_approve_view(request, pk):
             user=request.user, action='INVOICE_APPROVED', module='finance',
             record_id=str(inv.invoice_id), ip_address=ip,
         )
-        return Response({'message': 'Invoice approved for payment', 'status': inv.status, 'approval_route': final_route})
+        return Response({'message': 'Invoice fully approved for payment', 'status': inv.status, 'approval_route': final_route})
 
     next_step = APPROVAL_FLOW[APPROVAL_FLOW.index(current_step) + 1]
     inv.approval_route = next_step
@@ -384,17 +530,19 @@ def invoice_accept_partial_view(request, pk):
     if not match or match.match_status != 'partial':
         return Response({'error': 'Only invoices with a partial 3-way match can be accepted for adjusted payment'}, status=400)
 
-    approved_amount = Decimal(str(request.data.get('approved_amount', inv.amount)))
+    original_amount = inv.original_amount or inv.amount
+    approved_amount = Decimal(str(request.data.get('approved_amount', original_amount)))
     if approved_amount <= 0:
         return Response({'error': 'approved_amount must be positive'}, status=400)
-    if approved_amount > inv.amount:
+    if approved_amount > original_amount:
         return Response({'error': 'approved_amount cannot exceed invoice amount'}, status=400)
+    undelivered_amount = max(original_amount - approved_amount, Decimal('0'))
 
     discrepancies = match.discrepancies or {}
     discrepancies['partial_review'] = {
         'accepted': True,
         'approved_amount': float(approved_amount),
-        'original_invoice_amount': float(inv.amount),
+        'original_invoice_amount': float(original_amount),
         'note': request.data.get('notes', ''),
         'reviewed_by': str(request.user.id),
         'reviewed_at': timezone.now().isoformat(),
@@ -402,15 +550,19 @@ def invoice_accept_partial_view(request, pk):
     match.discrepancies = discrepancies
     match.save(update_fields=['discrepancies'])
 
-    inv.amount = approved_amount
-    inv.status = 'pending_approval'
-    inv.approval_route = 'finance_officer'
-    inv.save(update_fields=['amount', 'status', 'approval_route', 'updated_at'])
+    finance_review = _apply_invoice_finance_review(inv, approved_amount, undelivered_amount)
 
     return Response({
         'message': 'Partial match accepted. Invoice routed for adjusted approval.',
         'status': inv.status,
-        'approved_amount': float(inv.amount),
+        'approved_amount': float(approved_amount),
+        'net_payable_amount': float(inv.net_payable_amount),
+        'retention_amount': float(inv.retention_amount),
+        'liquidated_damages_amount': float(inv.liquidated_damages_amount),
+        'finance_review': {
+            key: float(value) if isinstance(value, Decimal) else value
+            for key, value in finance_review.items()
+        },
         'approval_route': inv.approval_route,
     })
 
@@ -424,6 +576,7 @@ def grn_webhook_view(request):
     grn_number = request.data.get('grn_number', '')
     po_number = request.data.get('po_number', '')
     contract_id = request.data.get('contract_id', '')
+    delivery_advice_id = request.data.get('delivery_advice_id', '')
 
     if not grn_number or not po_number:
         return Response({'error': 'grn_number and po_number are required'}, status=400)
@@ -436,6 +589,15 @@ def grn_webhook_view(request):
             pass
     if contract is None and po_number:
         contract = Contract.objects.filter(contract_number=po_number, status__in=('active', 'pending_acceptance')).first()
+
+    delivery_advice = None
+    if delivery_advice_id:
+        try:
+            delivery_advice = DeliveryAdvice.objects.select_related('contract', 'supplier').get(pk=delivery_advice_id)
+        except DeliveryAdvice.DoesNotExist:
+            return Response({'error': 'delivery_advice_id not found'}, status=404)
+        if contract is None:
+            contract = delivery_advice.contract
 
     # Support both flat payload and items array
     items_data = request.data.get('items', [])
@@ -451,12 +613,20 @@ def grn_webhook_view(request):
             grn_number=grn_number,
             defaults={
                 'contract': contract,
+                'delivery_advice': delivery_advice,
                 'po_number': po_number,
                 'item_description': item_desc,
                 'quantity_received': quantity,
                 'unit_price': unit_price,
                 'total_amount': total_amount,
+                'status': request.data.get('status', 'complete'),
                 'received_by': received_by,
+                'verified_by': 'wms_webhook',
+                'verified_at': timezone.now(),
+                'verification_method': 'wms_webhook',
+                'zamra_certificate_verified': _bool_from_request(request.data.get('zamra_certificate_verified', False)),
+                'cold_chain_maintained': _bool_from_request(request.data.get('cold_chain_maintained', True)),
+                'temperature_log_attached': _bool_from_request(request.data.get('temperature_log_attached', False)),
                 'source': 'webhook',
                 'raw_webhook': request.data,
             }
@@ -470,6 +640,9 @@ def grn_webhook_view(request):
                 'item_name': item_desc or request.data.get('item_name', ''),
                 'quantity_ordered': quantity,
                 'quantity_received': quantity,
+                'condition': request.data.get('condition', 'good'),
+                'batch_number': request.data.get('batch_number', ''),
+                'expiry_date': parse_date(str(request.data.get('expiry_date', ''))) if request.data.get('expiry_date') else None,
                 'unit_price': unit_price,
                 'total_amount': total_amount,
             }
@@ -491,17 +664,30 @@ def grn_webhook_view(request):
             total_amount += Decimal(str(it.get('total_amount', 0)))
 
         unit_price = total_amount / total_qty if total_qty else Decimal('0')
+        grn_status = 'complete'
+        if any(Decimal(str(it.get('quantity_received', 0))) < Decimal(str(it.get('quantity_ordered', 0))) for it in items_data):
+            grn_status = 'partial'
+        if any(str(it.get('condition', 'good')).lower() in ('damaged', 'rejected') for it in items_data):
+            grn_status = 'rejected'
 
         grn, created = GoodsReceiptNote.objects.update_or_create(
             grn_number=grn_number,
             defaults={
                 'contract': contract,
+                'delivery_advice': delivery_advice,
                 'po_number': po_number,
                 'item_description': item_desc,
                 'quantity_received': total_qty,
                 'unit_price': unit_price,
                 'total_amount': total_amount,
+                'status': request.data.get('status', grn_status),
                 'received_by': received_by,
+                'verified_by': 'wms_webhook',
+                'verified_at': timezone.now(),
+                'verification_method': 'wms_webhook',
+                'zamra_certificate_verified': _bool_from_request(request.data.get('zamra_certificate_verified', False)),
+                'cold_chain_maintained': _bool_from_request(request.data.get('cold_chain_maintained', True)),
+                'temperature_log_attached': _bool_from_request(request.data.get('temperature_log_attached', False)),
                 'source': 'webhook',
                 'raw_webhook': request.data,
             }
@@ -517,6 +703,9 @@ def grn_webhook_view(request):
                 item_name=it.get('item_name', ''),
                 quantity_ordered=Decimal(str(it.get('quantity_ordered', 0))),
                 quantity_received=Decimal(str(it.get('quantity_received', 0))),
+                condition=str(it.get('condition', 'good')).lower(),
+                batch_number=it.get('batch_number', ''),
+                expiry_date=parse_date(str(it.get('expiry_date', ''))) if it.get('expiry_date') else None,
                 unit_price=Decimal(str(it.get('unit_price', 0))),
                 total_amount=Decimal(str(it.get('total_amount', 0))),
             )
@@ -527,7 +716,7 @@ def grn_webhook_view(request):
         if milestone_name:
             ContractMilestone.objects.filter(
                 contract=contract, milestone_name=milestone_name
-            ).update(status='delivered')
+            ).update(status='delivered', completed_at=timezone.now())
 
     return Response({
         'message': 'GRN received',
@@ -558,14 +747,20 @@ def payment_bank_confirm_view(request, pk):
     if confirmed:
         payment.status = 'confirmed'
         payment.reference = bank_ref
-        payment.save(update_fields=['status', 'reference'])
+        payment.bank_reconciliation_status = 'paid'
+        payment.bank_reconciled_at = timezone.now()
+        payment.save(update_fields=['status', 'reference', 'bank_reconciliation_status', 'bank_reconciled_at'])
         inv.status = 'paid'
         inv.paid_at = timezone.now()
         inv.save(update_fields=['status', 'paid_at', 'updated_at'])
         return Response({'message': 'Payment confirmed by bank', 'status': inv.status, 'bank_reference': bank_ref})
     else:
         payment.status = 'failed'
-        payment.save()
+        payment.bank_reconciliation_status = 'unpaid'
+        payment.bank_reconciled_at = timezone.now()
+        payment.save(update_fields=['status', 'bank_reconciliation_status', 'bank_reconciled_at'])
+        inv.status = 'payment_failed'
+        inv.save(update_fields=['status', 'updated_at'])
         return Response({'message': 'Payment failed', 'status': payment.status})
 
 
@@ -589,11 +784,23 @@ def payment_manual_confirm_view(request, pk):
     if not bank_ref:
         bank_ref = f'MANUAL-{timezone.now().strftime("%Y%m%d-%H%M%S")}'
 
-    payment.status = 'confirmed'
+    reconcile_status = (request.data.get('status') or request.data.get('reconciliation_status') or 'paid').lower()
+    confirmed = request.data.get('confirmed')
+    if confirmed is not None:
+        reconcile_status = 'paid' if _bool_from_request(confirmed) else 'unpaid'
+
+    if reconcile_status not in ('paid', 'unpaid'):
+        return Response({'error': 'status must be paid or unpaid'}, status=400)
+
+    payment.status = 'confirmed' if reconcile_status == 'paid' else 'failed'
     payment.reference = bank_ref
-    payment.save(update_fields=['status', 'reference'])
-    inv.status = 'paid'
-    inv.paid_at = timezone.now()
+    payment.bank_reconciliation_status = reconcile_status
+    payment.bank_reconciled_by = request.user
+    payment.bank_reconciled_at = timezone.now()
+    payment.save(update_fields=['status', 'reference', 'bank_reconciliation_status', 'bank_reconciled_by', 'bank_reconciled_at'])
+
+    inv.status = 'paid' if reconcile_status == 'paid' else 'payment_failed'
+    inv.paid_at = timezone.now() if reconcile_status == 'paid' else None
     inv.save(update_fields=['status', 'paid_at', 'updated_at'])
 
     ip = request.META.get('REMOTE_ADDR', '')
@@ -603,9 +810,10 @@ def payment_manual_confirm_view(request, pk):
     )
 
     return Response({
-        'message': 'Payment manually confirmed (no bank webhook)',
+        'message': 'Payment reconciliation updated successfully',
         'status': inv.status,
         'bank_reference': bank_ref,
+        'reconciliation_status': reconcile_status,
         'note': 'Use bank-confirm webhook endpoint in production',
     })
 
@@ -665,7 +873,7 @@ def payment_process_view(request, pk):
     if request.user.role not in FINANCE_PAYMENT_ROLES:
         return Response({'error': 'Only finance officers can process payments'}, status=403)
 
-    if inv.status != 'approved':
+    if inv.status not in ('approved', 'fully_approved'):
         return Response({'error': 'Invoice must be approved for payment before processing'}, status=400)
 
     has_complete_match = ThreeWayMatch.objects.filter(invoice=inv, match_status='complete').exists()
@@ -680,16 +888,16 @@ def payment_process_view(request, pk):
         }, status=400)
 
     payment_method = request.data.get('payment_method', 'electronic')
-    amount = Decimal(str(request.data.get('amount', inv.amount)))
+    amount = Decimal(str(request.data.get('amount', inv.net_payable_amount or inv.amount)))
     if amount <= 0:
         return Response({'error': 'Payment amount must be positive'}, status=400)
     if amount > inv.amount:
         return Response({'error': 'Payment amount cannot exceed invoice amount'}, status=400)
 
-    apply_retention = _bool_from_request(request.data.get('apply_retention', True))
-    retention_rate = Decimal('0.05')
-    retained_amount = Decimal('0')
-    if apply_retention:
+    apply_retention = _bool_from_request(request.data.get('apply_retention', inv.retention_amount <= 0))
+    retained_amount = inv.retention_amount or Decimal('0')
+    if apply_retention and not retained_amount:
+        retention_rate = inv.contract.retention_rate
         retained_amount = (amount * retention_rate).quantize(Decimal('0.01'))
         amount -= retained_amount
 
@@ -716,14 +924,18 @@ def payment_process_view(request, pk):
         xml_bytes = tostring(pain001, encoding='unicode')
         file_hash = hashlib.sha256(xml_bytes.encode()).hexdigest()
         pmt.iso20022_file_ref = file_hash
+        pmt.pgp_encrypted_file_ref = f'{file_hash}.pgp'
+        pmt.sftp_outbox_ref = f'sftp/outbox/{file_hash}.xml.pgp'
         pmt.status = 'sent'
         pmt.processed_at = timezone.now()
-        pmt.save(update_fields=['iso20022_file_ref', 'status', 'processed_at'])
+        pmt.save(update_fields=['iso20022_file_ref', 'pgp_encrypted_file_ref', 'sftp_outbox_ref', 'status', 'processed_at'])
 
         return Response({
             'message': 'ISO 20022 payment file generated and sent for bank processing',
             'status': pmt.status,
             'iso20022_file_ref': file_hash,
+            'pgp_encrypted_file_ref': pmt.pgp_encrypted_file_ref,
+            'sftp_outbox_ref': pmt.sftp_outbox_ref,
             'xml_content': xml_bytes if getattr(settings, 'DEBUG', False) else '',
         })
 
@@ -745,6 +957,14 @@ class GRNListView(BaseView, generics.ListAPIView):
     serializer_class = GoodsReceiptNoteSerializer
     ordering = ['-received_date']
     filterset_fields = ['contract']
+
+
+class DeliveryAdviceListView(BaseView, generics.ListAPIView):
+    queryset = DeliveryAdvice.objects.select_related('contract', 'supplier').all()
+    serializer_class = DeliveryAdviceSerializer
+    ordering = ['-submitted_at']
+    filterset_fields = ['contract', 'status', 'supplier']
+    search_fields = ['advice_number', 'contract__contract_number', 'supplier__name']
 
 
 class LetterOfCreditListView(BaseView, generics.ListCreateAPIView):
@@ -922,6 +1142,7 @@ def manual_grn_create_view(request):
         grn_number = f'GRN-{contract.contract_number}-{count:04d}'
 
     received_by = request.data.get('received_by', request.user.full_name if hasattr(request.user, 'full_name') else str(request.user))
+    verifier_name = request.user.full_name if hasattr(request.user, 'full_name') else str(request.user)
 
     items_data = request.data.get('items', [])
     if not items_data:
@@ -931,60 +1152,38 @@ def manual_grn_create_view(request):
         item_desc = request.data.get('item_description', '')
         total_amount = quantity * unit_price
 
-        grn = GoodsReceiptNote.objects.create(
+        grn = _build_grn_from_items(
             contract=contract,
             po_number=contract.contract_number,
             grn_number=grn_number,
-            item_description=item_desc,
-            quantity_received=quantity,
-            unit_price=unit_price,
-            total_amount=total_amount,
+            items_data=[{
+                'item_code': request.data.get('item_code', ''),
+                'item_name': item_desc or request.data.get('item_name', ''),
+                'quantity_ordered': quantity,
+                'quantity_received': quantity,
+                'unit_price': unit_price,
+                'total_amount': total_amount,
+            }],
             received_by=received_by,
             notes=request.data.get('notes', ''),
             source='manual',
-        )
-        GRNLineItem.objects.create(
-            grn=grn, line_number=1,
-            item_code=request.data.get('item_code', ''),
-            item_name=item_desc or request.data.get('item_name', ''),
-            quantity_ordered=quantity, quantity_received=quantity,
-            unit_price=unit_price, total_amount=total_amount,
+            raw_webhook={'source': 'manual_grn_create', **request.data},
+            verification_method='manual_receipt',
+            verified_by=verifier_name,
         )
     else:
-        total_qty = Decimal('0')
-        total_amount = Decimal('0')
-        item_desc_parts = []
-        for it in items_data:
-            total_qty += Decimal(str(it.get('quantity_received', 0)))
-            total_amount += Decimal(str(it.get('total_amount', 0)))
-            item_desc_parts.append(it.get('item_name', it.get('item_code', '')))
-        unit_price = total_amount / total_qty if total_qty else Decimal('0')
-        item_desc = ', '.join(item_desc_parts[:3])
-        if len(item_desc_parts) > 3:
-            item_desc += f' (+{len(item_desc_parts) - 3} more)'
-
-        grn = GoodsReceiptNote.objects.create(
+        grn = _build_grn_from_items(
             contract=contract,
             po_number=contract.contract_number,
             grn_number=grn_number,
-            item_description=item_desc,
-            quantity_received=total_qty,
-            unit_price=unit_price,
-            total_amount=total_amount,
+            items_data=items_data,
             received_by=received_by,
             notes=request.data.get('notes', ''),
             source='manual',
+            raw_webhook={'source': 'manual_grn_create', **request.data},
+            verification_method='manual_receipt',
+            verified_by=verifier_name,
         )
-        for idx, it in enumerate(items_data, start=1):
-            GRNLineItem.objects.create(
-                grn=grn, line_number=idx,
-                item_code=it.get('item_code', ''),
-                item_name=it.get('item_name', ''),
-                quantity_ordered=Decimal(str(it.get('quantity_ordered', 0))),
-                quantity_received=Decimal(str(it.get('quantity_received', 0))),
-                unit_price=Decimal(str(it.get('unit_price', 0))),
-                total_amount=Decimal(str(it.get('total_amount', 0))),
-            )
 
     # Update milestone if specified
     milestone_name = request.data.get('milestone_name', '')
@@ -1067,24 +1266,49 @@ def contract_financial_summary_view(request, pk):
         contract=contract, status='confirmed'
     ).aggregate(total=Sum('retained_amount'))['total'] or 0
 
+    total_invoiced = Invoice.objects.filter(
+        contract=contract, status__in=('paid', 'fully_approved', 'pending_approval', 'finance_reviewed')
+    ).aggregate(total=Sum('original_amount'))['total'] or 0
+
+    total_ld = LiquidatedDamages.objects.filter(
+        contract=contract, status__in=('assessed', 'applied')
+    ).aggregate(total=Sum('applied_amount'))['total'] or 0
+
+    total_retention_released = RetentionRelease.objects.filter(
+        contract=contract
+    ).aggregate(total=Sum('amount'))['total'] or 0
+
+    amendment_total = contract.amendments.aggregate(
+        total=Sum('financial_impact')
+    )['total'] or 0
+
     milestones = ContractMilestone.objects.filter(contract=contract).values(
-        'milestone_id', 'milestone_name', 'due_date', 'status'
+        'milestone_id', 'milestone_name', 'actual_date', 'due_date', 'status', 'variance_flag'
     ).order_by('due_date')
 
     grns = GoodsReceiptNote.objects.filter(contract=contract).values(
         'grn_id', 'grn_number', 'item_description', 'quantity_received',
-        'unit_price', 'total_amount', 'received_date'
+        'unit_price', 'total_amount', 'received_date', 'status'
     ).order_by('-received_date')
+
+    final_value = contract.value + amendment_total
+    budget_savings = max(final_value - total_invoiced, Decimal('0'))
 
     return Response({
         'contract_id': str(contract.contract_id),
         'contract_number': contract.contract_number,
         'title': contract.title,
-        'value': float(contract.value),
+        'original_value': float(contract.value),
+        'amendment_total': float(amendment_total),
+        'final_contract_value': float(final_value),
         'currency': contract.currency,
+        'total_invoiced': float(total_invoiced),
+        'total_ld_deducted': float(total_ld),
         'payments_to_date': float(total_paid),
         'retained_to_date': float(total_retained),
-        'balance': float(contract.value - total_paid - total_retained),
+        'retention_released_to_date': float(total_retention_released),
+        'budget_savings': float(budget_savings),
+        'balance': float(final_value - total_paid - total_retained),
         'retention_rate': 0.05,
         'payment_terms': '30 days from invoice approval',
         'milestones': list(milestones),
@@ -1098,9 +1322,9 @@ def contract_financial_summary_view(request, pk):
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def supplier_delivery_log_view(request):
-    """Supplier-facing endpoint to log delivery of goods against a contract."""
+    """Supplier-facing endpoint to submit a delivery advice against a contract."""
     if request.user.role != 'supplier_user':
-        return Response({'error': 'Only suppliers can log deliveries'}, status=403)
+        return Response({'error': 'Only suppliers can submit delivery advice'}, status=403)
 
     contract_id = request.data.get('contract_id', '')
     if not contract_id:
@@ -1111,10 +1335,10 @@ def supplier_delivery_log_view(request):
     except Contract.DoesNotExist:
         return Response({'error': 'Contract not found'}, status=404)
 
-    grn_number = request.data.get('grn_number', '')
-    if not grn_number:
-        count = GoodsReceiptNote.objects.filter(contract=contract).count() + 1
-        grn_number = f'DEL-{contract.contract_number}-{count:04d}'
+    advice_number = request.data.get('advice_number', '')
+    if not advice_number:
+        count = DeliveryAdvice.objects.filter(contract=contract).count() + 1
+        advice_number = f'ADV-{contract.contract_number}-{count:04d}'
 
     items_data = request.data.get('items', [])
     if not items_data:
@@ -1129,40 +1353,107 @@ def supplier_delivery_log_view(request):
         total_amount += Decimal(str(it.get('total_amount', 0)))
         item_desc_parts.append(it.get('item_name', it.get('item_code', '')))
 
-    unit_price = total_amount / total_qty if total_qty else Decimal('0')
     item_desc = ', '.join(item_desc_parts[:3])
     if len(item_desc_parts) > 3:
         item_desc += f' (+{len(item_desc_parts) - 3} more)'
 
-    grn = GoodsReceiptNote.objects.create(
+    advice = DeliveryAdvice.objects.create(
+        advice_number=advice_number,
         contract=contract,
-        po_number=contract.contract_number,
-        grn_number=grn_number,
+        supplier=contract.supplier,
         item_description=item_desc,
-        quantity_received=total_qty,
-        unit_price=unit_price,
+        quantity_advised=total_qty,
         total_amount=total_amount,
-        received_by=request.user.full_name if hasattr(request.user, 'full_name') else str(request.user),
         notes=request.data.get('notes', ''),
+        status='submitted',
         source='supplier_portal',
-        raw_webhook=request.data,
+        submitted_by=request.user.full_name if hasattr(request.user, 'full_name') else str(request.user),
+        raw_payload=request.data,
     )
 
-    for idx, it in enumerate(items_data, start=1):
-        GRNLineItem.objects.create(
-            grn=grn,
-            line_number=idx,
-            item_code=it.get('item_code', ''),
-            item_name=it.get('item_name', ''),
-            quantity_ordered=Decimal(str(it.get('quantity_ordered', 0))),
-            quantity_received=Decimal(str(it.get('quantity_delivered', 0))),
-            unit_price=Decimal(str(it.get('unit_price', 0))),
-            total_amount=Decimal(str(it.get('total_amount', 0))),
-        )
+    return Response({
+        'message': 'Delivery advice submitted successfully',
+        'advice': DeliveryAdviceSerializer(advice).data,
+    })
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def verify_delivery_advice_view(request, pk):
+    if request.user.role not in ('contract_manager', 'procurement_officer', 'system_admin'):
+        return Response({'error': 'Only contract managers and procurement officers can verify delivery advice'}, status=403)
+
+    try:
+        advice = DeliveryAdvice.objects.select_related('contract', 'supplier').get(pk=pk)
+    except DeliveryAdvice.DoesNotExist:
+        return Response({'error': 'Delivery advice not found'}, status=404)
+
+    if advice.status == 'verified':
+        return Response({'error': 'Delivery advice has already been verified'}, status=400)
+
+    grn_number = request.data.get('grn_number', '').strip()
+    grn = None
+    if grn_number:
+        grn = GoodsReceiptNote.objects.select_related('contract', 'delivery_advice').filter(
+            contract=advice.contract,
+            grn_number=grn_number,
+        ).first()
+    if grn is None:
+        grn = GoodsReceiptNote.objects.select_related('contract', 'delivery_advice').filter(
+            contract=advice.contract,
+            delivery_advice=advice,
+        ).order_by('-received_date').first()
+    if grn is None:
+        webhook_grns = GoodsReceiptNote.objects.select_related('contract', 'delivery_advice').filter(
+            contract=advice.contract,
+            source='webhook',
+        ).order_by('-received_date')
+        if webhook_grns.count() == 1:
+            grn = webhook_grns.first()
+        elif webhook_grns.count() > 1 and not grn_number:
+            return Response({
+                'error': 'Multiple WMS GRNs were found for this contract. Please provide a GRN number to verify.',
+                'manual_grn_required': False,
+            }, status=400)
+
+    if grn is None:
+        return Response({
+            'error': 'WMS has not sent the GRN webhook yet, or the warehouse system is offline. No GRN was found for this delivery advice. Please check WMS or create the GRN manually.',
+            'manual_grn_required': True,
+        }, status=404)
+
+    received_by = request.data.get(
+        'received_by',
+        request.user.full_name if hasattr(request.user, 'full_name') else str(request.user)
+    )
+    notes = request.data.get('notes', advice.notes)
+    verifier_name = request.user.full_name if hasattr(request.user, 'full_name') else str(request.user)
+
+    if not grn.delivery_advice_id:
+        grn.delivery_advice = advice
+
+    milestone_name = request.data.get('milestone_name', '') or grn.raw_webhook.get('milestone_name', '') or advice.raw_payload.get('milestone_name', '')
+    if milestone_name:
+        ContractMilestone.objects.filter(
+            contract=advice.contract, milestone_name=milestone_name
+        ).update(status='delivered', completed_at=timezone.now())
+
+    grn.verified_by = verifier_name
+    grn.verified_at = timezone.now()
+    grn.verification_method = 'wms_webhook_verification'
+    grn.save(update_fields=['delivery_advice', 'verified_by', 'verified_at', 'verification_method'])
+
+    advice.status = 'verified'
+    advice.verified_by = verifier_name
+    advice.verified_at = timezone.now()
+    advice.verification_method = 'wms_webhook_verification'
+    advice.save(update_fields=['status', 'verified_by', 'verified_at', 'verification_method'])
 
     return Response({
-        'message': 'Delivery logged successfully',
+        'message': 'WMS GRN verified and contract milestone updated',
+        'advice': DeliveryAdviceSerializer(advice).data,
         'grn': GoodsReceiptNoteSerializer(grn).data,
+        'milestone_name': milestone_name,
     })
 
 
@@ -1177,7 +1468,11 @@ def execution_dashboard_view(request, pk):
     except Contract.DoesNotExist:
         return Response({'error': 'Contract not found'}, status=404)
 
-    grns = GoodsReceiptNote.objects.filter(contract=contract).prefetch_related('line_items').order_by('-received_date')
+    has_grn_line_items_table = 'fin_grn_line_item' in connection.introspection.table_names()
+    grns_queryset = GoodsReceiptNote.objects.filter(contract=contract).order_by('-received_date')
+    if has_grn_line_items_table:
+        grns_queryset = grns_queryset.prefetch_related('line_items')
+    grns = grns_queryset
     milestones = ContractMilestone.objects.filter(contract=contract).order_by('due_date')
     invoices_list = Invoice.objects.filter(contract=contract).order_by('-created_at')
     payments_list = Payment.objects.filter(contract=contract).order_by('-created_at')
@@ -1185,7 +1480,8 @@ def execution_dashboard_view(request, pk):
     # Delivery shortages: compare ordered vs received per item
     shortages = []
     for grn in grns:
-        for item in grn.line_items.all():
+        line_items = list(grn.line_items.all()) if has_grn_line_items_table else []
+        for item in line_items:
             shortage = item.quantity_ordered - item.quantity_received
             if shortage > 0:
                 shortages.append({
@@ -1218,7 +1514,12 @@ def execution_dashboard_view(request, pk):
             {
                 'milestone_id': str(m.milestone_id),
                 'milestone_name': m.milestone_name,
+                'planned_date': m.planned_date,
                 'due_date': m.due_date,
+                'actual_date': m.actual_date,
+                'variance_days': m.variance_days,
+                'variance_flag': m.variance_flag,
+                'sequence_number': m.sequence_number,
                 'status': m.status,
             }
             for m in milestones
@@ -1239,7 +1540,7 @@ def execution_dashboard_view(request, pk):
                         'quantity_received': float(li.quantity_received),
                         'unit_price': float(li.unit_price),
                     }
-                    for li in g.line_items.all()
+                    for li in (g.line_items.all() if has_grn_line_items_table else [])
                 ],
             }
             for g in grns

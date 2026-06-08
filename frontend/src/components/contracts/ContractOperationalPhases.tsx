@@ -1,4 +1,5 @@
 import React from 'react';
+import { Link } from 'react-router-dom';
 import { Contract } from '../../types';
 import { ArchiveIcon, CheckCircleIcon, ClockIcon } from '@heroicons/react/outline';
 
@@ -74,11 +75,20 @@ const ContractOperationalPhases: React.FC<Props> = ({ contract, title = 'Post-ac
               {phase.detail && <p className="text-sm opacity-90">{phase.detail}</p>}
               <div className="flex items-center justify-between gap-3">
                 <span className="text-[10px] font-black uppercase tracking-[0.2em]">{statePills[phase.state]}</span>
-                {phase.path && (
-                  <span className="text-[10px] font-black uppercase tracking-[0.2em] opacity-70">
-                    {phase.path.replace(/^\/+/, '')}
-                  </span>
-                )}
+                {phase.path ? (
+                  phase.path.startsWith('/') ? (
+                    <Link
+                      to={phase.path}
+                      className="text-[10px] font-black uppercase tracking-[0.2em] opacity-70 hover:opacity-100 hover:underline"
+                    >
+                      Open
+                    </Link>
+                  ) : (
+                    <span className="text-[10px] font-black uppercase tracking-[0.2em] opacity-70">
+                      {phase.path}
+                    </span>
+                  )
+                ) : null}
               </div>
             </div>
           </div>

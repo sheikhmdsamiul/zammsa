@@ -300,33 +300,102 @@ DEFAULT_MILESTONE_NAMES = [
 ]
 
 
-def _default_cpp_milestone_template(method):
+def _default_cpp_milestone_template(method, procurement_type='goods'):
+    """Generate milestone template by procurement method and type.
+    
+    procuremt_type: 'goods', 'works', 'services', 'consulting'
+    method: 'open_tender', 'international', 'limited', 'simplified', 'direct'
+    """
     # Configurable template by method; values are day offsets from day-0.
     # BR-CPP-08: Closing date minimum periods
     if method == 'open_tender':
         solicitation_to_closing = 21
         closing_to_evaluation = 14
+        evaluation_to_award = 5
+        award_to_signing = 23
     elif method == 'international':
         solicitation_to_closing = 30
         closing_to_evaluation = 14
+        evaluation_to_award = 5
+        award_to_signing = 23
     elif method == 'simplified':
         solicitation_to_closing = 14
         closing_to_evaluation = 7
-    else:
+        evaluation_to_award = 3
+        award_to_signing = 10
+    elif method == 'limited':
+        solicitation_to_closing = 14
+        closing_to_evaluation = 10
+        evaluation_to_award = 3
+        award_to_signing = 10
+    else:  # direct, simplified fallback
         solicitation_to_closing = 10
         closing_to_evaluation = 7
-    return [
-        ('Requisition to Solicitation', 0),
-        ('Publication (Solicitation issued)', 1),
-        ('Closing Date', 1 + solicitation_to_closing),
-        ('Bid Opening', 1 + solicitation_to_closing),
-        ('Evaluation Completion', 1 + solicitation_to_closing + closing_to_evaluation),
-        ('BER Approval (ZPC)', 1 + solicitation_to_closing + closing_to_evaluation + 5),
-        ('Contract Award Notice', 1 + solicitation_to_closing + closing_to_evaluation + 7),
-        ('Standstill Expires (10 working days)', 1 + solicitation_to_closing + closing_to_evaluation + 21),
-        ('Contract Signing', 1 + solicitation_to_closing + closing_to_evaluation + 23),
-        ('Delivery', 1 + solicitation_to_closing + closing_to_evaluation + 37),
-    ]
+        evaluation_to_award = 3
+        award_to_signing = 10
+    
+    # Service-specific durations
+    if procurement_type == 'consulting':
+        # Consulting services: simpler timeline, no delivery/installation
+        return [
+            ('Requisition to Solicitation', 0),
+            ('Publication (Solicitation issued)', 1),
+            ('Closing Date', 1 + solicitation_to_closing),
+            ('Bid Opening', 1 + solicitation_to_closing),
+            ('Evaluation Completion', 1 + solicitation_to_closing + closing_to_evaluation),
+            ('BER Approval (ZPC)', 1 + solicitation_to_closing + closing_to_evaluation + evaluation_to_award),
+            ('Contract Award Notice', 1 + solicitation_to_closing + closing_to_evaluation + evaluation_to_award + 2),
+            ('Standstill Expires (10 working days)', 1 + solicitation_to_closing + closing_to_evaluation + evaluation_to_award + 12),
+            ('Contract Signing', 1 + solicitation_to_closing + closing_to_evaluation + evaluation_to_award + 14),
+            ('Commencement', 1 + solicitation_to_closing + closing_to_evaluation + evaluation_to_award + 16),
+            ('Interim Report', 1 + solicitation_to_closing + closing_to_evaluation + evaluation_to_award + 30),
+            ('Draft Report', 1 + solicitation_to_closing + closing_to_evaluation + evaluation_to_award + 45),
+            ('Final Acceptance', 1 + solicitation_to_closing + closing_to_evaluation + evaluation_to_award + 48),
+            ('Final Payment', 1 + solicitation_to_closing + closing_to_evaluation + evaluation_to_award + 55),
+            ('Contract Closure', 1 + solicitation_to_closing + closing_to_evaluation + evaluation_to_award + 60),
+        ]
+    elif procurement_type == 'works':
+        # Works: includes Installation and Commissioning
+        closing_to_completion = 14
+        return [
+            ('Requisition to Solicitation', 0),
+            ('Publication (Solicitation issued)', 1),
+            ('Closing Date', 1 + solicitation_to_closing),
+            ('Bid Opening', 1 + solicitation_to_closing),
+            ('Evaluation Completion', 1 + solicitation_to_closing + closing_to_evaluation),
+            ('BER Approval (ZPC)', 1 + solicitation_to_closing + closing_to_evaluation + evaluation_to_award),
+            ('Contract Award Notice', 1 + solicitation_to_closing + closing_to_evaluation + evaluation_to_award + 2),
+            ('Standstill Expires (10 working days)', 1 + solicitation_to_closing + closing_to_evaluation + evaluation_to_award + 12),
+            ('Contract Signing', 1 + solicitation_to_closing + closing_to_evaluation + evaluation_to_award + 14),
+            ('Commencement', 1 + solicitation_to_closing + closing_to_evaluation + evaluation_to_award + 16),
+            ('Installation & Testing', 1 + solicitation_to_closing + closing_to_evaluation + evaluation_to_award + 30),
+            ('Completion', 1 + solicitation_to_closing + closing_to_evaluation + evaluation_to_award + 30 + closing_to_completion),
+            ('Final Acceptance', 1 + solicitation_to_closing + closing_to_evaluation + evaluation_to_award + 30 + closing_to_completion + 5),
+            ('Final Payment', 1 + solicitation_to_closing + closing_to_evaluation + evaluation_to_award + 30 + closing_to_completion + 15),
+            ('Security Bond Return', 1 + solicitation_to_closing + closing_to_evaluation + evaluation_to_award + 30 + closing_to_completion + 15 + 30),
+            ('Contract Closure', 1 + solicitation_to_closing + closing_to_evaluation + evaluation_to_award + 30 + closing_to_completion + 15 + 30 + 5),
+        ]
+    else:  # goods, non-consulting services
+        # Goods: 22 milestones including Security Bond Return
+        delivery_to_completion = 7
+        return [
+            ('Requisition to Solicitation', 0),
+            ('Publication (Solicitation issued)', 1),
+            ('Closing Date', 1 + solicitation_to_closing),
+            ('Bid Opening', 1 + solicitation_to_closing),
+            ('Evaluation Completion', 1 + solicitation_to_closing + closing_to_evaluation),
+            ('BER Approval (ZPC)', 1 + solicitation_to_closing + closing_to_evaluation + evaluation_to_award),
+            ('Contract Award Notice', 1 + solicitation_to_closing + closing_to_evaluation + evaluation_to_award + 2),
+            ('Standstill Expires (10 working days)', 1 + solicitation_to_closing + closing_to_evaluation + evaluation_to_award + 12),
+            ('Contract Signing', 1 + solicitation_to_closing + closing_to_evaluation + evaluation_to_award + 14),
+            ('Delivery', 1 + solicitation_to_closing + closing_to_evaluation + evaluation_to_award + 16),
+            ('Installation & Testing', 1 + solicitation_to_closing + closing_to_evaluation + evaluation_to_award + 30),
+            ('Completion', 1 + solicitation_to_closing + closing_to_evaluation + evaluation_to_award + 30 + delivery_to_completion),
+            ('Final Acceptance', 1 + solicitation_to_closing + closing_to_evaluation + evaluation_to_award + 30 + delivery_to_completion + 3),
+            ('Final Payment', 1 + solicitation_to_closing + closing_to_evaluation + evaluation_to_award + 30 + delivery_to_completion + 10),
+            ('Security Bond Return', 1 + solicitation_to_closing + closing_to_evaluation + evaluation_to_award + 30 + delivery_to_completion + 10 + 90),
+            ('Contract Closure', 1 + solicitation_to_closing + closing_to_evaluation + evaluation_to_award + 30 + delivery_to_completion + 10 + 90 + 7),
+        ]
 
 
 def _validate_milestone_minimum_periods(milestones, method):
@@ -906,7 +975,11 @@ class ContractProcurementPlanListView(BaseView, generics.ListCreateAPIView):
         if not milestones:
             from datetime import timedelta
             start_date = timezone.now().date()
-            template = _default_cpp_milestone_template(cpp.method)
+            # Get procurement type from requisition line items (default to 'goods')
+            procurement_type = 'goods'
+            if requisition and requisition.line_items.exists():
+                procurement_type = requisition.line_items.first().procurement_type
+            template = _default_cpp_milestone_template(cpp.method, procurement_type)
             for idx, (name, offset_days) in enumerate(template, start=1):
                 ProcurementMilestone.objects.create(
                     cpp=cpp,

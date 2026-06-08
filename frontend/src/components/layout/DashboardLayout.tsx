@@ -176,6 +176,7 @@ function useSidebarItems(userRole: string | undefined): NavItem[] {
       { label: 'Payments', path: '/finance/payments', icon: <CashIcon className={iconClass} />,
         children: [
           { label: 'Payment Queue', path: '/finance/payments' },
+          { label: 'Official GRNs', path: '/finance/grns' },
           { label: 'Letters of Credit', path: '/finance/letters-of-credit' },
         ]
       },
@@ -200,6 +201,7 @@ function useSidebarItems(userRole: string | undefined): NavItem[] {
       { label: 'Payments', path: '/finance/payments', icon: <CashIcon className={iconClass} />,
         children: [
           { label: 'Payment Queue', path: '/finance/payments' },
+          { label: 'Official GRNs', path: '/finance/grns' },
           { label: 'Letters of Credit', path: '/finance/letters-of-credit' },
         ]
       },

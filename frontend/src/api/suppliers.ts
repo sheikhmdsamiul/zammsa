@@ -34,7 +34,7 @@ export const suppliersApi = {
   getPerformance: (id: string) =>
     api.get<any>(`/suppliers/performances/?supplier=${id}`).then((r) => r.data),
 
-  evaluatePerformance: (supplierPk: string, data: { metrics: Record<string, any>; overall_score: number; improvement_notes?: string }) =>
+  evaluatePerformance: (supplierPk: string, data: { metrics: Record<string, any>; overall_score: number; improvement_notes?: string; contract_id?: string }) =>
     api.post<any>(`/suppliers/performances/evaluate/${supplierPk}/`, data).then((r) => r.data),
 
   getRiskScore: (id: string) =>

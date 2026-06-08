@@ -1,4 +1,4 @@
-from decimal import Decimal
+from decimal import Decimal, ROUND_CEILING
 from django.db.models import Q, Sum, Max
 from django.utils import timezone
 from rest_framework import generics, filters, status
@@ -25,6 +25,51 @@ CONTRACT_GENERATION_ROLES = ('procurement_officer', 'system_admin')
 CONTRACT_MANAGER_ROLES = ('contract_manager', 'procurement_manager', 'director_procurement', 'system_admin')
 STANDSTILL_MANAGE_ROLES = CONTRACT_GENERATION_ROLES + ('contract_manager', 'procurement_manager')
 SUPPLIER_CONTRACT_ROLES = ('supplier_user',)
+
+
+def _copy_cpp_milestones_to_contract(contract):
+    """Copy milestones 9-14 from CPP to ContractMilestone when contract activates"""
+    try:
+        # Navigate: Contract → Solicitation → Requisition → CPP
+        solicitation = contract.solicitation
+        if not solicitation or not solicitation.requisition:
+            return {'error': 'No solicitation or requisition found'}
+        
+        requisition = solicitation.requisition
+        cpp = requisition.cpp.filter(status='approved').first()
+        
+        if not cpp:
+            return {'error': 'No approved CPP found for this requisition'}
+        
+        # Get milestones 9-14 from CPP (Contract Signing, Delivery, Installation, etc.)
+        cpp_milestones = cpp.procurement_milestones.filter(
+            sequence_number__gte=9, 
+            sequence_number__lte=14
+        ).order_by('sequence_number')
+        
+        if not cpp_milestones.exists():
+            return {'error': 'No milestones 9-14 found in CPP'}
+        
+        # Copy each milestone to contract
+        created_count = 0
+        for idx, cpp_milestone in enumerate(cpp_milestones, start=1):
+            sequence_num = 14 + idx  # Milestones 15-20 map from CPP 9-14
+            
+            ContractMilestone.objects.create(
+                contract=contract,
+                sequence_number=sequence_num,
+                milestone_name=cpp_milestone.milestone_name,
+                planned_date=cpp_milestone.planned_date,
+                due_date=cpp_milestone.planned_date,
+                source_procurement_milestone=cpp_milestone,
+                status='pending',
+                notes=f'Copied from CPP milestone #{cpp_milestone.sequence_number}',
+            )
+            created_count += 1
+        
+        return {'success': True, 'created': created_count}
+    except Exception as e:
+        return {'error': str(e)}
 
 
 def _supplier_contract_filter(user):
@@ -346,6 +391,13 @@ def contract_countersign_view(request, pk):
         contract.status = 'pending_acceptance'
     else:
         contract.status = 'active'
+    
+    # Auto-copy CPP milestones to contract when it becomes active
+    if contract.status == 'active':
+        result = _copy_cpp_milestones_to_contract(contract)
+        if not result.get('success') and not result.get('error', '').startswith('No CPP'):
+            # Log warning but don't block activation
+           pass
 
     contract.save()
 
@@ -446,6 +498,13 @@ def contract_validate_security_view(request, pk, security_pk):
         security.save()
         contract.performance_security_validated = True
         contract.status = 'active'
+        
+        # Auto-copy CPP milestones when contract becomes active via security validation
+        result = _copy_cpp_milestones_to_contract(contract)
+        if not result.get('success') and not result.get('error', '').startswith('No CPP'):
+            # Log warning but don't block activation
+            pass
+        
         contract.save()
         return Response({'message': 'Security validated. Contract activated.', 'status': contract.status})
     else:
@@ -479,12 +538,15 @@ def contract_assign_manager_view(request, pk):
     contract.save()
 
     milestones_data = request.data.get('milestones', [])
-    for m in milestones_data:
+    for idx, m in enumerate(milestones_data, start=1):
         ContractMilestone.objects.create(
             contract=contract,
+            sequence_number=idx,
             milestone_name=m.get('name', 'Milestone'),
+            planned_date=m.get('planned_date') or m.get('due_date'),
             due_date=m.get('due_date'),
-            status='pending',
+            status=m.get('status', 'pending'),
+            notes=m.get('notes', ''),
         )
 
     return Response({
@@ -598,7 +660,7 @@ def contract_closure_checklist_view(request, pk):
 
     checklist, _ = ClosureChecklist.objects.get_or_create(contract=contract)
 
-    for field in ['all_deliverables_received', 'final_inspection_passed', 'all_payments_processed',
+    for field in ['all_deliverables_received', 'final_inspection_passed', 'all_invoices_submitted_approved', 'all_payments_processed',
                   'performance_security_released', 'snagging_items_resolved', 'staff_warranty_training_done',
                   'as_built_docs_received', 'acceptance_certificate_issued', 'liquidated_damages_deducted',
                   'retention_released', 'no_outstanding_disputes', 'no_pending_amendments',
@@ -640,16 +702,23 @@ def contract_calculate_ld_view(request, pk):
         return Response({'error': 'Contract not found'}, status=404)
 
     days_delayed = int(request.data.get('days_delayed', 0))
-    daily_rate = Decimal(str(request.data.get('daily_rate', 0)))
-    ten_pct = contract.value * Decimal('0.1')
-    calculated = Decimal(str(days_delayed)) * daily_rate
-    applied = min(calculated, ten_pct)
+    if days_delayed < 0:
+        return Response({'error': 'days_delayed cannot be negative'}, status=400)
+
+    weekly_rate = Decimal(str(request.data.get('weekly_rate', contract.liquidated_damages_rate)))
+    weeks_late = int((Decimal(days_delayed) / Decimal('7')).to_integral_value(rounding=ROUND_CEILING)) if days_delayed else 0
+    cap_amount = (contract.value * contract.liquidated_damages_cap_rate).quantize(Decimal('0.01'))
+    calculated = (contract.value * weekly_rate * Decimal(weeks_late)).quantize(Decimal('0.01'))
+    applied = min(calculated, cap_amount)
 
     ld = LiquidatedDamages.objects.create(
         contract=contract,
         assessment_date=timezone.now().date(),
         days_delayed=days_delayed,
-        daily_rate=daily_rate,
+        weeks_late=weeks_late,
+        daily_rate=Decimal('0'),
+        weekly_rate=weekly_rate,
+        cap_amount=cap_amount,
         calculated_amount=calculated,
         applied_amount=applied,
         status='assessed',
@@ -659,7 +728,9 @@ def contract_calculate_ld_view(request, pk):
         'message': 'Liquidated damages calculated (capped at 10%)',
         'calculated_amount': float(calculated),
         'applied_amount': float(applied),
-        'cap_amount': float(ten_pct),
+        'weeks_late': weeks_late,
+        'weekly_rate': float(weekly_rate),
+        'cap_amount': float(cap_amount),
         'ld': LiquidatedDamagesSerializer(ld).data,
     })
 
@@ -728,7 +799,7 @@ def contract_archive_view(request, pk):
     if contract.status not in ('completed', 'closed'):
         return Response({'error': 'Only completed or closed contracts can be archived'}, status=400)
     if contract.completed_at:
-        earliest_archive_date = contract.completed_at + timedelta(days=30)
+        earliest_archive_date = contract.completed_at + timedelta(days=contract.archive_after_days)
         if timezone.now().date() < earliest_archive_date and not request.data.get('force'):
             return Response({
                 'error': 'Contract can only be archived 30 days after completion unless force=true is supplied by an authorized records workflow.',
@@ -737,7 +808,7 @@ def contract_archive_view(request, pk):
 
     contract.status = 'archived'
     contract.archived_at = timezone.now()
-    contract.retention_expiry = timezone.now().date() + timedelta(days=365 * 7)
+    contract.retention_expiry = timezone.now().date() + timedelta(days=365 * contract.archive_retention_years)
     contract.save()
 
     ip = request.META.get('REMOTE_ADDR', '')
@@ -762,7 +833,7 @@ def contract_archive_view(request, pk):
         pass  # CPP archiving is best-effort; don't fail contract archive
 
     return Response({
-        'message': 'Contract archived with linked CPP. Retention set to 7 years.',
+        'message': f'Contract archived with linked CPP. Retention set to {contract.archive_retention_years} years.',
         'archive_filename': f'ZAMMSA-{contract.contract_number}-ARCHIVE.zip.enc',
         'encryption': 'AES-256',
         'legal_hold': contract.legal_hold,
@@ -792,11 +863,15 @@ def contract_amend_view(request, pk):
     new_total = cumulative + abs(financial_impact)
     variation_pct = (new_total / contract.value) * Decimal('100') if contract.value > 0 else Decimal('0')
 
-    legal_required = variation_pct > Decimal('25')
-    if legal_required:
-        legal_opinion = request.data.get('legal_opinion_ref', '')
-        if not legal_opinion:
-            return Response({'error': 'Legal opinion required for variations exceeding 25%'}, status=400)
+    cap_pct = contract.amendment_cap_rate * Decimal('100')
+    if variation_pct > cap_pct:
+        return Response({
+            'error': 'Amendment exceeds the 25% cumulative cap and is blocked. Re-procurement and Attorney General review are required.',
+            'cumulative_variation_percentage': float(variation_pct),
+            'cap_percentage': float(cap_pct),
+        }, status=400)
+
+    legal_required = False
 
     last_num = contract.amendments.aggregate(m=Max('amendment_number'))['m'] or 0
 
@@ -917,3 +992,37 @@ class AppealListView(BaseView, generics.ListCreateAPIView):
     queryset = Appeal.objects.select_related('contract', 'bidder', 'resolved_by').all()
     serializer_class = AppealSerializer
     ordering = ['-filed_at']
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def contract_milestone_update_actual_view(request, pk):
+    """Update ContractMilestone actual_date and recalculate variance"""
+    try:
+        milestone = ContractMilestone.objects.get(pk=pk)
+    except ContractMilestone.DoesNotExist:
+        return Response({'error': 'Milestone not found'}, status=404)
+
+    # Only contract managers can update milestones
+    if getattr(request.user, 'role', '') not in CONTRACT_MANAGER_ROLES:
+        return Response({'error': 'Only contract management roles can update milestones'}, status=403)
+
+    actual_date_str = request.data.get('actual_date')
+    if actual_date_str:
+        try:
+            from datetime import datetime
+            actual_date = datetime.strptime(actual_date_str, '%Y-%m-%d').date()
+            milestone.actual_date = actual_date
+        except ValueError:
+            return Response({'error': 'Invalid date format. Use YYYY-MM-DD'}, status=400)
+
+    notes = request.data.get('notes', None)
+    if notes is not None:
+        milestone.notes = notes
+
+    milestone.save()
+
+    return Response({
+        'message': 'Milestone updated',
+        'milestone': ContractMilestoneSerializer(milestone).data,
+    })

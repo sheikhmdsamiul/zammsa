@@ -24,6 +24,7 @@ urlpatterns = [
     path('securities/', views.ContractSecurityListView.as_view(), name='contract-security-list'),
     path('milestones/', views.ContractMilestoneListView.as_view(), name='contract-milestone-list'),
     path('milestones/<uuid:pk>/', views.ContractMilestoneDetailView.as_view(), name='contract-milestone-detail'),
+    path('milestones/<uuid:pk>/update-actual/', views.contract_milestone_update_actual_view, name='contract-milestone-update-actual'),
     path('amendments/', views.ContractAmendmentListView.as_view(), name='amendment-list'),
     path('closures/', views.ClosureChecklistListView.as_view(), name='closure-list'),
     path('liquidated-damages/', views.LiquidatedDamagesListView.as_view(), name='ld-list'),

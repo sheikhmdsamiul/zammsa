@@ -21,10 +21,20 @@ class ContractAmendmentSerializer(serializers.ModelSerializer):
 class ContractMilestoneSerializer(serializers.ModelSerializer):
     id = serializers.UUIDField(source='milestone_id', read_only=True)
     title = serializers.CharField(source='milestone_name', read_only=True)
+    planned_date = serializers.DateField(required=False, allow_null=True)
+    actual_date = serializers.DateField(required=False, allow_null=True)
+    variance_days = serializers.IntegerField(read_only=True)
+    variance_flag = serializers.CharField(read_only=True)
+    source_procurement_milestone = serializers.UUIDField(required=False, allow_null=True)
 
     class Meta:
         model = ContractMilestone
-        fields = '__all__'
+        fields = (
+            'id', 'contract', 'sequence_number', 'milestone_name', 'planned_date', 
+            'due_date', 'actual_date', 'completed_at', 'variance_days', 'variance_flag',
+            'source_procurement_milestone', 'status', 'notes', 'created_at', 'updated_at'
+        )
+        read_only_fields = ('milestone_id', 'variance_days', 'variance_flag', 'created_at', 'updated_at')
 
 
 class LiquidatedDamagesSerializer(serializers.ModelSerializer):
@@ -120,8 +130,13 @@ class ContractSerializer(serializers.ModelSerializer):
         payments = list(getattr(obj, 'payments').all())
         retention_releases = list(getattr(obj, 'retention_releases').all())
         supplier_performances = list(getattr(obj, 'supplier_performances').all())
-        closure_checklists = list(getattr(obj, 'closure_checklists').all())
-        latest_closure = closure_checklists[-1] if closure_checklists else None
+        closure_manager = getattr(obj, 'closure_checklists')
+        closure_checklists = list(
+            closure_manager.order_by('-completed_at', '-checklist_id')
+            if hasattr(closure_manager, 'order_by')
+            else closure_manager.all()
+        )
+        latest_closure = closure_checklists[0] if closure_checklists else None
 
         active_or_beyond = obj.status in ('active', 'completed', 'terminated', 'closed', 'archived')
         archived = bool(obj.archived_at)
@@ -156,10 +171,10 @@ class ContractSerializer(serializers.ModelSerializer):
                 'A',
                 'Contract Execution & Monitoring',
                 'R-12',
-                'complete' if archived or obj.status in ('completed', 'closed') else 'current' if active_or_beyond else 'upcoming',
-                'Contract is active or already closed',
-                'R-12 tracks execution, delivery oversight, deviations, and milestone follow-up.',
-                f'/contracts/{obj.contract_id}/performance',
+                'complete' if active_or_beyond else 'current' if obj.status in ('draft', 'pending_acceptance') else 'upcoming',
+                'Contract is active or ready for execution monitoring' if active_or_beyond else 'Execution plan is being prepared',
+                'R-12 tracks delivery, deviations, communications, and milestone follow-up during execution.',
+                f'/contracts/{obj.contract_id}/execution',
             ),
             phase(
                 'B',
@@ -168,7 +183,7 @@ class ContractSerializer(serializers.ModelSerializer):
                 'complete' if has_grn else 'current' if active_or_beyond else 'upcoming',
                 f'{len(goods_receipts)} goods receipt note(s)',
                 'Warehouse and contract management confirm delivery against the contract.',
-                f'/contracts/{obj.contract_id}/milestones',
+                f'/contracts/{obj.contract_id}/delivery',
             ),
             phase(
                 'C',
@@ -193,9 +208,9 @@ class ContractSerializer(serializers.ModelSerializer):
                 'Payment Approval Chain',
                 'R-07, R-02, R-10',
                 'complete' if invoice_approved else 'current' if invoice_reviewed and active_or_beyond else 'upcoming',
-                f'{len(payments)} payment record(s) linked',
+                f'{len(payments)} payment record(s) linked' if payment_started else 'Awaiting payment initiation',
                 'Approval follows the internal payment chain before release to bank.',
-                f'/finance/approvals?contract={obj.contract_id}',
+                f'/finance/payments?contract={obj.contract_id}',
             ),
             phase(
                 'F',
@@ -213,7 +228,7 @@ class ContractSerializer(serializers.ModelSerializer):
                 'complete' if retention_complete else 'current' if payment_complete and active_or_beyond else 'upcoming',
                 'Retention release or withholding recorded' if retention_complete else 'Retention still held',
                 'Retention is monitored until the contractual release conditions are met.',
-                f'/finance/retention?contract={obj.contract_id}',
+                f'/finance/retention',
             ),
             phase(
                 'H',

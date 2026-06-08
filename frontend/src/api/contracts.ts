@@ -1,5 +1,5 @@
 import api from './client';
-import { Contract, PaginatedResponse } from '../types';
+import { Contract, PaginatedResponse, ContractMilestone } from '../types';
 
 export const contractsApi = {
   list: (params?: Record<string, any>) =>
@@ -100,4 +100,7 @@ export const contractsApi = {
 
   export: (params?: Record<string, any>) =>
     api.get('/contracts/', { params, responseType: 'blob' }),
+
+  updateMilestoneActual: (milestoneId: string, data: { actual_date: string; notes?: string }) =>
+    api.post<ContractMilestone>(`/contracts/milestones/${milestoneId}/update-actual/`, data).then((r) => r.data),
 };

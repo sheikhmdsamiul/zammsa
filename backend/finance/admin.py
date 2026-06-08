@@ -1,11 +1,12 @@
 from django.contrib import admin
 from .models import (
-    BudgetAllocation, BudgetEncumbrance, GoodsReceiptNote, GRNLineItem,
+    BudgetAllocation, BudgetEncumbrance, DeliveryAdvice, GoodsReceiptNote, GRNLineItem,
     Invoice, InvoiceLineItem, ThreeWayMatch, Payment, LetterOfCredit,
 )
 
 admin.site.register(BudgetAllocation)
 admin.site.register(BudgetEncumbrance)
+admin.site.register(DeliveryAdvice)
 admin.site.register(GoodsReceiptNote)
 admin.site.register(GRNLineItem)
 admin.site.register(Invoice)

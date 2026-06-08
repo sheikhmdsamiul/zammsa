@@ -23,6 +23,7 @@ const FinanceDashboard: React.FC = () => {
         <div className="flex gap-3">
           <Link to="/finance/budgets" className="text-sm bg-white border border-gray-300 px-4 py-2 rounded-lg hover:bg-gray-50">Budgets</Link>
           <Link to="/finance/invoices" className="text-sm bg-white border border-gray-300 px-4 py-2 rounded-lg hover:bg-gray-50">Invoices</Link>
+          <Link to="/finance/grns" className="text-sm bg-white border border-gray-300 px-4 py-2 rounded-lg hover:bg-gray-50">GRNs</Link>
           <Link to="/finance/payments" className="text-sm bg-white border border-gray-300 px-4 py-2 rounded-lg hover:bg-gray-50">Payments</Link>
           <Link to="/finance/letters-of-credit" className="text-sm bg-white border border-gray-300 px-4 py-2 rounded-lg hover:bg-gray-50">LCs</Link>
         </div>

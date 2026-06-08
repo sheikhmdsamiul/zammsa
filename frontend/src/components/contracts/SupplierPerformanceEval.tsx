@@ -36,10 +36,18 @@ const SupplierPerformanceEval: React.FC = () => {
     { key: 'technicalSupport', label: 'Technical Support', description: 'quality of after-delivery support', value: 'N/A for goods supply', isNA: true },
   ];
 
+  const weights: Record<string, number> = {
+    deliveryTimeliness: 0.25,
+    qualityCompliance: 0.25,
+    contractAdherence: 0.20,
+    responsiveness: 0.15,
+    technicalSupport: 0.15,
+  };
   const validScores = Object.entries(scores)
     .filter(([_, v]) => v !== null) as [string, number][];
-  const overallScore = validScores.length > 0
-    ? Math.round(validScores.reduce((sum, [_, v]) => sum + v, 0) / validScores.length)
+  const totalWeight = validScores.reduce((sum, [key]) => sum + weights[key], 0);
+  const overallScore = totalWeight > 0
+    ? Math.round(validScores.reduce((sum, [key, v]) => sum + v * weights[key], 0) / totalWeight)
     : 0;
 
   const submitMutation = useMutation({
@@ -47,6 +55,7 @@ const SupplierPerformanceEval: React.FC = () => {
       metrics: scores,
       overall_score: overallScore,
       improvement_notes: comments,
+      contract_id: id,
     }),
     onSuccess: () => {
       setSubmitted(true);

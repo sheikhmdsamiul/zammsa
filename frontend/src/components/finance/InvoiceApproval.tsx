@@ -10,6 +10,15 @@ import {
   DocumentTextIcon, CashIcon,
 } from '@heroicons/react/outline';
 
+type BankOutcome = 'paid' | 'unpaid';
+
+type PaymentArtifacts = {
+  iso20022_file_ref?: string;
+  pgp_encrypted_file_ref?: string;
+  sftp_outbox_ref?: string;
+  xml_content?: string;
+};
+
 const InvoiceApproval: React.FC = () => {
   const { invoiceId } = useParams<{ invoiceId: string }>();
   const queryClient = useQueryClient();
@@ -19,10 +28,12 @@ const InvoiceApproval: React.FC = () => {
   const [reason, setReason] = useState('');
   const [approved, setApproved] = useState(false);
   const [paymentProcessing, setPaymentProcessing] = useState(false);
-  const [paymentMethod, setPaymentMethod] = useState('electronic');
+  const [paymentMethod, setPaymentMethod] = useState('iso20022');
   const [awaitingBankConfirmation, setAwaitingBankConfirmation] = useState(false);
   const [bankRef, setBankRef] = useState('');
+  const [bankOutcome, setBankOutcome] = useState<BankOutcome>('paid');
   const [paymentAdviceSent, setPaymentAdviceSent] = useState(false);
+  const [paymentArtifacts, setPaymentArtifacts] = useState<PaymentArtifacts | null>(null);
 
   const [matchResult, setMatchResult] = useState<any>(null);
 
@@ -45,7 +56,7 @@ const InvoiceApproval: React.FC = () => {
   const approveMutation = useMutation({
     mutationFn: () => financeApi.approveInvoice(invoiceId!),
     onSuccess: (data: any) => {
-      const isFullyApproved = data.status === 'approved';
+      const isFullyApproved = data.status === 'fully_approved' || data.status === 'approved';
       setApproved(isFullyApproved);
       toast.success(data.message || (isFullyApproved ? 'Invoice approved' : 'Approval step completed'));
       queryClient.invalidateQueries({ queryKey: ['invoice', invoiceId] });
@@ -101,7 +112,15 @@ const InvoiceApproval: React.FC = () => {
     }),
     onSuccess: (data: any) => {
       toast.success(data.message || 'Payment sent for bank processing');
+      setPaymentArtifacts({
+        iso20022_file_ref: data.iso20022_file_ref,
+        pgp_encrypted_file_ref: data.pgp_encrypted_file_ref,
+        sftp_outbox_ref: data.sftp_outbox_ref,
+        xml_content: data.xml_content,
+      });
       setPaymentProcessing(false);
+      setBankRef('');
+      setBankOutcome('paid');
       setAwaitingBankConfirmation(true);
       queryClient.invalidateQueries({ queryKey: ['invoice', invoiceId] });
     },
@@ -110,7 +129,8 @@ const InvoiceApproval: React.FC = () => {
 
   const confirmMutation = useMutation({
     mutationFn: () => financeApi.bankConfirmPayment(invoiceId!, {
-      status: 'PAID',
+      status: bankOutcome === 'paid' ? 'PAID' : 'FAILED',
+      confirmed: bankOutcome === 'paid',
       paymentRef: bankRef,
       bank_reference: bankRef,
     }),
@@ -122,7 +142,10 @@ const InvoiceApproval: React.FC = () => {
   });
 
   const manualConfirmMutation = useMutation({
-    mutationFn: () => financeApi.manualConfirmPayment(invoiceId!, { bank_reference: bankRef || undefined }),
+    mutationFn: () => financeApi.manualConfirmPayment(invoiceId!, {
+      bank_reference: bankRef || undefined,
+      status: bankOutcome,
+    }),
     onSuccess: (data: any) => {
       toast.success(data.message || 'Payment confirmed manually');
       queryClient.invalidateQueries({ queryKey: ['invoice', invoiceId] });
@@ -380,7 +403,7 @@ const InvoiceApproval: React.FC = () => {
           )}
 
           {/* Approved & Payment Section */}
-          {(approved || invoice.status === 'approved') && !paymentProcessing && !awaitingBankConfirmation && !isPaid && (
+          {(approved || invoice.status === 'approved' || invoice.status === 'fully_approved') && !paymentProcessing && !awaitingBankConfirmation && !isPaid && (
             <div className="bg-emerald-50 border border-emerald-100 rounded-3xl p-8 flex flex-col items-center text-center">
               <div className="w-16 h-16 bg-white rounded-2xl shadow-sm flex items-center justify-center mb-4">
                 <CheckCircleIcon className="w-10 h-10 text-emerald-500" />
@@ -430,6 +453,23 @@ const InvoiceApproval: React.FC = () => {
                 </div>
               </div>
 
+              {paymentArtifacts && (
+                <div className="mb-8 grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="rounded-2xl border border-gray-100 bg-gray-50 p-4">
+                    <p className="text-xs font-bold uppercase tracking-widest text-gray-400 mb-1">ISO 20022 File</p>
+                    <p className="text-sm font-bold text-gray-900 break-all">{paymentArtifacts.iso20022_file_ref || '-'}</p>
+                  </div>
+                  <div className="rounded-2xl border border-gray-100 bg-gray-50 p-4">
+                    <p className="text-xs font-bold uppercase tracking-widest text-gray-400 mb-1">PGP Envelope</p>
+                    <p className="text-sm font-bold text-gray-900 break-all">{paymentArtifacts.pgp_encrypted_file_ref || '-'}</p>
+                  </div>
+                  <div className="rounded-2xl border border-gray-100 bg-gray-50 p-4 md:col-span-2">
+                    <p className="text-xs font-bold uppercase tracking-widest text-gray-400 mb-1">SFTP Outbox</p>
+                    <p className="text-sm font-bold text-gray-900 break-all">{paymentArtifacts.sftp_outbox_ref || '-'}</p>
+                  </div>
+                </div>
+              )}
+
               <div className="flex justify-between items-center bg-gray-50 p-6 rounded-2xl">
                 <div className="flex items-center gap-3">
                   <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center">
@@ -463,7 +503,7 @@ const InvoiceApproval: React.FC = () => {
               <p className="text-gray-500 max-w-sm mx-auto mb-8">The funds have been transferred and the ledger has been updated.</p>
               
               <div className="flex flex-wrap gap-4 justify-center">
-                {!invoice.payment_advice_sent && (
+                {!invoice.payment_advice_sent && !paymentAdviceSent && (
                   <button 
                     onClick={() => sendAdviceMutation.mutate()} 
                     disabled={sendAdviceMutation.isPending}
@@ -540,7 +580,36 @@ const InvoiceApproval: React.FC = () => {
               <CashIcon className="w-12 h-12 text-blue-500" />
             </div>
             <h2 className="text-2xl font-black text-gray-900 text-center mb-2">Awaiting Bank Response</h2>
-            <p className="text-gray-500 text-center mb-8">Payment file has been transmitted. Please enter the bank reference once received.</p>
+            <p className="text-gray-500 text-center mb-8">Payment file has been transmitted. Capture the bank outcome once the confirmation arrives.</p>
+
+            {paymentArtifacts && (
+              <div className="grid grid-cols-1 gap-3 mb-6 text-left">
+                <div className="rounded-2xl border border-blue-100 bg-blue-50/60 p-4">
+                  <p className="text-[10px] font-black uppercase tracking-widest text-blue-400 mb-1">ISO 20022 File</p>
+                  <p className="text-sm font-bold text-blue-900 break-all">{paymentArtifacts.iso20022_file_ref || '-'}</p>
+                </div>
+                <div className="rounded-2xl border border-blue-100 bg-blue-50/60 p-4">
+                  <p className="text-[10px] font-black uppercase tracking-widest text-blue-400 mb-1">PGP Envelope</p>
+                  <p className="text-sm font-bold text-blue-900 break-all">{paymentArtifacts.pgp_encrypted_file_ref || '-'}</p>
+                </div>
+                <div className="rounded-2xl border border-blue-100 bg-blue-50/60 p-4">
+                  <p className="text-[10px] font-black uppercase tracking-widest text-blue-400 mb-1">SFTP Outbox</p>
+                  <p className="text-sm font-bold text-blue-900 break-all">{paymentArtifacts.sftp_outbox_ref || '-'}</p>
+                </div>
+              </div>
+            )}
+
+            <div className="mb-6">
+              <label className="block text-sm font-bold text-gray-700 mb-2">Bank Outcome</label>
+              <select
+                value={bankOutcome}
+                onChange={(e) => setBankOutcome(e.target.value as BankOutcome)}
+                className="w-full border-2 border-gray-100 bg-gray-50 rounded-2xl px-5 py-4 text-sm font-black focus:border-zammsa-green outline-none transition-all"
+              >
+                <option value="paid">Paid</option>
+                <option value="unpaid">Unpaid / Rejected</option>
+              </select>
+            </div>
             
             <div className="mb-6">
               <label className="block text-sm font-bold text-gray-700 mb-2">Bank Reference Number</label>
@@ -558,7 +627,7 @@ const InvoiceApproval: React.FC = () => {
                 disabled={!bankRef || confirmMutation.isPending}
                 className="flex-1 py-4 bg-zammsa-green text-white rounded-2xl font-black shadow-lg shadow-zammsa-green/20 disabled:opacity-30 transition-all"
               >
-                {confirmMutation.isPending ? 'Confirming...' : 'Confirm via Bank Webhook'}
+                {confirmMutation.isPending ? 'Confirming...' : `Confirm via Bank Webhook (${bankOutcome})`}
               </button>
               <button onClick={() => setAwaitingBankConfirmation(false)} className="px-6 py-4 text-gray-400 font-bold hover:text-gray-600 transition-colors">
                 Later
@@ -571,7 +640,7 @@ const InvoiceApproval: React.FC = () => {
                 disabled={manualConfirmMutation.isPending}
                 className="text-sm font-bold text-amber-800 hover:underline"
               >
-                {manualConfirmMutation.isPending ? 'Confirming...' : 'Manual Confirm (no bank webhook)'}
+                {manualConfirmMutation.isPending ? 'Confirming...' : `Manual Confirm (${bankOutcome})`}
               </button>
             </div>
           </div>

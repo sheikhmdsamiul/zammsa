@@ -44,11 +44,11 @@ export interface ApiError {
 
 export type StatusType =
   | 'draft' | 'submitted' | 'pending_dept_head' | 'pending_finance'
-  | 'pending_dg' | 'pending_zpc' | 'pending_approval'
-  | 'approved' | 'rejected'
+  | 'pending_dg' | 'pending_zpc' | 'pending_approval' | 'finance_reviewed'
+  | 'approved' | 'fully_approved' | 'rejected'
   | 'active' | 'completed' | 'terminated' | 'cancelled'
   | 'published' | 'closed' | 'awarded'
-  | 'pending' | 'verified' | 'failed';
+  | 'pending' | 'verified' | 'failed' | 'payment_failed';
 
 export interface Requisition {
   id: string;
@@ -457,11 +457,17 @@ export interface PerformanceBond {
 export interface ContractMilestone {
   id: string;
   contract: string;
+  sequence_number: number;
   title: string;
   milestone_name?: string;
   description?: string;
+  planned_date?: string | null;
   due_date: string;
+  actual_date?: string | null;
   completion_date: string | null;
+  completed_at?: string | null;
+  variance_days?: number | null;
+  variance_flag?: string;
   status: string;
   notes?: string;
 }
@@ -483,7 +489,7 @@ export interface ContractAmendment {
   created_at: string;
 }
 
-export type InvoiceStatus = 'draft' | 'submitted' | 'pending_matching' | 'pending_approval' | 'approved' | 'paid' | 'rejected';
+export type InvoiceStatus = 'draft' | 'submitted' | 'pending_matching' | 'finance_reviewed' | 'pending_approval' | 'approved' | 'fully_approved' | 'paid' | 'payment_failed' | 'rejected';
 
 export type PaymentMethod = 'electronic' | 'cheque' | 'loc' | 'iso20022';
 
@@ -500,16 +506,45 @@ export type MatchStatus = 'complete' | 'partial' | 'no_match';
 export interface GoodsReceiptNote {
   grn_id: string;
   contract: string;
+  delivery_advice?: string | null;
   po_number: string;
   grn_number: string;
   item_description: string;
   quantity_received: number;
   unit_price: number;
   total_amount: number;
+  status?: 'complete' | 'partial' | 'rejected';
   received_date: string;
   received_by: string;
+  verified_by?: string;
+  verified_at?: string | null;
+  verification_method?: string;
   notes: string;
+  zamra_certificate_verified?: boolean;
+  cold_chain_maintained?: boolean;
+  temperature_log_attached?: boolean;
   source: string;
+}
+
+export interface DeliveryAdvice {
+  advice_id: string;
+  advice_number: string;
+  contract: string;
+  contract_number?: string;
+  supplier: string;
+  supplier_name?: string;
+  item_description: string;
+  quantity_advised: number;
+  total_amount: number;
+  notes: string;
+  status: 'submitted' | 'verified' | 'rejected';
+  source: string;
+  submitted_by: string;
+  submitted_at: string;
+  verified_by?: string;
+  verified_at?: string | null;
+  verification_method?: string;
+  official_grn_number?: string;
 }
 
 export interface ThreeWayMatch {
@@ -537,6 +572,12 @@ export interface Invoice {
   supplier_bank?: string;
   invoice_number: string;
   amount: number;
+  original_amount?: number | null;
+  undelivered_amount?: number;
+  liquidated_damages_amount?: number;
+  net_before_retention?: number;
+  retention_amount?: number;
+  net_payable_amount?: number;
   due_date: string | null;
   document: string;
   status: InvoiceStatus;
@@ -564,8 +605,13 @@ export interface Payment {
   payment_method: PaymentMethod;
   reference: string;
   iso20022_file_ref: string;
+  pgp_encrypted_file_ref?: string;
+  sftp_outbox_ref?: string;
   vendor: string;
   status: PaymentStatus;
+  bank_reconciliation_status?: 'paid' | 'unpaid' | '';
+  bank_reconciled_by?: string | null;
+  bank_reconciled_at?: string | null;
   processed_at: string | null;
   created_at: string;
 }
@@ -1118,7 +1164,12 @@ export interface ExecutionDashboard {
   milestones: {
     milestone_id: string;
     milestone_name: string;
+    planned_date?: string | null;
     due_date: string;
+    actual_date?: string | null;
+    variance_days?: number | null;
+    variance_flag?: string;
+    sequence_number?: number;
     status: string;
   }[];
   deliveries: {

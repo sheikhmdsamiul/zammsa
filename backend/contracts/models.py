@@ -96,6 +96,12 @@ class Contract(models.Model):
     performance_security_required = models.BooleanField(default=False)
     performance_security_uploaded = models.BooleanField(default=False)
     performance_security_validated = models.BooleanField(default=False)
+    retention_rate = models.DecimalField(max_digits=5, decimal_places=4, default=Decimal('0.0500'))
+    liquidated_damages_rate = models.DecimalField(max_digits=5, decimal_places=4, default=Decimal('0.0050'))
+    liquidated_damages_cap_rate = models.DecimalField(max_digits=5, decimal_places=4, default=Decimal('0.1000'))
+    amendment_cap_rate = models.DecimalField(max_digits=5, decimal_places=4, default=Decimal('0.2500'))
+    archive_after_days = models.PositiveIntegerField(default=30)
+    archive_retention_years = models.PositiveIntegerField(default=7)
     archived_at = models.DateTimeField(null=True, blank=True)
     retention_expiry = models.DateField(null=True, blank=True)
     legal_hold = models.BooleanField(default=False)
@@ -142,6 +148,7 @@ class ClosureChecklist(models.Model):
     contract = models.ForeignKey(Contract, on_delete=models.CASCADE, related_name='closure_checklists')
     all_deliverables_received = models.BooleanField(default=False)
     final_inspection_passed = models.BooleanField(default=False)
+    all_invoices_submitted_approved = models.BooleanField(default=False)
     all_payments_processed = models.BooleanField(default=False)
     performance_security_released = models.BooleanField(default=False)
     snagging_items_resolved = models.BooleanField(default=False)
@@ -172,6 +179,7 @@ class ClosureChecklist(models.Model):
         common_complete = all([
             self.all_deliverables_received,
             self.final_inspection_passed,
+            self.all_invoices_submitted_approved,
             self.all_payments_processed,
             self.performance_security_released,
             self.acceptance_certificate_issued,
@@ -242,22 +250,78 @@ class ContractAmendment(models.Model):
 
 
 class ContractMilestone(models.Model):
+    VARIANCE_FLAG_CHOICES = [
+        ('green', 'On Time / Early'),
+        ('yellow', '1-7 Days Late'),
+        ('orange', '8-14 Days Late'),
+        ('red', '>14 Days Late / Critical'),
+    ]
+
     milestone_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     contract = models.ForeignKey(Contract, on_delete=models.CASCADE, related_name='milestones')
-    milestone_name = models.CharField(max_length=255)
-    due_date = models.DateField()
+    milestone_name = models.CharField(max_length=255, default='Milestone')
+    sequence_number = models.PositiveIntegerField(default=0)
+    
+    # Planned date (copy from CPP milestone 9-14 when contract activates)
+    planned_date = models.DateField(null=True, blank=True)
+    due_date = models.DateField(null=True, blank=True)  # Backward compat, can be removed later
+    
+    # Actual dates
+    actual_date = models.DateField(null=True, blank=True)
+    completed_at = models.DateTimeField(null=True, blank=True)  # Backward compat
+    
+    # Variance tracking
+    variance_days = models.IntegerField(null=True, blank=True)
+    variance_flag = models.CharField(max_length=20, choices=VARIANCE_FLAG_CHOICES, blank=True, default='')
+    
+    # Source tracking
+    source_procurement_milestone = models.ForeignKey(
+        'procurement_planning.ProcurementMilestone',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='contract_milestones',
+        help_text='Reference to the CPP里程碑 this contract milestone was copied from'
+    )
+    
     status = models.CharField(max_length=20, default='pending')
-    completed_at = models.DateTimeField(null=True, blank=True)
     notes = models.TextField(blank=True)
 
     class Meta:
         db_table = 'cnt_milestone'
         verbose_name = 'Contract Milestone'
         verbose_name_plural = 'Contract Milestones'
-        ordering = ['due_date']
+        ordering = ['sequence_number', 'planned_date']
 
     def __str__(self):
         return f'{self.contract.contract_number} - {self.milestone_name}'
+
+    def save(self, *args, **kwargs):
+        # Calculate variance if we have both dates
+        if self.actual_date and self.planned_date:
+            delta = (self.actual_date - self.planned_date).days
+            self.variance_days = delta
+            if delta <= 0:
+                self.variance_flag = 'green'
+            elif delta <= 7:
+                self.variance_flag = 'yellow'
+            elif delta <= 14:
+                self.variance_flag = 'orange'
+            else:
+                self.variance_flag = 'red'
+        elif self.actual_date and not self.planned_date and self.due_date:
+            # Backward compat: use due_date if planned_date is empty
+            delta = (self.actual_date - self.due_date).days
+            self.variance_days = delta
+            if delta <= 0:
+                self.variance_flag = 'green'
+            elif delta <= 7:
+                self.variance_flag = 'yellow'
+            elif delta <= 14:
+                self.variance_flag = 'orange'
+            else:
+                self.variance_flag = 'red'
+        super().save(*args, **kwargs)
 
 
 class LiquidatedDamages(models.Model):
@@ -265,7 +329,10 @@ class LiquidatedDamages(models.Model):
     contract = models.ForeignKey(Contract, on_delete=models.CASCADE, related_name='liquidated_damages')
     assessment_date = models.DateField()
     days_delayed = models.IntegerField()
+    weeks_late = models.PositiveIntegerField(default=0)
     daily_rate = models.DecimalField(max_digits=15, decimal_places=2)
+    weekly_rate = models.DecimalField(max_digits=8, decimal_places=4, default=Decimal('0.0050'))
+    cap_amount = models.DecimalField(max_digits=20, decimal_places=2, default=0)
     calculated_amount = models.DecimalField(max_digits=20, decimal_places=2)
     applied_amount = models.DecimalField(max_digits=20, decimal_places=2, null=True, blank=True)
     status = models.CharField(max_length=20, choices=LD_STATUS_CHOICES, default='assessed')

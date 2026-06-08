@@ -1,17 +1,16 @@
-import React, { useEffect } from 'react';
+import React from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { contractsApi } from '../../api/contracts';
 import { financeApi } from '../../api/finance';
 import { vendorApi } from '../../api/vendor';
-import { Contract, ExecutionDashboard } from '../../types';
 import { StatusBadge } from '../common/StatusBadge';
 import { LoadingSpinner } from '../common/LoadingSpinner';
 import { formatContractValue, formatDate } from './contractUtils';
 import toast from 'react-hot-toast';
 import {
   ArrowLeftIcon, PlusIcon, TrashIcon, TruckIcon,
-  ClockIcon, CheckCircleIcon, ExclamationIcon, CashIcon,
+  ClockIcon, CheckCircleIcon, ExclamationIcon,
 } from '@heroicons/react/outline';
 
 interface GrnItem {
@@ -39,6 +38,10 @@ const DeliveryManager: React.FC = () => {
   const [ldDays, setLdDays] = React.useState('');
   const [ldRate, setLdRate] = React.useState('0.5');
   const [certRef, setCertRef] = React.useState('');
+  const [editingMilestone, setEditingMilestone] = React.useState<{ id: string; actualDate: string } | null>(null);
+  const [verificationGrnNumber, setVerificationGrnNumber] = React.useState('');
+  const [verificationMilestoneName, setVerificationMilestoneName] = React.useState('');
+  const [verificationHint, setVerificationHint] = React.useState<string | null>(null);
 
   const { data: contract, isLoading } = useQuery({
     queryKey: ['contract', id],
@@ -49,6 +52,12 @@ const DeliveryManager: React.FC = () => {
   const { data: d } = useQuery({
     queryKey: ['contract-execution-dashboard', id],
     queryFn: () => vendorApi.contracts.executionDashboard(id!),
+    enabled: !!id,
+  });
+
+  const { data: deliveryAdvices } = useQuery({
+    queryKey: ['delivery-advices', id],
+    queryFn: () => financeApi.listDeliveryAdvices({ contract: id, status: 'submitted', page_size: 50 }),
     enabled: !!id,
   });
 
@@ -92,6 +101,47 @@ const DeliveryManager: React.FC = () => {
     onError: (err: any) => toast.error(err?.response?.data?.error || 'Failed to create GRN'),
   });
 
+  const wmsWebhookMutation = useMutation({
+    mutationFn: () => financeApi.postGrnWebhook({
+      contract_id: id!,
+      po_number: c?.contract_number || '',
+      grn_number: grnNumber || undefined,
+      items: grnItems,
+      notes: grnNotes,
+      milestone_name: milestoneName || undefined,
+      received_by: c?.contract_manager || 'WMS',
+    }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['contract-execution-dashboard', id] });
+      queryClient.invalidateQueries({ queryKey: ['contract', id] });
+      toast.success('WMS webhook GRN posted successfully');
+    },
+    onError: (err: any) => toast.error(err?.response?.data?.error || 'Failed to post WMS webhook GRN'),
+  });
+
+  const verifyAdviceMutation = useMutation({
+    mutationFn: ({ adviceId }: { adviceId: string }) => financeApi.verifyDeliveryAdvice(adviceId, {
+      grn_number: verificationGrnNumber || undefined,
+      milestone_name: verificationMilestoneName || undefined,
+      received_by: c?.contract_manager || undefined,
+      notes: grnNotes || undefined,
+    }),
+    onSuccess: () => {
+      setVerificationHint(null);
+      queryClient.invalidateQueries({ queryKey: ['contract-execution-dashboard', id] });
+      queryClient.invalidateQueries({ queryKey: ['delivery-advices', id] });
+      toast.success('WMS GRN verified and milestone updated');
+    },
+    onError: (err: any) => {
+      const apiError = err?.response?.data?.error || 'Failed to verify GRN';
+      const friendlyError = err?.response?.data?.manual_grn_required
+        ? `${apiError} Manual GRN creation is required until WMS comes back online or sends the webhook.`
+        : apiError;
+      setVerificationHint(friendlyError);
+      toast.error(friendlyError);
+    },
+  });
+
   const ldMutation = useMutation({
     mutationFn: () => contractsApi.calculateLD(id!, {
       days_delayed: Number(ldDays),
@@ -114,6 +164,17 @@ const DeliveryManager: React.FC = () => {
       toast.success(data.message);
     },
     onError: (err: any) => toast.error(err?.response?.data?.error || 'Failed to issue acceptance'),
+  });
+
+  const milestoneUpdateMutation = useMutation({
+    mutationFn: ({ milestoneId, actual_date, notes }: { milestoneId: string; actual_date: string; notes?: string }) =>
+      contractsApi.updateMilestoneActual(milestoneId, { actual_date, notes }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['contract', id] });
+      queryClient.invalidateQueries({ queryKey: ['contract-execution-dashboard', id] });
+      toast.success('Milestone updated');
+    },
+    onError: (err: any) => toast.error(err?.response?.data?.error || 'Failed to update milestone'),
   });
 
   if (isLoading) return <LoadingSpinner className="py-20" />;
@@ -140,6 +201,12 @@ const DeliveryManager: React.FC = () => {
           </div>
           <p className="text-sm text-gray-500 mt-0.5">{c.contract_number} — {c.title}</p>
         </div>
+        <Link
+          to="/finance/grns"
+          className="hidden sm:inline-flex items-center px-4 py-2 rounded-xl border border-gray-200 text-sm font-bold text-gray-700 hover:bg-gray-50"
+        >
+          Official GRNs
+        </Link>
       </div>
 
       {/* Contract Summary */}
@@ -153,14 +220,14 @@ const DeliveryManager: React.FC = () => {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Left: Manual GRN Creation */}
+        {/* Left: GRN Handling */}
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
           <div className="flex items-center gap-2 mb-5">
             <TruckIcon className="w-5 h-5 text-gray-700" />
             <h2 className="text-lg font-bold text-gray-900">Manual GRN Creation</h2>
             <span className="ml-auto text-[10px] bg-amber-50 text-amber-700 px-2 py-1 rounded-full font-bold">Testing Alt</span>
           </div>
-          <p className="text-xs text-gray-500 mb-4">Alternative to WMS webhook — create a GRN directly in PMS for testing.</p>
+          <p className="text-xs text-gray-500 mb-4">Use this when the WMS webhook has not arrived. This creates the official GRN and updates the selected milestone.</p>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-5">
             <div>
@@ -237,15 +304,85 @@ const DeliveryManager: React.FC = () => {
             <div className="text-sm text-gray-600">
               Total: <strong>{totalQty} units</strong> — <strong>K {totalAmount.toLocaleString()}</strong>
             </div>
-            <button onClick={() => grnMutation.mutate()} disabled={grnMutation.isPending || !grnItems.some(i => i.item_name)}
-              className="px-6 py-2.5 bg-zammsa-green text-white rounded-xl font-bold text-sm hover:bg-zammsa-green-dark disabled:opacity-50 shadow-sm">
-              {grnMutation.isPending ? 'Creating...' : 'Create GRN (Manual)'}
-            </button>
+            <div className="flex gap-3">
+              <button onClick={() => wmsWebhookMutation.mutate()} disabled={wmsWebhookMutation.isPending || !grnItems.some(i => i.item_name)}
+                className="px-6 py-2.5 bg-blue-600 text-white rounded-xl font-bold text-sm hover:bg-blue-700 disabled:opacity-50 shadow-sm">
+                {wmsWebhookMutation.isPending ? 'Posting...' : 'Simulate WMS Webhook'}
+              </button>
+              <button onClick={() => grnMutation.mutate()} disabled={grnMutation.isPending || !grnItems.some(i => i.item_name)}
+                className="px-6 py-2.5 bg-zammsa-green text-white rounded-xl font-bold text-sm hover:bg-zammsa-green-dark disabled:opacity-50 shadow-sm">
+                {grnMutation.isPending ? 'Creating...' : 'Create GRN Manually'}
+              </button>
+            </div>
           </div>
         </div>
 
         {/* Right: LD + Final Acceptance */}
         <div className="space-y-6">
+          {/* Delivery Advice Inbox */}
+          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
+            <div className="flex items-center gap-2 mb-4">
+              <ClockIcon className="w-5 h-5 text-blue-600" />
+              <h2 className="text-lg font-bold text-gray-900">Pending Delivery Advice</h2>
+            </div>
+            <p className="text-xs text-gray-500 mb-4">Verify the WMS GRN first. If the webhook GRN is not found, use the manual GRN form below.</p>
+            {verificationHint && (
+              <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+                {verificationHint}
+              </div>
+            )}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
+              <div>
+                <label className="block text-xs font-bold text-gray-600 mb-1">WMS GRN Number</label>
+                <input
+                  value={verificationGrnNumber}
+                  onChange={(e) => setVerificationGrnNumber(e.target.value)}
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm"
+                  placeholder="Enter the GRN number from WMS"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-gray-600 mb-1">Milestone Name</label>
+                <input
+                  value={verificationMilestoneName}
+                  onChange={(e) => setVerificationMilestoneName(e.target.value)}
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm"
+                  placeholder="Milestone to mark as delivered"
+                />
+              </div>
+            </div>
+            {deliveryAdvices?.results?.length ? (
+              <div className="space-y-3">
+                {deliveryAdvices.results.map((advice: any) => (
+                  <div key={advice.advice_id} className="border border-gray-200 rounded-xl p-4">
+                    <div className="flex items-start justify-between gap-3 mb-3">
+                      <div>
+                        <p className="font-bold text-gray-900">{advice.advice_number}</p>
+                        <p className="text-xs text-gray-500">{advice.supplier_name || 'Supplier'} • {advice.contract_number || c.contract_number}</p>
+                        <p className="text-xs text-gray-500 mt-1">{advice.item_description}</p>
+                      </div>
+                      <span className="text-xs font-bold text-blue-700 bg-blue-50 px-2 py-1 rounded-full">Submitted</span>
+                    </div>
+                    <div className="flex items-center justify-between gap-3 text-xs text-gray-500">
+                      <span>Qty: {Number(advice.quantity_advised).toLocaleString()}</span>
+                      <span>K {Number(advice.total_amount).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                      <button
+                        type="button"
+                        onClick={() => verifyAdviceMutation.mutate({ adviceId: advice.advice_id })}
+                        disabled={verifyAdviceMutation.isPending}
+                        className="px-3 py-2 rounded-lg bg-zammsa-green text-white font-bold hover:bg-zammsa-green-dark disabled:opacity-50"
+                      >
+                        Verify GRN
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-sm text-gray-500">No pending delivery advice for this contract.</p>
+            )}
+          </div>
+
           {/* Liquidated Damages */}
           <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
             <div className="flex items-center gap-2 mb-4">
@@ -324,23 +461,98 @@ const DeliveryManager: React.FC = () => {
                 <ClockIcon className="w-5 h-5 text-gray-700" />
                 <h2 className="text-lg font-bold text-gray-900">Milestones</h2>
               </div>
-              <div className="space-y-2">
-                {dashboard.milestones.map((m, i) => (
-                  <div key={i} className="flex items-center justify-between py-2 border-b border-gray-50 text-sm">
-                    <div className="flex items-center gap-2">
-                      <span className={`w-2 h-2 rounded-full ${
-                        m.status === 'completed' || m.status === 'delivered' ? 'bg-emerald-500' : 'bg-amber-400'
-                      }`} />
-                      <span className="text-gray-900">{m.milestone_name}</span>
-                    </div>
-                    <div className="text-right">
-                      <span className="text-xs text-gray-500">{formatDate(m.due_date)}</span>
-                      <span className={`ml-2 text-[10px] px-2 py-0.5 rounded-full font-bold ${
-                        m.status === 'completed' || m.status === 'delivered' ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'
-                      }`}>{m.status}</span>
-                    </div>
-                  </div>
-                ))}
+              <div className="space-y-3">
+                {dashboard.milestones
+                  .slice()
+                  .sort((a, b) => (a.sequence_number || 0) - (b.sequence_number || 0))
+                  .map((m) => {
+                    const plannedDate = m.planned_date || m.due_date;
+                    const variance = m.variance_days ?? (m.actual_date && plannedDate ?
+                      Math.ceil((new Date(m.actual_date).getTime() - new Date(plannedDate).getTime()) / (1000 * 60 * 60 * 24)) : null);
+                    const varianceFlag = m.variance_flag;
+                    const milestoneId = m.milestone_id;
+                    const isEditing = editingMilestone?.id === milestoneId;
+                    const editDate = editingMilestone?.actualDate || m.actual_date || '';
+                    
+                    const getVarianceColor = (flag?: string) => {
+                      if (!flag) return 'bg-gray-100 text-gray-600';
+                      switch (flag) {
+                        case 'green': return 'bg-emerald-50 text-emerald-700';
+                        case 'yellow': return 'bg-amber-50 text-amber-700';
+                        case 'orange': return 'bg-orange-50 text-orange-700';
+                        case 'red': return 'bg-rose-50 text-rose-700';
+                        default: return 'bg-gray-100 text-gray-600';
+                      }
+                    };
+                    
+                    const getVarianceLabel = (days?: number | null, flag?: string) => {
+                      if (days === null || days === undefined) return '—';
+                      if (days <= 0) return `On time (${days}d)`;
+                      if (days <= 7) return `${days}d late`;
+                      if (days <= 14) return `${days}d late`;
+                      return `${days}d late`;
+                    };
+                    
+                    const handleSubmit = (e: React.FormEvent) => {
+                      e.preventDefault();
+                      if (!editDate || !milestoneId) return;
+                      milestoneUpdateMutation.mutate({ milestoneId, actual_date: editDate, notes: `Updated via Delivery Manager` });
+                      setEditingMilestone(null);
+                    };
+                    
+                    const startEdit = () => {
+                      if (!milestoneId) return;
+                      setEditingMilestone({ id: milestoneId, actualDate: m.actual_date || '' });
+                    };
+                    
+                    const cancelEdit = () => {
+                      setEditingMilestone(null);
+                    };
+                    
+                    return (
+                      <div key={milestoneId} className="flex items-center justify-between py-3 border-b border-gray-50">
+                        <div className="flex items-center gap-3 flex-1 min-w-0">
+                          <span className={`w-2 h-2 rounded-full ${
+                            m.status === 'completed' || m.status === 'delivered' ? 'bg-emerald-500' : 'bg-amber-400'
+                          }`} />
+                          <div className="min-w-0">
+                            <p className="font-medium text-gray-900 truncate">{m.milestone_name}</p>
+                            <p className="text-xs text-gray-500">
+                              Planned: {formatDate(plannedDate)}
+                              {m.actual_date && <span className="ml-2">| Actual: {formatDate(m.actual_date)}</span>}
+                            </p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2 flex-shrink-0">
+                          {variance !== null && variance !== undefined && (
+                            <span className={`text-xs font-bold px-2.5 py-1 rounded-full ${getVarianceColor(varianceFlag)}`}>
+                              {getVarianceLabel(variance, varianceFlag)}
+                            </span>
+                          )}
+                          {isEditing ? (
+                            <form onSubmit={handleSubmit} className="flex items-center gap-2">
+                              <input
+                                type="date"
+                                value={editDate}
+                                onChange={(e) => setEditingMilestone(prev => prev ? { ...prev, actualDate: e.target.value } : null)}
+                                className="border border-gray-200 rounded-lg px-2 py-1 text-sm w-32"
+                              />
+                              <button type="submit" className="text-xs text-zammsa-green hover:underline font-bold">Save</button>
+                              <button type="button" onClick={cancelEdit} className="text-xs text-gray-500 hover:text-gray-700">Cancel</button>
+                            </form>
+                          ) : (
+                            <button
+                              onClick={startEdit}
+                              className="text-xs text-zammsa-green hover:underline font-bold"
+                              disabled={milestoneUpdateMutation.isPending}
+                            >
+                              Update Actual
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
               </div>
             </div>
           )}

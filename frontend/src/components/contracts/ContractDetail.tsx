@@ -6,6 +6,7 @@ import { StatusBadge } from '../common/StatusBadge';
 import { LoadingSpinner } from '../common/LoadingSpinner';
 import { PageHeader } from '../common/PageHeader';
 import { StatCard } from '../common/StatCard';
+import ContractOperationalPhases from './ContractOperationalPhases';
 import { Contract } from '../../types';
 import {
   formatContractValue,
@@ -290,6 +291,10 @@ const ContractDetail: React.FC = () => {
         </div>
       )}
 
+      {c.operational_phases?.length ? (
+        <ContractOperationalPhases contract={c} title="Execution and closure phases" />
+      ) : null}
+
       <div className="border-b border-gray-200">
         <nav className="flex gap-1 overflow-x-auto" aria-label="Contract sections">
           {tabs.map((tab) => (
@@ -468,18 +473,57 @@ const ContractDetail: React.FC = () => {
             </p>
           ) : (
             <div className="space-y-3">
-              {c.milestones.map((m) => (
-                <div
-                  key={m.id}
-                  className="flex items-center justify-between p-4 bg-gray-50 rounded-xl border border-gray-100"
-                >
-                  <div>
-                    <p className="font-medium text-gray-900">{m.title || m.milestone_name}</p>
-                    <p className="text-xs text-gray-500 mt-1">Due {formatDate(m.due_date)}</p>
-                  </div>
-                  <StatusBadge status={m.status} />
-                </div>
-              ))}
+              {c.milestones
+                .slice()
+                .sort((a, b) => (a.sequence_number || 0) - (b.sequence_number || 0))
+                .map((m) => {
+                  const plannedDate = m.planned_date || m.due_date;
+                  const variance = m.variance_days ?? (m.actual_date && plannedDate ? 
+                    Math.ceil((new Date(m.actual_date).getTime() - new Date(plannedDate).getTime()) / (1000 * 60 * 60 * 24)) : null);
+                  const varianceFlag = m.variance_flag;
+                  
+                  const getVarianceColor = (flag?: string) => {
+                    if (!flag) return 'bg-gray-100 text-gray-600';
+                    switch (flag) {
+                      case 'green': return 'bg-emerald-50 text-emerald-700';
+                      case 'yellow': return 'bg-amber-50 text-amber-700';
+                      case 'orange': return 'bg-orange-50 text-orange-700';
+                      case 'red': return 'bg-rose-50 text-rose-700';
+                      default: return 'bg-gray-100 text-gray-600';
+                    }
+                  };
+                  
+                  const getVarianceLabel = (days?: number | null, flag?: string) => {
+                    if (days === null || days === undefined) return '—';
+                    if (days <= 0) return `On time (${days}d)`;
+                    if (days <= 7) return `${days}d late`;
+                    if (days <= 14) return `${days}d late`;
+                    return `${days}d late`;
+                  };
+                  
+                  return (
+                    <div
+                      key={m.id}
+                      className="flex items-center justify-between p-4 bg-gray-50 rounded-xl border border-gray-100"
+                    >
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium text-gray-900">{m.title || m.milestone_name}</p>
+                        <p className="text-xs text-gray-500 mt-1">
+                          Planned: {formatDate(plannedDate)}
+                          {m.actual_date && <span className="ml-2">| Actual: {formatDate(m.actual_date)}</span>}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        {variance !== null && variance !== undefined && (
+                          <span className={`text-xs font-bold px-2.5 py-1 rounded-full ${getVarianceColor(varianceFlag)}`}>
+                            {getVarianceLabel(variance, varianceFlag)}
+                          </span>
+                        )}
+                        <StatusBadge status={m.status} />
+                      </div>
+                    </div>
+                  );
+                })}
             </div>
           )}
         </section>

@@ -11,9 +11,12 @@ INVOICE_STATUS_CHOICES = [
     ('draft', 'Draft'),
     ('submitted', 'Submitted'),
     ('pending_matching', 'Pending 3-Way Match'),
+    ('finance_reviewed', 'Finance Reviewed'),
     ('pending_approval', 'Pending Approval'),
     ('approved', 'Approved for Payment'),
+    ('fully_approved', 'Fully Approved'),
     ('paid', 'Paid'),
+    ('payment_failed', 'Payment Failed'),
     ('rejected', 'Rejected'),
 ]
 
@@ -30,6 +33,11 @@ PAYMENT_STATUS_CHOICES = [
     ('sent', 'Sent to Bank'),
     ('confirmed', 'Confirmed'),
     ('failed', 'Failed'),
+]
+
+PAYMENT_RECONCILIATION_CHOICES = [
+    ('paid', 'Paid'),
+    ('unpaid', 'Unpaid'),
 ]
 
 MATCH_STATUS_CHOICES = [
@@ -105,18 +113,73 @@ INVOICE_APPROVAL_ROUTES = [
 ]
 
 
+DELIVERY_ADVICE_STATUS_CHOICES = [
+    ('submitted', 'Submitted'),
+    ('verified', 'Verified'),
+    ('rejected', 'Rejected'),
+]
+
+GRN_STATUS_CHOICES = [
+    ('complete', 'Complete'),
+    ('partial', 'Partial'),
+    ('rejected', 'Rejected'),
+]
+
+GRN_CONDITION_CHOICES = [
+    ('good', 'Good'),
+    ('damaged', 'Damaged'),
+    ('rejected', 'Rejected'),
+]
+
+
+class DeliveryAdvice(models.Model):
+    advice_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    advice_number = models.CharField(max_length=100, unique=True)
+    contract = models.ForeignKey(Contract, on_delete=models.CASCADE, related_name='delivery_advices')
+    supplier = models.ForeignKey(Supplier, on_delete=models.PROTECT, related_name='delivery_advices')
+    item_description = models.TextField(blank=True, default='')
+    quantity_advised = models.DecimalField(max_digits=15, decimal_places=2)
+    total_amount = models.DecimalField(max_digits=20, decimal_places=2)
+    notes = models.TextField(blank=True, default='')
+    status = models.CharField(max_length=20, choices=DELIVERY_ADVICE_STATUS_CHOICES, default='submitted')
+    source = models.CharField(max_length=50, default='supplier_portal')
+    submitted_by = models.CharField(max_length=255, blank=True, default='')
+    submitted_at = models.DateTimeField(auto_now_add=True)
+    verified_by = models.CharField(max_length=255, blank=True, default='')
+    verified_at = models.DateTimeField(null=True, blank=True)
+    verification_method = models.CharField(max_length=50, blank=True, default='')
+    raw_payload = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        db_table = 'fin_delivery_advice'
+        verbose_name = 'Delivery Advice'
+        verbose_name_plural = 'Delivery Advices'
+        ordering = ['-submitted_at']
+
+    def __str__(self):
+        return f'{self.advice_number} - {self.contract.contract_number}'
+
+
 class GoodsReceiptNote(models.Model):
     grn_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     contract = models.ForeignKey(Contract, on_delete=models.CASCADE, null=True, blank=True, related_name='goods_receipt_notes')
+    delivery_advice = models.ForeignKey(DeliveryAdvice, on_delete=models.SET_NULL, null=True, blank=True, related_name='official_grns')
     po_number = models.CharField(max_length=50, blank=True, default='')
     grn_number = models.CharField(max_length=100, unique=True)
     item_description = models.TextField(blank=True, default='')
     quantity_received = models.DecimalField(max_digits=15, decimal_places=2)
     unit_price = models.DecimalField(max_digits=20, decimal_places=2)
     total_amount = models.DecimalField(max_digits=20, decimal_places=2)
+    status = models.CharField(max_length=20, choices=GRN_STATUS_CHOICES, default='complete')
     received_date = models.DateTimeField(auto_now_add=True)
     received_by = models.CharField(max_length=255, blank=True, default='')
+    verified_by = models.CharField(max_length=255, blank=True, default='')
+    verified_at = models.DateTimeField(null=True, blank=True)
+    verification_method = models.CharField(max_length=50, blank=True, default='')
     notes = models.TextField(blank=True, default='')
+    zamra_certificate_verified = models.BooleanField(default=False)
+    cold_chain_maintained = models.BooleanField(default=True)
+    temperature_log_attached = models.BooleanField(default=False)
     source = models.CharField(max_length=50, default='webhook',
         help_text='webhook, manual, api')
     raw_webhook = models.JSONField(default=dict, blank=True)
@@ -139,6 +202,9 @@ class GRNLineItem(models.Model):
     item_name = models.CharField(max_length=255, blank=True, default='')
     quantity_ordered = models.DecimalField(max_digits=15, decimal_places=2)
     quantity_received = models.DecimalField(max_digits=15, decimal_places=2)
+    condition = models.CharField(max_length=20, choices=GRN_CONDITION_CHOICES, default='good')
+    batch_number = models.CharField(max_length=100, blank=True, default='')
+    expiry_date = models.DateField(null=True, blank=True)
     unit_price = models.DecimalField(max_digits=20, decimal_places=2)
     total_amount = models.DecimalField(max_digits=20, decimal_places=2)
 
@@ -180,6 +246,12 @@ class Invoice(models.Model):
     supplier = models.ForeignKey(Supplier, on_delete=models.PROTECT, related_name='invoices')
     invoice_number = models.CharField(max_length=100)
     amount = models.DecimalField(max_digits=20, decimal_places=2)
+    original_amount = models.DecimalField(max_digits=20, decimal_places=2, null=True, blank=True)
+    undelivered_amount = models.DecimalField(max_digits=20, decimal_places=2, default=0)
+    liquidated_damages_amount = models.DecimalField(max_digits=20, decimal_places=2, default=0)
+    net_before_retention = models.DecimalField(max_digits=20, decimal_places=2, default=0)
+    retention_amount = models.DecimalField(max_digits=20, decimal_places=2, default=0)
+    net_payable_amount = models.DecimalField(max_digits=20, decimal_places=2, default=0)
     due_date = models.DateField(null=True, blank=True)
     document = models.CharField(max_length=500, blank=True, default='')
     status = models.CharField(max_length=50, choices=INVOICE_STATUS_CHOICES, default='draft')
@@ -244,8 +316,13 @@ class Payment(models.Model):
     payment_method = models.CharField(max_length=20, choices=PAYMENT_METHOD_CHOICES)
     reference = models.CharField(max_length=200, blank=True, default='')
     iso20022_file_ref = models.CharField(max_length=200, blank=True)
+    pgp_encrypted_file_ref = models.CharField(max_length=200, blank=True, default='')
+    sftp_outbox_ref = models.CharField(max_length=255, blank=True, default='')
     vendor = models.CharField(max_length=255, blank=True, default='')
     status = models.CharField(max_length=20, choices=PAYMENT_STATUS_CHOICES, default='pending')
+    bank_reconciliation_status = models.CharField(max_length=20, choices=PAYMENT_RECONCILIATION_CHOICES, blank=True, default='')
+    bank_reconciled_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='reconciled_payments')
+    bank_reconciled_at = models.DateTimeField(null=True, blank=True)
     processed_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 

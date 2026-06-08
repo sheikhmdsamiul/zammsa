@@ -115,7 +115,9 @@ const ThreeWayMatch = React.lazy(() => import('./components/finance/ThreeWayMatc
 const DiscrepancyReview = React.lazy(() => import('./components/finance/DiscrepancyReview'));
 const FinancePayments = React.lazy(() => import('./components/finance/Payments'));
 const FinanceLettersOfCredit = React.lazy(() => import('./components/finance/LettersOfCredit'));
+const RetentionTracker = React.lazy(() => import('./components/finance/RetentionTracker'));
 const InvoiceApproval = React.lazy(() => import('./components/finance/InvoiceApproval'));
+const GRNDeliveryLog = React.lazy(() => import('./components/execution/GRNDeliveryLog'));
 
 const SuppliersList = React.lazy(() => import('./components/suppliers/SuppliersList'));
 const SupplierDetail = React.lazy(() => import('./components/suppliers/SupplierDetail'));
@@ -370,7 +372,7 @@ function App() {
                     </ProtectedRoute>
                   } />
                   <Route path="contracts/amendments" element={
-                    <ProtectedRoute roles={[ROLES.CONTRACT_MANAGER]}>
+                    <ProtectedRoute roles={[ROLES.CONTRACT_MANAGER, ROLES.PROCUREMENT_MANAGER, ROLES.DIRECTOR_PROCUREMENT]}>
                       <AmendmentsList />
                     </ProtectedRoute>
                   } />
@@ -380,16 +382,20 @@ function App() {
                     </ProtectedRoute>
                   } />
                   <Route path="contracts/supplier-performance" element={
-                    <ProtectedRoute roles={[ROLES.CONTRACT_MANAGER]}>
+                    <ProtectedRoute roles={[ROLES.CONTRACT_MANAGER, ROLES.PROCUREMENT_MANAGER, ROLES.DIRECTOR_PROCUREMENT]}>
                       <SupplierPerformanceList />
                     </ProtectedRoute>
                   } />
                   <Route path="contracts/closure" element={
-                    <ProtectedRoute roles={[ROLES.CONTRACT_MANAGER]}>
+                    <ProtectedRoute roles={[ROLES.CONTRACT_MANAGER, ROLES.PROCUREMENT_MANAGER, ROLES.DIRECTOR_PROCUREMENT]}>
                       <ContractClosureList />
                     </ProtectedRoute>
                   } />
-                  <Route path="contracts/:id" element={<ContractDetail />} />
+                  <Route path="contracts/:id" element={
+                    <ProtectedRoute roles={[ROLES.CONTRACT_MANAGER, ROLES.PROCUREMENT_MANAGER, ROLES.DIRECTOR_PROCUREMENT, ROLES.PROCUREMENT_OFFICER, ROLES.FINANCE_OFFICER, ROLES.DIRECTOR_GENERAL, ROLES.ZPC_MEMBER]}>
+                      <ContractDetail />
+                    </ProtectedRoute>
+                  } />
                   <Route path="contracts/:id/standstill" element={
                     <ProtectedRoute roles={[ROLES.PROCUREMENT_OFFICER, ROLES.PROCUREMENT_MANAGER, ROLES.DIRECTOR_PROCUREMENT]}>
                       <StandstillMonitor />
@@ -407,12 +413,41 @@ function App() {
                       <ContractSigning />
                     </ProtectedRoute>
                   } />
-                  <Route path="contracts/:id/amendments" element={<ContractAmendments />} />
-                  <Route path="contracts/:id/ld" element={<LiquidatedDamages />} />
-                  <Route path="contracts/:id/performance" element={<SupplierPerformanceEval />} />
-                  <Route path="contracts/:id/closure" element={<ContractClosureChecklist />} />
-                  <Route path="contracts/:id/execution" element={<ExecutionDashboard />} />
-                  <Route path="contracts/:id/delivery" element={<DeliveryManager />} />
+                  <Route path="contracts/:id/amendments" element={
+                    <ProtectedRoute roles={[ROLES.CONTRACT_MANAGER, ROLES.PROCUREMENT_MANAGER, ROLES.DIRECTOR_PROCUREMENT]}>
+                      <ContractAmendments />
+                    </ProtectedRoute>
+                  } />
+                  <Route path="contracts/:id/ld" element={
+                    <ProtectedRoute roles={[ROLES.CONTRACT_MANAGER, ROLES.DIRECTOR_PROCUREMENT]}>
+                      <LiquidatedDamages />
+                    </ProtectedRoute>
+                  } />
+                  <Route path="contracts/:id/performance" element={
+                    <ProtectedRoute roles={[ROLES.CONTRACT_MANAGER, ROLES.PROCUREMENT_MANAGER, ROLES.DIRECTOR_PROCUREMENT]}>
+                      <SupplierPerformanceEval />
+                    </ProtectedRoute>
+                  } />
+                  <Route path="contracts/:id/closure" element={
+                    <ProtectedRoute roles={[ROLES.CONTRACT_MANAGER, ROLES.DIRECTOR_PROCUREMENT]}>
+                      <ContractClosureChecklist />
+                    </ProtectedRoute>
+                  } />
+                  <Route path="contracts/:id/execution" element={
+                    <ProtectedRoute roles={[ROLES.CONTRACT_MANAGER, ROLES.PROCUREMENT_MANAGER, ROLES.DIRECTOR_PROCUREMENT, ROLES.PROCUREMENT_OFFICER, ROLES.FINANCE_OFFICER]}>
+                      <ExecutionDashboard />
+                    </ProtectedRoute>
+                  } />
+                  <Route path="contracts/:id/delivery" element={
+                    <ProtectedRoute roles={[ROLES.CONTRACT_MANAGER, ROLES.PROCUREMENT_MANAGER, ROLES.DIRECTOR_PROCUREMENT, ROLES.PROCUREMENT_OFFICER]}>
+                      <DeliveryManager />
+                    </ProtectedRoute>
+                  } />
+                  <Route path="contracts/:id/archive" element={
+                    <ProtectedRoute roles={[ROLES.CONTRACT_MANAGER, ROLES.PROCUREMENT_MANAGER, ROLES.DIRECTOR_PROCUREMENT, ROLES.SYSTEM_ADMIN]}>
+                      <ContractArchiving />
+                    </ProtectedRoute>
+                  } />
                   <Route path="finance" element={
                     <ProtectedRoute roles={[ROLES.FINANCE_OFFICER, ROLES.BUDGET_CONTROLLER, ROLES.DIRECTOR_GENERAL, ROLES.CONTRACT_MANAGER]}>
                       <FinanceDashboard />
@@ -443,13 +478,23 @@ function App() {
                       <FinancePayments />
                     </ProtectedRoute>
                   } />
+                  <Route path="finance/grns" element={
+                    <ProtectedRoute roles={[ROLES.FINANCE_OFFICER, ROLES.BUDGET_CONTROLLER, ROLES.CONTRACT_MANAGER, ROLES.DIRECTOR_GENERAL]}>
+                      <GRNDeliveryLog />
+                    </ProtectedRoute>
+                  } />
                   <Route path="finance/letters-of-credit" element={
                     <ProtectedRoute roles={[ROLES.FINANCE_OFFICER, ROLES.BUDGET_CONTROLLER, ROLES.DIRECTOR_GENERAL, ROLES.CONTRACT_MANAGER]}>
                       <FinanceLettersOfCredit />
                     </ProtectedRoute>
                   } />
+                  <Route path="finance/retention" element={
+                    <ProtectedRoute roles={[ROLES.FINANCE_OFFICER, ROLES.BUDGET_CONTROLLER, ROLES.DIRECTOR_GENERAL, ROLES.CONTRACT_MANAGER]}>
+                      <RetentionTracker />
+                    </ProtectedRoute>
+                  } />
                   <Route path="finance/invoices/:invoiceId/approval" element={
-                    <ProtectedRoute roles={[ROLES.FINANCE_OFFICER, ROLES.BUDGET_CONTROLLER, ROLES.DIRECTOR_GENERAL]}>
+                    <ProtectedRoute roles={[ROLES.FINANCE_OFFICER, ROLES.BUDGET_CONTROLLER, ROLES.DEPARTMENT_HEAD, ROLES.DIRECTOR_GENERAL]}>
                       <InvoiceApproval />
                     </ProtectedRoute>
                   } />

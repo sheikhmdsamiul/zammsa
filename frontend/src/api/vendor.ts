@@ -97,9 +97,9 @@ export const vendorApi = {
       api.get<PaginatedResponse<any>>('/finance/grns/', { params }).then((r) => r.data),
     downloadPDF: (id: string) =>
       api.get(`/finance/invoices/${id}/`, { responseType: 'blob' }),
-    logDelivery: (data: {
+    submitDeliveryAdvice: (data: {
       contract_id: string;
-      grn_number?: string;
+      advice_number?: string;
       items: Array<{
         item_code?: string;
         item_name: string;

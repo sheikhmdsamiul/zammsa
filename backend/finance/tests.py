@@ -11,8 +11,8 @@ from solicitations.models import Solicitation
 from bids.models import BidSubmission
 from evaluations.models import BidEvaluationReport, EvaluationCommittee
 from suppliers.models import Supplier
-from contracts.models import Contract
-from .models import BudgetAllocation, BudgetEncumbrance, GoodsReceiptNote, Invoice, Payment, LetterOfCredit
+from contracts.models import Contract, ContractMilestone
+from .models import BudgetAllocation, BudgetEncumbrance, DeliveryAdvice, GoodsReceiptNote, Invoice, Payment, LetterOfCredit
 
 
 class BudgetAllocationTests(APITestCase):
@@ -203,6 +203,191 @@ class GoodsReceiptNoteWebhookTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         grn = GoodsReceiptNote.objects.get(grn_number='GRN-002')
         self.assertEqual(grn.contract.contract_number, 'CTR-TEST')
+
+
+class DeliveryAdviceWorkflowTests(APITestCase):
+    def setUp(self):
+        self.supplier_user = User.objects.create_user(
+            employee_id='SUP001',
+            full_name='Supplier Portal User',
+            email='supplier.portal@test.gov.zm',
+            password='testpass123',
+            role='supplier_user',
+        )
+        self.manager_user = User.objects.create_user(
+            employee_id='MGR001',
+            full_name='Contract Manager',
+            email='manager@test.gov.zm',
+            password='testpass123',
+            role='contract_manager',
+        )
+        self.client.force_authenticate(user=self.supplier_user)
+        dept = Department.objects.create(dept_code='DLV', dept_name='Delivery', level='national')
+        req = Requisition.objects.create(
+            req_number='REQ-DLV', department=dept,
+            requester=self.supplier_user, description='Delivery test', required_date='2026-06-01',
+        )
+        sol = Solicitation.objects.create(
+            sol_number='SOL-DLV', title='Delivery test', description='Delivery test', method='rfq',
+            requisition=req, closing_date=timezone.now(),
+        )
+        EvaluationCommittee.objects.create(
+            solicitation=sol, chairperson=self.supplier_user, secretary=self.supplier_user,
+        )
+        bid = BidSubmission.objects.create(
+            submission_id='BID-DLV', solicitation=sol, supplier=self.supplier_user,
+        )
+        ber = BidEvaluationReport.objects.create(
+            solicitation=sol, report_content={}, created_by=self.supplier_user,
+        )
+        self.supplier = Supplier.objects.create(
+            registration_number='SUP-DLV', tin='TIN-DLV', name='Delivery Supplier',
+        )
+        self.contract = Contract.objects.create(
+            contract_number='CTR-DLV', solicitation=sol, winning_bid=bid,
+            ber=ber, supplier=self.supplier, title='Delivery Contract',
+            contract_type='po', value=150000, start_date='2026-01-01',
+            end_date='2026-12-31',
+        )
+        self.milestone = ContractMilestone.objects.create(
+            contract=self.contract,
+            sequence_number=1,
+            milestone_name='Delivery 1',
+            due_date='2026-02-01',
+            status='pending',
+        )
+        self.submit_url = reverse('supplier-delivery-log')
+
+    def test_supplier_submits_delivery_advice(self):
+        response = self.client.post(self.submit_url, {
+            'contract_id': str(self.contract.contract_id),
+            'items': [
+                {
+                    'item_code': 'ITM-01',
+                    'item_name': 'Test Item',
+                    'quantity_ordered': 10,
+                    'quantity_delivered': 10,
+                    'unit_price': 100,
+                    'total_amount': 1000,
+                }
+            ],
+            'notes': 'Delivered to warehouse',
+        }, format='json')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(DeliveryAdvice.objects.count(), 1)
+        advice = DeliveryAdvice.objects.first()
+        self.assertEqual(advice.status, 'submitted')
+
+    def test_manager_verifies_wms_grn_and_updates_milestone(self):
+        advice = DeliveryAdvice.objects.create(
+            advice_number='ADV-CTR-DLV-0001',
+            contract=self.contract,
+            supplier=self.supplier,
+            item_description='Test Item',
+            quantity_advised=10,
+            total_amount=1000,
+            status='submitted',
+            source='supplier_portal',
+            submitted_by='Supplier Portal User',
+            raw_payload={
+                'items': [
+                    {
+                        'item_code': 'ITM-01',
+                        'item_name': 'Test Item',
+                        'quantity_ordered': 10,
+                        'quantity_delivered': 10,
+                        'unit_price': 100,
+                        'total_amount': 1000,
+                    }
+                ]
+            },
+        )
+
+        self.client.force_authenticate(user=self.manager_user)
+        webhook_url = reverse('grn-webhook')
+        webhook_response = self.client.post(webhook_url, {
+            'grn_number': 'GRN-CTR-DLV-0001',
+            'po_number': self.contract.contract_number,
+            'contract_id': str(self.contract.contract_id),
+            'milestone_name': 'Delivery 1',
+            'quantity_received': 10,
+            'unit_price': 100,
+            'item_description': 'Test Item',
+            'received_by': 'WMS',
+        }, format='json')
+        self.assertEqual(webhook_response.status_code, status.HTTP_200_OK)
+        self.assertTrue(webhook_response.data['created'])
+
+        url = reverse('delivery-advice-verify', args=[advice.advice_id])
+        response = self.client.post(url, {
+            'grn_number': 'GRN-CTR-DLV-0001',
+            'milestone_name': 'Delivery 1',
+            'received_by': 'Store Clerk',
+        }, format='json')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        advice.refresh_from_db()
+        self.assertEqual(advice.status, 'verified')
+        self.assertEqual(GoodsReceiptNote.objects.count(), 1)
+        grn = GoodsReceiptNote.objects.first()
+        self.assertEqual(grn.delivery_advice, advice)
+        self.assertEqual(grn.verification_method, 'wms_webhook_verification')
+        self.milestone.refresh_from_db()
+        self.assertEqual(self.milestone.status, 'delivered')
+        self.assertIsNotNone(self.milestone.completed_at)
+
+    def test_manager_verify_wms_grn_missing_requires_manual_creation(self):
+        advice = DeliveryAdvice.objects.create(
+            advice_number='ADV-CTR-DLV-0002',
+            contract=self.contract,
+            supplier=self.supplier,
+            item_description='Test Item',
+            quantity_advised=10,
+            total_amount=1000,
+            status='submitted',
+            source='supplier_portal',
+            submitted_by='Supplier Portal User',
+            raw_payload={
+                'items': [
+                    {
+                        'item_code': 'ITM-01',
+                        'item_name': 'Test Item',
+                        'quantity_ordered': 10,
+                        'quantity_delivered': 10,
+                        'unit_price': 100,
+                        'total_amount': 1000,
+                    }
+                ]
+            },
+        )
+
+        self.client.force_authenticate(user=self.manager_user)
+        url = reverse('delivery-advice-verify', args=[advice.advice_id])
+        response = self.client.post(url, {'grn_number': 'GRN-MISSING', 'milestone_name': 'Delivery 1'}, format='json')
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+        self.assertTrue(response.data['manual_grn_required'])
+
+    def test_manual_grn_creation_updates_milestone(self):
+        self.client.force_authenticate(user=self.manager_user)
+        url = reverse('manual-grn-create')
+        response = self.client.post(url, {
+            'contract_id': str(self.contract.contract_id),
+            'grn_number': 'GRN-MAN-001',
+            'milestone_name': 'Delivery 1',
+            'items': [
+                {
+                    'item_code': 'ITM-01',
+                    'item_name': 'Test Item',
+                    'quantity_ordered': 10,
+                    'quantity_received': 10,
+                    'unit_price': 100,
+                    'total_amount': 1000,
+                }
+            ],
+        }, format='json')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.milestone.refresh_from_db()
+        self.assertEqual(self.milestone.status, 'delivered')
+        self.assertIsNotNone(self.milestone.completed_at)
 
 
 class InvoiceWorkflowTests(APITestCase):
@@ -470,7 +655,13 @@ class PaymentTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data['status'], 'sent')
         self.assertIn('iso20022_file_ref', response.data)
+        self.assertIn('pgp_encrypted_file_ref', response.data)
+        self.assertIn('sftp_outbox_ref', response.data)
         self.assertIn('xml_content', response.data)
+        payment = Payment.objects.first()
+        self.assertEqual(payment.iso20022_file_ref, response.data['iso20022_file_ref'])
+        self.assertTrue(payment.pgp_encrypted_file_ref.endswith('.pgp'))
+        self.assertTrue(payment.sftp_outbox_ref.endswith('.xml.pgp'))
 
     def test_bank_confirm_payment(self):
         inv = self._create_invoice()
@@ -485,6 +676,8 @@ class PaymentTests(APITestCase):
         payment = Payment.objects.first()
         self.assertEqual(payment.status, 'confirmed')
         self.assertEqual(payment.reference, 'BNK-001')
+        self.assertEqual(payment.bank_reconciliation_status, 'paid')
+        self.assertIsNotNone(payment.bank_reconciled_at)
 
     def test_bank_confirm_payment_failed(self):
         inv = self._create_invoice()
@@ -496,6 +689,42 @@ class PaymentTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         payment = Payment.objects.first()
         self.assertEqual(payment.status, 'failed')
+        self.assertEqual(payment.bank_reconciliation_status, 'unpaid')
+        self.assertIsNotNone(payment.bank_reconciled_at)
+
+    def test_manual_confirm_payment_paid(self):
+        inv = self._create_invoice()
+        self.client.post(self.pay_url(inv.invoice_id), {
+            'amount': 50000, 'payment_method': 'iso20022',
+        }, format='json')
+        url = reverse('invoice-manual-confirm', args=[inv.invoice_id])
+        response = self.client.post(url, {'bank_reference': 'MAN-001', 'status': 'paid'}, format='json')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['reconciliation_status'], 'paid')
+        inv.refresh_from_db()
+        self.assertEqual(inv.status, 'paid')
+        self.assertIsNotNone(inv.paid_at)
+        payment = Payment.objects.first()
+        self.assertEqual(payment.status, 'confirmed')
+        self.assertEqual(payment.bank_reconciliation_status, 'paid')
+        self.assertEqual(payment.reference, 'MAN-001')
+
+    def test_manual_confirm_payment_unpaid(self):
+        inv = self._create_invoice()
+        self.client.post(self.pay_url(inv.invoice_id), {
+            'amount': 50000, 'payment_method': 'iso20022',
+        }, format='json')
+        url = reverse('invoice-manual-confirm', args=[inv.invoice_id])
+        response = self.client.post(url, {'bank_reference': 'MAN-002', 'status': 'unpaid'}, format='json')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['reconciliation_status'], 'unpaid')
+        inv.refresh_from_db()
+        self.assertEqual(inv.status, 'approved')
+        self.assertIsNone(inv.paid_at)
+        payment = Payment.objects.first()
+        self.assertEqual(payment.status, 'failed')
+        self.assertEqual(payment.bank_reconciliation_status, 'unpaid')
+        self.assertEqual(payment.reference, 'MAN-002')
 
     def test_bank_confirm_no_sent_payment(self):
         inv = self._create_invoice()
