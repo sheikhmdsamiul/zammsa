@@ -78,6 +78,16 @@ class RequisitionSerializer(serializers.ModelSerializer):
                     f'Department mismatch: requisition is for "{department}" but the APP line item belongs to "{app_department}".'
                 )
 
+        # BR-CPP-02: Requisition can only reference APP line items from an approved/published APP
+        if app_line_item and self.instance is None:
+            app = app_line_item.app
+            if app.status not in ('approved', 'published'):
+                raise serializers.ValidationError({
+                    'app_line_item': f'Cannot create requisition from APP line item "{app_line_item.description}" — '
+                    f'the Annual Procurement Plan (APP) is currently "{app.status}". '
+                    'Only approved or published APPs can be used to create requisitions.'
+                })
+
         return data
 
     class Meta:

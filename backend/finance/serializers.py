@@ -4,7 +4,8 @@ from django.db import connection
 from django.utils import timezone
 from .models import (
     BudgetAllocation, BudgetEncumbrance, DeliveryAdvice, GoodsReceiptNote, GRNLineItem,
-    Invoice, InvoiceLineItem, ThreeWayMatch, Payment, LetterOfCredit, RetentionRelease,
+    Invoice, InvoiceLineItem, PurchaseOrder, PurchaseOrderLineItem,
+    ThreeWayMatch, Payment, LetterOfCredit, RetentionRelease,
 )
 from suppliers.models import Supplier
 
@@ -25,6 +26,27 @@ class BudgetEncumbranceSerializer(serializers.ModelSerializer):
     class Meta:
         model = BudgetEncumbrance
         fields = '__all__'
+
+
+class PurchaseOrderLineItemSerializer(serializers.ModelSerializer):
+    id = serializers.UUIDField(source='line_item_id', read_only=True)
+
+    class Meta:
+        model = PurchaseOrderLineItem
+        fields = '__all__'
+        read_only_fields = ('line_item_id',)
+
+
+class PurchaseOrderSerializer(serializers.ModelSerializer):
+    id = serializers.UUIDField(source='po_id', read_only=True)
+    contract_number = serializers.CharField(source='contract.contract_number', read_only=True)
+    supplier_name = serializers.CharField(source='supplier.name', read_only=True)
+    line_items = PurchaseOrderLineItemSerializer(many=True, read_only=True)
+
+    class Meta:
+        model = PurchaseOrder
+        fields = '__all__'
+        read_only_fields = ('po_id', 'created_at')
 
 
 class DeliveryAdviceSerializer(serializers.ModelSerializer):
@@ -121,6 +143,7 @@ class InvoiceSerializer(serializers.ModelSerializer):
     grn_details = GoodsReceiptNoteSerializer(source='grn', read_only=True)
     line_items = InvoiceLineItemSerializer(many=True, read_only=True)
     suggested_approval_route = serializers.SerializerMethodField()
+    po_details = serializers.SerializerMethodField()
     
     # Allow blank invoice_number for auto-generation
     invoice_number = serializers.CharField(required=False, allow_blank=True)
@@ -177,6 +200,12 @@ class InvoiceSerializer(serializers.ModelSerializer):
 
     def get_suggested_approval_route(self, obj):
         return obj.determine_approval_route()
+
+    def get_po_details(self, obj):
+        po = PurchaseOrder.objects.filter(contract=obj.contract, status='active').first()
+        if po:
+            return PurchaseOrderSerializer(po).data
+        return None
 
 
 class LetterOfCreditSerializer(serializers.ModelSerializer):

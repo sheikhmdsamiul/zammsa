@@ -64,6 +64,12 @@ const ExecutionDashboard: React.FC = () => {
             <p className="text-xs font-bold text-gray-400 uppercase tracking-wide">Status</p>
             <StatusBadge status={data.status} />
           </div>
+          {data.po_number && (
+            <div className="bg-gray-50 rounded-xl p-4 text-center">
+              <p className="text-xs font-bold text-gray-400 uppercase tracking-wide">PO Number</p>
+              <p className="text-sm font-black text-gray-900 truncate">{data.po_number}</p>
+            </div>
+          )}
         </div>
       </div>
 

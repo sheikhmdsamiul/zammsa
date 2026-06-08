@@ -334,67 +334,60 @@ def _default_cpp_milestone_template(method, procurement_type='goods'):
         evaluation_to_award = 3
         award_to_signing = 10
     
-    # Service-specific durations
+    # All templates now produce 22 milestones (seq 1-22) as per the Phase Guide.
+    # Seq 1-14: Pre-contract / procurement phase
+    # Seq 15-22: Post-award / contract execution phase
+    base_pre = [
+        ('CPP Approved', 0),
+        ('Solicitation Document Ready', 2),
+        ('Solicitation Published', 3),
+        ('Pre-bid Conference Held', 4),
+        ('Clarification Cutoff', 1 + solicitation_to_closing - 5),
+        ('Bid Closing Date', 1 + solicitation_to_closing),
+        ('Public Bid Opening', 1 + solicitation_to_closing),
+        ('Preliminary Examination Complete', 1 + solicitation_to_closing + closing_to_evaluation),
+        ('Technical Evaluation Complete', 1 + solicitation_to_closing + closing_to_evaluation + 7),
+        ('Financial Evaluation Complete', 1 + solicitation_to_closing + closing_to_evaluation + 9),
+        ('BER Generated and Signed', 1 + solicitation_to_closing + closing_to_evaluation + 11),
+        ('BER Approved by ZPC', 1 + solicitation_to_closing + closing_to_evaluation + 16),
+        ('Contract Award Notice Published', 1 + solicitation_to_closing + closing_to_evaluation + 17),
+        ('Standstill Period Ends', 1 + solicitation_to_closing + closing_to_evaluation + 27),
+    ]
+
     if procurement_type == 'consulting':
-        # Consulting services: simpler timeline, no delivery/installation
-        return [
-            ('Requisition to Solicitation', 0),
-            ('Publication (Solicitation issued)', 1),
-            ('Closing Date', 1 + solicitation_to_closing),
-            ('Bid Opening', 1 + solicitation_to_closing),
-            ('Evaluation Completion', 1 + solicitation_to_closing + closing_to_evaluation),
-            ('BER Approval (ZPC)', 1 + solicitation_to_closing + closing_to_evaluation + evaluation_to_award),
-            ('Contract Award Notice', 1 + solicitation_to_closing + closing_to_evaluation + evaluation_to_award + 2),
-            ('Standstill Expires (10 working days)', 1 + solicitation_to_closing + closing_to_evaluation + evaluation_to_award + 12),
-            ('Contract Signing', 1 + solicitation_to_closing + closing_to_evaluation + evaluation_to_award + 14),
-            ('Commencement', 1 + solicitation_to_closing + closing_to_evaluation + evaluation_to_award + 16),
-            ('Interim Report', 1 + solicitation_to_closing + closing_to_evaluation + evaluation_to_award + 30),
-            ('Draft Report', 1 + solicitation_to_closing + closing_to_evaluation + evaluation_to_award + 45),
-            ('Final Acceptance', 1 + solicitation_to_closing + closing_to_evaluation + evaluation_to_award + 48),
-            ('Final Payment', 1 + solicitation_to_closing + closing_to_evaluation + evaluation_to_award + 55),
-            ('Contract Closure', 1 + solicitation_to_closing + closing_to_evaluation + evaluation_to_award + 60),
+        return base_pre + [
+            ('Contract Signed — Both Parties', 1 + solicitation_to_closing + closing_to_evaluation + 29),
+            ('Performance Security Received', 1 + solicitation_to_closing + closing_to_evaluation + 32),
+            ('Contract Active / Work Commences', 1 + solicitation_to_closing + closing_to_evaluation + 34),
+            ('Delivery / Completion', 1 + solicitation_to_closing + closing_to_evaluation + 48),
+            ('Final Inspection and Acceptance', 1 + solicitation_to_closing + closing_to_evaluation + 55),
+            ('Final Invoice Submission', 1 + solicitation_to_closing + closing_to_evaluation + 58),
+            ('Final Payment', 1 + solicitation_to_closing + closing_to_evaluation + 65),
+            ('Contract Closure', 1 + solicitation_to_closing + closing_to_evaluation + 72),
         ]
     elif procurement_type == 'works':
-        # Works: includes Installation and Commissioning
         closing_to_completion = 14
-        return [
-            ('Requisition to Solicitation', 0),
-            ('Publication (Solicitation issued)', 1),
-            ('Closing Date', 1 + solicitation_to_closing),
-            ('Bid Opening', 1 + solicitation_to_closing),
-            ('Evaluation Completion', 1 + solicitation_to_closing + closing_to_evaluation),
-            ('BER Approval (ZPC)', 1 + solicitation_to_closing + closing_to_evaluation + evaluation_to_award),
-            ('Contract Award Notice', 1 + solicitation_to_closing + closing_to_evaluation + evaluation_to_award + 2),
-            ('Standstill Expires (10 working days)', 1 + solicitation_to_closing + closing_to_evaluation + evaluation_to_award + 12),
-            ('Contract Signing', 1 + solicitation_to_closing + closing_to_evaluation + evaluation_to_award + 14),
-            ('Commencement', 1 + solicitation_to_closing + closing_to_evaluation + evaluation_to_award + 16),
-            ('Installation & Testing', 1 + solicitation_to_closing + closing_to_evaluation + evaluation_to_award + 30),
-            ('Completion', 1 + solicitation_to_closing + closing_to_evaluation + evaluation_to_award + 30 + closing_to_completion),
-            ('Final Acceptance', 1 + solicitation_to_closing + closing_to_evaluation + evaluation_to_award + 30 + closing_to_completion + 5),
-            ('Final Payment', 1 + solicitation_to_closing + closing_to_evaluation + evaluation_to_award + 30 + closing_to_completion + 15),
-            ('Security Bond Return', 1 + solicitation_to_closing + closing_to_evaluation + evaluation_to_award + 30 + closing_to_completion + 15 + 30),
-            ('Contract Closure', 1 + solicitation_to_closing + closing_to_evaluation + evaluation_to_award + 30 + closing_to_completion + 15 + 30 + 5),
+        return base_pre + [
+            ('Contract Signed — Both Parties', 1 + solicitation_to_closing + closing_to_evaluation + 29),
+            ('Performance Security Received', 1 + solicitation_to_closing + closing_to_evaluation + 32),
+            ('Contract Active / Work Commences', 1 + solicitation_to_closing + closing_to_evaluation + 34),
+            ('Delivery / Completion', 1 + solicitation_to_closing + closing_to_evaluation + 34 + closing_to_completion),
+            ('Final Inspection and Acceptance', 1 + solicitation_to_closing + closing_to_evaluation + 34 + closing_to_completion + 5),
+            ('Final Invoice Submission', 1 + solicitation_to_closing + closing_to_evaluation + 34 + closing_to_completion + 8),
+            ('Final Payment', 1 + solicitation_to_closing + closing_to_evaluation + 34 + closing_to_completion + 18),
+            ('Contract Closure', 1 + solicitation_to_closing + closing_to_evaluation + 34 + closing_to_completion + 25),
         ]
     else:  # goods, non-consulting services
-        # Goods: 22 milestones including Security Bond Return
         delivery_to_completion = 7
-        return [
-            ('Requisition to Solicitation', 0),
-            ('Publication (Solicitation issued)', 1),
-            ('Closing Date', 1 + solicitation_to_closing),
-            ('Bid Opening', 1 + solicitation_to_closing),
-            ('Evaluation Completion', 1 + solicitation_to_closing + closing_to_evaluation),
-            ('BER Approval (ZPC)', 1 + solicitation_to_closing + closing_to_evaluation + evaluation_to_award),
-            ('Contract Award Notice', 1 + solicitation_to_closing + closing_to_evaluation + evaluation_to_award + 2),
-            ('Standstill Expires (10 working days)', 1 + solicitation_to_closing + closing_to_evaluation + evaluation_to_award + 12),
-            ('Contract Signing', 1 + solicitation_to_closing + closing_to_evaluation + evaluation_to_award + 14),
-            ('Delivery', 1 + solicitation_to_closing + closing_to_evaluation + evaluation_to_award + 16),
-            ('Installation & Testing', 1 + solicitation_to_closing + closing_to_evaluation + evaluation_to_award + 30),
-            ('Completion', 1 + solicitation_to_closing + closing_to_evaluation + evaluation_to_award + 30 + delivery_to_completion),
-            ('Final Acceptance', 1 + solicitation_to_closing + closing_to_evaluation + evaluation_to_award + 30 + delivery_to_completion + 3),
-            ('Final Payment', 1 + solicitation_to_closing + closing_to_evaluation + evaluation_to_award + 30 + delivery_to_completion + 10),
-            ('Security Bond Return', 1 + solicitation_to_closing + closing_to_evaluation + evaluation_to_award + 30 + delivery_to_completion + 10 + 90),
-            ('Contract Closure', 1 + solicitation_to_closing + closing_to_evaluation + evaluation_to_award + 30 + delivery_to_completion + 10 + 90 + 7),
+        return base_pre + [
+            ('Contract Signed — Both Parties', 1 + solicitation_to_closing + closing_to_evaluation + 29),
+            ('Performance Security Received', 1 + solicitation_to_closing + closing_to_evaluation + 32),
+            ('Contract Active / Work Commences', 1 + solicitation_to_closing + closing_to_evaluation + 34),
+            ('Delivery / Completion', 1 + solicitation_to_closing + closing_to_evaluation + 36),
+            ('Final Inspection and Acceptance', 1 + solicitation_to_closing + closing_to_evaluation + 36 + delivery_to_completion),
+            ('Final Invoice Submission', 1 + solicitation_to_closing + closing_to_evaluation + 36 + delivery_to_completion + 3),
+            ('Final Payment', 1 + solicitation_to_closing + closing_to_evaluation + 36 + delivery_to_completion + 10),
+            ('Contract Closure', 1 + solicitation_to_closing + closing_to_evaluation + 36 + delivery_to_completion + 17),
         ]
 
 
@@ -826,6 +819,17 @@ class APPLineItemListView(BaseView, generics.ListCreateAPIView):
     ordering = ['-line_item_id']
     filterset_fields = ['app__department', 'app__fiscal_year', 'commodity']
     search_fields = ['description', 'app__department__dept_name']
+
+    def get_queryset(self):
+        qs = super().get_queryset()
+        status_filter = self.request.query_params.get('app__status__in')
+        if status_filter:
+            statuses = [s.strip() for s in status_filter.split(',') if s.strip()]
+            if statuses:
+                qs = qs.filter(app__status__in=statuses)
+        else:
+            qs = qs.filter(app__status__in=['approved', 'published'])
+        return qs
 
     def perform_create(self, serializer):
         item = serializer.save()

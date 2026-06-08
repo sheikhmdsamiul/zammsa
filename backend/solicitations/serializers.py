@@ -83,11 +83,12 @@ class SolicitationListSerializer(serializers.ModelSerializer):
     estimated_value = serializers.SerializerMethodField()
     issue_date = serializers.SerializerMethodField()
     requisition_number = serializers.CharField(source='requisition.req_number', read_only=True)
+    cpp_number = serializers.CharField(source='cpp.cpp_number', read_only=True)
     total_bids = serializers.SerializerMethodField()
 
     class Meta:
         model = Solicitation
-        fields = ('id', 'solicitation_id', 'sol_number', 'title', 'type', 'method', 'department', 'estimated_value', 'issue_date', 'closing_date', 'status', 'published_at', 'created_at', 'requisition_number', 'total_bids')
+        fields = ('id', 'solicitation_id', 'sol_number', 'title', 'type', 'method', 'department', 'estimated_value', 'issue_date', 'closing_date', 'status', 'published_at', 'created_at', 'requisition_number', 'cpp_number', 'total_bids')
 
     def get_department(self, obj):
         if obj.department:
@@ -125,6 +126,8 @@ class SolicitationSerializer(serializers.ModelSerializer):
 
     opening_date = serializers.DateTimeField(required=False, allow_null=True)
     requisition = serializers.PrimaryKeyRelatedField(required=True, queryset=Requisition.objects.all())
+    cpp = serializers.PrimaryKeyRelatedField(read_only=True)
+    cpp_number = serializers.CharField(source='cpp.cpp_number', read_only=True)
     document_sets = SolicitationDocumentSerializer(many=True, source='documents', read_only=True)
     clarification_responses = ClarificationRequestSerializer(many=True, source='clarifications', read_only=True)
     evaluation_criteria = EvaluationCriterionSerializer(many=True, read_only=True)
@@ -220,9 +223,27 @@ class SolicitationSerializer(serializers.ModelSerializer):
         except (ValueError, TypeError):
             return Department.objects.filter(dept_name=value).first()
 
+    def validate(self, data):
+        if self.instance is None and not data.get('requisition'):
+            raise serializers.ValidationError({'requisition': 'A requisition is required to create a solicitation.'})
+        return data
+
+    def validate_method(self, value):
+        requisition = self.initial_data.get('requisition')
+        if requisition:
+            from procurement_planning.models import ContractProcurementPlan
+            approved_cpp = requisition.cpp.filter(status='approved').first()
+            if approved_cpp and approved_cpp.method and approved_cpp.method != value:
+                raise serializers.ValidationError(
+                    f'Method "{value}" does not match the approved CPP method "{approved_cpp.method}". '
+                    'The solicitation method must align with the CPP.'
+                )
+        return value
+
     def create(self, validated_data):
         from django.utils import timezone
         import secrets
+        from procurement_planning.models import ContractProcurementPlan
 
         type_val = self.initial_data.get('type')
         if type_val and 'method' not in validated_data:
@@ -251,11 +272,23 @@ class SolicitationSerializer(serializers.ModelSerializer):
         if 'sol_number' not in validated_data or not validated_data.get('sol_number'):
             validated_data['sol_number'] = f"SOL-{timezone.now().strftime('%Y%m%d')}-{secrets.token_hex(3).upper()}"
 
-        # Auto-recommend method based on estimated value
-        if 'method' not in validated_data or not validated_data.get('method'):
+        # Auto-set method from approved CPP if not explicitly provided
+        requisition = validated_data.get('requisition')
+        approved_cpp = None
+        if requisition:
+            approved_cpp = requisition.cpp.filter(status='approved').first()
+        if approved_cpp:
+            validated_data['cpp'] = approved_cpp
+            if not validated_data.get('method'):
+                validated_data['method'] = approved_cpp.method
+            if not validated_data.get('estimated_value') and approved_cpp.estimated_value:
+                validated_data['estimated_value'] = approved_cpp.estimated_value
+
+        # Fallback: auto-recommend method based on estimated value (no CPP available)
+        if not validated_data.get('method'):
             est_value = validated_data.get('estimated_value')
-            if est_value is None and validated_data.get('requisition'):
-                est_value = validated_data['requisition'].estimated_total
+            if est_value is None and requisition:
+                est_value = requisition.estimated_total
             if est_value is not None:
                 try:
                     from system_config.models import ThresholdRule

@@ -272,6 +272,10 @@ const SolicitationDetail: React.FC = () => {
                 <p className="text-sm font-bold text-gray-900 mt-0.5 capitalize">{sol.procurement_method?.replace(/_/g, ' ') || '---'}</p>
               </div>
               <div className="p-3 bg-gray-50 rounded-2xl">
+                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">CPP Reference</p>
+                <p className="text-sm font-bold text-gray-900 mt-0.5">{sol.cpp_number || '---'}</p>
+              </div>
+              <div className="p-3 bg-gray-50 rounded-2xl">
                 <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Estimated Value</p>
                 <p className="text-sm font-bold text-gray-900 mt-0.5">K {sol.estimated_value?.toLocaleString()} {sol.currency}</p>
               </div>

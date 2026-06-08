@@ -7,11 +7,18 @@ class APPLineItemSerializer(serializers.ModelSerializer):
     commodity_name = serializers.CharField(source='commodity.commodity_name', read_only=True, allow_null=True)
     commodity_category = serializers.CharField(source='commodity.category', read_only=True, allow_null=True)
     procurement_type_display = serializers.CharField(source='get_procurement_type_display', read_only=True)
+    app_status = serializers.CharField(source='app.status', read_only=True)
+    app_department = serializers.CharField(source='app.department.dept_name', read_only=True)
+    app_fiscal_year = serializers.CharField(source='app.fiscal_year.year_code', read_only=True)
+    app_name = serializers.SerializerMethodField()
 
     class Meta:
         model = APPLineItem
         fields = '__all__'
         read_only_fields = ('line_item_id',)
+
+    def get_app_name(self, obj):
+        return f"APP {obj.app.fiscal_year.year_code} - {obj.app.department.dept_name}"
 
 
 class AnnualProcurementPlanListSerializer(serializers.ModelSerializer):

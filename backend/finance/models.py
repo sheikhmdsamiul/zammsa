@@ -61,6 +61,55 @@ LOC_STATUS_CHOICES = [
 ]
 
 
+PURCHASE_ORDER_STATUS_CHOICES = [
+    ('pending', 'Pending'),
+    ('active', 'Active'),
+    ('completed', 'Completed'),
+    ('cancelled', 'Cancelled'),
+]
+
+
+class PurchaseOrder(models.Model):
+    po_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    po_number = models.CharField(max_length=50, unique=True)
+    contract = models.ForeignKey(Contract, on_delete=models.CASCADE, related_name='purchase_orders')
+    supplier = models.ForeignKey(Supplier, on_delete=models.PROTECT, related_name='purchase_orders')
+    total_amount = models.DecimalField(max_digits=20, decimal_places=2)
+    status = models.CharField(max_length=20, choices=PURCHASE_ORDER_STATUS_CHOICES, default='active')
+    created_at = models.DateTimeField(auto_now_add=True)
+    notes = models.TextField(blank=True, default='')
+
+    class Meta:
+        db_table = 'fin_purchase_order'
+        verbose_name = 'Purchase Order'
+        verbose_name_plural = 'Purchase Orders'
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f'{self.po_number} - {self.supplier.name}'
+
+
+class PurchaseOrderLineItem(models.Model):
+    line_item_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    po = models.ForeignKey(PurchaseOrder, on_delete=models.CASCADE, related_name='line_items')
+    line_number = models.PositiveIntegerField()
+    item_code = models.CharField(max_length=100, blank=True, default='')
+    item_name = models.CharField(max_length=255, blank=True, default='')
+    description = models.TextField(blank=True, default='')
+    quantity = models.DecimalField(max_digits=15, decimal_places=2)
+    unit_price = models.DecimalField(max_digits=20, decimal_places=2)
+    total_price = models.DecimalField(max_digits=20, decimal_places=2)
+
+    class Meta:
+        db_table = 'fin_po_line_item'
+        verbose_name = 'PO Line Item'
+        verbose_name_plural = 'PO Line Items'
+        ordering = ['line_number']
+
+    def __str__(self):
+        return f'{self.po.po_number} - Line {self.line_number}: {self.item_name}'
+
+
 class BudgetAllocation(models.Model):
     allocation_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     entity_level = models.CharField(max_length=50)

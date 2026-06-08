@@ -112,6 +112,8 @@ export interface Solicitation {
   description: string;
   type: 'rfq' | 'rfb' | 'rfp' | 'rfi';
   requisition: string;
+  cpp?: string;
+  cpp_number?: string;
   status: StatusType;
   issue_date: string;
   closing_date: string;
@@ -1123,6 +1125,13 @@ export interface ContractFinancialSummary {
   title: string;
   value: number;
   currency: string;
+  po_number?: string;
+  purchase_orders?: {
+    id: string;
+    po_number: string;
+    total_amount: number;
+    status: string;
+  }[];
   payments_to_date: number;
   retained_to_date: number;
   balance: number;
@@ -1153,6 +1162,7 @@ export interface ExecutionDashboard {
   contract_number: string;
   title: string;
   supplier: string;
+  po_number?: string;
   value: number;
   currency: string;
   status: string;

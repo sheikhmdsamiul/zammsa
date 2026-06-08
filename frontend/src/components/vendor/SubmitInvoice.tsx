@@ -16,6 +16,7 @@ const SubmitInvoice: React.FC = () => {
   const queryClient = useQueryClient();
 
   const [selectedContract, setSelectedContract] = React.useState(contractId || '');
+  const [selectedPo, setSelectedPo] = React.useState('');
   const [selectedMilestone, setSelectedMilestone] = React.useState('');
   const [invoiceNumber, setInvoiceNumber] = React.useState('');
   const [invoiceDate, setInvoiceDate] = React.useState(new Date().toISOString().slice(0, 10));
@@ -38,6 +39,12 @@ const SubmitInvoice: React.FC = () => {
     enabled: !!selectedContract,
   });
 
+  const { data: purchaseOrders = [] } = useQuery({
+    queryKey: ['contract-purchase-orders', selectedContract],
+    queryFn: () => vendorApi.invoices.purchaseOrders(selectedContract),
+    enabled: !!selectedContract,
+  });
+
   const grnsByContract = summary?.grns || [];
 
   const amountNum = parseFloat(amount) || 0;
@@ -57,7 +64,8 @@ const SubmitInvoice: React.FC = () => {
       if (invoiceNumber) form.append('invoice_number', invoiceNumber);
       form.append('amount', String(amountNum));
       if (invoiceDate) form.append('due_date', invoiceDate);
-      if (selectedMilestone) form.append('po_number', selectedMilestone);
+      if (selectedPo) form.append('po_number', selectedPo);
+      if (selectedMilestone) form.append('milestone_name', selectedMilestone);
       if (selectedGrn) form.append('grn', selectedGrn);
       if (invoiceFile) form.append('document', invoiceFile);
 
@@ -135,13 +143,13 @@ const SubmitInvoice: React.FC = () => {
         )}
 
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-8 mb-6">
-          <h2 className="text-lg font-bold text-gray-900 mb-6">Select Purchase Order / Milestone</h2>
+          <h2 className="text-lg font-bold text-gray-900 mb-6">Purchase Order & Milestone</h2>
 
           <div className="mb-6">
             <label className="block text-sm font-semibold text-gray-700 mb-2">Contract</label>
             <select
               value={selectedContract}
-              onChange={(e) => { setSelectedContract(e.target.value); setSelectedMilestone(''); setSelectedGrn(''); }}
+              onChange={(e) => { setSelectedContract(e.target.value); setSelectedPo(''); setSelectedMilestone(''); setSelectedGrn(''); }}
               className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-zammsa-green/20 focus:border-zammsa-green outline-none transition-all"
               required
             >
@@ -154,9 +162,27 @@ const SubmitInvoice: React.FC = () => {
             </select>
           </div>
 
+          {purchaseOrders.length > 0 && (
+            <div className="mb-6">
+              <label className="block text-sm font-semibold text-gray-700 mb-2">Purchase Order</label>
+              <select
+                value={selectedPo}
+                onChange={(e) => setSelectedPo(e.target.value)}
+                className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-zammsa-green/20 focus:border-zammsa-green outline-none transition-all"
+              >
+                <option value="">Select a purchase order (optional)</option>
+                {purchaseOrders.map((po: any) => (
+                  <option key={po.id} value={po.po_number}>
+                    {po.po_number} — K {po.total_amount?.toLocaleString()} ({po.status})
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+
           {summary && summary.milestones && summary.milestones.length > 0 && (
             <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">Purchase Order / Milestone</label>
+              <label className="block text-sm font-semibold text-gray-700 mb-2">Milestone</label>
               <select
                 value={selectedMilestone}
                 onChange={(e) => setSelectedMilestone(e.target.value)}

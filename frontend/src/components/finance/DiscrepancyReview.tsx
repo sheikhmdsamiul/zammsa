@@ -14,12 +14,15 @@ interface LineMatch {
   line_number: number;
   item_name: string;
   item_code: string;
-  invoice_qty: number;
+  po_qty: number;
   grn_qty: number;
-  invoice_price: number;
+  invoice_qty: number;
+  po_price: number;
   grn_price: number;
+  invoice_price: number;
   qty_match: boolean;
   price_match: boolean;
+  grn_qty_match: boolean;
 }
 
 const DiscrepancyReview: React.FC = () => {
@@ -149,11 +152,13 @@ const DiscrepancyReview: React.FC = () => {
                     <thead>
                       <tr className="border-b border-gray-200">
                         <th className="text-left py-3 px-2 font-semibold text-gray-600">Item</th>
-                        <th className="text-right py-3 px-2 font-semibold text-gray-600">Inv Qty</th>
+                        <th className="text-right py-3 px-2 font-semibold text-gray-600">PO Qty</th>
                         <th className="text-right py-3 px-2 font-semibold text-gray-600">GRN Qty</th>
+                        <th className="text-right py-3 px-2 font-semibold text-gray-600">Inv Qty</th>
                         <th className="text-center py-3 px-2 font-semibold text-gray-600">Qty Match</th>
-                        <th className="text-right py-3 px-2 font-semibold text-gray-600">Inv Price</th>
+                        <th className="text-right py-3 px-2 font-semibold text-gray-600">PO Price</th>
                         <th className="text-right py-3 px-2 font-semibold text-gray-600">GRN Price</th>
+                        <th className="text-right py-3 px-2 font-semibold text-gray-600">Inv Price</th>
                         <th className="text-center py-3 px-2 font-semibold text-gray-600">Price Match</th>
                       </tr>
                     </thead>
@@ -164,15 +169,20 @@ const DiscrepancyReview: React.FC = () => {
                             <p className="font-medium text-gray-900">{lm.item_name || `Line ${lm.line_number}`}</p>
                             {lm.item_code && <p className="text-xs text-gray-400">{lm.item_code}</p>}
                           </td>
-                          <td className="py-3 px-2 text-right">{lm.invoice_qty}</td>
+                          <td className="py-3 px-2 text-right font-semibold text-purple-700">{lm.po_qty}</td>
                           <td className="py-3 px-2 text-right">{lm.grn_qty}</td>
+                          <td className="py-3 px-2 text-right">{lm.invoice_qty}</td>
                           <td className="py-3 px-2 text-center">
                             {lm.qty_match
                               ? <CheckCircleIcon className="w-5 h-5 text-emerald-500 inline" />
                               : <XCircleIcon className="w-5 h-5 text-rose-500 inline" />}
+                            {!lm.grn_qty_match && lm.qty_match !== undefined && (
+                              <span className="ml-1 text-xs text-amber-600" title="GRN qty mismatch">⚠</span>
+                            )}
                           </td>
-                          <td className="py-3 px-2 text-right">K {lm.invoice_price?.toLocaleString()}</td>
+                          <td className="py-3 px-2 text-right font-semibold text-purple-700">K {lm.po_price?.toLocaleString()}</td>
                           <td className="py-3 px-2 text-right">K {lm.grn_price?.toLocaleString()}</td>
+                          <td className="py-3 px-2 text-right">K {lm.invoice_price?.toLocaleString()}</td>
                           <td className="py-3 px-2 text-center">
                             {lm.price_match
                               ? <CheckCircleIcon className="w-5 h-5 text-emerald-500 inline" />

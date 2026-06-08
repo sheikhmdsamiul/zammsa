@@ -30,9 +30,10 @@ class ContractMilestoneSerializer(serializers.ModelSerializer):
     class Meta:
         model = ContractMilestone
         fields = (
-            'id', 'contract', 'sequence_number', 'milestone_name', 'planned_date', 
-            'due_date', 'actual_date', 'completed_at', 'variance_days', 'variance_flag',
-            'source_procurement_milestone', 'status', 'notes', 'created_at', 'updated_at'
+            'id', 'contract', 'sequence_number', 'milestone_name', 'title',
+            'planned_date', 'due_date', 'actual_date', 'completed_at',
+            'variance_days', 'variance_flag',
+            'source_procurement_milestone', 'status', 'notes',
         )
         read_only_fields = ('milestone_id', 'variance_days', 'variance_flag', 'created_at', 'updated_at')
 
@@ -81,10 +82,14 @@ class ContractListSerializer(serializers.ModelSerializer):
     vendor = serializers.CharField(source='supplier.name', read_only=True)
     solicitation_number = serializers.CharField(source='solicitation.sol_number', read_only=True)
     performance_bond = serializers.SerializerMethodField()
+    requires_performance_bond = serializers.SerializerMethodField()
 
     class Meta:
         model = Contract
-        fields = ('id', 'contract_id', 'contract_number', 'title', 'vendor_name', 'vendor', 'contract_type', 'value', 'currency', 'start_date', 'end_date', 'status', 'award_date', 'created_at', 'solicitation_number', 'vendor', 'performance_security_required', 'performance_security_uploaded', 'performance_security_validated', 'performance_bond')
+        fields = ('id', 'contract_id', 'contract_number', 'title', 'vendor_name', 'vendor', 'contract_type', 'value', 'currency', 'start_date', 'end_date', 'status', 'award_date', 'created_at', 'solicitation_number', 'vendor', 'performance_security_required', 'performance_security_uploaded', 'performance_security_validated', 'performance_bond', 'signed_by_vendor', 'signed_by_authority', 'signed_vendor_date', 'signed_authority_date', 'award_notice_published', 'waiting_period_end', 'appeal_pending', 'requires_performance_bond')
+
+    def get_requires_performance_bond(self, obj):
+        return obj.requires_performance_bond()
 
     def get_performance_bond(self, obj):
         perf_securities = [s for s in obj.securities.all() if s.security_type == 'performance']

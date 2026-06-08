@@ -18,15 +18,15 @@ import django_filters
 
 from .models import (
     BudgetAllocation, BudgetEncumbrance, DeliveryAdvice, GoodsReceiptNote, GRNLineItem,
-    Invoice, InvoiceLineItem, ThreeWayMatch, Payment, LetterOfCredit,
+    Invoice, InvoiceLineItem, PurchaseOrder, ThreeWayMatch, Payment, LetterOfCredit,
     RetentionRelease, INVOICE_APPROVAL_ROUTES,
 )
 from .serializers import (
     BudgetAllocationSerializer, BudgetEncumbranceSerializer,
     DeliveryAdviceSerializer, GoodsReceiptNoteSerializer, GRNLineItemSerializer,
     InvoiceSerializer, InvoiceListSerializer, InvoiceLineItemSerializer,
-    ThreeWayMatchSerializer, PaymentSerializer, LetterOfCreditSerializer,
-    RetentionReleaseSerializer,
+    PurchaseOrderSerializer, ThreeWayMatchSerializer, PaymentSerializer,
+    LetterOfCreditSerializer, RetentionReleaseSerializer,
 )
 from accounts.audit import log_audit_action
 from contracts.models import Contract, ContractMilestone, LiquidatedDamages
@@ -279,6 +279,13 @@ def invoice_submit_view(request, pk):
     inv.status = 'submitted'
     inv.submitted_at = timezone.now()
     inv.save()
+
+    # Auto-update Final Invoice milestone actual_date
+    from contracts.models import ContractMilestone
+    ContractMilestone.objects.filter(
+        contract=inv.contract, milestone_name__icontains='Invoice'
+    ).update(status='completed', completed_at=timezone.now(), actual_date=timezone.now().date())
+
     return Response({'message': 'Invoice submitted for processing', 'status': inv.status})
 
 
@@ -292,17 +299,72 @@ def invoice_match_view(request, pk):
     except Invoice.DoesNotExist:
         return Response({'error': 'Invoice not found'}, status=404)
 
+    # Find the Purchase Order for this contract to use as baseline
+    po = PurchaseOrder.objects.filter(contract=inv.contract, status='active').prefetch_related('line_items').first()
+    po_line_items = list(po.line_items.all().order_by('line_number')) if po else []
+
     inv_line_items = list(inv.line_items.all().order_by('line_number'))
     grn_line_items = list(inv.grn.line_items.all().order_by('line_number')) if inv.grn else []
 
-    # Item-level matching
+    # True 3-way matching: PO vs GRN vs Invoice
     line_matches = []
     overall_qty_match = True
     overall_price_match = True
     total_discrepancies = {}
 
-    if inv_line_items and grn_line_items:
-        # Match line by line using line_number
+    if po_line_items:
+        # Use PO line items as the primary reference
+        match_sources = [po_line_items, grn_line_items, inv_line_items]
+        max_lines = max(len(s) for s in match_sources if s) if any(match_sources) else 0
+
+        for i in range(max_lines):
+            po_item = po_line_items[i] if i < len(po_line_items) else None
+            grn_item = grn_line_items[i] if i < len(grn_line_items) else None
+            inv_item = inv_line_items[i] if i < len(inv_line_items) else None
+
+            po_qty = po_item.quantity if po_item else Decimal('0')
+            po_price = po_item.unit_price if po_item else Decimal('0')
+            grn_qty = grn_item.quantity_received if grn_item else Decimal('0')
+            grn_price = grn_item.unit_price if grn_item else Decimal('0')
+            inv_qty = inv_item.quantity if inv_item else Decimal('0')
+            inv_price = inv_item.unit_price if inv_item else Decimal('0')
+
+            # Compare invoice to PO (ordered qty) and invoice to GRN (received qty)
+            inv_vs_po_qty = (inv_qty == po_qty)
+            inv_vs_po_price = (inv_price == po_price)
+            inv_vs_grn_qty = (inv_qty == grn_qty)
+
+            if not inv_vs_po_qty:
+                overall_qty_match = False
+            if not inv_vs_po_price:
+                overall_price_match = False
+
+            line_match = {
+                'line_number': i + 1,
+                'item_name': po_item.item_name if po_item else (grn_item.item_name if grn_item else (inv_item.item_name if inv_item else '')),
+                'item_code': po_item.item_code if po_item else (grn_item.item_code if grn_item else (inv_item.item_code if inv_item else '')),
+                'po_qty': float(po_qty),
+                'grn_qty': float(grn_qty),
+                'invoice_qty': float(inv_qty),
+                'po_price': float(po_price),
+                'grn_price': float(grn_price),
+                'invoice_price': float(inv_price),
+                'qty_match': inv_vs_po_qty,
+                'price_match': inv_vs_po_price,
+                'grn_qty_match': inv_vs_grn_qty,
+            }
+            line_matches.append(line_match)
+
+            if not inv_vs_po_qty:
+                total_discrepancies[f'line_{i+1}_qty'] = {
+                    'po': float(po_qty), 'grn': float(grn_qty), 'invoice': float(inv_qty),
+                }
+            if not inv_vs_po_price:
+                total_discrepancies[f'line_{i+1}_price'] = {
+                    'po': float(po_price), 'invoice': float(inv_price),
+                }
+    elif inv_line_items and grn_line_items:
+        # Fallback: GRN vs Invoice (no PO)
         max_lines = max(len(inv_line_items), len(grn_line_items))
         for i in range(max_lines):
             inv_item = inv_line_items[i] if i < len(inv_line_items) else None
@@ -325,25 +387,28 @@ def invoice_match_view(request, pk):
                 'line_number': i + 1,
                 'item_name': (inv_item.item_name if inv_item else grn_item.item_name),
                 'item_code': (inv_item.item_code if inv_item else grn_item.item_code),
-                'invoice_qty': float(inv_qty),
+                'po_qty': float(grn_qty),
                 'grn_qty': float(grn_qty),
-                'invoice_price': float(inv_price),
+                'invoice_qty': float(inv_qty),
+                'po_price': float(grn_price),
                 'grn_price': float(grn_price),
+                'invoice_price': float(inv_price),
                 'qty_match': qty_ok,
                 'price_match': price_ok,
+                'grn_qty_match': qty_ok,
             }
             line_matches.append(line_match)
 
             if not qty_ok:
                 total_discrepancies[f'line_{i+1}_qty'] = {
-                    'invoice': float(inv_qty), 'grn': float(grn_qty),
+                    'grn': float(grn_qty), 'invoice': float(inv_qty),
                 }
             if not price_ok:
                 total_discrepancies[f'line_{i+1}_price'] = {
-                    'invoice': float(inv_price), 'grn': float(grn_price),
+                    'grn': float(grn_price), 'invoice': float(inv_price),
                 }
     else:
-        # Fallback: header-level matching (legacy)
+        # Fallback: header-level matching (legacy — no line items)
         po_qty = Decimal('1')
         po_price = inv.contract.value
 
@@ -385,12 +450,15 @@ def invoice_match_view(request, pk):
             'line_number': 1,
             'item_name': inv.grn.item_description if inv.grn else '',
             'item_code': '',
-            'invoice_qty': float(inv_qty),
+            'po_qty': float(po_qty),
             'grn_qty': float(grn_qty),
-            'invoice_price': float(inv_price),
+            'invoice_qty': float(inv_qty),
+            'po_price': float(po_price),
             'grn_price': float(grn_price),
+            'invoice_price': float(inv_price),
             'qty_match': overall_qty_match,
             'price_match': overall_price_match,
+            'grn_qty_match': overall_qty_match,
         }]
 
     if overall_qty_match and overall_price_match:
@@ -402,10 +470,10 @@ def invoice_match_view(request, pk):
 
     ThreeWayMatch.objects.create(
         invoice=inv,
-        po_quantity=sum(m['grn_qty'] for m in line_matches),
+        po_quantity=sum(m['po_qty'] for m in line_matches),
         grn_quantity=sum(m['grn_qty'] for m in line_matches),
         invoice_quantity=sum(m['invoice_qty'] for m in line_matches),
-        po_price=sum(m['grn_price'] for m in line_matches) / len(line_matches) if line_matches else 0,
+        po_price=sum(m['po_price'] for m in line_matches) / len(line_matches) if line_matches else 0,
         invoice_price=sum(m['invoice_price'] for m in line_matches) / len(line_matches) if line_matches else 0,
         match_status=match_status,
         discrepancies={'line_matches': line_matches, **total_discrepancies},
@@ -710,13 +778,18 @@ def grn_webhook_view(request):
                 total_amount=Decimal(str(it.get('total_amount', 0))),
             )
 
-    # Update related milestone if contract has one
+    # Update related milestone if contract has one (auto-set actual_date)
     if contract:
         milestone_name = request.data.get('milestone_name', '')
         if milestone_name:
             ContractMilestone.objects.filter(
                 contract=contract, milestone_name=milestone_name
-            ).update(status='delivered', completed_at=timezone.now())
+            ).update(status='completed', completed_at=timezone.now(), actual_date=timezone.now().date())
+        else:
+            # Auto-update Delivery milestone when no milestone_name specified
+            ContractMilestone.objects.filter(
+                contract=contract, milestone_name__icontains='Delivery'
+            ).update(status='completed', completed_at=timezone.now(), actual_date=timezone.now().date())
 
     return Response({
         'message': 'GRN received',
@@ -753,6 +826,13 @@ def payment_bank_confirm_view(request, pk):
         inv.status = 'paid'
         inv.paid_at = timezone.now()
         inv.save(update_fields=['status', 'paid_at', 'updated_at'])
+
+        # Auto-update Final Payment milestone actual_date
+        from contracts.models import ContractMilestone
+        ContractMilestone.objects.filter(
+            contract=inv.contract, milestone_name__icontains='Payment'
+        ).update(status='completed', completed_at=timezone.now(), actual_date=timezone.now().date())
+
         return Response({'message': 'Payment confirmed by bank', 'status': inv.status, 'bank_reference': bank_ref})
     else:
         payment.status = 'failed'
@@ -802,6 +882,13 @@ def payment_manual_confirm_view(request, pk):
     inv.status = 'paid' if reconcile_status == 'paid' else 'payment_failed'
     inv.paid_at = timezone.now() if reconcile_status == 'paid' else None
     inv.save(update_fields=['status', 'paid_at', 'updated_at'])
+
+    # Auto-update Final Payment milestone actual_date
+    if reconcile_status == 'paid':
+        from contracts.models import ContractMilestone
+        ContractMilestone.objects.filter(
+            contract=inv.contract, milestone_name__icontains='Payment'
+        ).update(status='completed', completed_at=timezone.now(), actual_date=timezone.now().date())
 
     ip = request.META.get('REMOTE_ADDR', '')
     log_audit_action(
@@ -976,6 +1063,20 @@ class LetterOfCreditListView(BaseView, generics.ListCreateAPIView):
 class LetterOfCreditDetailView(generics.RetrieveUpdateDestroyAPIView):
     queryset = LetterOfCredit.objects.all()
     serializer_class = LetterOfCreditSerializer
+    permission_classes = [IsAuthenticated]
+
+
+class PurchaseOrderListView(BaseView, generics.ListAPIView):
+    queryset = PurchaseOrder.objects.select_related('contract', 'supplier').prefetch_related('line_items').all()
+    serializer_class = PurchaseOrderSerializer
+    ordering = ['-created_at']
+    filterset_fields = ['contract', 'status']
+    search_fields = ['po_number', 'contract__contract_number', 'supplier__name']
+
+
+class PurchaseOrderDetailView(generics.RetrieveAPIView):
+    queryset = PurchaseOrder.objects.select_related('contract', 'supplier').prefetch_related('line_items').all()
+    serializer_class = PurchaseOrderSerializer
     permission_classes = [IsAuthenticated]
 
 
@@ -1185,12 +1286,17 @@ def manual_grn_create_view(request):
             verified_by=verifier_name,
         )
 
-    # Update milestone if specified
+    # Update milestone if specified (auto-set actual_date)
     milestone_name = request.data.get('milestone_name', '')
     if milestone_name and contract:
         ContractMilestone.objects.filter(
             contract=contract, milestone_name=milestone_name
-        ).update(status='delivered', completed_at=timezone.now())
+        ).update(status='completed', completed_at=timezone.now(), actual_date=timezone.now().date())
+    elif contract:
+        # Auto-update Delivery milestone
+        ContractMilestone.objects.filter(
+            contract=contract, milestone_name__icontains='Delivery'
+        ).update(status='completed', completed_at=timezone.now(), actual_date=timezone.now().date())
 
     ip = request.META.get('REMOTE_ADDR', '')
     log_audit_action(
@@ -1286,6 +1392,11 @@ def contract_financial_summary_view(request, pk):
         'milestone_id', 'milestone_name', 'actual_date', 'due_date', 'status', 'variance_flag'
     ).order_by('due_date')
 
+    po = PurchaseOrder.objects.filter(contract=contract).order_by('-created_at').first()
+    purchase_orders_list = PurchaseOrder.objects.filter(contract=contract).values(
+        'po_id', 'po_number', 'total_amount', 'status', 'created_at'
+    ).order_by('-created_at')
+
     grns = GoodsReceiptNote.objects.filter(contract=contract).values(
         'grn_id', 'grn_number', 'item_description', 'quantity_received',
         'unit_price', 'total_amount', 'received_date', 'status'
@@ -1298,6 +1409,16 @@ def contract_financial_summary_view(request, pk):
         'contract_id': str(contract.contract_id),
         'contract_number': contract.contract_number,
         'title': contract.title,
+        'po_number': po.po_number if po else None,
+        'purchase_orders': [
+            {
+                'id': str(po_entry['po_id']),
+                'po_number': po_entry['po_number'],
+                'total_amount': float(po_entry['total_amount']),
+                'status': po_entry['status'],
+            }
+            for po_entry in purchase_orders_list
+        ],
         'original_value': float(contract.value),
         'amendment_total': float(amendment_total),
         'final_contract_value': float(final_value),
@@ -1436,7 +1557,11 @@ def verify_delivery_advice_view(request, pk):
     if milestone_name:
         ContractMilestone.objects.filter(
             contract=advice.contract, milestone_name=milestone_name
-        ).update(status='delivered', completed_at=timezone.now())
+        ).update(status='completed', completed_at=timezone.now(), actual_date=timezone.now().date())
+    elif advice.contract:
+        ContractMilestone.objects.filter(
+            contract=advice.contract, milestone_name__icontains='Delivery'
+        ).update(status='completed', completed_at=timezone.now(), actual_date=timezone.now().date())
 
     grn.verified_by = verifier_name
     grn.verified_at = timezone.now()
@@ -1497,11 +1622,14 @@ def execution_dashboard_view(request, pk):
     total_retained = sum(p.retained_amount for p in payments_list if p.status == 'confirmed')
     balance = float(contract.value - total_paid - total_retained)
 
+    po = PurchaseOrder.objects.filter(contract=contract, status='active').first()
+
     return Response({
         'contract_id': str(contract.contract_id),
         'contract_number': contract.contract_number,
         'title': contract.title,
         'supplier': contract.supplier.name if contract.supplier else '',
+        'po_number': po.po_number if po else None,
         'value': float(contract.value),
         'currency': contract.currency,
         'status': contract.status,

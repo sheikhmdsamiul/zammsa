@@ -964,7 +964,7 @@ const SolicitationCreate: React.FC = () => {
               {[
                 ['Reference', `SOL-${new Date().getFullYear()}-${department?.slice(0, 3).toUpperCase() || 'XXX'}-XX`],
                 ['Title', title],
-                ['Method', 'Open National Bidding'],
+                ['Type', template === 'itb' ? 'ITB (Goods)' : template === 'rfp' ? 'RFP (Consulting)' : 'RFQ (Quotations)'],
                 ['Value', `K ${estimatedValue.toLocaleString()}`],
                 ['Closing', `${fmtDate(closingDate)} ${closingHour}:${closingMinute} CAT`],
                 ['Opening', `${fmtDate(openingDate)} ${openingHour}:${openingMinute} CAT`],

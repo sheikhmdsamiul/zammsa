@@ -97,6 +97,8 @@ export const vendorApi = {
       api.get<PaginatedResponse<any>>('/finance/grns/', { params }).then((r) => r.data),
     downloadPDF: (id: string) =>
       api.get(`/finance/invoices/${id}/`, { responseType: 'blob' }),
+    purchaseOrders: (contractId: string) =>
+      api.get<PaginatedResponse<any>>('/finance/purchase-orders/', { params: { contract: contractId } }).then((r) => r.data?.results || []),
     submitDeliveryAdvice: (data: {
       contract_id: string;
       advice_number?: string;

@@ -27,37 +27,104 @@ STANDSTILL_MANAGE_ROLES = CONTRACT_GENERATION_ROLES + ('contract_manager', 'proc
 SUPPLIER_CONTRACT_ROLES = ('supplier_user',)
 
 
+def _update_activation_milestones_status(contract):
+    """Update milestone statuses for seq 15-17 based on current contract state."""
+    today = timezone.now().date()
+    now = timezone.now()
+
+    signed_milestone = contract.milestones.filter(sequence_number=15).first()
+    if signed_milestone and signed_milestone.status != 'completed':
+        if contract.signed_by_vendor and contract.signed_by_authority:
+            signed_milestone.status = 'completed'
+            signed_milestone.actual_date = today
+            signed_milestone.completed_at = now
+            signed_milestone.save()
+
+    security_milestone = contract.milestones.filter(sequence_number=16).first()
+    if security_milestone and security_milestone.status != 'completed':
+        security_handled = (
+            not contract.performance_security_required
+            or contract.performance_security_validated
+        )
+        if security_handled:
+            security_milestone.status = 'completed'
+            security_milestone.actual_date = today
+            security_milestone.completed_at = now
+            security_milestone.save()
+
+    active_milestone = contract.milestones.filter(sequence_number=17).first()
+    if active_milestone and active_milestone.status != 'completed':
+        if contract.status == 'active':
+            active_milestone.status = 'completed'
+            active_milestone.actual_date = today
+            active_milestone.completed_at = now
+            active_milestone.save()
+
+
 def _copy_cpp_milestones_to_contract(contract):
-    """Copy milestones 9-14 from CPP to ContractMilestone when contract activates"""
+    """Copy post-award milestones 15-22 from CPP to ContractMilestone when contract activates.
+    
+    If the CPP does not have milestones 15-22 defined, default post-award milestones
+    are generated using the contract's date range as a guide.
+    """
     try:
-        # Navigate: Contract → Solicitation → Requisition → CPP
         solicitation = contract.solicitation
-        if not solicitation or not solicitation.requisition:
-            return {'error': 'No solicitation or requisition found'}
-        
-        requisition = solicitation.requisition
-        cpp = requisition.cpp.filter(status='approved').first()
-        
+        cpp = None
+
+        # Prefer direct CPP link on solicitation, fall back to requisition chain
+        if solicitation and hasattr(solicitation, 'cpp') and solicitation.cpp:
+            cpp = solicitation.cpp
+        elif solicitation and solicitation.requisition:
+            cpp = solicitation.requisition.cpp.filter(status='approved').first()
+
         if not cpp:
-            return {'error': 'No approved CPP found for this requisition'}
-        
-        # Get milestones 9-14 from CPP (Contract Signing, Delivery, Installation, etc.)
-        cpp_milestones = cpp.procurement_milestones.filter(
-            sequence_number__gte=9, 
-            sequence_number__lte=14
-        ).order_by('sequence_number')
-        
-        if not cpp_milestones.exists():
-            return {'error': 'No milestones 9-14 found in CPP'}
-        
-        # Copy each milestone to contract
+            return {'error': 'No approved CPP found — check that the solicitation is linked to a CPP'}
+
+        # Get post-award milestones (seq 15-22) from CPP
+        cpp_milestones = list(cpp.procurement_milestones.filter(
+            sequence_number__gte=15,
+            sequence_number__lte=22
+        ).order_by('sequence_number'))
+
+        if not cpp_milestones:
+            # CPP has no seq 15-22 milestones (e.g. created before 22-milestone template).
+            # Generate default post-award milestones using contract date range.
+            from datetime import timedelta
+            today = timezone.now().date()
+            start = contract.start_date or today
+            end = contract.end_date or (start + timedelta(days=365))
+            duration = (end - start).days or 365
+
+            default_milestones = [
+                ('Contract Signed — Both Parties', 0),
+                ('Performance Security Received', 7),
+                ('Contract Active / Work Commences', 14),
+                ('Delivery / Completion', int(duration * 0.6)),
+                ('Final Inspection and Acceptance', int(duration * 0.7)),
+                ('Final Invoice Submission', int(duration * 0.8)),
+                ('Final Payment', int(duration * 0.9)),
+                ('Contract Closure', int(duration * 1.0)),
+            ]
+            for seq_offset, (name, day_offset) in enumerate(default_milestones, start=15):
+                planned = start + timedelta(days=day_offset)
+                ContractMilestone.objects.create(
+                    contract=contract,
+                    sequence_number=seq_offset,
+                    milestone_name=name,
+                    planned_date=planned,
+                    due_date=planned,
+                    status='pending',
+                    notes=f'Auto-generated post-award milestone #{seq_offset}',
+                )
+            _update_activation_milestones_status(contract)
+            return {'success': True, 'created': len(default_milestones), 'source': 'default_template'}
+
+        # Copy each milestone to contract, preserving the same sequence
         created_count = 0
-        for idx, cpp_milestone in enumerate(cpp_milestones, start=1):
-            sequence_num = 14 + idx  # Milestones 15-20 map from CPP 9-14
-            
+        for cpp_milestone in cpp_milestones:
             ContractMilestone.objects.create(
                 contract=contract,
-                sequence_number=sequence_num,
+                sequence_number=cpp_milestone.sequence_number,
                 milestone_name=cpp_milestone.milestone_name,
                 planned_date=cpp_milestone.planned_date,
                 due_date=cpp_milestone.planned_date,
@@ -66,8 +133,62 @@ def _copy_cpp_milestones_to_contract(contract):
                 notes=f'Copied from CPP milestone #{cpp_milestone.sequence_number}',
             )
             created_count += 1
+
+        _update_activation_milestones_status(contract)
+        return {'success': True, 'created': created_count, 'source': 'cpp'}
+    except Exception as e:
+        return {'error': str(e)}
+
+
+def _generate_po_for_contract(contract):
+    """Generate a PurchaseOrder from the winning bid's line items when contract goes active"""
+    from finance.models import PurchaseOrder, PurchaseOrderLineItem
+    try:
+        winning_bid = contract.winning_bid
+        if not winning_bid:
+            return {'error': 'No winning bid found for this contract'}
         
-        return {'success': True, 'created': created_count}
+        bid_line_items = winning_bid.line_items
+        if not bid_line_items:
+            return {'error': 'No line items in winning bid'}
+        
+        # Build PO number from contract number
+        import datetime
+        po_number = f'PO-{contract.contract_number}'
+        
+        # Calculate total from bid line items
+        total = Decimal('0')
+        for item in bid_line_items:
+            qty = Decimal(str(item.get('quantity', item.get('qty', 0))))
+            price = Decimal(str(item.get('unit_price', item.get('price', 0))))
+            total += qty * price
+        
+        # Create PO
+        po = PurchaseOrder.objects.create(
+            po_number=po_number,
+            contract=contract,
+            supplier=contract.supplier,
+            total_amount=contract.value if contract.value > 0 else total,
+            status='active',
+        )
+        
+        # Create PO line items from bid line items
+        for idx, item in enumerate(bid_line_items, start=1):
+            qty = Decimal(str(item.get('quantity', item.get('qty', 0))))
+            price = Decimal(str(item.get('unit_price', item.get('price', 0))))
+            total_price = qty * price
+            PurchaseOrderLineItem.objects.create(
+                po=po,
+                line_number=idx,
+                item_code=item.get('item_code', item.get('code', '')),
+                item_name=item.get('item_name', item.get('name', '')),
+                description=item.get('description', ''),
+                quantity=qty,
+                unit_price=price,
+                total_price=total_price,
+            )
+        
+        return {'success': True, 'po_number': po_number}
     except Exception as e:
         return {'error': str(e)}
 
@@ -396,10 +517,13 @@ def contract_countersign_view(request, pk):
     if contract.status == 'active':
         result = _copy_cpp_milestones_to_contract(contract)
         if not result.get('success') and not result.get('error', '').startswith('No CPP'):
-            # Log warning but don't block activation
            pass
+        # Auto-generate Purchase Order from winning bid
+        po_result = _generate_po_for_contract(contract)
 
     contract.save()
+
+    _update_activation_milestones_status(contract)
 
     ip = request.META.get('REMOTE_ADDR', '')
     log_audit_action(
@@ -502,8 +626,10 @@ def contract_validate_security_view(request, pk, security_pk):
         # Auto-copy CPP milestones when contract becomes active via security validation
         result = _copy_cpp_milestones_to_contract(contract)
         if not result.get('success') and not result.get('error', '').startswith('No CPP'):
-            # Log warning but don't block activation
             pass
+        
+        # Auto-generate Purchase Order from winning bid
+        po_result = _generate_po_for_contract(contract)
         
         contract.save()
         return Response({'message': 'Security validated. Contract activated.', 'status': contract.status})
@@ -678,6 +804,10 @@ def contract_closure_checklist_view(request, pk):
         contract.status = 'completed'
         contract.completed_at = timezone.now().date()
         contract.save()
+        # Auto-update Contract Closure milestone
+        ContractMilestone.objects.filter(
+            contract=contract, milestone_name__icontains='Closure'
+        ).update(status='completed', completed_at=timezone.now(), actual_date=timezone.now().date())
         ip = request.META.get('REMOTE_ADDR', '')
         log_audit_action(
             user=request.user, action='CONTRACT_CLOSED', module='contracts',
@@ -767,6 +897,11 @@ def contract_final_acceptance_view(request, pk):
         final_inspection_passed=True,
         acceptance_certificate_issued=True,
     )
+
+    # Auto-update Final Inspection milestone
+    ContractMilestone.objects.filter(
+        contract=contract, milestone_name__icontains='Inspection'
+    ).update(status='completed', completed_at=timezone.now(), actual_date=timezone.now().date())
 
     return Response({
         'message': 'Final Acceptance Certificate issued. Retention release countdown started (30 days).',

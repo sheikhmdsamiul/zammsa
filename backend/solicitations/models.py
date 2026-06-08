@@ -56,6 +56,13 @@ class Solicitation(models.Model):
     solicitation_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     sol_number = models.CharField(max_length=50, unique=True)
     requisition = models.ForeignKey(Requisition, on_delete=models.PROTECT, related_name='solicitations', null=True, blank=True)
+    cpp = models.ForeignKey(
+        'procurement_planning.ContractProcurementPlan',
+        on_delete=models.PROTECT,
+        null=True, blank=True,
+        related_name='solicitations',
+        help_text='The approved CPP under which this solicitation is created',
+    )
     title = models.CharField(max_length=255)
     description = models.TextField()
     method = models.CharField(max_length=50)

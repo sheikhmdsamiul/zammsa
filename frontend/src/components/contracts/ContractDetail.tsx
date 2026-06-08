@@ -364,6 +364,10 @@ const ContractDetail: React.FC = () => {
                   <dt className="text-gray-500 font-medium">Title</dt>
                   <dd className="font-medium text-gray-900 mt-0.5">{c.title || '—'}</dd>
                 </div>
+                <div>
+                  <dt className="text-gray-500 font-medium">Purchase Order</dt>
+                  <dd className="font-medium text-gray-900 mt-0.5">{(c as any).po_number || (c as any).purchase_order?.po_number || '—'}</dd>
+                </div>
               </dl>
             </section>
 

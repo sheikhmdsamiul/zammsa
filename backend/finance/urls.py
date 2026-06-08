@@ -34,4 +34,6 @@ urlpatterns = [
     path('contracts/<uuid:pk>/execution-dashboard/', views.execution_dashboard_view, name='contract-execution-dashboard'),
     path('supplier-delivery-log/', views.supplier_delivery_log_view, name='supplier-delivery-log'),
     path('grns/manual/', views.manual_grn_create_view, name='grn-manual-create'),
+    path('purchase-orders/', views.PurchaseOrderListView.as_view(), name='po-list'),
+    path('purchase-orders/<uuid:pk>/', views.PurchaseOrderDetailView.as_view(), name='po-detail'),
 ]

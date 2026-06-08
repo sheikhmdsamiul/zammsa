@@ -38,6 +38,7 @@ const SolicitationsList: React.FC = () => {
     { key: 'title', label: 'Title', sortable: true, render: (_: any, row: any) => (
       <Link to={`/solicitations/${row.id}`} className="text-zammsa-green hover:underline font-medium">{row.title}</Link>
     )},
+    { key: 'cpp_number', label: 'CPP #', render: (v: string) => v ? <span className="text-xs font-mono font-bold text-gray-600">{v}</span> : '-' },
     { key: 'type', label: 'Type', render: (v: string) => (
       <span className={`text-xs font-medium px-2 py-1 rounded-full ${typeColors[v] || ''}`}>{v?.toUpperCase()}</span>
     )},

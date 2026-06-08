@@ -30,8 +30,8 @@ const RequisitionCreate: React.FC = () => {
   const [confirm, setConfirm] = useState(false);
 
   const { data: lineItemsData } = useQuery({
-    queryKey: ['appLineItems'],
-    queryFn: () => procurementPlanningApi.lineItems.list({ page_size: 200 }),
+    queryKey: ['appLineItems', 'approved-published'],
+    queryFn: () => procurementPlanningApi.lineItems.list({ page_size: 500, app__status__in: 'approved,published' }),
   });
   const { data: fundingSourcesData } = useQuery({
     queryKey: ['fundingSourcesForReq'],
@@ -243,13 +243,19 @@ const RequisitionCreate: React.FC = () => {
             <div className="md:col-span-2">
               <label className="block text-sm font-medium text-gray-700 mb-1">Link to APP Line Item *</label>
               <select value={form.app_line_item} onChange={(e) => setForm({ ...form, app_line_item: e.target.value })} className="w-full border-gray-300 rounded-lg px-3 py-2">
-                <option value="">Select APP line item...</option>
+                <option value="">-- Select an approved/published APP line item --</option>
+                {lineItems.length === 0 && <option value="" disabled>No approved/published APP line items available</option>}
                 {lineItems.map((li: any) => (
                   <option key={li.line_item_id} value={li.line_item_id}>
-                    {(li.app_name || li.app || 'APP')} / {li.description} (K{Number(li.estimated_value || 0).toLocaleString()})
+                    {li.app_name || '---'} | {li.description?.slice(0, 60)} | K{Number(li.estimated_value || 0).toLocaleString()} | {li.commodity_name || li.commodity_category || '---'} | {li.app_status}
                   </option>
                 ))}
               </select>
+              {lineItems.length > 0 && (
+                <p className="text-xs text-gray-400 mt-1">
+                  Showing {lineItems.length} line item{lineItems.length !== 1 ? 's' : ''} from approved/published APPs only
+                </p>
+              )}
             </div>
             <div className="md:col-span-2">
               <label className="block text-sm font-medium text-gray-700 mb-1">Justification *</label>
