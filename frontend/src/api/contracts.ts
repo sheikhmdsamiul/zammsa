@@ -68,6 +68,9 @@ export const contractsApi = {
   archive: (id: string, data?: { force?: boolean }) =>
     api.post<any>(`/contracts/${id}/archive/`, data || {}).then((r) => r.data),
 
+  finalAcceptance: (id: string, data?: { acceptance_certificate_ref?: string }) =>
+    api.post<any>(`/contracts/${id}/final-acceptance/`, data || {}).then((r) => r.data),
+
   amend: (id: string, data: { reason: string; description: string; financial_impact: number; legal_opinion_ref?: string }) =>
     api.post<any>(`/contracts/${id}/amend/`, data).then((r) => r.data),
 

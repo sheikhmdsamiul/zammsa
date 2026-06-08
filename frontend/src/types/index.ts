@@ -405,6 +405,7 @@ export interface Contract {
   retention_expiry: string | null;
   legal_hold: boolean;
   operational_phases?: ContractOperationalPhase[];
+  supplier_performances?: SupplierPerformance[];
   created_at: string;
   updated_at: string;
 }
@@ -431,6 +432,19 @@ export interface ContractSecurity {
   reference_number: string;
   expiry_date: string | null;
   status: string;
+}
+
+export interface SupplierPerformance {
+  performance_id: string;
+  supplier: string;
+  contract: string;
+  evaluation_date: string;
+  metrics: Record<string, number>;
+  overall_score: number;
+  needs_improvement: boolean;
+  evaluated_by: string | null;
+  improvement_notes: string;
+  created_at: string;
 }
 
 export interface PerformanceBond {
@@ -1055,6 +1069,89 @@ export interface FiscalYear {
 export interface Commodity {
   id: string; commodity_code: string; commodity_name: string; category: string;
   sub_category: string; unit_of_measure: string | null; uom_name: string; is_active: boolean;
+}
+
+export interface ContractFinancialSummary {
+  contract_id: string;
+  contract_number: string;
+  title: string;
+  value: number;
+  currency: string;
+  payments_to_date: number;
+  retained_to_date: number;
+  balance: number;
+  retention_rate: number;
+  payment_terms: string;
+  milestones: {
+    milestone_id: string;
+    milestone_name: string;
+    due_date: string;
+    status: string;
+  }[];
+  grns: {
+    grn_id: string;
+    grn_number: string;
+    item_description: string;
+    quantity_received: number;
+    unit_price: number;
+    total_amount: number;
+    received_date: string;
+  }[];
+  start_date: string;
+  end_date: string;
+  status: string;
+}
+
+export interface ExecutionDashboard {
+  contract_id: string;
+  contract_number: string;
+  title: string;
+  supplier: string;
+  value: number;
+  currency: string;
+  status: string;
+  start_date: string;
+  end_date: string;
+  payments_to_date: number;
+  retained_to_date: number;
+  balance: number;
+  milestones: {
+    milestone_id: string;
+    milestone_name: string;
+    due_date: string;
+    status: string;
+  }[];
+  deliveries: {
+    grn_id: string;
+    grn_number: string;
+    item_description: string;
+    quantity_received: number;
+    total_amount: number;
+    received_date: string;
+    line_items: {
+      item_code: string;
+      item_name: string;
+      quantity_ordered: number;
+      quantity_received: number;
+      unit_price: number;
+    }[];
+  }[];
+  invoices: {
+    invoice_id: string;
+    invoice_number: string;
+    amount: number;
+    status: string;
+    submitted_at: string;
+  }[];
+  shortages: {
+    grn_number: string;
+    item_code: string;
+    item_name: string;
+    ordered: number;
+    received: number;
+    shortage: number;
+  }[];
+  shortage_count: number;
 }
 
 export interface BackupRecord {

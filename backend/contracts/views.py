@@ -666,6 +666,47 @@ def contract_calculate_ld_view(request, pk):
 
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
+def contract_final_acceptance_view(request, pk):
+    """R-12 issues Final Acceptance Certificate — triggers retention release countdown."""
+    if getattr(request.user, 'role', '') not in CONTRACT_MANAGER_ROLES:
+        return Response({'error': 'Only contract management roles can issue final acceptance'}, status=403)
+
+    try:
+        contract = Contract.objects.get(pk=pk)
+    except Contract.DoesNotExist:
+        return Response({'error': 'Contract not found'}, status=404)
+
+    cert_ref = request.data.get('acceptance_certificate_ref', '')
+    if not cert_ref:
+        cert_ref = f'FAC-{contract.contract_number}-{timezone.now().strftime("%Y%m%d")}'
+
+    contract.acceptance_date = timezone.now().date()
+    contract.completed_at = timezone.now().date()
+    contract.save(update_fields=['acceptance_date', 'completed_at'])
+
+    ip = request.META.get('REMOTE_ADDR', '')
+    log_audit_action(
+        user=request.user, action='FINAL_ACCEPTANCE_ISSUED', module='contracts',
+        record_id=str(contract.contract_id), ip_address=ip,
+    )
+
+    # Update closure checklist if exists
+    ClosureChecklist.objects.filter(contract=contract).update(
+        all_deliverables_received=True,
+        final_inspection_passed=True,
+        acceptance_certificate_issued=True,
+    )
+
+    return Response({
+        'message': 'Final Acceptance Certificate issued. Retention release countdown started (30 days).',
+        'acceptance_certificate_ref': cert_ref,
+        'acceptance_date': contract.acceptance_date,
+        'retention_releasable_on': (contract.completed_at + timedelta(days=30)).isoformat(),
+    })
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
 def contract_archive_view(request, pk):
     if getattr(request.user, 'role', '') not in CONTRACT_MANAGER_ROLES + ('records_manager',):
         return Response({'error': 'Only contract management or records roles can archive contracts'}, status=403)

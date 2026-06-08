@@ -1,7 +1,10 @@
 from rest_framework import serializers
 from django.core.files.storage import default_storage
 from django.utils import timezone
-from .models import BudgetAllocation, BudgetEncumbrance, GoodsReceiptNote, Invoice, ThreeWayMatch, Payment, LetterOfCredit, RetentionRelease
+from .models import (
+    BudgetAllocation, BudgetEncumbrance, GoodsReceiptNote, GRNLineItem,
+    Invoice, InvoiceLineItem, ThreeWayMatch, Payment, LetterOfCredit, RetentionRelease,
+)
 from suppliers.models import Supplier
 
 
@@ -23,13 +26,32 @@ class BudgetEncumbranceSerializer(serializers.ModelSerializer):
         fields = '__all__'
 
 
+class GRNLineItemSerializer(serializers.ModelSerializer):
+    id = serializers.UUIDField(source='line_item_id', read_only=True)
+
+    class Meta:
+        model = GRNLineItem
+        fields = '__all__'
+        read_only_fields = ('line_item_id',)
+
+
 class GoodsReceiptNoteSerializer(serializers.ModelSerializer):
     id = serializers.UUIDField(source='grn_id', read_only=True)
+    line_items = GRNLineItemSerializer(many=True, read_only=True)
 
     class Meta:
         model = GoodsReceiptNote
         fields = '__all__'
         read_only_fields = ('grn_id', 'received_date')
+
+
+class InvoiceLineItemSerializer(serializers.ModelSerializer):
+    id = serializers.UUIDField(source='line_item_id', read_only=True)
+
+    class Meta:
+        model = InvoiceLineItem
+        fields = '__all__'
+        read_only_fields = ('line_item_id',)
 
 
 class ThreeWayMatchSerializer(serializers.ModelSerializer):
@@ -69,6 +91,7 @@ class InvoiceSerializer(serializers.ModelSerializer):
     three_way_matches = ThreeWayMatchSerializer(many=True, read_only=True)
     payments = PaymentSerializer(many=True, read_only=True)
     grn_details = GoodsReceiptNoteSerializer(source='grn', read_only=True)
+    line_items = InvoiceLineItemSerializer(many=True, read_only=True)
     suggested_approval_route = serializers.SerializerMethodField()
     
     # Allow blank invoice_number for auto-generation

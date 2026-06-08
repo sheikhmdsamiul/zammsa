@@ -172,7 +172,7 @@ const MyContracts: React.FC = () => {
                     </span>
                   </div>
                   <Link
-                    to={`/vendor/contracts/${contract.id}`}
+                    to={action?.tone === 'green' ? `/vendor/contracts/${contract.id}/sign` : `/vendor/contracts/${contract.id}`}
                     className={`px-4 py-2 text-sm font-bold rounded-xl ${
                       action?.tone === 'green'
                         ? 'bg-zammsa-green text-white hover:bg-zammsa-green-dark'

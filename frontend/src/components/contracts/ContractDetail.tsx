@@ -95,6 +95,18 @@ const ContractDetail: React.FC = () => {
     },
     {
       show: c.status === 'active',
+      label: 'Execution dashboard',
+      path: `/contracts/${id}/execution`,
+      className: 'bg-violet-600 hover:bg-violet-700 text-white',
+    },
+    {
+      show: c.status === 'active',
+      label: 'Delivery manager',
+      path: `/contracts/${id}/delivery`,
+      className: 'bg-indigo-600 hover:bg-indigo-700 text-white',
+    },
+    {
+      show: c.status === 'active',
       label: 'Liquidated damages',
       path: `/contracts/${id}/ld`,
       className: 'bg-amber-600 hover:bg-amber-700 text-white',

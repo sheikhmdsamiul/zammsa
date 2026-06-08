@@ -14,6 +14,7 @@ urlpatterns = [
     path('invoices/<uuid:pk>/reject/', views.invoice_reject_view, name='invoice-reject'),
     path('invoices/<uuid:pk>/pay/', views.payment_process_view, name='invoice-pay'),
     path('invoices/<uuid:pk>/bank-confirm/', views.payment_bank_confirm_view, name='invoice-bank-confirm'),
+    path('invoices/<uuid:pk>/manual-confirm/', views.payment_manual_confirm_view, name='invoice-manual-confirm'),
     path('invoices/<uuid:pk>/send-advice/', views.invoice_send_payment_advice_view, name='invoice-send-advice'),
     path('invoices/<uuid:pk>/post-erp/', views.invoice_post_to_erp_view, name='invoice-post-erp'),
     path('grn-webhook/', views.grn_webhook_view, name='grn-webhook'),
@@ -27,4 +28,8 @@ urlpatterns = [
     path('budget-allocations/summary/', views.budget_summary_view, name='budget-summary'),
     path('letters-of-credit/<uuid:pk>/drawdown/', views.lc_drawdown_view, name='loc-drawdown'),
     path('retention/release/<uuid:pk>/', views.retention_release_view, name='retention-release'),
+    path('contracts/<uuid:pk>/financial-summary/', views.contract_financial_summary_view, name='contract-financial-summary'),
+    path('contracts/<uuid:pk>/execution-dashboard/', views.execution_dashboard_view, name='contract-execution-dashboard'),
+    path('supplier-delivery-log/', views.supplier_delivery_log_view, name='supplier-delivery-log'),
+    path('grns/manual/', views.manual_grn_create_view, name='grn-manual-create'),
 ]

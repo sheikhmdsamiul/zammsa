@@ -40,6 +40,10 @@ const BidSubmission = React.lazy(() => import('./components/vendor/BidSubmission
 const MyBids = React.lazy(() => import('./components/vendor/MyBids'));
 const MyContracts = React.lazy(() => import('./components/vendor/MyContracts'));
 const VendorContractDetail = React.lazy(() => import('./components/vendor/VendorContractDetail'));
+const VendorContractSigning = React.lazy(() => import('./components/vendor/VendorContractSigning'));
+const SubmitInvoice = React.lazy(() => import('./components/vendor/SubmitInvoice'));
+const SupplierDeliveryLog = React.lazy(() => import('./components/vendor/SupplierDeliveryLog'));
+const SupplierExecutionTrack = React.lazy(() => import('./components/vendor/SupplierExecutionTrack'));
 const Invoices = React.lazy(() => import('./components/vendor/Invoices'));
 const VendorProfile = React.lazy(() => import('./components/vendor/VendorProfile'));
 const VendorSettings = React.lazy(() => import('./components/vendor/VendorSettings'));
@@ -101,11 +105,14 @@ const AmendmentsList = React.lazy(() => import('./components/contracts/Amendment
 const LiquidatedDamagesList = React.lazy(() => import('./components/contracts/LiquidatedDamagesList'));
 const SupplierPerformanceList = React.lazy(() => import('./components/contracts/SupplierPerformanceList'));
 const ContractClosureList = React.lazy(() => import('./components/contracts/ContractClosureList'));
+const ExecutionDashboard = React.lazy(() => import('./components/contracts/ExecutionDashboard'));
+const DeliveryManager = React.lazy(() => import('./components/contracts/DeliveryManager'));
 
 const FinanceDashboard = React.lazy(() => import('./components/finance/FinanceDashboard'));
 const FinanceBudgets = React.lazy(() => import('./components/finance/Budgets'));
 const FinanceInvoices = React.lazy(() => import('./components/finance/Invoices'));
 const ThreeWayMatch = React.lazy(() => import('./components/finance/ThreeWayMatch'));
+const DiscrepancyReview = React.lazy(() => import('./components/finance/DiscrepancyReview'));
 const FinancePayments = React.lazy(() => import('./components/finance/Payments'));
 const FinanceLettersOfCredit = React.lazy(() => import('./components/finance/LettersOfCredit'));
 const InvoiceApproval = React.lazy(() => import('./components/finance/InvoiceApproval'));
@@ -404,7 +411,8 @@ function App() {
                   <Route path="contracts/:id/ld" element={<LiquidatedDamages />} />
                   <Route path="contracts/:id/performance" element={<SupplierPerformanceEval />} />
                   <Route path="contracts/:id/closure" element={<ContractClosureChecklist />} />
-                  <Route path="contracts/:id/archive" element={<ContractArchiving />} />
+                  <Route path="contracts/:id/execution" element={<ExecutionDashboard />} />
+                  <Route path="contracts/:id/delivery" element={<DeliveryManager />} />
                   <Route path="finance" element={
                     <ProtectedRoute roles={[ROLES.FINANCE_OFFICER, ROLES.BUDGET_CONTROLLER, ROLES.DIRECTOR_GENERAL, ROLES.CONTRACT_MANAGER]}>
                       <FinanceDashboard />
@@ -423,6 +431,11 @@ function App() {
                   <Route path="finance/matching" element={
                     <ProtectedRoute roles={[ROLES.FINANCE_OFFICER, ROLES.BUDGET_CONTROLLER, ROLES.CONTRACT_MANAGER]}>
                       <ThreeWayMatch />
+                    </ProtectedRoute>
+                  } />
+                  <Route path="finance/discrepancies" element={
+                    <ProtectedRoute roles={[ROLES.FINANCE_OFFICER, ROLES.BUDGET_CONTROLLER]}>
+                      <DiscrepancyReview />
                     </ProtectedRoute>
                   } />
                   <Route path="finance/payments" element={
@@ -524,7 +537,13 @@ function App() {
                   <Route path="bids/:id" element={<BidDetail />} />
                   <Route path="contracts" element={<MyContracts />} />
                   <Route path="contracts/:id" element={<VendorContractDetail />} />
+                  <Route path="contracts/:id/execution" element={<SupplierExecutionTrack />} />
+                  <Route path="contracts/:id/sign" element={<VendorContractSigning />} />
                   <Route path="invoices" element={<Invoices />} />
+                  <Route path="invoices/new" element={<SubmitInvoice />} />
+                  <Route path="invoices/new/:contractId" element={<SubmitInvoice />} />
+                  <Route path="deliveries/new" element={<SupplierDeliveryLog />} />
+                  <Route path="deliveries/new/:contractId" element={<SupplierDeliveryLog />} />
                   <Route path="profile" element={<VendorProfile />} />
                   <Route path="settings" element={<VendorSettings />} />
                 </Route>

@@ -88,4 +88,23 @@ export const financeApi = {
 
   releaseRetention: (contractId: string, data: { amount: number; acceptance_certificate_ref?: string; notes?: string; override?: boolean }) =>
     api.post<any>(`/finance/retention/release/${contractId}/`, data).then((r) => r.data),
+
+  manualConfirmPayment: (id: string, data: { bank_reference?: string }) =>
+    api.post<{ message: string; status: string; bank_reference: string; note?: string }>(`/finance/invoices/${id}/manual-confirm/`, data).then((r) => r.data),
+
+  createGrnManual: (data: {
+    contract_id: string;
+    grn_number?: string;
+    items: Array<{
+      item_code?: string;
+      item_name: string;
+      quantity_ordered: number;
+      quantity_received: number;
+      unit_price: number;
+      total_amount: number;
+    }>;
+    notes?: string;
+    milestone_name?: string;
+  }) =>
+    api.post<any>('/finance/grns/manual/', data).then((r) => r.data),
 };

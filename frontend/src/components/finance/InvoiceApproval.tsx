@@ -121,6 +121,15 @@ const InvoiceApproval: React.FC = () => {
     onError: (err: any) => toast.error(err?.response?.data?.error || 'Failed to confirm payment'),
   });
 
+  const manualConfirmMutation = useMutation({
+    mutationFn: () => financeApi.manualConfirmPayment(invoiceId!, { bank_reference: bankRef || undefined }),
+    onSuccess: (data: any) => {
+      toast.success(data.message || 'Payment confirmed manually');
+      queryClient.invalidateQueries({ queryKey: ['invoice', invoiceId] });
+    },
+    onError: (err: any) => toast.error(err?.response?.data?.error || 'Failed to confirm payment'),
+  });
+
   const sendAdviceMutation = useMutation({
     mutationFn: () => financeApi.sendPaymentAdvice(invoiceId!),
     onSuccess: () => {
@@ -543,16 +552,26 @@ const InvoiceApproval: React.FC = () => {
               />
             </div>
             
-            <div className="flex gap-3">
+            <div className="flex gap-3 mb-3">
               <button 
                 onClick={() => confirmMutation.mutate()} 
                 disabled={!bankRef || confirmMutation.isPending}
                 className="flex-1 py-4 bg-zammsa-green text-white rounded-2xl font-black shadow-lg shadow-zammsa-green/20 disabled:opacity-30 transition-all"
               >
-                {confirmMutation.isPending ? 'Confirming...' : 'Confirm Disbursement'}
+                {confirmMutation.isPending ? 'Confirming...' : 'Confirm via Bank Webhook'}
               </button>
               <button onClick={() => setAwaitingBankConfirmation(false)} className="px-6 py-4 text-gray-400 font-bold hover:text-gray-600 transition-colors">
                 Later
+              </button>
+            </div>
+            <div className="flex items-center gap-2 p-3 bg-amber-50 rounded-2xl border border-amber-100">
+              <span className="text-[10px] bg-amber-200 text-amber-800 px-2 py-0.5 rounded-full font-bold shrink-0">Testing</span>
+              <button
+                onClick={() => manualConfirmMutation.mutate()}
+                disabled={manualConfirmMutation.isPending}
+                className="text-sm font-bold text-amber-800 hover:underline"
+              >
+                {manualConfirmMutation.isPending ? 'Confirming...' : 'Manual Confirm (no bank webhook)'}
               </button>
             </div>
           </div>

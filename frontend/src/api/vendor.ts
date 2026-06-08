@@ -1,7 +1,7 @@
 import api from './client';
 import {
   VendorRegistration, VendorDashboardStats, VendorActivity, UpcomingDeadline, VendorNotification, RegistrationDocument,
-  TenderPublic, Bid, Contract, Invoice, PaginatedResponse
+  TenderPublic, Bid, Contract, Invoice, ContractFinancialSummary, ExecutionDashboard, PaginatedResponse,
 } from '../types';
 
 export const vendorApi = {
@@ -72,10 +72,14 @@ export const vendorApi = {
       api.get<PaginatedResponse<Contract>>('/contracts/', { params }).then((r) => r.data),
     get: (id: string) =>
       api.get<Contract>(`/contracts/${id}/`).then((r) => r.data),
-    sign: (id: string) =>
-      api.post<any>(`/contracts/${id}/sign-supplier/`).then((r) => r.data),
+    sign: (id: string, data?: Record<string, any>) =>
+      api.post<any>(`/contracts/${id}/sign-supplier/`, data || {}).then((r) => r.data),
     uploadSecurity: (id: string, data: { security_type?: string; amount: number; issuing_bank: string; reference_number?: string; expiry_date?: string }) =>
       api.post<any>(`/contracts/${id}/upload-security/`, data).then((r) => r.data),
+    financialSummary: (id: string) =>
+      api.get<ContractFinancialSummary>(`/finance/contracts/${id}/financial-summary/`).then((r) => r.data),
+    executionDashboard: (id: string) =>
+      api.get<ExecutionDashboard>(`/finance/contracts/${id}/execution-dashboard/`).then((r) => r.data),
   },
 
   invoices: {
@@ -87,8 +91,26 @@ export const vendorApi = {
       api.post<Invoice>('/finance/invoices/', data, {
         headers: { 'Content-Type': 'multipart/form-data' },
       }).then((r) => r.data),
+    submit: (id: string) =>
+      api.post(`/finance/invoices/${id}/submit/`).then((r) => r.data),
+    getGrns: (params?: Record<string, any>) =>
+      api.get<PaginatedResponse<any>>('/finance/grns/', { params }).then((r) => r.data),
     downloadPDF: (id: string) =>
       api.get(`/finance/invoices/${id}/`, { responseType: 'blob' }),
+    logDelivery: (data: {
+      contract_id: string;
+      grn_number?: string;
+      items: Array<{
+        item_code?: string;
+        item_name: string;
+        quantity_ordered: number;
+        quantity_delivered: number;
+        unit_price: number;
+        total_amount: number;
+      }>;
+      notes?: string;
+    }) =>
+      api.post<any>('/finance/supplier-delivery-log/', data).then((r) => r.data),
   },
 
   profile: {

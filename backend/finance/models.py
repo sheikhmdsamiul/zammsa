@@ -131,6 +131,47 @@ class GoodsReceiptNote(models.Model):
         return f'{self.grn_number} - {self.contract.contract_number}'
 
 
+class GRNLineItem(models.Model):
+    line_item_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    grn = models.ForeignKey(GoodsReceiptNote, on_delete=models.CASCADE, related_name='line_items')
+    line_number = models.PositiveIntegerField()
+    item_code = models.CharField(max_length=100, blank=True, default='')
+    item_name = models.CharField(max_length=255, blank=True, default='')
+    quantity_ordered = models.DecimalField(max_digits=15, decimal_places=2)
+    quantity_received = models.DecimalField(max_digits=15, decimal_places=2)
+    unit_price = models.DecimalField(max_digits=20, decimal_places=2)
+    total_amount = models.DecimalField(max_digits=20, decimal_places=2)
+
+    class Meta:
+        db_table = 'fin_grn_line_item'
+        verbose_name = 'GRN Line Item'
+        verbose_name_plural = 'GRN Line Items'
+        ordering = ['line_number']
+
+    def __str__(self):
+        return f'{self.grn.grn_number} - Line {self.line_number}'
+
+
+class InvoiceLineItem(models.Model):
+    line_item_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    invoice = models.ForeignKey('Invoice', on_delete=models.CASCADE, related_name='line_items')
+    line_number = models.PositiveIntegerField()
+    item_code = models.CharField(max_length=100, blank=True, default='')
+    item_name = models.CharField(max_length=255, blank=True, default='')
+    quantity = models.DecimalField(max_digits=15, decimal_places=2)
+    unit_price = models.DecimalField(max_digits=20, decimal_places=2)
+    total_amount = models.DecimalField(max_digits=20, decimal_places=2)
+
+    class Meta:
+        db_table = 'fin_invoice_line_item'
+        verbose_name = 'Invoice Line Item'
+        verbose_name_plural = 'Invoice Line Items'
+        ordering = ['line_number']
+
+    def __str__(self):
+        return f'{self.invoice.invoice_number} - Line {self.line_number}'
+
+
 class Invoice(models.Model):
     invoice_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     contract = models.ForeignKey(Contract, on_delete=models.CASCADE, related_name='invoices')

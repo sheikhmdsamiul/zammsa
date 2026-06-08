@@ -14,14 +14,20 @@ from rest_framework.pagination import PageNumberPagination
 from django_filters.rest_framework import DjangoFilterBackend
 import django_filters
 
-from .models import BudgetAllocation, BudgetEncumbrance, GoodsReceiptNote, Invoice, ThreeWayMatch, Payment, LetterOfCredit, RetentionRelease, INVOICE_APPROVAL_ROUTES
+from .models import (
+    BudgetAllocation, BudgetEncumbrance, GoodsReceiptNote, GRNLineItem,
+    Invoice, InvoiceLineItem, ThreeWayMatch, Payment, LetterOfCredit,
+    RetentionRelease, INVOICE_APPROVAL_ROUTES,
+)
 from .serializers import (
-    BudgetAllocationSerializer, BudgetEncumbranceSerializer, GoodsReceiptNoteSerializer,
-    InvoiceSerializer, InvoiceListSerializer, ThreeWayMatchSerializer,
-    PaymentSerializer, LetterOfCreditSerializer, RetentionReleaseSerializer,
+    BudgetAllocationSerializer, BudgetEncumbranceSerializer,
+    GoodsReceiptNoteSerializer, GRNLineItemSerializer,
+    InvoiceSerializer, InvoiceListSerializer, InvoiceLineItemSerializer,
+    ThreeWayMatchSerializer, PaymentSerializer, LetterOfCreditSerializer,
+    RetentionReleaseSerializer,
 )
 from accounts.audit import log_audit_action
-from contracts.models import Contract
+from contracts.models import Contract, ContractMilestone
 
 FINANCE_PAYMENT_ROLES = ('finance_officer', 'budget_controller', 'system_admin')
 APPROVAL_FLOW = ('finance_officer', 'department_head', 'director_general')
@@ -160,65 +166,129 @@ def invoice_submit_view(request, pk):
 @permission_classes([IsAuthenticated])
 def invoice_match_view(request, pk):
     try:
-        inv = Invoice.objects.select_related('grn', 'contract').get(pk=pk)
+        inv = Invoice.objects.select_related('grn', 'contract').prefetch_related(
+            'line_items', 'grn__line_items',
+        ).get(pk=pk)
     except Invoice.DoesNotExist:
         return Response({'error': 'Invoice not found'}, status=404)
 
-    # Robust matching logic
-    po_qty = Decimal('1') # Default for value-based matching
-    po_price = inv.contract.value
-    
-    grn_qty = Decimal('0')
-    grn_price = Decimal('0')
-    
-    if inv.grn:
-        grn_qty = inv.grn.quantity_received
-        grn_price = inv.grn.unit_price
-        # If we have a GRN, we use its unit price as the target PO price for this item
-        po_price = inv.grn.unit_price
-        po_qty = inv.grn.quantity_received # Expecting same qty as GRN
-    
-    inv_qty = Decimal('1')
-    inv_price = inv.amount
-    
-    if request.data:
-        po_qty = Decimal(str(request.data.get('po_quantity', po_qty)))
-        grn_qty = Decimal(str(request.data.get('grn_quantity', grn_qty)))
-        inv_qty = Decimal(str(request.data.get('invoice_quantity', inv_qty)))
-        po_price = Decimal(str(request.data.get('po_price', po_price)))
-        inv_price = Decimal(str(request.data.get('invoice_price', inv_price)))
-    elif inv.grn:
-        inv_qty = grn_qty
-        inv_price = (inv.amount / inv_qty) if inv_qty else Decimal('0')
+    inv_line_items = list(inv.line_items.all().order_by('line_number'))
+    grn_line_items = list(inv.grn.line_items.all().order_by('line_number')) if inv.grn else []
 
-    # Comparisons
-    qty_match = (po_qty == grn_qty == inv_qty)
-    price_match = (po_price == inv_price)
-    
-    if qty_match and price_match:
+    # Item-level matching
+    line_matches = []
+    overall_qty_match = True
+    overall_price_match = True
+    total_discrepancies = {}
+
+    if inv_line_items and grn_line_items:
+        # Match line by line using line_number
+        max_lines = max(len(inv_line_items), len(grn_line_items))
+        for i in range(max_lines):
+            inv_item = inv_line_items[i] if i < len(inv_line_items) else None
+            grn_item = grn_line_items[i] if i < len(grn_line_items) else None
+
+            inv_qty = inv_item.quantity if inv_item else Decimal('0')
+            inv_price = inv_item.unit_price if inv_item else Decimal('0')
+            grn_qty = grn_item.quantity_received if grn_item else Decimal('0')
+            grn_price = grn_item.unit_price if grn_item else Decimal('0')
+
+            qty_ok = (inv_qty == grn_qty)
+            price_ok = (inv_price == grn_price)
+
+            if not qty_ok:
+                overall_qty_match = False
+            if not price_ok:
+                overall_price_match = False
+
+            line_match = {
+                'line_number': i + 1,
+                'item_name': (inv_item.item_name if inv_item else grn_item.item_name),
+                'item_code': (inv_item.item_code if inv_item else grn_item.item_code),
+                'invoice_qty': float(inv_qty),
+                'grn_qty': float(grn_qty),
+                'invoice_price': float(inv_price),
+                'grn_price': float(grn_price),
+                'qty_match': qty_ok,
+                'price_match': price_ok,
+            }
+            line_matches.append(line_match)
+
+            if not qty_ok:
+                total_discrepancies[f'line_{i+1}_qty'] = {
+                    'invoice': float(inv_qty), 'grn': float(grn_qty),
+                }
+            if not price_ok:
+                total_discrepancies[f'line_{i+1}_price'] = {
+                    'invoice': float(inv_price), 'grn': float(grn_price),
+                }
+    else:
+        # Fallback: header-level matching (legacy)
+        po_qty = Decimal('1')
+        po_price = inv.contract.value
+
+        grn_qty = Decimal('0')
+        grn_price = Decimal('0')
+
+        if inv.grn:
+            grn_qty = inv.grn.quantity_received
+            grn_price = inv.grn.unit_price
+            po_price = inv.grn.unit_price
+            po_qty = inv.grn.quantity_received
+
+        inv_qty = Decimal('1')
+        inv_price = inv.amount
+
+        if request.data:
+            po_qty = Decimal(str(request.data.get('po_quantity', po_qty)))
+            grn_qty = Decimal(str(request.data.get('grn_quantity', grn_qty)))
+            inv_qty = Decimal(str(request.data.get('invoice_quantity', inv_qty)))
+            po_price = Decimal(str(request.data.get('po_price', po_price)))
+            inv_price = Decimal(str(request.data.get('invoice_price', inv_price)))
+        elif inv.grn:
+            inv_qty = grn_qty
+            inv_price = (inv.amount / inv_qty) if inv_qty else Decimal('0')
+
+        overall_qty_match = (grn_qty == inv_qty)
+        overall_price_match = (po_price == inv_price)
+
+        if not overall_qty_match:
+            total_discrepancies['quantity_mismatch_grn_inv'] = {
+                'grn': float(grn_qty), 'invoice': float(inv_qty),
+            }
+        if not overall_price_match:
+            total_discrepancies['price_mismatch'] = {
+                'po': float(po_price), 'invoice': float(inv_price),
+            }
+
+        line_matches = [{
+            'line_number': 1,
+            'item_name': inv.grn.item_description if inv.grn else '',
+            'item_code': '',
+            'invoice_qty': float(inv_qty),
+            'grn_qty': float(grn_qty),
+            'invoice_price': float(inv_price),
+            'grn_price': float(grn_price),
+            'qty_match': overall_qty_match,
+            'price_match': overall_price_match,
+        }]
+
+    if overall_qty_match and overall_price_match:
         match_status = 'complete'
-    elif qty_match or price_match:
+    elif overall_qty_match or overall_price_match:
         match_status = 'partial'
     else:
         match_status = 'no_match'
 
-    discrepancies = {}
-    if po_qty != inv_qty:
-        discrepancies['quantity_mismatch_po_inv'] = {'po': float(po_qty), 'invoice': float(inv_qty)}
-    if grn_qty != inv_qty:
-        discrepancies['quantity_mismatch_grn_inv'] = {'grn': float(grn_qty), 'invoice': float(inv_qty)}
-    if po_price != inv_price:
-        discrepancies['price_mismatch'] = {'po': float(po_price), 'invoice': float(inv_price)}
-
     ThreeWayMatch.objects.create(
         invoice=inv,
-        po_quantity=po_qty,
-        grn_quantity=grn_qty,
-        invoice_quantity=inv_qty,
-        po_price=po_price,
-        invoice_price=inv_price,
+        po_quantity=sum(m['grn_qty'] for m in line_matches),
+        grn_quantity=sum(m['grn_qty'] for m in line_matches),
+        invoice_quantity=sum(m['invoice_qty'] for m in line_matches),
+        po_price=sum(m['grn_price'] for m in line_matches) / len(line_matches) if line_matches else 0,
+        invoice_price=sum(m['invoice_price'] for m in line_matches) / len(line_matches) if line_matches else 0,
         match_status=match_status,
-        discrepancies=discrepancies,
+        discrepancies={'line_matches': line_matches, **total_discrepancies},
     )
 
     if match_status == 'complete':
@@ -234,17 +304,11 @@ def invoice_match_view(request, pk):
             'overall_match': match_status == 'complete',
             'flag_for_review': match_status != 'complete',
             'invoice_amount': float(inv.amount),
-            'po_amount': float(po_qty * po_price),
-            'grn_amount': float(grn_qty * po_price),
-            'invoice_vs_po': po_price == inv_price,
-            'po_vs_grn': po_qty == grn_qty,
-            'invoice_vs_grn': grn_qty == inv_qty,
-            'quantity_match': qty_match,
-            'invoice_qty': float(inv_qty),
-            'grn_qty': float(grn_qty),
-            'po_qty': float(po_qty),
+            'line_matches': line_matches,
+            'quantity_match': overall_qty_match,
+            'price_match': overall_price_match,
         },
-        'discrepancies': discrepancies,
+        'discrepancies': total_discrepancies,
     })
 
 
@@ -360,10 +424,6 @@ def grn_webhook_view(request):
     grn_number = request.data.get('grn_number', '')
     po_number = request.data.get('po_number', '')
     contract_id = request.data.get('contract_id', '')
-    quantity = Decimal(str(request.data.get('quantity_received', 0)))
-    unit_price = Decimal(str(request.data.get('unit_price', 0)))
-    item_desc = request.data.get('item_description', '')
-    received_by = request.data.get('received_by', '')
 
     if not grn_number or not po_number:
         return Response({'error': 'grn_number and po_number are required'}, status=400)
@@ -377,22 +437,97 @@ def grn_webhook_view(request):
     if contract is None and po_number:
         contract = Contract.objects.filter(contract_number=po_number, status__in=('active', 'pending_acceptance')).first()
 
-    total_amount = quantity * unit_price
+    # Support both flat payload and items array
+    items_data = request.data.get('items', [])
+    if not items_data:
+        # Legacy flat format
+        quantity = Decimal(str(request.data.get('quantity_received', 0)))
+        unit_price = Decimal(str(request.data.get('unit_price', 0)))
+        item_desc = request.data.get('item_description', '')
+        received_by = request.data.get('received_by', '')
+        total_amount = quantity * unit_price
 
-    grn, created = GoodsReceiptNote.objects.update_or_create(
-        grn_number=grn_number,
-        defaults={
-            'contract': contract,
-            'po_number': po_number,
-            'item_description': item_desc,
-            'quantity_received': quantity,
-            'unit_price': unit_price,
-            'total_amount': total_amount,
-            'received_by': received_by,
-            'source': 'webhook',
-            'raw_webhook': request.data,
-        }
-    )
+        grn, created = GoodsReceiptNote.objects.update_or_create(
+            grn_number=grn_number,
+            defaults={
+                'contract': contract,
+                'po_number': po_number,
+                'item_description': item_desc,
+                'quantity_received': quantity,
+                'unit_price': unit_price,
+                'total_amount': total_amount,
+                'received_by': received_by,
+                'source': 'webhook',
+                'raw_webhook': request.data,
+            }
+        )
+        # Create a single line item from the legacy flat data
+        GRNLineItem.objects.update_or_create(
+            grn=grn,
+            line_number=1,
+            defaults={
+                'item_code': request.data.get('item_code', ''),
+                'item_name': item_desc or request.data.get('item_name', ''),
+                'quantity_ordered': quantity,
+                'quantity_received': quantity,
+                'unit_price': unit_price,
+                'total_amount': total_amount,
+            }
+        )
+    else:
+        # Items array format — compute summary from items
+        total_qty = Decimal('0')
+        total_amount = Decimal('0')
+        received_by = request.data.get('received_by', '')
+        item_desc = ', '.join(
+            str(it.get('item_name', it.get('item_code', '')))
+            for it in items_data[:3]
+        )
+        if len(items_data) > 3:
+            item_desc += f' (+{len(items_data) - 3} more)'
+
+        for it in items_data:
+            total_qty += Decimal(str(it.get('quantity_received', 0)))
+            total_amount += Decimal(str(it.get('total_amount', 0)))
+
+        unit_price = total_amount / total_qty if total_qty else Decimal('0')
+
+        grn, created = GoodsReceiptNote.objects.update_or_create(
+            grn_number=grn_number,
+            defaults={
+                'contract': contract,
+                'po_number': po_number,
+                'item_description': item_desc,
+                'quantity_received': total_qty,
+                'unit_price': unit_price,
+                'total_amount': total_amount,
+                'received_by': received_by,
+                'source': 'webhook',
+                'raw_webhook': request.data,
+            }
+        )
+
+        # Create/replace line items from the items array
+        grn.line_items.all().delete()
+        for idx, it in enumerate(items_data, start=1):
+            GRNLineItem.objects.create(
+                grn=grn,
+                line_number=idx,
+                item_code=it.get('item_code', ''),
+                item_name=it.get('item_name', ''),
+                quantity_ordered=Decimal(str(it.get('quantity_ordered', 0))),
+                quantity_received=Decimal(str(it.get('quantity_received', 0))),
+                unit_price=Decimal(str(it.get('unit_price', 0))),
+                total_amount=Decimal(str(it.get('total_amount', 0))),
+            )
+
+    # Update related milestone if contract has one
+    if contract:
+        milestone_name = request.data.get('milestone_name', '')
+        if milestone_name:
+            ContractMilestone.objects.filter(
+                contract=contract, milestone_name=milestone_name
+            ).update(status='delivered')
 
     return Response({
         'message': 'GRN received',
@@ -432,6 +567,47 @@ def payment_bank_confirm_view(request, pk):
         payment.status = 'failed'
         payment.save()
         return Response({'message': 'Payment failed', 'status': payment.status})
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def payment_manual_confirm_view(request, pk):
+    """Alternative to bank webhook — finance officer manually confirms payment (for testing)."""
+    if request.user.role not in FINANCE_PAYMENT_ROLES:
+        return Response({'error': 'Only finance officers can confirm payments'}, status=403)
+
+    try:
+        inv = Invoice.objects.get(pk=pk)
+    except Invoice.DoesNotExist:
+        return Response({'error': 'Invoice not found'}, status=404)
+
+    payment = inv.payments.filter(status='sent').first()
+    if not payment:
+        return Response({'error': 'No sent payment found for this invoice. Process payment first.'}, status=400)
+
+    bank_ref = request.data.get('bank_reference', '')
+    if not bank_ref:
+        bank_ref = f'MANUAL-{timezone.now().strftime("%Y%m%d-%H%M%S")}'
+
+    payment.status = 'confirmed'
+    payment.reference = bank_ref
+    payment.save(update_fields=['status', 'reference'])
+    inv.status = 'paid'
+    inv.paid_at = timezone.now()
+    inv.save(update_fields=['status', 'paid_at', 'updated_at'])
+
+    ip = request.META.get('REMOTE_ADDR', '')
+    log_audit_action(
+        user=request.user, action='PAYMENT_MANUAL_CONFIRM', module='finance',
+        record_id=str(inv.invoice_id), ip_address=ip,
+    )
+
+    return Response({
+        'message': 'Payment manually confirmed (no bank webhook)',
+        'status': inv.status,
+        'bank_reference': bank_ref,
+        'note': 'Use bank-confirm webhook endpoint in production',
+    })
 
 
 @api_view(['POST'])
@@ -568,6 +744,7 @@ class GRNListView(BaseView, generics.ListAPIView):
     queryset = GoodsReceiptNote.objects.select_related('contract').all()
     serializer_class = GoodsReceiptNoteSerializer
     ordering = ['-received_date']
+    filterset_fields = ['contract']
 
 
 class LetterOfCreditListView(BaseView, generics.ListCreateAPIView):
@@ -725,6 +902,112 @@ def lc_drawdown_view(request, pk):
 
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
+def manual_grn_create_view(request):
+    """Alternative to WMS webhook — R-12 manually creates a GRN (for testing)."""
+    if request.user.role not in ('contract_manager', 'procurement_officer', 'system_admin'):
+        return Response({'error': 'Only contract managers and procurement officers can create GRNs manually'}, status=403)
+
+    contract_id = request.data.get('contract_id', '')
+    if not contract_id:
+        return Response({'error': 'contract_id is required'}, status=400)
+
+    try:
+        contract = Contract.objects.get(pk=contract_id)
+    except Contract.DoesNotExist:
+        return Response({'error': 'Contract not found'}, status=404)
+
+    grn_number = request.data.get('grn_number', '')
+    if not grn_number:
+        count = GoodsReceiptNote.objects.filter(contract=contract).count() + 1
+        grn_number = f'GRN-{contract.contract_number}-{count:04d}'
+
+    received_by = request.data.get('received_by', request.user.full_name if hasattr(request.user, 'full_name') else str(request.user))
+
+    items_data = request.data.get('items', [])
+    if not items_data:
+        # Flat single-item format
+        quantity = Decimal(str(request.data.get('quantity_received', 0)))
+        unit_price = Decimal(str(request.data.get('unit_price', 0)))
+        item_desc = request.data.get('item_description', '')
+        total_amount = quantity * unit_price
+
+        grn = GoodsReceiptNote.objects.create(
+            contract=contract,
+            po_number=contract.contract_number,
+            grn_number=grn_number,
+            item_description=item_desc,
+            quantity_received=quantity,
+            unit_price=unit_price,
+            total_amount=total_amount,
+            received_by=received_by,
+            notes=request.data.get('notes', ''),
+            source='manual',
+        )
+        GRNLineItem.objects.create(
+            grn=grn, line_number=1,
+            item_code=request.data.get('item_code', ''),
+            item_name=item_desc or request.data.get('item_name', ''),
+            quantity_ordered=quantity, quantity_received=quantity,
+            unit_price=unit_price, total_amount=total_amount,
+        )
+    else:
+        total_qty = Decimal('0')
+        total_amount = Decimal('0')
+        item_desc_parts = []
+        for it in items_data:
+            total_qty += Decimal(str(it.get('quantity_received', 0)))
+            total_amount += Decimal(str(it.get('total_amount', 0)))
+            item_desc_parts.append(it.get('item_name', it.get('item_code', '')))
+        unit_price = total_amount / total_qty if total_qty else Decimal('0')
+        item_desc = ', '.join(item_desc_parts[:3])
+        if len(item_desc_parts) > 3:
+            item_desc += f' (+{len(item_desc_parts) - 3} more)'
+
+        grn = GoodsReceiptNote.objects.create(
+            contract=contract,
+            po_number=contract.contract_number,
+            grn_number=grn_number,
+            item_description=item_desc,
+            quantity_received=total_qty,
+            unit_price=unit_price,
+            total_amount=total_amount,
+            received_by=received_by,
+            notes=request.data.get('notes', ''),
+            source='manual',
+        )
+        for idx, it in enumerate(items_data, start=1):
+            GRNLineItem.objects.create(
+                grn=grn, line_number=idx,
+                item_code=it.get('item_code', ''),
+                item_name=it.get('item_name', ''),
+                quantity_ordered=Decimal(str(it.get('quantity_ordered', 0))),
+                quantity_received=Decimal(str(it.get('quantity_received', 0))),
+                unit_price=Decimal(str(it.get('unit_price', 0))),
+                total_amount=Decimal(str(it.get('total_amount', 0))),
+            )
+
+    # Update milestone if specified
+    milestone_name = request.data.get('milestone_name', '')
+    if milestone_name and contract:
+        ContractMilestone.objects.filter(
+            contract=contract, milestone_name=milestone_name
+        ).update(status='delivered', completed_at=timezone.now())
+
+    ip = request.META.get('REMOTE_ADDR', '')
+    log_audit_action(
+        user=request.user, action='GRN_MANUAL_CREATE', module='finance',
+        record_id=str(grn.grn_id), ip_address=ip,
+    )
+
+    return Response({
+        'message': 'GRN created manually',
+        'grn': GoodsReceiptNoteSerializer(grn).data,
+        'note': 'Use grn-webhook endpoint in production with WMS integration',
+    })
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
 def retention_release_view(request, pk):
     try:
         contract = Contract.objects.get(pk=pk)
@@ -765,6 +1048,214 @@ def retention_release_view(request, pk):
         'message': 'Retention released successfully',
         'amount': float(amount),
         'release': RetentionReleaseSerializer(release).data,
+    })
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def contract_financial_summary_view(request, pk):
+    try:
+        contract = Contract.objects.get(pk=pk)
+    except Contract.DoesNotExist:
+        return Response({'error': 'Contract not found'}, status=404)
+
+    total_paid = Payment.objects.filter(
+        contract=contract, status='confirmed'
+    ).aggregate(total=Sum('amount'))['total'] or 0
+
+    total_retained = Payment.objects.filter(
+        contract=contract, status='confirmed'
+    ).aggregate(total=Sum('retained_amount'))['total'] or 0
+
+    milestones = ContractMilestone.objects.filter(contract=contract).values(
+        'milestone_id', 'milestone_name', 'due_date', 'status'
+    ).order_by('due_date')
+
+    grns = GoodsReceiptNote.objects.filter(contract=contract).values(
+        'grn_id', 'grn_number', 'item_description', 'quantity_received',
+        'unit_price', 'total_amount', 'received_date'
+    ).order_by('-received_date')
+
+    return Response({
+        'contract_id': str(contract.contract_id),
+        'contract_number': contract.contract_number,
+        'title': contract.title,
+        'value': float(contract.value),
+        'currency': contract.currency,
+        'payments_to_date': float(total_paid),
+        'retained_to_date': float(total_retained),
+        'balance': float(contract.value - total_paid - total_retained),
+        'retention_rate': 0.05,
+        'payment_terms': '30 days from invoice approval',
+        'milestones': list(milestones),
+        'grns': list(grns),
+        'start_date': contract.start_date,
+        'end_date': contract.end_date,
+        'status': contract.status,
+    })
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def supplier_delivery_log_view(request):
+    """Supplier-facing endpoint to log delivery of goods against a contract."""
+    if request.user.role != 'supplier_user':
+        return Response({'error': 'Only suppliers can log deliveries'}, status=403)
+
+    contract_id = request.data.get('contract_id', '')
+    if not contract_id:
+        return Response({'error': 'contract_id is required'}, status=400)
+
+    try:
+        contract = Contract.objects.get(pk=contract_id)
+    except Contract.DoesNotExist:
+        return Response({'error': 'Contract not found'}, status=404)
+
+    grn_number = request.data.get('grn_number', '')
+    if not grn_number:
+        count = GoodsReceiptNote.objects.filter(contract=contract).count() + 1
+        grn_number = f'DEL-{contract.contract_number}-{count:04d}'
+
+    items_data = request.data.get('items', [])
+    if not items_data:
+        return Response({'error': 'At least one delivery item is required'}, status=400)
+
+    total_qty = Decimal('0')
+    total_amount = Decimal('0')
+    item_desc_parts = []
+
+    for it in items_data:
+        total_qty += Decimal(str(it.get('quantity_delivered', 0)))
+        total_amount += Decimal(str(it.get('total_amount', 0)))
+        item_desc_parts.append(it.get('item_name', it.get('item_code', '')))
+
+    unit_price = total_amount / total_qty if total_qty else Decimal('0')
+    item_desc = ', '.join(item_desc_parts[:3])
+    if len(item_desc_parts) > 3:
+        item_desc += f' (+{len(item_desc_parts) - 3} more)'
+
+    grn = GoodsReceiptNote.objects.create(
+        contract=contract,
+        po_number=contract.contract_number,
+        grn_number=grn_number,
+        item_description=item_desc,
+        quantity_received=total_qty,
+        unit_price=unit_price,
+        total_amount=total_amount,
+        received_by=request.user.full_name if hasattr(request.user, 'full_name') else str(request.user),
+        notes=request.data.get('notes', ''),
+        source='supplier_portal',
+        raw_webhook=request.data,
+    )
+
+    for idx, it in enumerate(items_data, start=1):
+        GRNLineItem.objects.create(
+            grn=grn,
+            line_number=idx,
+            item_code=it.get('item_code', ''),
+            item_name=it.get('item_name', ''),
+            quantity_ordered=Decimal(str(it.get('quantity_ordered', 0))),
+            quantity_received=Decimal(str(it.get('quantity_delivered', 0))),
+            unit_price=Decimal(str(it.get('unit_price', 0))),
+            total_amount=Decimal(str(it.get('total_amount', 0))),
+        )
+
+    return Response({
+        'message': 'Delivery logged successfully',
+        'grn': GoodsReceiptNoteSerializer(grn).data,
+    })
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def execution_dashboard_view(request, pk):
+    """Contract manager dashboard showing milestones, deliveries, and shortages."""
+    try:
+        contract = Contract.objects.select_related('supplier').prefetch_related(
+            'goods_receipt_notes', 'invoices', 'payments', 'milestones',
+        ).get(pk=pk)
+    except Contract.DoesNotExist:
+        return Response({'error': 'Contract not found'}, status=404)
+
+    grns = GoodsReceiptNote.objects.filter(contract=contract).prefetch_related('line_items').order_by('-received_date')
+    milestones = ContractMilestone.objects.filter(contract=contract).order_by('due_date')
+    invoices_list = Invoice.objects.filter(contract=contract).order_by('-created_at')
+    payments_list = Payment.objects.filter(contract=contract).order_by('-created_at')
+
+    # Delivery shortages: compare ordered vs received per item
+    shortages = []
+    for grn in grns:
+        for item in grn.line_items.all():
+            shortage = item.quantity_ordered - item.quantity_received
+            if shortage > 0:
+                shortages.append({
+                    'grn_number': grn.grn_number,
+                    'item_code': item.item_code,
+                    'item_name': item.item_name,
+                    'ordered': float(item.quantity_ordered),
+                    'received': float(item.quantity_received),
+                    'shortage': float(shortage),
+                })
+
+    total_paid = sum(p.amount for p in payments_list if p.status == 'confirmed')
+    total_retained = sum(p.retained_amount for p in payments_list if p.status == 'confirmed')
+    balance = float(contract.value - total_paid - total_retained)
+
+    return Response({
+        'contract_id': str(contract.contract_id),
+        'contract_number': contract.contract_number,
+        'title': contract.title,
+        'supplier': contract.supplier.name if contract.supplier else '',
+        'value': float(contract.value),
+        'currency': contract.currency,
+        'status': contract.status,
+        'start_date': contract.start_date,
+        'end_date': contract.end_date,
+        'payments_to_date': float(total_paid),
+        'retained_to_date': float(total_retained),
+        'balance': balance,
+        'milestones': [
+            {
+                'milestone_id': str(m.milestone_id),
+                'milestone_name': m.milestone_name,
+                'due_date': m.due_date,
+                'status': m.status,
+            }
+            for m in milestones
+        ],
+        'deliveries': [
+            {
+                'grn_id': str(g.grn_id),
+                'grn_number': g.grn_number,
+                'item_description': g.item_description,
+                'quantity_received': float(g.quantity_received),
+                'total_amount': float(g.total_amount),
+                'received_date': g.received_date,
+                'line_items': [
+                    {
+                        'item_code': li.item_code,
+                        'item_name': li.item_name,
+                        'quantity_ordered': float(li.quantity_ordered),
+                        'quantity_received': float(li.quantity_received),
+                        'unit_price': float(li.unit_price),
+                    }
+                    for li in g.line_items.all()
+                ],
+            }
+            for g in grns
+        ],
+        'invoices': [
+            {
+                'invoice_id': str(inv.invoice_id),
+                'invoice_number': inv.invoice_number,
+                'amount': float(inv.amount),
+                'status': inv.status,
+                'submitted_at': inv.submitted_at,
+            }
+            for inv in invoices_list
+        ],
+        'shortages': shortages,
+        'shortage_count': len(shortages),
     })
 
 

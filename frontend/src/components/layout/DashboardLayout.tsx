@@ -38,10 +38,6 @@ function useSidebarItems(userRole: string | undefined): NavItem[] {
       { label: 'Solicitations', path: '/solicitations', icon: <DocumentTextIcon className={iconClass} />, badge: 2,
         children: [
           { label: 'Create New', path: '/solicitations/create' },
-          { label: 'Draft', path: '/solicitations' },
-          { label: 'Pending Approval', path: '/solicitations' },
-          { label: 'Published', path: '/solicitations' },
-          { label: 'Closed', path: '/solicitations' },
           { label: 'All Solicitations', path: '/solicitations' },
         ]
       },

@@ -16,6 +16,10 @@ export const ROUTES = {
     SOLICITATION_DETAIL: '/vendor/solicitations/:id',
     CONTRACTS: '/vendor/contracts',
     CONTRACT_DETAIL: '/vendor/contracts/:id',
+    CONTRACT_SIGN: '/vendor/contracts/:id/sign',
+    INVOICES: '/vendor/invoices',
+    INVOICE_CREATE: '/vendor/invoices/new',
+    DELIVERY_LOG: '/vendor/deliveries/new',
     PROFILE: '/vendor/profile',
   },
   // Backward compatibility
@@ -27,6 +31,9 @@ export const ROUTES = {
     SOLICITATION_DETAIL: '/vendor/solicitations/:id',
     CONTRACTS: '/vendor/contracts',
     CONTRACT_DETAIL: '/vendor/contracts/:id',
+    CONTRACT_SIGN: '/vendor/contracts/:id/sign',
+    INVOICES: '/vendor/invoices',
+    INVOICE_CREATE: '/vendor/invoices/new',
     PROFILE: '/vendor/profile',
   },
   DASHBOARD: {
@@ -47,6 +54,7 @@ export const ROUTES = {
     CONTRACT_CREATE: '/contracts/create',
     FINANCE: '/finance',
     FINANCE_BUDGETS: '/finance/budgets',
+    EXECUTION_DASHBOARD: '/contracts/:id/execution',
     FINANCE_INVOICES: '/finance/invoices',
     FINANCE_PAYMENTS: '/finance/payments',
     FINANCE_LC: '/finance/letters-of-credit',

@@ -15,6 +15,7 @@ urlpatterns = [
     path('<uuid:pk>/resolve-appeal/<uuid:appeal_pk>/', views.contract_resolve_appeal_view, name='contract-resolve-appeal'),
     path('<uuid:pk>/activate/', views.contract_activate_after_waiting_view, name='contract-activate'),
     path('<uuid:pk>/closure-checklist/', views.contract_closure_checklist_view, name='contract-closure-checklist'),
+    path('<uuid:pk>/final-acceptance/', views.contract_final_acceptance_view, name='contract-final-acceptance'),
     path('<uuid:pk>/calculate-ld/', views.contract_calculate_ld_view, name='contract-calculate-ld'),
     path('<uuid:pk>/archive/', views.contract_archive_view, name='contract-archive'),
     path('<uuid:pk>/amend/', views.contract_amend_view, name='contract-amend'),

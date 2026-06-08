@@ -20,6 +20,7 @@ import {
   ArrowLeftIcon,
   DocumentTextIcon,
   ShieldCheckIcon,
+  ChartBarIcon,
 } from '@heroicons/react/outline';
 
 const VendorContractDetail: React.FC = () => {
@@ -31,16 +32,6 @@ const VendorContractDetail: React.FC = () => {
     queryKey: ['vendor-contract', id],
     queryFn: () => vendorApi.contracts.get(id!),
     enabled: !!id,
-  });
-
-  const signMutation = useMutation({
-    mutationFn: () => vendorApi.contracts.sign(id!),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['vendor-contract', id] });
-      queryClient.invalidateQueries({ queryKey: ['vendor-contracts'] });
-      toast.success('Contract signed successfully. Awaiting Director General countersignature.');
-    },
-    onError: (err: any) => toast.error(err?.response?.data?.error || 'Failed to sign contract'),
   });
 
   const [showSecurityForm, setShowSecurityForm] = useState(false);
@@ -137,16 +128,15 @@ const VendorContractDetail: React.FC = () => {
             <p className="text-sm font-black uppercase tracking-wider text-zammsa-green">Action required</p>
             <h2 className="text-lg font-bold text-gray-900 mt-1">Sign your contract</h2>
             <p className="text-sm text-gray-600 mt-1">
-              Standstill is complete. Review the terms below and apply your digital signature.
+              Standstill is complete. Review the terms and apply your digital signature.
             </p>
           </div>
           <button
             type="button"
-            onClick={() => signMutation.mutate()}
-            disabled={signMutation.isPending}
-            className="shrink-0 px-8 py-3 bg-zammsa-green text-white rounded-xl font-bold text-sm disabled:opacity-50"
+            onClick={() => navigate(`/vendor/contracts/${id}/sign`)}
+            className="shrink-0 px-8 py-3 bg-zammsa-green text-white rounded-xl font-bold text-sm hover:bg-zammsa-green-dark transition-all"
           >
-            {signMutation.isPending ? 'Signing...' : 'Sign contract'}
+            Sign now
           </button>
         </div>
       )}
@@ -382,6 +372,17 @@ const VendorContractDetail: React.FC = () => {
               </a>
             </section>
           )}
+          <section className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
+            <h2 className="text-sm font-bold text-gray-900 mb-3 flex items-center gap-2">
+              <ChartBarIcon className="w-5 h-5" />
+              Execution track
+            </h2>
+            <p className="text-xs text-gray-500 mb-3">View delivery records, invoices, performance scores, milestones, and shortages</p>
+            <Link to={`/vendor/contracts/${c.id}/execution`}
+              className="inline-flex items-center justify-center w-full px-4 py-2.5 bg-zammsa-green text-white rounded-xl text-sm font-bold hover:bg-zammsa-green-dark shadow-sm transition-all">
+              View full track
+            </Link>
+          </section>
         </aside>
       </div>
     </div>
