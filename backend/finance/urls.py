@@ -32,6 +32,7 @@ urlpatterns = [
     path('retention/release/<uuid:pk>/', views.retention_release_view, name='retention-release'),
     path('contracts/<uuid:pk>/financial-summary/', views.contract_financial_summary_view, name='contract-financial-summary'),
     path('contracts/<uuid:pk>/execution-dashboard/', views.execution_dashboard_view, name='contract-execution-dashboard'),
+    path('contracts/<uuid:pk>/available-grns/', views.supplier_available_grns_view, name='contract-available-grns'),
     path('supplier-delivery-log/', views.supplier_delivery_log_view, name='supplier-delivery-log'),
     path('grns/manual/', views.manual_grn_create_view, name='grn-manual-create'),
     path('purchase-orders/', views.PurchaseOrderListView.as_view(), name='po-list'),

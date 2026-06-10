@@ -107,10 +107,11 @@ const BidSubmission: React.FC = () => {
   }, [closingDate]);
 
   const securityRequiredAmount = useMemo(() => {
-    if (!parsedBidPrice) return 0;
+    const estimatedValue = Number(tender?.estimated_value || 0);
+    if (!estimatedValue) return 0;
     const rate = tender?.bid_security_rate || 2;
-    return parsedBidPrice * (rate / 100);
-  }, [parsedBidPrice, tender]);
+    return estimatedValue * (rate / 100);
+  }, [tender]);
 
   const addendaList = tender?.addenda || [];
   const hasAddenda = addendaList.length > 0;
@@ -479,7 +480,7 @@ const BidSubmission: React.FC = () => {
                 'Bid Security Document',
                 'security', true, 'Must be from a registered commercial bank in Zambia. Valid for: 118 days from closing date (90+28 days)',
                 '.pdf,.jpg,.jpeg,.png',
-                `Bank guarantee — 2% of your total bid price (min K${Math.round(securityRequiredAmount).toLocaleString()})`
+                `Bank guarantee — ${tender?.bid_security_rate || 2}% of the solicitation estimated value (K${Math.round(securityRequiredAmount).toLocaleString()})`
               )}
               {zamraRequired && docUploadRow(
                 'ZAMRA Product Registration Certificates',
@@ -594,7 +595,7 @@ const BidSubmission: React.FC = () => {
               <div className="p-5 bg-gray-50 border border-gray-200 rounded-2xl">
                 <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Bid Security Amount Confirmed</p>
                 <p className="text-sm font-bold text-gray-900">
-                  {(tender?.bid_security_rate || 2)}% of K{parsedBidPrice.toLocaleString()} = K{Math.round(securityRequiredAmount).toLocaleString()}
+                  {(tender?.bid_security_rate || 2)}% of estimated value K{Number(tender.estimated_value || 0).toLocaleString()} = K{Math.round(securityRequiredAmount).toLocaleString()}
                 </p>
                 {files.security && (
                   <p className="text-[11px] text-emerald-600 mt-1 flex items-center gap-1">

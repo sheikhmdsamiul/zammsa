@@ -1,55 +1,82 @@
-import React, { useEffect, useMemo } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { vendorApi } from '../../api/vendor';
 import { LoadingSpinner } from '../common/LoadingSpinner';
 import { formatContractValue, formatDate } from '../contracts/contractUtils';
 import toast from 'react-hot-toast';
-import { ArrowLeftIcon } from '@heroicons/react/outline';
-
-const RETENTION_RATE = 0.05;
-const PAYMENT_TERMS = '30 days from invoice approval';
+import { ArrowLeftIcon, ExclamationIcon, CheckCircleIcon } from '@heroicons/react/outline';
+import { AvailableGRN, GRNLineItemInfo } from '../../types';
 
 const SubmitInvoice: React.FC = () => {
   const { contractId } = useParams<{ contractId: string }>();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
 
-  const [selectedContract, setSelectedContract] = React.useState(contractId || '');
-  const [selectedPo, setSelectedPo] = React.useState('');
-  const [selectedMilestone, setSelectedMilestone] = React.useState('');
-  const [invoiceNumber, setInvoiceNumber] = React.useState('');
-  const [invoiceDate, setInvoiceDate] = React.useState(new Date().toISOString().slice(0, 10));
-  const [amount, setAmount] = React.useState('');
-  const [selectedGrn, setSelectedGrn] = React.useState('');
-  const [invoiceFile, setInvoiceFile] = React.useState<File | null>(null);
+  const [selectedContract, setSelectedContract] = useState(contractId || '');
+  const [selectedGRN, setSelectedGRN] = useState('');
+  const [invoiceNumber, setInvoiceNumber] = useState('');
+  const [lineQtyOverrides, setLineQtyOverrides] = useState<Record<number, number>>({});
+  const [invoiceFile, setInvoiceFile] = useState<File | null>(null);
+  const [deliveryNoteFile, setDeliveryNoteFile] = useState<File | null>(null);
+  const [zamraCertFile, setZamraCertFile] = useState<File | null>(null);
+  const [tempLogFile, setTempLogFile] = useState<File | null>(null);
+  const [bankConfirmSame, setBankConfirmSame] = useState(true);
+  const [updateBankName, setUpdateBankName] = useState('');
+  const [updateBankAccount, setUpdateBankAccount] = useState('');
+  const [updateBankHolder, setUpdateBankHolder] = useState('');
+  const [bankLetterFile, setBankLetterFile] = useState<File | null>(null);
 
-  const { data: contractsData } = useQuery({
+  const { data: contractsData, isLoading: contractsLoading } = useQuery({
     queryKey: ['vendor-contracts-for-invoice-submit'],
-    queryFn: () => vendorApi.contracts.list({ page_size: 100, status__in: 'active,pending_acceptance' }),
+    queryFn: () => vendorApi.contracts.list({ page_size: 100, status: 'active' }),
   });
 
-  const activeContracts = (contractsData?.results || []).filter(
-    (c: any) => c.status === 'active' || c.status === 'pending_acceptance'
-  );
+  const activeContracts = (contractsData?.results || []).filter((c: any) => c.status === 'active');
 
-  const { data: summary, isLoading: summaryLoading } = useQuery({
+  const { data: summary } = useQuery({
     queryKey: ['contract-financial-summary', selectedContract],
     queryFn: () => vendorApi.contracts.financialSummary(selectedContract),
     enabled: !!selectedContract,
   });
 
-  const { data: purchaseOrders = [] } = useQuery({
-    queryKey: ['contract-purchase-orders', selectedContract],
-    queryFn: () => vendorApi.invoices.purchaseOrders(selectedContract),
+  const { data: profile } = useQuery({
+    queryKey: ['vendor-profile'],
+    queryFn: () => vendorApi.profile.get(),
+  });
+
+  const { data: availableGRNs = [], isLoading: grnsLoading } = useQuery({
+    queryKey: ['contract-available-grns', selectedContract],
+    queryFn: () => vendorApi.contracts.availableGRNs(selectedContract),
     enabled: !!selectedContract,
   });
 
-  const grnsByContract = summary?.grns || [];
+  const selectedGRNData = availableGRNs.find((g: any) => g.grn_id === selectedGRN) as AvailableGRN | undefined;
 
-  const amountNum = parseFloat(amount) || 0;
-  const retentionAmount = amountNum * RETENTION_RATE;
-  const netPayable = amountNum - retentionAmount;
+  const lineItems = useMemo(() => {
+    if (!selectedGRNData) return [];
+    return selectedGRNData.line_items.map((li) => ({
+      ...li,
+      invoiceQty: lineQtyOverrides[li.line_number] ?? li.quantity_received,
+    }));
+  }, [selectedGRNData, lineQtyOverrides]);
+
+  const overageWarnings = useMemo(() => {
+    return lineItems
+      .filter((li) => li.invoiceQty > li.quantity_received)
+      .map((li) => ({
+        item: li.item_name || li.item_code,
+        invoiceQty: li.invoiceQty,
+        grnQty: li.quantity_received,
+      }));
+  }, [lineItems]);
+
+  const totalInvoiceAmount = useMemo(() => {
+    return lineItems.reduce((sum, li) => sum + li.invoiceQty * li.unit_price, 0);
+  }, [lineItems]);
+
+  const retentionAmount = totalInvoiceAmount * 0.05;
+  const netPayable = totalInvoiceAmount - retentionAmount;
 
   useEffect(() => {
     if (contractId) {
@@ -57,17 +84,47 @@ const SubmitInvoice: React.FC = () => {
     }
   }, [contractId]);
 
+  useEffect(() => {
+    setSelectedGRN('');
+    setLineQtyOverrides({});
+    setInvoiceFile(null);
+    setDeliveryNoteFile(null);
+    setZamraCertFile(null);
+    setTempLogFile(null);
+  }, [selectedContract]);
+
+  useEffect(() => {
+    if (selectedGRNData && !invoiceNumber) {
+      const grnNum = selectedGRNData.grn_number.replace(/[^a-zA-Z0-9]/g, '');
+      setInvoiceNumber(`INV-${grnNum}-${Date.now().toString(36).toUpperCase()}`);
+    }
+  }, [selectedGRNData]);
+
   const createAndSubmitMutation = useMutation({
     mutationFn: async () => {
       const form = new FormData();
       form.append('contract', selectedContract);
+      if (selectedGRN) form.append('grn', selectedGRN);
       if (invoiceNumber) form.append('invoice_number', invoiceNumber);
-      form.append('amount', String(amountNum));
-      if (invoiceDate) form.append('due_date', invoiceDate);
-      if (selectedPo) form.append('po_number', selectedPo);
-      if (selectedMilestone) form.append('milestone_name', selectedMilestone);
-      if (selectedGrn) form.append('grn', selectedGrn);
+      form.append('amount', String(totalInvoiceAmount));
+      form.append('original_amount', String(totalInvoiceAmount));
+
+      form.append('line_items_data', JSON.stringify(
+        lineItems.map((li, idx) => ({
+          line_number: idx + 1,
+          item_code: li.item_code,
+          item_name: li.item_name,
+          quantity: li.invoiceQty,
+          unit_price: li.unit_price,
+          total_amount: li.invoiceQty * li.unit_price,
+          grn_line_item_id: li.line_item_id,
+        }))
+      ));
+
       if (invoiceFile) form.append('document', invoiceFile);
+      if (deliveryNoteFile) form.append('delivery_note', deliveryNoteFile);
+      if (zamraCertFile) form.append('zamra_certificate', zamraCertFile);
+      if (tempLogFile) form.append('temperature_log', tempLogFile);
 
       const created = await vendorApi.invoices.create(form);
       await vendorApi.invoices.submit(created.invoice_id);
@@ -75,7 +132,7 @@ const SubmitInvoice: React.FC = () => {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['vendor-invoices'] });
-      toast.success('Invoice submitted successfully for processing');
+      toast.success('Invoice submitted successfully. 30-day payment deadline started.');
       navigate('/vendor/invoices', { replace: true });
     },
     onError: (err: any) => {
@@ -86,34 +143,28 @@ const SubmitInvoice: React.FC = () => {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-
-    if (!selectedContract) {
-      toast.error('Please select a contract');
+    if (!selectedContract) { toast.error('Please select a contract'); return; }
+    if (!selectedGRN) { toast.error('Please select a delivery note (GRN) to invoice against'); return; }
+    if (lineItems.length === 0) { toast.error('No line items available from the selected GRN'); return; }
+    if (overageWarnings.length > 0) {
+      const msg = overageWarnings.map((w) => `${w.item}: invoices ${w.invoiceQty} but GRN confirms ${w.grnQty}`).join('; ');
+      toast.error(`Invoice quantity exceeds GRN for: ${msg}`);
       return;
     }
-    if (!amount || amountNum <= 0) {
-      toast.error('Please enter a valid invoice amount');
-      return;
-    }
-    if (!invoiceFile) {
-      toast.error('Please upload the invoice PDF document');
-      return;
-    }
-
+    if (!invoiceFile) { toast.error('Please upload the invoice PDF document'); return; }
+    if (totalInvoiceAmount <= 0) { toast.error('Invoice amount must be greater than zero'); return; }
     createAndSubmitMutation.mutate();
   };
 
-  const selectedContractSummary = activeContracts.find((c: any) => c.id === selectedContract || c.contract_id === selectedContract);
-
   return (
-    <div className="max-w-4xl mx-auto pb-12">
+    <div className="max-w-5xl mx-auto pb-12">
       <div className="flex items-center gap-3 mb-8">
         <Link to="/vendor/invoices" className="p-2 border border-gray-200 rounded-xl text-gray-500 hover:text-gray-900">
           <ArrowLeftIcon className="w-5 h-5" />
         </Link>
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Submit Invoice</h1>
-          <p className="text-sm text-gray-500 mt-0.5">Submit an invoice against an active contract</p>
+          <p className="text-sm text-gray-500 mt-0.5">Create and submit an invoice against delivered goods</p>
         </div>
       </div>
 
@@ -143,174 +194,261 @@ const SubmitInvoice: React.FC = () => {
         )}
 
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-8 mb-6">
-          <h2 className="text-lg font-bold text-gray-900 mb-6">Purchase Order & Milestone</h2>
-
-          <div className="mb-6">
-            <label className="block text-sm font-semibold text-gray-700 mb-2">Contract</label>
-            <select
-              value={selectedContract}
-              onChange={(e) => { setSelectedContract(e.target.value); setSelectedPo(''); setSelectedMilestone(''); setSelectedGrn(''); }}
-              className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-zammsa-green/20 focus:border-zammsa-green outline-none transition-all"
-              required
-            >
-              <option value="">Select an active contract...</option>
-              {activeContracts.map((c: any) => (
-                <option key={c.id || c.contract_id} value={c.id || c.contract_id}>
-                  {c.contract_number} — {c.title || 'Supply Contract'} ({formatContractValue(c.value, c.currency)})
-                </option>
-              ))}
-            </select>
-          </div>
-
-          {purchaseOrders.length > 0 && (
-            <div className="mb-6">
-              <label className="block text-sm font-semibold text-gray-700 mb-2">Purchase Order</label>
-              <select
-                value={selectedPo}
-                onChange={(e) => setSelectedPo(e.target.value)}
-                className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-zammsa-green/20 focus:border-zammsa-green outline-none transition-all"
-              >
-                <option value="">Select a purchase order (optional)</option>
-                {purchaseOrders.map((po: any) => (
-                  <option key={po.id} value={po.po_number}>
-                    {po.po_number} — K {po.total_amount?.toLocaleString()} ({po.status})
-                  </option>
-                ))}
-              </select>
-            </div>
-          )}
-
-          {summary && summary.milestones && summary.milestones.length > 0 && (
+          <h2 className="text-lg font-bold text-gray-900 mb-6">Invoice Header</h2>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 mb-6">
             <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">Milestone</label>
-              <select
-                value={selectedMilestone}
-                onChange={(e) => setSelectedMilestone(e.target.value)}
-                className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-zammsa-green/20 focus:border-zammsa-green outline-none transition-all"
-              >
-                <option value="">Select a milestone (optional)</option>
-                {summary.milestones.map((m: any) => (
-                  <option key={m.milestone_id} value={m.milestone_name}>
-                    {m.milestone_name} — {formatDate(m.due_date)} ({m.status})
-                  </option>
-                ))}
-              </select>
+              <label className="block text-sm font-semibold text-gray-700 mb-2">Contract <span className="text-rose-500">*</span></label>
+              {contractsLoading ? (
+                <LoadingSpinner className="py-3" />
+              ) : (
+                <select
+                  value={selectedContract}
+                  onChange={(e) => { setSelectedContract(e.target.value); }}
+                  className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-zammsa-green/20 focus:border-zammsa-green outline-none transition-all"
+                  required
+                >
+                  <option value="">Select an active contract...</option>
+                  {activeContracts.map((c: any) => (
+                    <option key={c.id || c.contract_id} value={c.id || c.contract_id}>
+                      {c.contract_number} — {c.title || 'Supply Contract'} ({formatContractValue(c.value, c.currency)})
+                    </option>
+                  ))}
+                </select>
+              )}
             </div>
-          )}
-        </div>
-
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-8 mb-6">
-          <h2 className="text-lg font-bold text-gray-900 mb-6">Invoice Details</h2>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
             <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">Invoice Number</label>
+              <label className="block text-sm font-semibold text-gray-700 mb-2">Invoice Number <span className="text-rose-500">*</span></label>
               <input
                 value={invoiceNumber}
                 onChange={(e) => setInvoiceNumber(e.target.value)}
                 className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-zammsa-green/20 focus:border-zammsa-green outline-none transition-all"
-                placeholder="e.g. INV-ABC-2026-045"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">Invoice Date</label>
-              <input
-                type="date"
-                value={invoiceDate}
-                onChange={(e) => setInvoiceDate(e.target.value)}
-                className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-zammsa-green/20 focus:border-zammsa-green outline-none transition-all"
+                placeholder="Auto-generated or enter your own"
                 required
               />
-            </div>
-            <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">Invoice Amount (ZMW) <span className="text-rose-500">*</span></label>
-              <div className="relative">
-                <span className="absolute left-4 top-3 text-gray-400 font-bold">K</span>
-                <input
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  value={amount}
-                  onChange={(e) => setAmount(e.target.value)}
-                  className="w-full border border-gray-200 rounded-xl pl-9 pr-4 py-3 text-sm font-bold focus:ring-2 focus:ring-zammsa-green/20 focus:border-zammsa-green outline-none transition-all"
-                  placeholder="0.00"
-                  required
-                />
-              </div>
             </div>
           </div>
         </div>
 
-        {summary && grnsByContract.length > 0 && (
+        {selectedContract && (
           <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-8 mb-6">
-            <h2 className="text-lg font-bold text-gray-900 mb-2">Goods Receipt Note</h2>
-            <p className="text-sm text-gray-400 mb-4">Auto-linked from WMS delivery — select a GRN to reference</p>
-            <select
-              value={selectedGrn}
-              onChange={(e) => setSelectedGrn(e.target.value)}
-              className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-zammsa-green/20 focus:border-zammsa-green outline-none transition-all"
-            >
-              <option value="">Select a GRN (optional)</option>
-              {grnsByContract.map((grn: any) => (
-                <option key={grn.grn_id} value={grn.grn_id}>
-                  {grn.grn_number} — {grn.item_description} (Qty: {grn.quantity_received}, K {Number(grn.total_amount).toLocaleString()})
-                </option>
-              ))}
-            </select>
+            <h2 className="text-lg font-bold text-gray-900 mb-2">Select Delivery Note (GRN)</h2>
+            <p className="text-sm text-gray-400 mb-4">
+              Choose a goods receipt note with COMPLETE or PARTIAL status to invoice against.
+              Only GRNs without an existing invoice are shown.
+            </p>
+            {grnsLoading ? (
+              <LoadingSpinner className="py-8" />
+            ) : availableGRNs.length === 0 ? (
+              <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-sm text-amber-800">
+                No available GRNs for this contract. Goods must be delivered and receipted before you can invoice.
+              </div>
+            ) : (
+              <select
+                value={selectedGRN}
+                onChange={(e) => { setSelectedGRN(e.target.value); setLineQtyOverrides({}); }}
+                className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-zammsa-green/20 focus:border-zammsa-green outline-none transition-all"
+                required
+              >
+                <option value="">Select a delivery note...</option>
+                {availableGRNs.map((grn: any) => (
+                  <option key={grn.grn_id} value={grn.grn_id}>
+                    {grn.grn_number}  {formatDate(grn.received_date)}  {grn.status.toUpperCase()} ({grn.quantity_received} units, K {Number(grn.total_amount).toLocaleString()})
+                  </option>
+                ))}
+              </select>
+            )}
+          </div>
+        )}
+
+        {selectedGRNData && lineItems.length > 0 && (
+          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-8 mb-6">
+            <h2 className="text-lg font-bold text-gray-900 mb-4">Line Items</h2>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-gray-200">
+                    <th className="text-left py-3 px-2 font-semibold text-gray-600">Item</th>
+                    <th className="text-right py-3 px-2 font-semibold text-gray-600">GRN Qty</th>
+                    <th className="text-right py-3 px-2 font-semibold text-gray-600">Invoice Qty</th>
+                    <th className="text-right py-3 px-2 font-semibold text-gray-600">Unit Price</th>
+                    <th className="text-right py-3 px-2 font-semibold text-gray-600">Line Total</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {lineItems.map((li) => (
+                    <tr key={li.line_number} className="border-b border-gray-100">
+                      <td className="py-3 px-2 font-medium">{li.item_name || li.item_code}</td>
+                      <td className="py-3 px-2 text-right">{li.quantity_received.toLocaleString()}</td>
+                      <td className="py-3 px-2 text-right">
+                        <input
+                          type="number"
+                          min="0"
+                          max={li.quantity_received}
+                          step="1"
+                          value={li.invoiceQty}
+                          onChange={(e) => {
+                            const val = parseInt(e.target.value) || 0;
+                            setLineQtyOverrides((prev) => ({ ...prev, [li.line_number]: val }));
+                          }}
+                          className={`w-24 text-right border rounded-lg px-2 py-1 text-sm ${
+                            li.invoiceQty > li.quantity_received
+                              ? 'border-red-300 bg-red-50 text-red-700'
+                              : 'border-gray-200'
+                          }`}
+                        />
+                      </td>
+                      <td className="py-3 px-2 text-right">K {li.unit_price.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+                      <td className="py-3 px-2 text-right font-semibold">
+                        K {(li.invoiceQty * li.unit_price).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot>
+                  <tr className="border-t-2 border-gray-300">
+                    <td colSpan={4} className="py-3 px-2 text-right font-bold text-gray-900">TOTAL</td>
+                    <td className="py-3 px-2 text-right font-bold text-gray-900">
+                      K {totalInvoiceAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                    </td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+
+            {overageWarnings.length > 0 && (
+              <div className="mt-4 bg-red-50 border border-red-200 rounded-xl p-4">
+                <div className="flex items-start gap-3">
+                  <ExclamationIcon className="w-5 h-5 text-red-500 mt-0.5 shrink-0" />
+                  <div>
+                    <p className="text-sm font-bold text-red-800">Quantity exceeds GRN confirmation</p>
+                    {overageWarnings.map((w, i) => (
+                      <p key={i} className="text-sm text-red-700 mt-1">
+                        Invoice claims {w.invoiceQty} {w.item} but GRN confirms only {w.grnQty} received.
+                        You may only invoice for quantities confirmed in the GRN.
+                        Please correct or explain the discrepancy.
+                      </p>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         )}
 
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-8 mb-6">
-          <h2 className="text-lg font-bold text-gray-900 mb-6">Invoice Document</h2>
-          <div>
-            <label className="block text-sm font-semibold text-gray-700 mb-2">Upload Invoice PDF <span className="text-rose-500">*</span></label>
-            <div className="relative">
-              <input
-                type="file"
-                accept=".pdf"
-                onChange={(e) => setInvoiceFile(e.target.files?.[0] || null)}
-                className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
-              />
-              <div className={`w-full border-2 border-dashed rounded-xl px-5 py-4 text-sm flex items-center justify-between transition-all ${invoiceFile ? 'border-zammsa-green bg-zammsa-green/5' : 'border-gray-200 bg-gray-50'}`}>
-                <div className="flex items-center gap-3">
-                  <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${invoiceFile ? 'bg-zammsa-green/10' : 'bg-gray-100'}`}>
-                    <svg className={`w-5 h-5 ${invoiceFile ? 'text-zammsa-green' : 'text-gray-400'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                    </svg>
-                  </div>
-                  <span className={invoiceFile ? 'text-zammsa-green font-semibold' : 'text-gray-400'}>
-                    {invoiceFile ? invoiceFile.name : 'Click to upload invoice PDF document'}
-                  </span>
-                </div>
-                {invoiceFile && (
-                  <button
-                    type="button"
-                    onClick={(e) => { e.stopPropagation(); setInvoiceFile(null); }}
-                    className="text-xs text-red-500 font-bold hover:underline"
-                  >
-                    Clear
-                  </button>
-                )}
-              </div>
-            </div>
+          <h2 className="text-lg font-bold text-gray-900 mb-4">Attachments</h2>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <FileUpload
+              label="Invoice PDF *"
+              accept=".pdf"
+              file={invoiceFile}
+              onChange={setInvoiceFile}
+              required
+            />
+            <FileUpload
+              label="Delivery Note / Packing List"
+              accept=".pdf,.jpg,.png"
+              file={deliveryNoteFile}
+              onChange={setDeliveryNoteFile}
+            />
+            <FileUpload
+              label="ZAMRA Batch Certificates"
+              accept=".pdf"
+              file={zamraCertFile}
+              onChange={setZamraCertFile}
+            />
+            <FileUpload
+              label="Temperature Log"
+              accept=".pdf,.jpg,.png"
+              file={tempLogFile}
+              onChange={setTempLogFile}
+            />
           </div>
         </div>
 
-        {amountNum > 0 && (
+        {profile && (
+          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-8 mb-6">
+            <h2 className="text-lg font-bold text-gray-900 mb-4">Bank Details Confirmation</h2>
+
+            {profile.bank_name ? (
+              <div className="bg-gray-50 rounded-xl p-4 mb-4">
+                <div className="flex items-center gap-4">
+                  <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center">
+                    <svg className="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
+                    </svg>
+                  </div>
+                  <div>
+                    <p className="font-bold text-gray-900">{profile.bank_name}</p>
+                    <p className="text-sm text-gray-600">{profile.bank_account_name} — {profile.bank_account_number}</p>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 mb-4">
+                <p className="text-sm text-amber-800 font-medium">No bank details on file.</p>
+                <p className="text-xs text-amber-700 mt-1">
+                  <Link to="/vendor/profile" className="underline font-semibold">Update your profile</Link> to add bank details before submitting invoices.
+                </p>
+              </div>
+            )}
+
+            {profile.bank_name && (
+              <div>
+                <label className="flex items-start gap-3 p-4 bg-gray-50 rounded-xl cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={bankConfirmSame}
+                    onChange={(e) => setBankConfirmSame(e.target.checked)}
+                    className="mt-0.5 h-5 w-5 rounded border-gray-300 text-zammsa-green focus:ring-zammsa-green"
+                  />
+                  <span className="text-sm text-gray-700">I confirm the bank details above are correct for payment</span>
+                </label>
+
+                {!bankConfirmSame && (
+                  <div className="mt-4 border border-amber-200 rounded-xl p-4 bg-amber-50">
+                    <p className="text-sm font-bold text-amber-800 mb-3">Update Bank Details</p>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4">
+                      <div>
+                        <label className="block text-xs font-semibold text-gray-600 mb-1">Bank Name</label>
+                        <input value={updateBankName} onChange={(e) => setUpdateBankName(e.target.value)}
+                          className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm" />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-semibold text-gray-600 mb-1">Account Number</label>
+                        <input value={updateBankAccount} onChange={(e) => setUpdateBankAccount(e.target.value)}
+                          className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm" />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-semibold text-gray-600 mb-1">Account Holder</label>
+                        <input value={updateBankHolder} onChange={(e) => setUpdateBankHolder(e.target.value)}
+                          className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm" />
+                      </div>
+                    </div>
+                    <FileUpload
+                      label="Bank Confirmation Letter (required for update)"
+                      accept=".pdf"
+                      file={bankLetterFile}
+                      onChange={setBankLetterFile}
+                    />
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+
+        {totalInvoiceAmount > 0 && (
           <div className="bg-gradient-to-br from-blue-50 to-indigo-50 border border-blue-100 rounded-2xl p-8 mb-6">
             <h2 className="text-lg font-bold text-gray-900 mb-4">Payment Summary</h2>
             <div className="space-y-3">
               <div className="flex items-center justify-between text-sm">
                 <span className="text-gray-600">Invoice Amount</span>
-                <span className="font-bold text-gray-900">K {amountNum.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                <span className="font-bold text-gray-900">K {totalInvoiceAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
               </div>
               <div className="flex items-center justify-between text-sm">
-                <span className="text-gray-600">
-                  Retention ({(RETENTION_RATE * 100).toFixed(0)}%) &mdash; withheld per contract terms
-                </span>
-                <span className="font-bold text-amber-600">
-                  - K {retentionAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                </span>
+                <span className="text-gray-600">Retention (5%) — withheld per contract terms</span>
+                <span className="font-bold text-amber-600">- K {retentionAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
               </div>
               <div className="border-t border-blue-200 pt-3 flex items-center justify-between">
                 <span className="text-base font-bold text-gray-900">Net Payable</span>
@@ -318,8 +456,9 @@ const SubmitInvoice: React.FC = () => {
                   K {netPayable.toLocaleString(undefined, { minimumFractionDigits: 2 })}
                 </span>
               </div>
-              <div className="text-xs text-gray-400 italic pt-2">
-                Payment Terms: {PAYMENT_TERMS}
+              <div className="flex items-center gap-2 text-xs text-gray-400 italic pt-2">
+                <CheckCircleIcon className="w-4 h-4 text-green-500" />
+                Payment deadline: 30 days from invoice approval
               </div>
             </div>
           </div>
@@ -334,7 +473,7 @@ const SubmitInvoice: React.FC = () => {
           </Link>
           <button
             type="submit"
-            disabled={createAndSubmitMutation.isPending}
+            disabled={createAndSubmitMutation.isPending || overageWarnings.length > 0}
             className="px-10 py-3 bg-zammsa-green text-white rounded-xl font-bold hover:bg-zammsa-green-dark disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-zammsa-green/20 transition-all flex items-center gap-2"
           >
             {createAndSubmitMutation.isPending ? (
@@ -351,5 +490,43 @@ const SubmitInvoice: React.FC = () => {
     </div>
   );
 };
+
+function FileUpload({
+  label, accept, file, onChange, required,
+}: {
+  label: string;
+  accept: string;
+  file: File | null;
+  onChange: (f: File | null) => void;
+  required?: boolean;
+}) {
+  return (
+    <div>
+      <label className="block text-sm font-semibold text-gray-700 mb-2">
+        {label} {required && <span className="text-rose-500">*</span>}
+      </label>
+      <div className="relative">
+        <input
+          type="file"
+          accept={accept}
+          onChange={(e) => onChange(e.target.files?.[0] || null)}
+          className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
+          required={required && !file}
+        />
+        <div className={`w-full border-2 border-dashed rounded-xl px-4 py-3 text-sm flex items-center justify-between transition-all ${file ? 'border-zammsa-green bg-zammsa-green/5' : 'border-gray-200 bg-gray-50'}`}>
+          <span className={file ? 'text-zammsa-green font-semibold truncate mr-2' : 'text-gray-400'}>
+            {file ? file.name : `Upload ${label}`}
+          </span>
+          {file && (
+            <button type="button" onClick={(e) => { e.stopPropagation(); onChange(null); }}
+              className="text-xs text-red-500 font-bold hover:underline shrink-0">
+              Clear
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
 
 export default SubmitInvoice;

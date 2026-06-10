@@ -235,12 +235,13 @@ const SolicitationDetail: React.FC = () => {
       )}
 
       {/* Publication Status */}
-      {sol.publication_targets && sol.publication_targets.length > 0 && (
+      {((sol.publication_targets?.length ?? 0) > 0 || sol.published_at) && (
         <div className="bg-white rounded-3xl border border-gray-200 shadow-sm p-6">
           <h2 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-4">Publication Status</h2>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             {PUBLISH_TARGETS.map(target => {
               const isPublished = sol.publication_targets?.includes(target.key);
+              const proof = sol.publication_proofs?.[target.key];
               return (
                 <div key={target.key} className={`p-4 rounded-2xl border-2 ${isPublished ? 'border-emerald-200 bg-emerald-50' : 'border-gray-100 bg-gray-50'}`}>
                   <div className="flex items-center gap-2 mb-1">
@@ -250,12 +251,26 @@ const SolicitationDetail: React.FC = () => {
                   <p className={`text-xs font-semibold ${isPublished ? 'text-emerald-700' : 'text-gray-400'}`}>
                     {isPublished ? 'Published' : 'Not published'}
                   </p>
+                  {proof?.timestamp && (
+                    <p className="text-[10px] text-gray-400 mt-1">{new Date(proof.timestamp).toLocaleString()}</p>
+                  )}
+                  {proof?.reference && (
+                    <p className="text-[10px] text-gray-500 mt-0.5">Ref: {proof.reference}</p>
+                  )}
+                  {proof?.status && (
+                    <p className={`text-[10px] font-medium mt-0.5 ${proof.status === 'delivered' ? 'text-emerald-600' : 'text-amber-600'}`}>
+                      {proof.status}
+                    </p>
+                  )}
                 </div>
               );
             })}
           </div>
           {sol.egp_reference && <p className="text-xs text-gray-400 mt-3">e-GP Reference: {sol.egp_reference}</p>}
           {sol.published_at && <p className="text-xs text-gray-400">Published: {fmtDateTime(sol.published_at)}</p>}
+          {sol.clarification_cutoff && (
+            <p className="text-xs text-gray-400 mt-1">Clarification Cutoff: {fmtDateTime(sol.clarification_cutoff)}</p>
+          )}
         </div>
       )}
 

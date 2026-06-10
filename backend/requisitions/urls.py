@@ -12,6 +12,7 @@ urlpatterns = [
     path('<uuid:pk>/diff/', views.requisition_diff_view, name='requisition-diff'),
     path('<uuid:pk>/tracking/', views.requisition_tracking_view, name='requisition-tracking'),
     path('items/', views.RequisitionItemListView.as_view(), name='requisition-item-list'),
+    path('items/<uuid:item_id>/upload/', views.requisition_item_upload_attachment_view, name='requisition-item-upload'),
     path('specifications/', views.SpecificationListView.as_view(), name='specification-list'),
     path('specifications/<uuid:pk>/', views.SpecificationDetailView.as_view(), name='specification-detail'),
     path('approvals/', views.RequisitionApprovalListView.as_view(), name='approval-list'),

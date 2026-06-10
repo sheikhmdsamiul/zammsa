@@ -89,7 +89,15 @@ export const financeApi = {
   listDeliveryAdvices: (params?: Record<string, any>) =>
     api.get<PaginatedResponse<DeliveryAdvice>>('/finance/delivery-advices/', { params }).then((r) => r.data),
 
-  verifyDeliveryAdvice: (id: string, data?: { grn_number?: string; milestone_name?: string; received_by?: string; notes?: string }) =>
+  verifyDeliveryAdvice: (id: string, data?: {
+    grn_number?: string;
+    milestone_name?: string;
+    received_by?: string;
+    notes?: string;
+    zamra_certificate_verified?: boolean;
+    cold_chain_maintained?: boolean;
+    temperature_log_attached?: boolean;
+  }) =>
     api.post<{ message: string; advice: DeliveryAdvice; grn: GoodsReceiptNote }>(`/finance/delivery-advices/${id}/verify/`, data || {}).then((r) => r.data),
 
   releaseRetention: (contractId: string, data: { amount: number; acceptance_certificate_ref?: string; notes?: string; override?: boolean }) =>
@@ -103,6 +111,7 @@ export const financeApi = {
     grn_number?: string;
     delivery_advice_id?: string;
     items: Array<{
+      po_line_item_id?: string;
       item_code?: string;
       item_name: string;
       quantity_ordered: number;
@@ -112,6 +121,9 @@ export const financeApi = {
     }>;
     notes?: string;
     milestone_name?: string;
+    zamra_certificate_verified?: boolean;
+    cold_chain_maintained?: boolean;
+    temperature_log_attached?: boolean;
   }) =>
     api.post<any>('/finance/grns/manual/', data).then((r) => r.data),
 };

@@ -35,7 +35,7 @@ const DiscrepancyReview: React.FC = () => {
 
   const { data: invoicesData, isLoading, error } = useQuery({
     queryKey: ['invoices-for-discrepancy-review'],
-    queryFn: () => financeApi.listInvoices({ status: 'pending_matching', page_size: 50 }),
+    queryFn: () => financeApi.listInvoices({ status: ['pending_matching', 'submitted'], page_size: 50 }),
   });
 
   const invoices: Invoice[] = invoicesData?.results || [];

@@ -365,8 +365,12 @@ const ContractDetail: React.FC = () => {
                   <dd className="font-medium text-gray-900 mt-0.5">{c.title || '—'}</dd>
                 </div>
                 <div>
-                  <dt className="text-gray-500 font-medium">Purchase Order</dt>
-                  <dd className="font-medium text-gray-900 mt-0.5">{(c as any).po_number || (c as any).purchase_order?.po_number || '—'}</dd>
+                  <dt className="text-gray-500 font-medium">Purchase Orders</dt>
+                  <dd className="font-medium text-gray-900 mt-0.5">
+                    {c.purchase_orders?.length
+                      ? c.purchase_orders.map((po) => po.po_number).join(', ')
+                      : '—'}
+                  </dd>
                 </div>
               </dl>
             </section>
@@ -404,6 +408,82 @@ const ContractDetail: React.FC = () => {
                 </div>
               </dl>
             </section>
+
+            {c.purchase_orders && c.purchase_orders.length > 0 && (
+              <section className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
+                <h2 className="text-xs font-black text-gray-400 uppercase tracking-[0.2em] mb-6">
+                  Purchase Order &amp; Deliveries
+                </h2>
+
+                {/* PO summary */}
+                {c.purchase_orders.map((po) => (
+                  <div key={po.id} className="mb-6 pb-6 border-b border-gray-100 last:border-b-0 last:mb-0 last:pb-0">
+                    <div className="flex items-center justify-between mb-3">
+                      <div>
+                        <span className="font-mono font-bold text-gray-900">{po.po_number}</span>
+                        <StatusBadge status={po.status} className="ml-2" />
+                      </div>
+                      <span className="text-sm font-bold text-gray-700">
+                        Total: {(po.total_amount).toLocaleString('en-US', { style: 'currency', currency: c.currency || 'ZMW' })}
+                      </span>
+                    </div>
+
+                    {/* PO line items with delivery progress */}
+                    {c.delivery_progress && c.delivery_progress.length > 0 ? (
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-sm">
+                          <thead>
+                            <tr className="text-left text-xs text-gray-500 uppercase tracking-wider border-b border-gray-200">
+                              <th className="pb-2 pr-3 font-semibold">Item</th>
+                              <th className="pb-2 pr-3 font-semibold text-right">Ordered</th>
+                              <th className="pb-2 pr-3 font-semibold text-right">Received</th>
+                              <th className="pb-2 pr-3 font-semibold text-right">Unit Price</th>
+                              <th className="pb-2 pr-3 font-semibold text-right">Delivered</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {c.delivery_progress.map((item, idx) => (
+                              <tr key={idx} className="border-b border-gray-50 last:border-b-0">
+                                <td className="py-2.5 pr-3">
+                                  <p className="font-medium text-gray-900">{item.item_name || item.item_code}</p>
+                                  {item.item_code && <p className="text-xs text-gray-400">{item.item_code}</p>}
+                                </td>
+                                <td className="py-2.5 pr-3 text-right font-medium text-gray-700">{item.quantity_ordered}</td>
+                                <td className="py-2.5 pr-3 text-right font-medium text-gray-700">{item.quantity_received}</td>
+                                <td className="py-2.5 pr-3 text-right font-medium text-gray-700">
+                                  {(item.unit_price).toLocaleString('en-US', { style: 'currency', currency: c.currency || 'ZMW' })}
+                                </td>
+                                <td className="py-2.5 text-right">
+                                  <div className="flex items-center justify-end gap-2">
+                                    <div className="w-20 bg-gray-200 rounded-full h-2">
+                                      <div
+                                        className={`h-2 rounded-full ${
+                                          item.progress_pct >= 100
+                                            ? 'bg-emerald-500'
+                                            : item.progress_pct > 0
+                                            ? 'bg-amber-400'
+                                            : 'bg-gray-200'
+                                        }`}
+                                        style={{ width: `${Math.min(item.progress_pct, 100)}%` }}
+                                      />
+                                    </div>
+                                    <span className="text-xs font-bold text-gray-600 min-w-[3rem] text-right">
+                                      {item.progress_pct}%
+                                    </span>
+                                  </div>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    ) : (
+                      <p className="text-xs text-gray-400 italic">No line items on this purchase order.</p>
+                    )}
+                  </div>
+                ))}
+              </section>
+            )}
           </div>
 
           <aside className="space-y-6">

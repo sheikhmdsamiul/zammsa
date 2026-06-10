@@ -4,6 +4,7 @@ import { useQuery, useMutation } from '@tanstack/react-query';
 import { requisitionsApi } from '../../api/requisitions';
 import { procurementPlanningApi, masterDataApi } from '../../api/procurement_planning';
 import toast from 'react-hot-toast';
+import { InformationCircleIcon } from '@heroicons/react/outline';
 import { useAuth } from '../../hooks/useAuth';
 
 type ProcurementType = 'goods' | 'consulting' | 'works';
@@ -27,6 +28,7 @@ const RequisitionCreate: React.FC = () => {
     item_code: '', description: '', quantity: 1, unit: 'Box', estimated_unit_cost: 0, commodity: '', zamra_required: true,
   }]);
   const [specs, setSpecs] = useState<Record<number, any>>({});
+  const [attachments, setAttachments] = useState<Record<number, File | null>>({});
   const [confirm, setConfirm] = useState(false);
 
   const { data: lineItemsData } = useQuery({
@@ -73,7 +75,7 @@ const RequisitionCreate: React.FC = () => {
   const selectedFunding = fundingSources.find((f: any) => (f.source_id || f.id) === form.funding_source);
 
   const canGoStep2 = Boolean(form.description && form.department && form.date_required && form.delivery_location && form.funding_source && form.justification);
-  const canGoStep3 = items.length > 0 && items.every(i => i.description && Number(i.quantity) > 0 && Number(i.estimated_unit_cost) > 0);
+  const canGoStep3 = items.length > 0 && items.every(i => i.description && Number(i.quantity) > 0 && Number(i.estimated_unit_cost) > 0) && items.every((_, idx) => attachments[idx]);
   const canGoStep4 = canGoStep3 && items.every((_, idx) => {
     const s = specs[idx];
     return s?.technical_standard && s?.shelf_life && s?.packaging && s?.storage && s?.quality_requirements;
@@ -81,7 +83,7 @@ const RequisitionCreate: React.FC = () => {
 
   const next = () => {
     if (step === 1 && !canGoStep2) return toast.error('Complete Step 1 fields');
-    if (step === 2 && !canGoStep3) return toast.error('Add valid line items');
+    if (step === 2 && !canGoStep3) return toast.error('Complete all line items and upload attachments for each');
     if (step === 3 && !canGoStep4) return toast.error('Complete specifications for all items');
     setStep(prev => Math.min(prev + 1, 4));
   };
@@ -141,6 +143,14 @@ const RequisitionCreate: React.FC = () => {
         notes: `Funding Source: ${selectedFunding?.source_name || '-'}${selectedFunding?.source_code ? ` (${selectedFunding.source_code})` : ''}\nJustification: ${form.justification}`,
       };
       const created = await createMutation.mutateAsync(payload);
+
+      // Upload attachments per line item
+      for (let i = 0; i < items.length; i++) {
+        const file = attachments[i];
+        if (file && created.items?.[i]?.id) {
+          await requisitionsApi.uploadItemAttachment(created.items[i].id, file);
+        }
+      }
 
       const specifications = items.map((it, idx) => ({
         specification_type: form.procurement_type === 'goods' ? 'goods' : form.procurement_type === 'consulting' ? 'tor' : 'sow',
@@ -287,6 +297,11 @@ const RequisitionCreate: React.FC = () => {
                     ))}
                   </select>
                   <label className="text-xs flex items-center gap-2 px-2"><input type="checkbox" checked={item.zamra_required} onChange={(e) => updateItem(i, 'zamra_required', e.target.checked)} /> ZAMRA</label>
+                  <div className="flex items-center gap-1">
+                    <label className="text-xs text-gray-500 whitespace-nowrap">Supporting Doc:</label>
+                    <input type="file" onChange={(e) => setAttachments(prev => ({ ...prev, [i]: e.target.files?.[0] || null }))} className="text-xs w-24" title="Spec sheet, quote, or other supporting document" />
+                    {attachments[i] && <span className="text-[10px] text-green-600 font-medium">✓</span>}
+                  </div>
                 </div>
                 {items.length > 1 && (
                   <button type="button" onClick={() => removeItem(i)} className="text-red-500 hover:text-red-700 text-sm mt-1">Remove</button>
@@ -337,6 +352,13 @@ const RequisitionCreate: React.FC = () => {
             <p>Funding Source: <span className="font-medium">{selectedFunding?.source_name || '-'}</span></p>
             <p>Line Items: <span className="font-medium">{items.length}</span></p>
             <p>Estimated Total: <span className="font-medium">K {estimatedTotal.toLocaleString()}</span></p>
+            <p>Attachments: <span className="font-medium">{Object.values(attachments).filter(Boolean).length} / {items.length} items</span></p>
+            {items.some((_, i) => Number(items[i].quantity) * Number(items[i].estimated_unit_cost) > 1_000_000) && (
+              <div className="mt-2 p-2 bg-yellow-50 border border-yellow-200 rounded-lg text-xs flex items-center gap-2">
+                <InformationCircleIcon className="w-4 h-4 text-yellow-600 shrink-0" />
+                <span className="text-yellow-800 font-medium">Technical review required — some line items exceed K1,000,000</span>
+              </div>
+            )}
             <p>Approval Chain: <span className="font-medium">You → Dept Head → Finance → Director General {estimatedTotal > 250000 ? '→ ZPC' : ''} → Approved</span></p>
           </div>
           <label className="flex items-start gap-2 text-sm">

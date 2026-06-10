@@ -147,10 +147,55 @@ const MyContracts: React.FC = () => {
                     <span>{Math.round(progress)}%</span>
                     <span>{new Date(contract.end_date).toLocaleDateString()}</span>
                   </div>
-                  <div className="w-full bg-gray-200 rounded-full h-2">
+                  <div className="w-full bg-gray-200 rounded-full h-2 mb-1">
                     <div className="bg-zammsa-green h-2 rounded-full" style={{ width: `${progress}%` }} />
                   </div>
+                  <div className="flex justify-between text-xs text-gray-400">
+                    <span>Contract period</span>
+                    <span>{contract.status === 'active' ? 'In progress' : contract.status}</span>
+                  </div>
                 </div>
+
+                {contract.delivery_progress && contract.delivery_progress.length > 0 && (
+                  <div className="mb-4 pt-2 border-t border-gray-50">
+                    <div className="flex justify-between text-xs text-gray-400 mb-1">
+                      <span>Delivery progress</span>
+                      <span className="font-bold text-gray-600">
+                        {contract.delivery_progress.reduce((s, i) => s + i.quantity_received, 0)} /{' '}
+                        {contract.delivery_progress.reduce((s, i) => s + i.quantity_ordered, 0)} items
+                      </span>
+                    </div>
+                    <div className="w-full bg-gray-200 rounded-full h-2">
+                      <div
+                        className={`h-2 rounded-full ${
+                          contract.delivery_progress.every(d => d.progress_pct >= 100)
+                            ? 'bg-emerald-500'
+                            : 'bg-amber-400'
+                        }`}
+                        style={{
+                          width: `${Math.min(
+                            (contract.delivery_progress.reduce((s, i) => s + i.quantity_received, 0) /
+                              contract.delivery_progress.reduce((s, i) => s + i.quantity_ordered, 0)) *
+                              100,
+                            100
+                          )}%`,
+                        }}
+                      />
+                    </div>
+                    <div className="flex justify-between text-xs text-gray-400 mt-1">
+                      <span>
+                        {contract.delivery_progress.filter(d => d.progress_pct >= 100).length} of{' '}
+                        {contract.delivery_progress.length} items fully delivered
+                      </span>
+                      <span className="font-semibold text-gray-500">
+                        K{' '}
+                        {contract.delivery_progress
+                          .reduce((s, i) => s + i.total_received_value, 0)
+                          .toLocaleString(undefined, { minimumFractionDigits: 0 })}
+                      </span>
+                    </div>
+                  </div>
+                )}
 
                 <div className="flex items-center justify-between pt-3 border-t border-gray-100 flex-wrap gap-3">
                   <div className="flex gap-4 text-sm text-gray-500">

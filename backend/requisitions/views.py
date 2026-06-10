@@ -148,6 +148,24 @@ def requisition_submit_view(request, pk):
     if req.requester_id != request.user.id:
         return Response({'error': 'Only the requester can submit this requisition'}, status=403)
 
+    # Validate every line item has an attachment
+    items = req.items.all()
+    missing_attachments = [str(item.item_id) for item in items if not item.attachment]
+    if missing_attachments:
+        return Response({
+            'error': 'All line items must have a supporting document attached before submission.',
+            'items_missing_attachment': missing_attachments,
+        }, status=400)
+
+    # Auto-set technical review flag when any goods item exceeds K1,000,000
+    technical_review = False
+    for item in items:
+        if float(item.total_estimate) > 1_000_000:
+            technical_review = True
+            break
+    if technical_review:
+        req.technical_review_required = True
+
     budget_warnings = _check_budget_and_encumber(req)
     if budget_warnings:
         return Response({
@@ -362,6 +380,33 @@ class RequisitionItemListView(BaseView, generics.ListCreateAPIView):
     queryset = RequisitionItem.objects.select_related('requisition', 'unit_of_measure', 'commodity').all()
     serializer_class = RequisitionItemSerializer
     ordering = ['-item_id']
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def requisition_item_upload_attachment_view(request, item_id):
+    try:
+        item = RequisitionItem.objects.get(pk=item_id)
+    except RequisitionItem.DoesNotExist:
+        return Response({'error': 'Line item not found'}, status=404)
+
+    req = item.requisition
+    if req.status not in ('draft', 'rejected', 'amended'):
+        return Response({'error': 'Only draft, rejected, or amended requisitions can be edited'}, status=400)
+    if req.requester_id != request.user.id:
+        return Response({'error': 'You can only edit requisitions you created'}, status=403)
+
+    file = request.FILES.get('attachment')
+    if not file:
+        return Response({'error': 'No file provided'}, status=400)
+
+    item.attachment = file
+    item.save(update_fields=['attachment'])
+    return Response({
+        'message': 'Attachment uploaded',
+        'item_id': str(item.item_id),
+        'filename': file.name,
+    })
 
 
 class SpecificationListView(BaseView, generics.ListCreateAPIView):

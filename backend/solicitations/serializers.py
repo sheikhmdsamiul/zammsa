@@ -1,3 +1,5 @@
+from datetime import datetime
+from django.utils import timezone
 from rest_framework import serializers
 from .models import SolicitationTemplate, Solicitation, EvaluationCriterion, SolicitationAddendum, ClarificationRequest, SolicitationDocument
 from master_data.models import Department
@@ -84,11 +86,12 @@ class SolicitationListSerializer(serializers.ModelSerializer):
     issue_date = serializers.SerializerMethodField()
     requisition_number = serializers.CharField(source='requisition.req_number', read_only=True)
     cpp_number = serializers.CharField(source='cpp.cpp_number', read_only=True)
+    cpp_resource_requirements = serializers.SerializerMethodField()
     total_bids = serializers.SerializerMethodField()
 
     class Meta:
         model = Solicitation
-        fields = ('id', 'solicitation_id', 'sol_number', 'title', 'type', 'method', 'department', 'estimated_value', 'issue_date', 'closing_date', 'status', 'published_at', 'created_at', 'requisition_number', 'cpp_number', 'total_bids')
+        fields = ('id', 'solicitation_id', 'sol_number', 'title', 'type', 'method', 'department', 'estimated_value', 'issue_date', 'closing_date', 'status', 'published_at', 'created_at', 'requisition_number', 'cpp_number', 'cpp_resource_requirements', 'total_bids')
 
     def get_department(self, obj):
         if obj.department:
@@ -110,6 +113,11 @@ class SolicitationListSerializer(serializers.ModelSerializer):
         if obj.published_at:
             return obj.published_at.date().isoformat()
         return obj.created_at.date().isoformat()
+
+    def get_cpp_resource_requirements(self, obj):
+        if obj.cpp and obj.cpp.resource_requirements:
+            return obj.cpp.resource_requirements
+        return None
 
     def get_total_bids(self, obj):
         return obj.bids.filter(status='submitted').count()
@@ -223,9 +231,59 @@ class SolicitationSerializer(serializers.ModelSerializer):
         except (ValueError, TypeError):
             return Department.objects.filter(dept_name=value).first()
 
+    MIN_BIDDING_PERIOD_DAYS = {
+        'open_tender': 21,
+        'international': 30,
+        'limited': 14,
+        'simplified': 14,
+        'direct': 0,
+    }
+
     def validate(self, data):
         if self.instance is None and not data.get('requisition'):
             raise serializers.ValidationError({'requisition': 'A requisition is required to create a solicitation.'})
+
+        method = data.get('method', getattr(self.instance, 'method', None))
+        closing_date = data.get('closing_date', getattr(self.instance, 'closing_date', None))
+        issue_date = data.get('issue_date', getattr(self.instance, 'issue_date', None))
+
+        # BR-SOL-01: Validate minimum bidding period
+        if method and closing_date:
+            min_days = self.MIN_BIDDING_PERIOD_DAYS.get(method, 0)
+            if min_days > 0:
+                ref_date = issue_date or timezone.now().date()
+                if isinstance(ref_date, datetime):
+                    ref_date = ref_date.date()
+                if isinstance(closing_date, datetime):
+                    closing_date = closing_date.date()
+                gap = (closing_date - ref_date).days
+                if gap < min_days:
+                    raise serializers.ValidationError(
+                        f'Minimum bidding period for "{method}" is {min_days} days. '
+                        f'Current gap is {gap} days.'
+                    )
+
+        # Validate clarification cutoff is ≥ 5 working days before closing
+        cutoff = data.get('clarification_cutoff', getattr(self.instance, 'clarification_cutoff', None))
+        closing = data.get('closing_date', getattr(self.instance, 'closing_date', None))
+        if cutoff and closing:
+            if isinstance(cutoff, str):
+                from django.utils.dateparse import parse_datetime
+                cutoff = parse_datetime(cutoff)
+            if isinstance(closing, str):
+                from django.utils.dateparse import parse_datetime
+                closing = parse_datetime(closing)
+            if cutoff and closing:
+                if cutoff >= closing:
+                    raise serializers.ValidationError(
+                        {'clarification_cutoff': 'Clarification cutoff must be before the closing date.'}
+                    )
+                remaining = (closing - cutoff).days
+                if remaining < 5:
+                    raise serializers.ValidationError(
+                        {'clarification_cutoff': f'Clarification cutoff must be at least 5 working days before closing. Currently {remaining} day(s).'}
+                    )
+
         return data
 
     def validate_method(self, value):

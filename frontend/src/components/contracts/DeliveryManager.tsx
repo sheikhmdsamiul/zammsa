@@ -14,6 +14,7 @@ import {
 } from '@heroicons/react/outline';
 
 interface GrnItem {
+  po_line_item_id: string;
   item_code: string;
   item_name: string;
   quantity_ordered: number;
@@ -23,7 +24,7 @@ interface GrnItem {
 }
 
 const emptyItem: GrnItem = {
-  item_code: '', item_name: '', quantity_ordered: 0,
+  po_line_item_id: '', item_code: '', item_name: '', quantity_ordered: 0,
   quantity_received: 0, unit_price: 0, total_amount: 0,
 };
 
@@ -42,6 +43,10 @@ const DeliveryManager: React.FC = () => {
   const [verificationGrnNumber, setVerificationGrnNumber] = React.useState('');
   const [verificationMilestoneName, setVerificationMilestoneName] = React.useState('');
   const [verificationHint, setVerificationHint] = React.useState<string | null>(null);
+  const [adviceToLink, setAdviceToLink] = React.useState('');
+  const [zamraCertificateVerified, setZamraCertificateVerified] = React.useState(false);
+  const [coldChainMaintained, setColdChainMaintained] = React.useState(true);
+  const [temperatureLogAttached, setTemperatureLogAttached] = React.useState(false);
 
   const { data: contract, isLoading } = useQuery({
     queryKey: ['contract', id],
@@ -63,6 +68,35 @@ const DeliveryManager: React.FC = () => {
 
   const c = contract;
   const dashboard = d;
+
+  // Gather PO line items from contract's purchase_orders
+  const poLineItems = React.useMemo(() => {
+    if (!c?.purchase_orders) return [];
+    return c.purchase_orders.flatMap(po =>
+      (po.line_items || []).map(li => ({
+        ...li,
+        po_number: po.po_number,
+      }))
+    );
+  }, [c]);
+
+  const handleSelectPOItem = (idx: number, poLineItemId: string) => {
+    const poItem = poLineItems.find(li => li.id === poLineItemId);
+    if (!poItem) return;
+    const updated = grnItems.map((item, i) => {
+      if (i !== idx) return item;
+      return {
+        po_line_item_id: poItem.id,
+        item_code: poItem.item_code,
+        item_name: poItem.item_name,
+        quantity_ordered: poItem.quantity,
+        quantity_received: poItem.quantity,
+        unit_price: poItem.unit_price,
+        total_amount: poItem.quantity * poItem.unit_price,
+      };
+    });
+    setGrnItems(updated);
+  };
 
   const addItem = () => setGrnItems([...grnItems, { ...emptyItem }]);
   const removeItem = (idx: number) => {
@@ -87,16 +121,25 @@ const DeliveryManager: React.FC = () => {
     mutationFn: () => financeApi.createGrnManual({
       contract_id: id!,
       grn_number: grnNumber || undefined,
-      items: grnItems,
-      notes: grnNotes,
       milestone_name: milestoneName || undefined,
+      notes: grnNotes,
+      delivery_advice_id: adviceToLink || undefined,
+      zamra_certificate_verified: zamraCertificateVerified,
+      cold_chain_maintained: coldChainMaintained,
+      temperature_log_attached: temperatureLogAttached,
+      items: grnItems,
     }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['contract-execution-dashboard', id] });
+      queryClient.invalidateQueries({ queryKey: ['delivery-advices', id] });
       toast.success('GRN created manually');
       setGrnItems([{ ...emptyItem }]);
       setGrnNumber('');
       setGrnNotes('');
+      setAdviceToLink('');
+      setZamraCertificateVerified(false);
+      setColdChainMaintained(true);
+      setTemperatureLogAttached(false);
     },
     onError: (err: any) => toast.error(err?.response?.data?.error || 'Failed to create GRN'),
   });
@@ -125,6 +168,9 @@ const DeliveryManager: React.FC = () => {
       milestone_name: verificationMilestoneName || undefined,
       received_by: c?.contract_manager || undefined,
       notes: grnNotes || undefined,
+      zamra_certificate_verified: zamraCertificateVerified,
+      cold_chain_maintained: coldChainMaintained,
+      temperature_log_attached: temperatureLogAttached,
     }),
     onSuccess: () => {
       setVerificationHint(null);
@@ -141,6 +187,25 @@ const DeliveryManager: React.FC = () => {
       toast.error(friendlyError);
     },
   });
+
+  const populateFromAdvice = (advice: any) => {
+    const rawItems = advice.raw_payload?.items || [];
+    if (rawItems.length > 0) {
+      setGrnItems(rawItems.map((it: any) => ({
+        po_line_item_id: it.po_line_item_id || '',
+        item_code: it.item_code || '',
+        item_name: it.item_name || '',
+        quantity_ordered: Number(it.quantity_delivered || 0),
+        quantity_received: Number(it.quantity_delivered || 0),
+        unit_price: Number(it.unit_price || 0),
+        total_amount: Number(it.total_amount || 0),
+      })));
+    }
+    if (advice.notes) setGrnNotes(advice.notes);
+    setAdviceToLink(advice.advice_id || advice.id);
+    setMilestoneName(advice.raw_payload?.milestone_name || '');
+    toast.success('Form auto-populated from delivery advice');
+  };
 
   const ldMutation = useMutation({
     mutationFn: () => contractsApi.calculateLD(id!, {
@@ -225,8 +290,25 @@ const DeliveryManager: React.FC = () => {
           <div className="flex items-center gap-2 mb-5">
             <TruckIcon className="w-5 h-5 text-gray-700" />
             <h2 className="text-lg font-bold text-gray-900">Manual GRN Creation</h2>
-            <span className="ml-auto text-[10px] bg-amber-50 text-amber-700 px-2 py-1 rounded-full font-bold">Testing Alt</span>
+            {adviceToLink ? (
+              <span className="ml-auto text-[10px] bg-blue-100 text-blue-800 px-2 py-1 rounded-full font-bold">Linked to Advice</span>
+            ) : (
+              <span className="ml-auto text-[10px] bg-amber-50 text-amber-700 px-2 py-1 rounded-full font-bold">Testing Alt</span>
+            )}
           </div>
+          {adviceToLink && (
+            <div className="mb-4 px-4 py-3 bg-blue-50 border border-blue-200 rounded-xl text-sm text-blue-900">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="font-medium">Form auto-populated from delivery advice.</p>
+                  <p className="text-xs mt-1">Review and adjust if needed, then click <strong>Create GRN Manually</strong>. The delivery advice will be marked as verified.</p>
+                </div>
+                <button onClick={() => { setAdviceToLink(''); setMilestoneName(''); }} className="text-red-600 hover:text-red-800">
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                </button>
+              </div>
+            </div>
+          )}
           <p className="text-xs text-gray-500 mb-4">Use this when the WMS webhook has not arrived. This creates the official GRN and updates the selected milestone.</p>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-5">
@@ -247,10 +329,34 @@ const DeliveryManager: React.FC = () => {
               <div key={idx} className="border border-gray-200 rounded-xl p-4">
                 <div className="flex items-center justify-between mb-2">
                   <span className="text-xs font-bold text-gray-400">Item #{idx + 1}</span>
-                  {grnItems.length > 1 && (
-                    <button onClick={() => removeItem(idx)} className="text-rose-500 hover:text-rose-700"><TrashIcon className="w-4 h-4" /></button>
-                  )}
+                  <div className="flex items-center gap-2">
+                    {item.po_line_item_id && (
+                      <span className="text-xs text-emerald-600 font-semibold">✓ from PO</span>
+                    )}
+                    {grnItems.length > 1 && (
+                      <button onClick={() => removeItem(idx)} className="text-rose-500 hover:text-rose-700"><TrashIcon className="w-4 h-4" /></button>
+                    )}
+                  </div>
                 </div>
+
+                {poLineItems.length > 0 && (
+                  <div className="mb-3">
+                    <label className="block text-xs text-gray-500 mb-0.5">Select from Purchase Order</label>
+                    <select
+                      value={item.po_line_item_id}
+                      onChange={(e) => handleSelectPOItem(idx, e.target.value)}
+                      className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm"
+                    >
+                      <option value="">— Manual entry —</option>
+                      {poLineItems.map((pli) => (
+                        <option key={pli.id} value={pli.id}>
+                          {pli.item_name} ({pli.po_number}) — Qty: {pli.quantity} @ K{Number(pli.unit_price).toLocaleString()}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                   <div>
                     <label className="block text-xs text-gray-500 mb-0.5">Item Code</label>
@@ -292,6 +398,37 @@ const DeliveryManager: React.FC = () => {
               className="flex items-center gap-2 text-sm text-zammsa-green font-bold hover:underline">
               <PlusIcon className="w-4 h-4" /> Add Item
             </button>
+          </div>
+
+          {/* Medical Compliance & Inspection (COI) Checks */}
+          <div className="bg-gray-50 border border-gray-100 rounded-xl p-4 mb-5 space-y-3">
+            <h3 className="text-xs font-bold text-gray-700 uppercase tracking-wide">Medical Compliance & Safety (COI) Checks</h3>
+            <div className="space-y-3">
+              <label className="flex items-center gap-3 cursor-pointer">
+                <input type="checkbox" checked={zamraCertificateVerified} onChange={e => setZamraCertificateVerified(e.target.checked)}
+                  className="h-4 w-4 rounded border-gray-300 text-zammsa-green focus:ring-zammsa-green" />
+                <div>
+                  <p className="text-xs font-semibold text-gray-950">ZAMRA Product Registration Certificate Verified</p>
+                  <p className="text-[10px] text-gray-500">Confirm medicine batch registration certificates are valid</p>
+                </div>
+              </label>
+              <label className="flex items-center gap-3 cursor-pointer">
+                <input type="checkbox" checked={coldChainMaintained} onChange={e => setColdChainMaintained(e.target.checked)}
+                  className="h-4 w-4 rounded border-gray-300 text-zammsa-green focus:ring-zammsa-green" />
+                <div>
+                  <p className="text-xs font-semibold text-gray-950">Cold Chain Maintained</p>
+                  <p className="text-[10px] text-gray-500">Confirm temperature was kept within required ranges in transit</p>
+                </div>
+              </label>
+              <label className="flex items-center gap-3 cursor-pointer">
+                <input type="checkbox" checked={temperatureLogAttached} onChange={e => setTemperatureLogAttached(e.target.checked)}
+                  className="h-4 w-4 rounded border-gray-300 text-zammsa-green focus:ring-zammsa-green" />
+                <div>
+                  <p className="text-xs font-semibold text-gray-950">Temperature Log Attached</p>
+                  <p className="text-[10px] text-gray-500">Confirm temperature log data is extracted and reviewed</p>
+                </div>
+              </label>
+            </div>
           </div>
 
           <div className="mb-5">
@@ -366,14 +503,23 @@ const DeliveryManager: React.FC = () => {
                     <div className="flex items-center justify-between gap-3 text-xs text-gray-500">
                       <span>Qty: {Number(advice.quantity_advised).toLocaleString()}</span>
                       <span>K {Number(advice.total_amount).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
-                      <button
-                        type="button"
-                        onClick={() => verifyAdviceMutation.mutate({ adviceId: advice.advice_id })}
-                        disabled={verifyAdviceMutation.isPending}
-                        className="px-3 py-2 rounded-lg bg-zammsa-green text-white font-bold hover:bg-zammsa-green-dark disabled:opacity-50"
-                      >
-                        Verify GRN
-                      </button>
+                      <div className="flex gap-2">
+                        <button
+                          type="button"
+                          onClick={() => populateFromAdvice(advice)}
+                          className="px-3 py-2 rounded-lg bg-amber-500 text-white font-bold hover:bg-amber-600"
+                        >
+                          Create GRN
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => verifyAdviceMutation.mutate({ adviceId: advice.advice_id })}
+                          disabled={verifyAdviceMutation.isPending}
+                          className="px-3 py-2 rounded-lg bg-zammsa-green text-white font-bold hover:bg-zammsa-green-dark disabled:opacity-50"
+                        >
+                          Verify GRN
+                        </button>
+                      </div>
                     </div>
                   </div>
                 ))}
@@ -432,6 +578,66 @@ const DeliveryManager: React.FC = () => {
               {finalAcceptMutation.isPending ? 'Issuing...' : 'Issue Final Acceptance Certificate'}
             </button>
           </div>
+
+          {/* Submitted Invoices & Certificates */}
+          {dashboard && dashboard.invoices && dashboard.invoices.length > 0 && (
+            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
+              <div className="flex items-center gap-2 mb-4">
+                <svg className="w-5 h-5 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+                <h2 className="text-lg font-bold text-gray-900">Submitted Invoices & Certificates</h2>
+              </div>
+              <p className="text-xs text-gray-500 mb-4">Review supplier-submitted documents before manually issuing or verifying the Goods Receipt Note (GRN).</p>
+              <div className="space-y-3">
+                {dashboard.invoices.map((inv: any) => (
+                  <div key={inv.invoice_id} className="border border-gray-100 rounded-xl p-4 bg-gray-50/50">
+                    <div className="flex items-center justify-between mb-3 text-sm">
+                      <div>
+                        <span className="font-bold text-gray-950">{inv.invoice_number}</span>
+                        {inv.submitted_at && (
+                          <span className="text-[10px] text-gray-500 ml-2">
+                            {new Date(inv.submitted_at).toLocaleDateString()}
+                          </span>
+                        )}
+                      </div>
+                      <span className="font-bold text-gray-950">K {inv.amount?.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                    </div>
+                    <div className="space-y-2 border-t border-gray-200/60 pt-3">
+                      <p className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Attached Documents</p>
+                      {inv.document && (
+                        <a href={inv.document} target="_blank" rel="noopener noreferrer" 
+                          className="flex items-center gap-2 text-xs text-zammsa-green font-semibold hover:underline">
+                          <CheckCircleIcon className="w-4 h-4 text-emerald-500" /> Invoice PDF
+                        </a>
+                      )}
+                      {inv.delivery_note && (
+                        <a href={inv.delivery_note} target="_blank" rel="noopener noreferrer"
+                          className="flex items-center gap-2 text-xs text-blue-600 font-semibold hover:underline">
+                          <CheckCircleIcon className="w-4 h-4 text-blue-500" /> Delivery Note / Packing List
+                        </a>
+                      )}
+                      {inv.zamra_certificate && (
+                        <a href={inv.zamra_certificate} target="_blank" rel="noopener noreferrer"
+                          className="flex items-center gap-2 text-xs text-purple-600 font-semibold hover:underline">
+                          <CheckCircleIcon className="w-4 h-4 text-purple-500" /> ZAMRA Batch Certificate
+                        </a>
+                      )}
+                      {inv.temperature_log && (
+                        <a href={inv.temperature_log} target="_blank" rel="noopener noreferrer"
+                          className="flex items-center gap-2 text-xs text-amber-600 font-semibold hover:underline">
+                          <CheckCircleIcon className="w-4 h-4 text-amber-500" /> Cold Chain Temperature Log
+                        </a>
+                      )}
+                      {!inv.document && !inv.delivery_note && !inv.zamra_certificate && !inv.temperature_log && (
+                        <span className="text-xs text-gray-400 italic">No document attachments uploaded.</span>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* Existing Deliveries */}
           {dashboard && dashboard.deliveries.length > 0 && (
@@ -513,7 +719,7 @@ const DeliveryManager: React.FC = () => {
                       <div key={milestoneId} className="flex items-center justify-between py-3 border-b border-gray-50">
                         <div className="flex items-center gap-3 flex-1 min-w-0">
                           <span className={`w-2 h-2 rounded-full ${
-                            m.status === 'completed' || m.status === 'delivered' ? 'bg-emerald-500' : 'bg-amber-400'
+                            m.status === 'completed' ? 'bg-emerald-500' : 'bg-amber-400'
                           }`} />
                           <div className="min-w-0">
                             <p className="font-medium text-gray-900 truncate">{m.milestone_name}</p>

@@ -29,11 +29,21 @@ interface MethodOption {
 
 interface ResourceRequirements {
   evaluationCommitteeSize: number;
+  requiredExpertise: string[];
   prebidConferenceRequired: boolean;
   siteVisitRequired: boolean;
   specialInspectionRequired: boolean;
   specialDeliveryRequirements: boolean;
 }
+
+const EXPERTISE_OPTIONS = [
+  { key: 'procurement', label: 'Procurement / regulatory expertise', mandatory: true },
+  { key: 'laboratory', label: 'Laboratory / medical sciences expertise', mandatory: false },
+  { key: 'finance', label: 'Finance / value-for-money expertise', mandatory: false },
+  { key: 'legal', label: 'Legal expertise', mandatory: false },
+  { key: 'supply_chain', label: 'Supply chain / logistics expertise', mandatory: false },
+  { key: 'engineering', label: 'Engineering / technical expertise', mandatory: false },
+];
 
 interface NewRiskState {
   category: CPPRisk['risk_category'];
@@ -73,11 +83,11 @@ const CPPEdit: React.FC = () => {
   const [recommendedMethod, setRecommendedMethod] = useState<ProcurementMethod | ''>('');
   const [methodOverride, setMethodOverride] = useState(false);
   const [overrideReason, setOverrideReason] = useState('');
-  const [zpcJustification, setZpcJustification] = useState('');
   const [milestones, setMilestones] = useState<ProcurementMilestone[]>([]);
   const [newMilestone, setNewMilestone] = useState({ name: '', date: '' });
   const [resourceRequirements, setResourceRequirements] = useState<ResourceRequirements>({
     evaluationCommitteeSize: 3,
+    requiredExpertise: ['procurement'],
     prebidConferenceRequired: false,
     siteVisitRequired: false,
     specialInspectionRequired: false,
@@ -119,7 +129,6 @@ const CPPEdit: React.FC = () => {
         setMethodOverride(Boolean(res.method_override));
         setNewMethodOverride(res.method_override ? (res.method || '') : '');
         setOverrideReason(res.override_reason || '');
-        setZpcJustification(res.zpc_justification || '');
         setMilestones((res.milestones || []).map((m, idx) => ({
           milestone_id: m.milestone_id || crypto.randomUUID(),
           cpp: m.cpp || '',
@@ -142,6 +151,7 @@ const CPPEdit: React.FC = () => {
         const rr = (res.resource_requirements || {}) as Partial<ResourceRequirements>;
         setResourceRequirements({
           evaluationCommitteeSize: Number(rr.evaluationCommitteeSize) || 3,
+          requiredExpertise: Array.isArray(rr.requiredExpertise) ? rr.requiredExpertise : ['procurement'],
           prebidConferenceRequired: Boolean(rr.prebidConferenceRequired),
           siteVisitRequired: Boolean(rr.siteVisitRequired),
           specialInspectionRequired: Boolean(rr.specialInspectionRequired),
@@ -224,7 +234,6 @@ const CPPEdit: React.FC = () => {
         method_override: methodOverride,
         override_reason: methodOverride ? overrideReason : '',
         zpc_approval_required: METHOD_OPTIONS.find(m => m.value === (methodOverride ? newMethodOverride : recommendedMethod))?.zpcRequired || false,
-        zpc_justification: zpcJustification,
         estimated_value: requisitions.find(r => r.requisition_id === selectedRequisition)?.estimated_total || 0,
         overall_risk_level: calculateOverallRiskLevel(),
         resource_requirements: resourceRequirements,
@@ -408,20 +417,6 @@ const CPPEdit: React.FC = () => {
             </div>
           )}
 
-          {(() => {
-            const finalMethod = methodOverride ? newMethodOverride : recommendedMethod;
-            return finalMethod && METHOD_OPTIONS.find(m => m.value === finalMethod)?.zpcRequired ? (
-              <div className="mt-4">
-                <label className="block text-sm font-medium text-gray-700 mb-1">ZPC Justification (required for non-open method)</label>
-                <textarea
-                  value={zpcJustification}
-                  onChange={(e) => setZpcJustification(e.target.value)}
-                  placeholder="Provide justification for non-open procurement method..."
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm h-24"
-                />
-              </div>
-            ) : null;
-          })()}
         </div>
       )}
 
@@ -487,6 +482,32 @@ const CPPEdit: React.FC = () => {
                 onChange={(e) => setResourceRequirements({ ...resourceRequirements, evaluationCommitteeSize: parseInt(e.target.value) || 3 })}
                 className="w-32 border border-gray-300 rounded-lg px-3 py-2 text-sm"
               />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Required Expertise (tick all that apply)</label>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                {EXPERTISE_OPTIONS.map(exp => (
+                  <label key={exp.key} className="flex items-start gap-2 p-3 bg-gray-50 rounded-lg cursor-pointer hover:bg-gray-100">
+                    <input
+                      type="checkbox"
+                      checked={resourceRequirements.requiredExpertise.includes(exp.key)}
+                      onChange={() => {
+                        setResourceRequirements(prev => ({
+                          ...prev,
+                          requiredExpertise: prev.requiredExpertise.includes(exp.key)
+                            ? prev.requiredExpertise.filter(e => e !== exp.key)
+                            : [...prev.requiredExpertise, exp.key],
+                        }));
+                      }}
+                      className="mt-0.5 rounded text-zammsa-green focus:ring-zammsa-green"
+                    />
+                    <div>
+                      <span className="text-sm font-medium text-gray-700">{exp.label}</span>
+                      {exp.mandatory && <span className="text-[10px] font-bold text-zammsa-green ml-1 uppercase">(mandatory)</span>}
+                    </div>
+                  </label>
+                ))}
+              </div>
             </div>
             <div className="space-y-2">
               <div className="flex items-center gap-2">
@@ -630,6 +651,7 @@ const CPPEdit: React.FC = () => {
                 <div><span className="text-gray-500 block">Milestones</span>{milestones.length}</div>
                 <div><span className="text-gray-500 block">Risks</span>{risks.length}</div>
                 <div><span className="text-gray-500 block">Est. Value</span>{selectedRequisitionData?.estimated_total.toLocaleString()}</div>
+                <div><span className="text-gray-500 block">Committee</span>{resourceRequirements.evaluationCommitteeSize} members, {resourceRequirements.requiredExpertise.length} expertise areas</div>
               </div>
             </div>
             <div className="p-3 bg-yellow-50 border border-yellow-200 rounded-lg">

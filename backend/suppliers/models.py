@@ -49,6 +49,9 @@ class Supplier(models.Model):
     status = models.CharField(max_length=20, choices=SUPPLIER_STATUS_CHOICES, default='pending')
     risk_score = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True)
     risk_level = models.CharField(max_length=20, choices=RISK_LEVEL_CHOICES, default='low')
+    bank_name = models.CharField(max_length=255, blank=True, default='')
+    bank_account_number = models.CharField(max_length=100, blank=True, default='')
+    bank_account_name = models.CharField(max_length=255, blank=True, default='')
     registered_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

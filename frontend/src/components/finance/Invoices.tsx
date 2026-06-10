@@ -21,7 +21,7 @@ const Invoices: React.FC = () => {
 
   const columns = [
     { key: 'invoice_number', label: 'Invoice #', render: (v: string) => <span className="font-medium">{v}</span> },
-    { key: 'contract', label: 'Contract' },
+    { key: 'contract_number', label: 'Contract' },
     { key: 'amount', label: 'Amount', render: (v: number) => v?.toLocaleString() },
     { key: 'due_date', label: 'Due Date', render: (v: string) => v ? new Date(v).toLocaleDateString() : '-' },
     { key: 'paid_at', label: 'Paid Date', render: (v: string | null) => v ? new Date(v).toLocaleDateString() : '-' },

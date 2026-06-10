@@ -115,6 +115,8 @@ class TenderPublicSerializer(serializers.ModelSerializer):
         return ''
 
     def get_estimated_value(self, obj):
+        if obj.estimated_value is not None:
+            return float(obj.estimated_value)
         if hasattr(obj, 'requisition') and obj.requisition:
             return float(obj.requisition.estimated_total) if obj.requisition.estimated_total else 0
         return 0
@@ -179,6 +181,8 @@ class TenderPublicListSerializer(serializers.ModelSerializer):
         return ''
 
     def get_estimated_value(self, obj):
+        if obj.estimated_value is not None:
+            return float(obj.estimated_value)
         if hasattr(obj, 'requisition') and obj.requisition:
             return float(obj.requisition.estimated_total) if obj.requisition.estimated_total else 0
         return 0

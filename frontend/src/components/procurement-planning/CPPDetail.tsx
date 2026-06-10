@@ -17,6 +17,16 @@ import {
   GlobeIcon, ScaleIcon, CheckCircleIcon, RefreshIcon,
 } from '@heroicons/react/outline';
 
+const ZPC_GROUNDS = [
+  'Sole Source / Proprietary Item',
+  'Emergency Procurement',
+  'Additional Supplies from Original Supplier',
+  'Standardization Requirements',
+  'National Security',
+  'Artistic / Cultural Specificity',
+  'Research / Experimental Purpose',
+];
+
 const METHOD_LABELS: Record<string, string> = {
   open_tender: 'Open National Bidding',
   international: 'Open International Bidding',
@@ -58,6 +68,10 @@ export default function CPPDetail() {
   const [validationError, setValidationError] = useState<string[] | null>(null);
   const [showReject, setShowReject] = useState(false);
   const [reason, setReason] = useState('');
+  const [showZPCApprove, setShowZPCApprove] = useState(false);
+  const [zpcGrounds, setZpcGrounds] = useState('');
+  const [zpcJustification, setZpcJustification] = useState('');
+  const [zpcResolutionRef, setZpcResolutionRef] = useState('');
 
   const loadData = async () => {
     if (!id) return;
@@ -73,12 +87,22 @@ export default function CPPDetail() {
 
   useEffect(() => { loadData(); }, [id]);
 
-  const approveCPP = async () => {
+  const approveCPPWithZPC = async () => {
     if (!id) return;
+    if (!zpcGrounds) { toast.error('Select ZPC grounds'); return; }
+    if (!zpcJustification.trim()) { toast.error('Enter ZPC justification'); return; }
     setActionLoading('approve');
     try {
-      await procurementPlanningApi.contractPlans.approve(id);
-      toast.success('Strategy approved');
+      await procurementPlanningApi.contractPlans.approve(id, {
+        zpc_grounds: zpcGrounds,
+        zpc_justification: zpcJustification,
+        zpc_resolution_ref: zpcResolutionRef,
+      });
+      toast.success('CPP approved — procurement may commence');
+      setShowZPCApprove(false);
+      setZpcGrounds('');
+      setZpcJustification('');
+      setZpcResolutionRef('');
       loadData();
     } catch (err: any) { toast.error(err.response?.data?.error || 'Approval failed'); }
     setActionLoading('');
@@ -435,10 +459,10 @@ export default function CPPDetail() {
                        <button onClick={submitToZPC} disabled={actionLoading !== ''} className="w-full py-4 bg-amber-600 text-white rounded-2xl text-xs font-black uppercase tracking-widest shadow-lg shadow-amber-100 hover:bg-amber-700 transition-all disabled:opacity-50">Submit to ZPC</button>
                     )}
                     {canZPCAction && (
-                       <>
-                          <button onClick={approveCPP} disabled={actionLoading !== ''} className="w-full py-4 bg-zammsa-green text-white rounded-2xl text-xs font-black uppercase tracking-widest shadow-lg shadow-zammsa-green/20 hover:bg-zammsa-green-dark transition-all disabled:opacity-50">Confirm Strategy</button>
-                          <button onClick={() => setShowReject(true)} disabled={actionLoading !== ''} className="w-full py-4 bg-rose-600 text-white rounded-2xl text-xs font-black uppercase tracking-widest shadow-lg shadow-rose-100 hover:bg-rose-700 transition-all disabled:opacity-50">Reject / Return</button>
-                       </>
+                        <>
+                           <button onClick={() => setShowZPCApprove(true)} disabled={actionLoading !== ''} className="w-full py-4 bg-zammsa-green text-white rounded-2xl text-xs font-black uppercase tracking-widest shadow-lg shadow-zammsa-green/20 hover:bg-zammsa-green-dark transition-all disabled:opacity-50">Approve with ZPC Justification</button>
+                           <button onClick={() => setShowReject(true)} disabled={actionLoading !== ''} className="w-full py-4 bg-rose-600 text-white rounded-2xl text-xs font-black uppercase tracking-widest shadow-lg shadow-rose-100 hover:bg-rose-700 transition-all disabled:opacity-50">Reject / Return</button>
+                        </>
                     )}
                  </div>
               </div>
@@ -468,6 +492,54 @@ export default function CPPDetail() {
            </div>
         </div>
       </div>
+
+      {/* ZPC Approval Modal */}
+      {showZPCApprove && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/60 backdrop-blur-sm p-6">
+          <div className="bg-white rounded-[32px] shadow-2xl max-w-lg w-full p-10 border border-white/20 transform animate-in zoom-in-95 duration-300">
+            <div className="w-16 h-16 rounded-2xl bg-zammsa-green/10 text-zammsa-green flex items-center justify-center mb-8">
+               <ShieldCheckIcon className="w-8 h-8" />
+            </div>
+            <h3 className="text-2xl font-black text-gray-900 tracking-tight">ZPC Approval — Non-Open Method</h3>
+            <p className="text-sm font-medium text-gray-500 mt-2 mb-8">Record the ZPC's justification and resolution details for this non-open procurement method.</p>
+
+            <div className="space-y-6">
+              <div>
+                <label className="text-[10px] font-black text-gray-400 uppercase ml-1 mb-2 block">ZPC Grounds *</label>
+                <select value={zpcGrounds} onChange={(e) => setZpcGrounds(e.target.value)}
+                  className="w-full bg-white border border-gray-200 rounded-2xl px-5 py-4 text-sm font-bold text-gray-700 outline-none focus:ring-4 focus:ring-zammsa-green/5 transition-all">
+                  <option value="">-- Select Grounds --</option>
+                  {ZPC_GROUNDS.map(g => <option key={g} value={g}>{g}</option>)}
+                </select>
+              </div>
+
+              <div>
+                <label className="text-[10px] font-black text-gray-400 uppercase ml-1 mb-2 block">ZPC Resolution Reference</label>
+                <input type="text" value={zpcResolutionRef} onChange={(e) => setZpcResolutionRef(e.target.value)}
+                  placeholder="e.g. ZPC/RES/2026/042"
+                  className="w-full bg-white border border-gray-200 rounded-2xl px-5 py-4 text-sm font-bold text-gray-700 outline-none focus:ring-4 focus:ring-zammsa-green/5 transition-all" />
+              </div>
+
+              <div>
+                <label className="text-[10px] font-black text-gray-400 uppercase ml-1 mb-2 block">ZPC Justification *</label>
+                <textarea value={zpcJustification} onChange={(e) => setZpcJustification(e.target.value)}
+                  placeholder="Formal justification for approving this non-open procurement method..."
+                  rows={4}
+                  className="w-full bg-white border border-gray-200 rounded-2xl px-5 py-4 text-sm font-bold text-gray-700 outline-none focus:ring-4 focus:ring-zammsa-green/5 transition-all" />
+              </div>
+            </div>
+
+            <div className="flex gap-4 mt-10">
+              <button onClick={() => { setShowZPCApprove(false); setZpcGrounds(''); setZpcJustification(''); setZpcResolutionRef(''); }}
+                className="flex-1 py-4 text-sm font-bold text-gray-400 bg-gray-50 rounded-2xl hover:bg-gray-100 transition-all uppercase tracking-widest">Cancel</button>
+              <button onClick={approveCPPWithZPC} disabled={actionLoading !== ''}
+                className="flex-1 py-4 bg-zammsa-green text-white rounded-2xl text-sm font-black uppercase tracking-widest shadow-lg shadow-zammsa-green/20 hover:bg-zammsa-green-dark transition-all disabled:opacity-50">
+                {actionLoading === 'approve' ? 'Approving...' : 'Confirm Approval'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Reject Modal */}
       {showReject && (

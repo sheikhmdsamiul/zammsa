@@ -157,6 +157,8 @@ export interface Solicitation {
   minimum_technical_threshold?: number;
   document_fee_enabled?: boolean;
   document_fee_amount?: number;
+  clarification_cutoff?: string;
+  cpp_resource_requirements?: Record<string, any>;
 }
 
 export interface Addendum {
@@ -408,6 +410,33 @@ export interface Contract {
   legal_hold: boolean;
   operational_phases?: ContractOperationalPhase[];
   supplier_performances?: SupplierPerformance[];
+  purchase_orders?: {
+    id: string;
+    po_number: string;
+    total_amount: number;
+    status: string;
+    created_at: string;
+    line_items: {
+      id: string;
+      line_number: number;
+      item_code: string;
+      item_name: string;
+      description: string;
+      quantity: number;
+      unit_price: number;
+      total_price: number;
+    }[];
+  }[];
+  delivery_progress?: {
+    item_code: string;
+    item_name: string;
+    quantity_ordered: number;
+    quantity_received: number;
+    unit_price: number;
+    total_ordered_value: number;
+    total_received_value: number;
+    progress_pct: number;
+  }[];
   created_at: string;
   updated_at: string;
 }
@@ -528,6 +557,29 @@ export interface GoodsReceiptNote {
   source: string;
 }
 
+export interface GRNLineItemInfo {
+  line_item_id: string;
+  line_number: number;
+  item_code: string;
+  item_name: string;
+  quantity_ordered: number;
+  quantity_received: number;
+  unit_price: number;
+  total_amount: number;
+}
+
+export interface AvailableGRN {
+  grn_id: string;
+  grn_number: string;
+  status: string;
+  received_date: string;
+  item_description: string;
+  quantity_received: number;
+  unit_price: number;
+  total_amount: number;
+  line_items: GRNLineItemInfo[];
+}
+
 export interface DeliveryAdvice {
   advice_id: string;
   advice_number: string;
@@ -571,7 +623,11 @@ export interface Invoice {
   grn: string | null;
   supplier: string;
   supplier_name?: string;
-  supplier_bank?: string;
+  supplier_bank?: {
+    bank_name: string;
+    bank_account_number: string;
+    bank_account_name: string;
+  };
   invoice_number: string;
   amount: number;
   original_amount?: number | null;
@@ -1155,6 +1211,11 @@ export interface ContractFinancialSummary {
   start_date: string;
   end_date: string;
   status: string;
+  supplier_bank?: {
+    bank_name: string;
+    bank_account_number: string;
+    bank_account_name: string;
+  };
 }
 
 export interface ExecutionDashboard {
@@ -1213,6 +1274,16 @@ export interface ExecutionDashboard {
     shortage: number;
   }[];
   shortage_count: number;
+  delivery_progress?: {
+    item_code: string;
+    item_name: string;
+    quantity_ordered: number;
+    quantity_received: number;
+    unit_price: number;
+    total_ordered_value: number;
+    total_received_value: number;
+    progress_pct: number;
+  }[];
 }
 
 export interface BackupRecord {

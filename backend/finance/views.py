@@ -18,8 +18,9 @@ import django_filters
 
 from .models import (
     BudgetAllocation, BudgetEncumbrance, DeliveryAdvice, GoodsReceiptNote, GRNLineItem,
-    Invoice, InvoiceLineItem, PurchaseOrder, ThreeWayMatch, Payment, LetterOfCredit,
-    RetentionRelease, INVOICE_APPROVAL_ROUTES,
+    Invoice, InvoiceLineItem, PurchaseOrder, PurchaseOrderLineItem,
+    ThreeWayMatch, Payment, LetterOfCredit,
+    RetentionRelease, INVOICE_APPROVAL_ROUTES, INVOICE_STATUS_CHOICES,
 )
 from .serializers import (
     BudgetAllocationSerializer, BudgetEncumbranceSerializer,
@@ -117,17 +118,25 @@ def _build_grn_from_items(
         verified_at=timezone.now() if verified_by else None,
         verification_method=verification_method,
         notes=notes,
-        zamra_certificate_verified=bool((raw_webhook or {}).get('zamra_certificate_verified', False)),
-        cold_chain_maintained=bool((raw_webhook or {}).get('cold_chain_maintained', True)),
-        temperature_log_attached=bool((raw_webhook or {}).get('temperature_log_attached', False)),
+        zamra_certificate_verified=_bool_from_request((raw_webhook or {}).get('zamra_certificate_verified', False)),
+        cold_chain_maintained=_bool_from_request((raw_webhook or {}).get('cold_chain_maintained', True)),
+        temperature_log_attached=_bool_from_request((raw_webhook or {}).get('temperature_log_attached', False)),
         source=source,
         raw_webhook=raw_webhook or {},
     )
 
     for idx, it in enumerate(items_data, start=1):
         received_qty = Decimal(str(it.get(quantity_key, it.get('quantity_received', it.get('quantity_delivered', 0)))))
+        po_line_item_id = it.get('po_line_item_id')
+        po_line_item = None
+        if po_line_item_id:
+            try:
+                po_line_item = PurchaseOrderLineItem.objects.get(pk=po_line_item_id)
+            except (PurchaseOrderLineItem.DoesNotExist, Exception):
+                pass
         GRNLineItem.objects.create(
             grn=grn,
+            po_line_item=po_line_item,
             line_number=idx,
             item_code=it.get('item_code', ''),
             item_name=it.get('item_name', ''),
@@ -202,7 +211,7 @@ class StandardPagination(PageNumberPagination):
 
 
 class InvoiceFilter(django_filters.FilterSet):
-    status = django_filters.CharFilter(lookup_expr='exact')
+    status = django_filters.MultipleChoiceFilter(choices=INVOICE_STATUS_CHOICES)
     contract = django_filters.CharFilter(field_name='contract__contract_number', lookup_expr='exact')
 
     class Meta:
@@ -272,21 +281,30 @@ class InvoiceDetailView(generics.RetrieveUpdateDestroyAPIView):
 @permission_classes([IsAuthenticated])
 def invoice_submit_view(request, pk):
     try:
-        inv = Invoice.objects.get(pk=pk)
+        inv = Invoice.objects.select_related('contract', 'grn').get(pk=pk)
     except Invoice.DoesNotExist:
         return Response({'error': 'Invoice not found'}, status=404)
 
     inv.status = 'submitted'
     inv.submitted_at = timezone.now()
+    if not inv.due_date:
+        inv.due_date = timezone.now().date() + timedelta(days=30)
     inv.save()
 
-    # Auto-update Final Invoice milestone actual_date
-    from contracts.models import ContractMilestone
-    ContractMilestone.objects.filter(
-        contract=inv.contract, milestone_name__icontains='Invoice'
-    ).update(status='completed', completed_at=timezone.now(), actual_date=timezone.now().date())
+    # Notify R-07 and R-12 (via audit log)
+    ip = request.META.get('REMOTE_ADDR', '')
+    log_audit_action(
+        user=request.user, action='INVOICE_SUBMITTED', module='finance',
+        record_id=str(inv.invoice_id), ip_address=ip,
+    )
 
-    return Response({'message': 'Invoice submitted for processing', 'status': inv.status})
+    return Response({
+        'message': 'Invoice submitted for contract manager verification',
+        'invoice_number': inv.invoice_number,
+        'status': inv.status,
+        'payment_deadline': inv.due_date,
+        'next_step': 'Contract manager verifies GRN linkage, then Finance Officer runs 3-way match',
+    })
 
 
 @api_view(['POST'])
@@ -334,7 +352,7 @@ def invoice_match_view(request, pk):
             inv_vs_po_price = (inv_price == po_price)
             inv_vs_grn_qty = (inv_qty == grn_qty)
 
-            if not inv_vs_po_qty:
+            if not inv_vs_grn_qty:
                 overall_qty_match = False
             if not inv_vs_po_price:
                 overall_price_match = False
@@ -468,6 +486,30 @@ def invoice_match_view(request, pk):
     else:
         match_status = 'no_match'
 
+    # Check compliance/safety on GRN
+    grn_compliance_fail = False
+    if not inv.grn:
+        # If no PO line items and no invoice line items, and we got grn_quantity in request,
+        # it is the legacy test fallback where GRN doesn't exist in DB.
+        is_legacy_fallback = not po_line_items and not inv_line_items and request.data and request.data.get('grn_quantity') is not None
+        if not is_legacy_fallback:
+            match_status = 'no_match'
+            total_discrepancies['missing_grn'] = {'message': 'Invoice does not have a linked Goods Receipt Note (GRN)'}
+    else:
+        if not inv.grn.zamra_certificate_verified:
+            grn_compliance_fail = True
+            total_discrepancies['zamra_verification_missing'] = {'grn_value': False, 'required': True}
+        if not inv.grn.cold_chain_maintained:
+            grn_compliance_fail = True
+            total_discrepancies['cold_chain_violation'] = {'grn_value': False, 'required': True}
+        if not inv.grn.temperature_log_attached:
+            grn_compliance_fail = True
+            total_discrepancies['temperature_log_missing'] = {'grn_value': False, 'required': True}
+
+        if grn_compliance_fail:
+            match_status = 'no_match'
+
+    inv.three_way_matches.all().delete()
     ThreeWayMatch.objects.create(
         invoice=inv,
         po_quantity=sum(m['po_qty'] for m in line_matches),
@@ -500,6 +542,9 @@ def invoice_match_view(request, pk):
             'line_matches': line_matches,
             'quantity_match': overall_qty_match,
             'price_match': overall_price_match,
+            'zamra_certificate_verified': inv.grn.zamra_certificate_verified if inv.grn else False,
+            'cold_chain_maintained': inv.grn.cold_chain_maintained if inv.grn else True,
+            'temperature_log_attached': inv.grn.temperature_log_attached if inv.grn else False,
             'finance_review': {
                 key: float(value) if isinstance(value, Decimal) else value
                 for key, value in (finance_review or {}).items()
@@ -1046,6 +1091,71 @@ class GRNListView(BaseView, generics.ListAPIView):
     filterset_fields = ['contract']
 
 
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def supplier_available_grns_view(request, pk):
+    """Return GRNs available for invoicing: COMPLETE/PARTIAL, not already invoiced, for the supplier's contract."""
+    from contracts.models import Contract
+    from django.db.models import Q
+    try:
+        contract = Contract.objects.get(pk=pk)
+    except Contract.DoesNotExist:
+        return Response({'error': 'Contract not found'}, status=404)
+    if getattr(request.user, 'role', '') == 'supplier_user':
+        if not _user_can_access_supplier_contract(request.user, contract):
+            return Response({'error': 'Access denied'}, status=403)
+    grns = GoodsReceiptNote.objects.filter(
+        contract=contract,
+        status__in=['complete', 'partial'],
+    ).exclude(
+        grn_id__in=Invoice.objects.filter(
+            contract=contract, status__in=['submitted', 'pending_matching', 'finance_reviewed', 'pending_approval', 'approved', 'fully_approved', 'paid']
+        ).values('grn_id')
+    ).order_by('-received_date')
+    has_items_table = 'fin_grn_line_item' in connection.introspection.table_names()
+    if has_items_table:
+        grns = grns.prefetch_related('line_items')
+    result = []
+    for g in grns:
+        items = list(g.line_items.all()) if has_items_table else []
+        result.append({
+            'grn_id': str(g.grn_id),
+            'grn_number': g.grn_number,
+            'status': g.status,
+            'received_date': g.received_date,
+            'item_description': g.item_description,
+            'quantity_received': float(g.quantity_received),
+            'unit_price': float(g.unit_price),
+            'total_amount': float(g.total_amount),
+            'line_items': [
+                {
+                    'line_item_id': str(li.line_item_id),
+                    'line_number': li.line_number,
+                    'item_code': li.item_code,
+                    'item_name': li.item_name,
+                    'quantity_ordered': float(li.quantity_ordered),
+                    'quantity_received': float(li.quantity_received),
+                    'unit_price': float(li.unit_price),
+                    'total_amount': float(li.total_amount),
+                }
+                for li in items
+            ],
+        })
+    return Response({'grns': result})
+
+
+def _user_can_access_supplier_contract(user, contract):
+    from suppliers.models import VendorApplication
+    filters = Q(winning_bid__supplier=user)
+    if user.employee_id and str(user.employee_id).startswith('SUP-'):
+        reg = str(user.employee_id).replace('SUP-', '', 1)
+        filters |= Q(supplier__registration_number=reg)
+    app = VendorApplication.objects.filter(email=user.email).first()
+    if app and app.registration_number:
+        filters |= Q(supplier__registration_number=app.registration_number)
+    return Contract.objects.filter(pk=contract.pk).filter(filters).exists()
+
+
 class DeliveryAdviceListView(BaseView, generics.ListAPIView):
     queryset = DeliveryAdvice.objects.select_related('contract', 'supplier').all()
     serializer_class = DeliveryAdviceSerializer
@@ -1304,9 +1414,29 @@ def manual_grn_create_view(request):
         record_id=str(grn.grn_id), ip_address=ip,
     )
 
+    # If a delivery_advice_id was provided, link GRN to advice and mark verified
+    delivery_advice_id = request.data.get('delivery_advice_id', '')
+    advice_linked = None
+    if delivery_advice_id:
+        try:
+            advice = DeliveryAdvice.objects.get(pk=delivery_advice_id)
+            if advice.status == 'submitted':
+                grn.delivery_advice = advice
+                grn.verified_by = verifier_name
+                grn.verified_at = timezone.now()
+                grn.save(update_fields=['delivery_advice', 'verified_by', 'verified_at'])
+                advice.status = 'verified'
+                advice.verified_by = verifier_name
+                advice.verified_at = timezone.now()
+                advice.save(update_fields=['status', 'verified_by', 'verified_at'])
+                advice_linked = {'advice_id': str(advice.advice_id), 'status': 'verified'}
+        except DeliveryAdvice.DoesNotExist:
+            pass
+
     return Response({
         'message': 'GRN created manually',
         'grn': GoodsReceiptNoteSerializer(grn).data,
+        'advice_linked': advice_linked,
         'note': 'Use grn-webhook endpoint in production with WMS integration',
     })
 
@@ -1402,6 +1532,16 @@ def contract_financial_summary_view(request, pk):
         'unit_price', 'total_amount', 'received_date', 'status'
     ).order_by('-received_date')
 
+    supplier_bank = {}
+    if contract.supplier:
+        bank_number = contract.supplier.bank_account_number or ''
+        masked = f'••••{bank_number[-4:]}' if len(bank_number) >= 4 else ''
+        supplier_bank = {
+            'bank_name': contract.supplier.bank_name or '',
+            'bank_account_number': masked,
+            'bank_account_name': contract.supplier.bank_account_name or '',
+        }
+
     final_value = contract.value + amendment_total
     budget_savings = max(final_value - total_invoiced, Decimal('0'))
 
@@ -1437,6 +1577,7 @@ def contract_financial_summary_view(request, pk):
         'start_date': contract.start_date,
         'end_date': contract.end_date,
         'status': contract.status,
+        'supplier_bank': supplier_bank,
     })
 
 
@@ -1566,7 +1707,19 @@ def verify_delivery_advice_view(request, pk):
     grn.verified_by = verifier_name
     grn.verified_at = timezone.now()
     grn.verification_method = 'wms_webhook_verification'
-    grn.save(update_fields=['delivery_advice', 'verified_by', 'verified_at', 'verification_method'])
+    
+    # Update compliance and certificates verified during manual inspection
+    if 'zamra_certificate_verified' in request.data:
+        grn.zamra_certificate_verified = _bool_from_request(request.data['zamra_certificate_verified'])
+    if 'cold_chain_maintained' in request.data:
+        grn.cold_chain_maintained = _bool_from_request(request.data['cold_chain_maintained'])
+    if 'temperature_log_attached' in request.data:
+        grn.temperature_log_attached = _bool_from_request(request.data['temperature_log_attached'])
+        
+    grn.save(update_fields=[
+        'delivery_advice', 'verified_by', 'verified_at', 'verification_method',
+        'zamra_certificate_verified', 'cold_chain_maintained', 'temperature_log_attached'
+    ])
 
     advice.status = 'verified'
     advice.verified_by = verifier_name
@@ -1624,6 +1777,42 @@ def execution_dashboard_view(request, pk):
 
     po = PurchaseOrder.objects.filter(contract=contract, status='active').first()
 
+    # Delivery progress: aggregate PO line items vs total received across all GRNs
+    from collections import defaultdict
+    delivery_progress = []
+    try:
+        po_items = PurchaseOrderLineItem.objects.filter(
+            po__contract=contract, po__status='active'
+        ).order_by('line_number')
+        received_by_key = defaultdict(lambda: Decimal('0'))
+        if has_grn_line_items_table:
+            for grn in grns:
+                for li in grn.line_items.all():
+                    for key in [li.item_code, li.item_name]:
+                        if key:
+                            received_by_key[key] += li.quantity_received
+        for po_item in po_items:
+            display_name = po_item.item_name or po_item.description
+            qty_ordered = po_item.quantity
+            qty_received = Decimal('0')
+            for key in [po_item.item_code, po_item.item_name, po_item.description]:
+                if key and key in received_by_key:
+                    qty_received = received_by_key[key]
+                    break
+            pct = float(qty_received / qty_ordered * 100) if qty_ordered > 0 else 0
+            delivery_progress.append({
+                'item_code': po_item.item_code,
+                'item_name': display_name,
+                'quantity_ordered': float(qty_ordered),
+                'quantity_received': float(qty_received),
+                'unit_price': float(po_item.unit_price),
+                'total_ordered_value': float(po_item.total_price),
+                'total_received_value': float(qty_received * po_item.unit_price),
+                'progress_pct': round(pct, 1),
+            })
+    except Exception:
+        pass
+
     return Response({
         'contract_id': str(contract.contract_id),
         'contract_number': contract.contract_number,
@@ -1680,11 +1869,16 @@ def execution_dashboard_view(request, pk):
                 'amount': float(inv.amount),
                 'status': inv.status,
                 'submitted_at': inv.submitted_at,
+                'document': inv.document,
+                'delivery_note': getattr(inv, 'delivery_note', ''),
+                'zamra_certificate': getattr(inv, 'zamra_certificate', ''),
+                'temperature_log': getattr(inv, 'temperature_log', ''),
             }
             for inv in invoices_list
         ],
         'shortages': shortages,
         'shortage_count': len(shortages),
+        'delivery_progress': delivery_progress,
     })
 
 

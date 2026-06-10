@@ -475,6 +475,8 @@ def vendor_profile_view(request):
     if not profile and user.employee_id and user.employee_id.startswith('SUP-'):
         try:
             supplier = Supplier.objects.get(registration_number=user.employee_id.replace('SUP-', '', 1))
+            bank_number = supplier.bank_account_number or ''
+            masked = f'••••{bank_number[-4:]}' if len(bank_number) >= 4 else ''
             return Response({
                 'company_name': supplier.name,
                 'registration_number': supplier.registration_number,
@@ -482,6 +484,9 @@ def vendor_profile_view(request):
                 'ceec_category': supplier.ceec_category,
                 'email': user.email,
                 'status': supplier.status,
+                'bank_name': supplier.bank_name or '',
+                'bank_account_number': masked,
+                'bank_account_name': supplier.bank_account_name or '',
             })
         except Supplier.DoesNotExist:
             pass
@@ -491,11 +496,36 @@ def vendor_profile_view(request):
 
     if request.method == 'GET':
         serializer = VendorApplicationSerializer(profile)
-        return Response(serializer.data)
+        data = serializer.data
+        if data.get('bank_account_number'):
+            num = data['bank_account_number']
+            data['bank_account_number'] = f'••••{num[-4:]}' if len(num) >= 4 else '••••'
+        return Response(data)
 
     elif request.method == 'PATCH':
         serializer = VendorApplicationSerializer(profile, data=request.data, partial=True)
         if serializer.is_valid():
             serializer.save()
-            return Response(serializer.data)
+            # Sync bank fields to Supplier record if it exists
+            try:
+                reg_no = profile.registration_number
+                supplier = Supplier.objects.filter(registration_number=reg_no).first()
+                if supplier:
+                    bank_fields = {}
+                    if 'bank_name' in request.data:
+                        bank_fields['bank_name'] = request.data['bank_name']
+                    if 'bank_account_number' in request.data:
+                        bank_fields['bank_account_number'] = request.data['bank_account_number']
+                    if 'bank_account_name' in request.data:
+                        bank_fields['bank_account_name'] = request.data['bank_account_name']
+                    if bank_fields:
+                        Supplier.objects.filter(pk=supplier.supplier_id).update(**bank_fields)
+            except Exception:
+                pass
+            # Mask account number in response
+            data = serializer.data
+            if data.get('bank_account_number'):
+                num = data['bank_account_number']
+                data['bank_account_number'] = f'••••{num[-4:]}' if len(num) >= 4 else '••••'
+            return Response(data)
         return Response(serializer.errors, status=400)

@@ -50,6 +50,8 @@ class Requisition(models.Model):
     status = models.CharField(max_length=50, choices=REQ_STATUS_CHOICES, default='draft')
     budget_validated = models.BooleanField(default=False)
     encumbrance_ref = models.CharField(max_length=100, blank=True)
+    technical_review_required = models.BooleanField(default=False,
+        help_text='Auto-set when any goods line item exceeds K1,000,000')
     app_line_item = models.ForeignKey(
         APPLineItem, on_delete=models.PROTECT,
         null=True, blank=True,
@@ -94,6 +96,8 @@ class RequisitionItem(models.Model):
     unit_price_estimate = models.DecimalField(max_digits=15, decimal_places=2)
     total_estimate = models.DecimalField(max_digits=20, decimal_places=2, editable=False)
     commodity = models.ForeignKey(Commodity, on_delete=models.SET_NULL, null=True, blank=True)
+    attachment = models.FileField(upload_to='requisition_attachments/', blank=True, null=True,
+        help_text='Supporting document for this line item (spec sheet, quote, etc.)')
     history = HistoricalRecords()
 
     class Meta:

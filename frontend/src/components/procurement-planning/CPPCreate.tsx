@@ -168,16 +168,6 @@ const MILESTONE_TEMPLATES: Record<string, MilestoneTemplate[]> = {
   ],
 };
 
-const ZPC_GROUNDS = [
-  'Sole Source / Proprietary Item',
-  'Emergency Procurement',
-  'Additional Supplies from Original Supplier',
-  'Standardization Requirements',
-  'National Security',
-  'Artistic / Cultural Specificity',
-  'Research / Experimental Purpose',
-];
-
 function addWorkingDays(date: Date, days: number): Date {
   const result = new Date(date);
   let added = 0;
@@ -218,8 +208,6 @@ const CPPCreate: React.FC = () => {
   const [methodOverride, setMethodOverride] = useState(false);
   const [newMethodOverride, setNewMethodOverride] = useState<ProcurementMethod | ''>('');
   const [overrideReason, setOverrideReason] = useState('');
-  const [zpcGrounds, setZpcGrounds] = useState('');
-  const [zpcJustification, setZpcJustification] = useState('');
   const [milestones, setMilestones] = useState<ProcurementMilestone[]>([]);
   const [resourceRequirements, setResourceRequirements] = useState<ResourceRequirements>({
     evaluationCommitteeSize: 4,
@@ -455,8 +443,6 @@ const CPPCreate: React.FC = () => {
         method_override: methodOverride,
         override_reason: methodOverride ? overrideReason : undefined,
         zpc_approval_required: finalMethodOption?.zpcRequired || false,
-        zpc_grounds: finalMethodOption && !finalMethodOption.isOpen ? zpcGrounds : undefined,
-        zpc_justification: finalMethodOption && !finalMethodOption.isOpen ? zpcJustification : undefined,
         estimated_value: selectedReq?.estimated_total || 0,
         overall_risk_level: calculateOverallRiskLevel() as any,
         resource_requirements: resourceRequirements as any,
@@ -486,7 +472,6 @@ const CPPCreate: React.FC = () => {
     if (currentStep === 1 && !finalMethod) { toast.error('Determine procurement method first'); return; }
     if (currentStep === 1 && methodOverride && !newMethodOverride) { toast.error('Select an alternative method'); return; }
     if (currentStep === 1 && methodOverride && !overrideReason.trim()) { toast.error('Override justification is required'); return; }
-    if (currentStep === 1 && finalMethodOption?.zpcRequired && !zpcJustification.trim()) { toast.error('ZPC justification is required for non-open methods'); return; }
     setCurrentStep(prev => Math.min(prev + 1, CPPSteps.length - 1));
   };
 
@@ -851,42 +836,6 @@ const CPPCreate: React.FC = () => {
             </div>
           )}
 
-          {/* ZPC Justification for non-open methods */}
-          {finalMethodOption && !finalMethodOption.isOpen && (
-            <div className="bg-white rounded-3xl border border-gray-100 shadow-sm p-8">
-              <h2 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-6 flex items-center gap-2">
-                <ShieldCheckIcon className="w-4 h-4" />
-                Non-Open Method — ZPC Justification Required
-              </h2>
-              <div className="space-y-6">
-                <div>
-                  <label className="text-[10px] font-black text-gray-400 uppercase ml-1 mb-2 block">ZPC Grounds *</label>
-                  <select
-                    value={zpcGrounds}
-                    onChange={(e) => setZpcGrounds(e.target.value)}
-                    className="w-full bg-white border border-gray-100 rounded-2xl px-5 py-4 text-sm font-bold text-gray-700 outline-none focus:ring-4 focus:ring-zammsa-green/5 transition-all"
-                  >
-                    <option value="">-- Select Grounds --</option>
-                    {ZPC_GROUNDS.map(g => <option key={g} value={g}>{g}</option>)}
-                  </select>
-                </div>
-                <div className="space-y-1">
-                  <label className="text-[10px] font-black text-gray-400 uppercase ml-1">ZPC Justification Document *</label>
-                  <textarea
-                    value={zpcJustification}
-                    onChange={(e) => setZpcJustification(e.target.value)}
-                    placeholder="Detailed written justification..."
-                    rows={3}
-                    className="w-full bg-white border border-gray-100 rounded-2xl px-5 py-4 text-sm font-bold text-gray-700 outline-none focus:ring-4 focus:ring-zammsa-green/5 transition-all"
-                  />
-                </div>
-                <div className="flex items-center gap-2 p-3 bg-gray-50 rounded-xl">
-                  <DocumentTextIcon className="w-4 h-4 text-gray-400 shrink-0" />
-                  <p className="text-xs font-bold text-gray-500">Supporting Evidence: Upload market survey, ZAMRA cert, etc.</p>
-                </div>
-              </div>
-            </div>
-          )}
         </div>
       )}
 
@@ -1398,8 +1347,10 @@ const CPPCreate: React.FC = () => {
               <p className="text-sm font-black text-emerald-900 uppercase tracking-wider">
                 {finalMethodOption?.isOpen ? (
                   <>Routing: CPP will be APPROVED IMMEDIATELY upon submission (Open method — no ZPC wait required). Baseline schedule will be LOCKED automatically.</>
-                ) : (
+                ) : methodOverride ? (
                   <>Routing: CPP will be sent to Director of Procurement for override approval, then ZPC for justification review.</>
+                ) : (
+                  <>Routing: CPP will be submitted to ZPC for justification review and approval.</>
                 )}
               </p>
             </div>

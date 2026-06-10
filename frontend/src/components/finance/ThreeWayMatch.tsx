@@ -162,6 +162,9 @@ const ThreeWayMatch: React.FC = () => {
                   { label: 'PO Value vs GRN Value', status: (matchResult as any).po_vs_grn, detail: `K ${(matchResult as any).po_amount?.toLocaleString()} vs K ${(matchResult as any).grn_amount?.toLocaleString()}` },
                   { label: 'Invoice vs GRN', status: (matchResult as any).invoice_vs_grn, detail: `K ${(matchResult as any).invoice_amount?.toLocaleString()} vs K ${(matchResult as any).grn_amount?.toLocaleString()}` },
                   { label: 'Quantity Verification', status: (matchResult as any).quantity_match, detail: `${(matchResult as any).invoice_qty || 0} vs ${(matchResult as any).grn_qty || 0} units` },
+                  { label: 'ZAMRA Certificate Verification', status: (matchResult as any).zamra_certificate_verified, detail: (matchResult as any).zamra_certificate_verified ? 'Verified regulatory compliance' : 'Pending regulatory verification' },
+                  { label: 'Cold Chain Compliance', status: (matchResult as any).cold_chain_maintained, detail: (matchResult as any).cold_chain_maintained ? 'Temperature maintained within safety limits' : 'Cold chain breach detected or unchecked' },
+                  { label: 'Temperature Log Verification', status: (matchResult as any).temperature_log_attached, detail: (matchResult as any).temperature_log_attached ? 'Data log verified and attached' : 'No temperature data log attached' },
                 ]).map((item, i) => (
                   <div key={i} className={`flex items-center justify-between p-4 rounded-xl ${
                     item.status ? 'bg-emerald-50 border border-emerald-200' : 'bg-rose-50 border border-rose-200'

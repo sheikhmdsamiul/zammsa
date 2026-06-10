@@ -43,10 +43,32 @@ class RequisitionListSerializer(serializers.ModelSerializer):
     department = serializers.CharField(source='department.dept_name', read_only=True)
     requester_name = serializers.CharField(source='requester.full_name', read_only=True)
     department_name = serializers.CharField(source='department.dept_name', read_only=True)
+    cpp_number = serializers.SerializerMethodField()
+    recommended_method = serializers.SerializerMethodField()
+    procurement_type = serializers.SerializerMethodField()
+    commodity_category = serializers.SerializerMethodField()
 
     class Meta:
         model = Requisition
-        fields = ('id', 'requisition_id', 'req_number', 'title', 'department', 'department_name', 'requester_name', 'estimated_total', 'required_date', 'status', 'current_approver', 'submitted_at', 'approved_at', 'created_at', 'days_at_current_stage', 'app_line_item')
+        fields = ('id', 'requisition_id', 'req_number', 'title', 'department', 'department_name', 'requester_name', 'estimated_total', 'required_date', 'status', 'current_approver', 'submitted_at', 'approved_at', 'created_at', 'days_at_current_stage', 'app_line_item', 'cpp_number', 'recommended_method', 'procurement_type', 'commodity_category')
+
+    def get_cpp_number(self, obj):
+        cpp = obj.cpp.filter(status='approved').first()
+        return cpp.cpp_number if cpp else None
+
+    def get_recommended_method(self, obj):
+        cpp = obj.cpp.filter(status='approved').first()
+        return cpp.recommended_method or cpp.method if cpp else None
+
+    def get_procurement_type(self, obj):
+        if obj.app_line_item:
+            return obj.app_line_item.procurement_type
+        return None
+
+    def get_commodity_category(self, obj):
+        if obj.app_line_item and obj.app_line_item.commodity:
+            return obj.app_line_item.commodity.category
+        return None
 
 
 class RequisitionSerializer(serializers.ModelSerializer):

@@ -78,6 +78,8 @@ export const vendorApi = {
       api.post<any>(`/contracts/${id}/upload-security/`, data).then((r) => r.data),
     financialSummary: (id: string) =>
       api.get<ContractFinancialSummary>(`/finance/contracts/${id}/financial-summary/`).then((r) => r.data),
+    availableGRNs: (id: string) =>
+      api.get<{ grns: any[] }>(`/finance/contracts/${id}/available-grns/`).then((r) => r.data.grns),
     executionDashboard: (id: string) =>
       api.get<ExecutionDashboard>(`/finance/contracts/${id}/execution-dashboard/`).then((r) => r.data),
   },

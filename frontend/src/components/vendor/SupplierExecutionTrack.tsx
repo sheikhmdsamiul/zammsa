@@ -22,7 +22,6 @@ const milestoneStatusIcon = (status: string) => {
   switch (status) {
     case 'completed': return <CheckCircleIcon className="w-5 h-5 text-emerald-500" />;
     case 'pending': return <ClockIcon className="w-5 h-5 text-amber-400" />;
-    case 'delivered': return <TruckIcon className="w-5 h-5 text-blue-500" />;
     default: return <ClockIcon className="w-5 h-5 text-gray-400" />;
   }
 };
@@ -212,6 +211,72 @@ const SupplierExecutionTrack: React.FC = () => {
             </div>
           </div>
 
+          {/* Purchase Order Delivery Tracking */}
+          {d?.delivery_progress && d.delivery_progress.length > 0 && (
+            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
+              <div className="flex items-center gap-2 mb-5">
+                <TruckIcon className="w-5 h-5 text-gray-700" />
+                <h2 className="text-lg font-bold text-gray-900">Delivery Tracking — PO Items</h2>
+                <span className="ml-auto text-xs font-semibold text-gray-400">
+                  {d.delivery_progress.filter(i => i.progress_pct >= 100).length} / {d.delivery_progress.length} complete
+                </span>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="text-gray-500 border-b border-gray-200">
+                      <th className="text-left py-2 font-semibold">Item</th>
+                      <th className="text-right py-2 font-semibold">Ordered</th>
+                      <th className="text-right py-2 font-semibold">Unit Price</th>
+                      <th className="text-right py-2 font-semibold">Total</th>
+                      <th className="text-right py-2 font-semibold">Received</th>
+                      <th className="text-right py-2 font-semibold">Progress</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {d.delivery_progress.map((item, idx) => {
+                      const remaining = Math.max(0, item.quantity_ordered - item.quantity_received);
+                      return (
+                        <tr key={idx} className="border-b border-gray-50">
+                          <td className="py-3 pr-4">
+                            <p className="font-medium text-gray-900">{item.item_name}</p>
+                            {item.item_code && <p className="text-xs text-gray-400">{item.item_code}</p>}
+                          </td>
+                          <td className="py-3 text-right text-gray-600">{item.quantity_ordered}</td>
+                          <td className="py-3 text-right text-gray-600">{formatValue(item.unit_price)}</td>
+                          <td className="py-3 text-right text-gray-600">{formatValue(item.total_ordered_value)}</td>
+                          <td className="py-3 text-right">
+                            <span className="font-semibold text-gray-900">{item.quantity_received}</span>
+                            {remaining > 0 && (
+                              <span className="text-xs text-amber-600 ml-1">({remaining} left)</span>
+                            )}
+                          </td>
+                          <td className="py-3 text-right">
+                            <div className="flex items-center justify-end gap-2">
+                              <div className="w-16 bg-gray-200 rounded-full h-2">
+                                <div
+                                  className={`h-2 rounded-full ${
+                                    item.progress_pct >= 100
+                                      ? 'bg-emerald-500'
+                                      : item.progress_pct > 0
+                                        ? 'bg-amber-400'
+                                        : 'bg-gray-200'
+                                  }`}
+                                  style={{ width: `${Math.min(item.progress_pct, 100)}%` }}
+                                />
+                              </div>
+                              <span className="text-xs font-bold text-gray-600 w-8 text-right">{item.progress_pct}%</span>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
           {/* Shortages */}
           {hasShortages && (
             <div className="bg-white rounded-2xl border border-amber-200 shadow-sm p-6">
@@ -301,7 +366,6 @@ const SupplierExecutionTrack: React.FC = () => {
                         )}
                         <span className={`text-xs font-bold px-2.5 py-1 rounded-full ${
                           m.status === 'completed' ? 'bg-emerald-50 text-emerald-700' :
-                          m.status === 'delivered' ? 'bg-blue-50 text-blue-700' :
                           m.status === 'pending' ? 'bg-amber-50 text-amber-700' :
                           'bg-gray-50 text-gray-600'
                         }`}>{m.status}</span>

@@ -227,13 +227,13 @@ const InvoiceApproval: React.FC = () => {
                 <h2 className="text-xl font-bold text-gray-900">3-Way Match Verification</h2>
                 <p className="text-sm text-gray-500">Comparing Contract, Receipt, and Invoice</p>
               </div>
-              {!displayMatch && (invoice.status === 'submitted' || invoice.status === 'pending_matching') && (
+              {(invoice.status === 'submitted' || invoice.status === 'pending_matching') && (
                 <button 
                   onClick={() => matchMutation.mutate()} 
                   disabled={matchMutation.isPending}
                   className="px-6 py-2.5 bg-zammsa-green text-white rounded-xl font-bold hover:bg-zammsa-green-dark shadow-lg shadow-zammsa-green/20 transition-all"
                 >
-                  {matchMutation.isPending ? 'Verifying...' : 'Run 3-Way Match'}
+                  {matchMutation.isPending ? 'Verifying...' : displayMatch ? 'Re-run 3-Way Match' : 'Run 3-Way Match'}
                 </button>
               )}
             </div>
@@ -479,7 +479,11 @@ const InvoiceApproval: React.FC = () => {
                   </div>
                   <div>
                     <p className="text-xs font-bold text-gray-400 uppercase tracking-tighter">Target Account</p>
-                    <p className="text-sm font-bold text-gray-700">{invoice.supplier_bank || 'Standard Chartered ****9821'}</p>
+                    <p className="text-sm font-bold text-gray-700">
+                      {invoice.supplier_bank
+                        ? `${invoice.supplier_bank.bank_name} — ${invoice.supplier_bank.bank_account_name} (${invoice.supplier_bank.bank_account_number})`
+                        : 'Standard Chartered ****9821'}
+                    </p>
                   </div>
                 </div>
                 <button 

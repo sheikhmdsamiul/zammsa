@@ -246,6 +246,10 @@ class GoodsReceiptNote(models.Model):
 class GRNLineItem(models.Model):
     line_item_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     grn = models.ForeignKey(GoodsReceiptNote, on_delete=models.CASCADE, related_name='line_items')
+    po_line_item = models.ForeignKey(
+        'PurchaseOrderLineItem', on_delete=models.SET_NULL,
+        null=True, blank=True, related_name='grn_line_items'
+    )
     line_number = models.PositiveIntegerField()
     item_code = models.CharField(max_length=100, blank=True, default='')
     item_name = models.CharField(max_length=255, blank=True, default='')
@@ -270,6 +274,10 @@ class GRNLineItem(models.Model):
 class InvoiceLineItem(models.Model):
     line_item_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     invoice = models.ForeignKey('Invoice', on_delete=models.CASCADE, related_name='line_items')
+    grn_line_item = models.ForeignKey(
+        'GRNLineItem', on_delete=models.SET_NULL,
+        null=True, blank=True, related_name='invoice_line_items'
+    )
     line_number = models.PositiveIntegerField()
     item_code = models.CharField(max_length=100, blank=True, default='')
     item_name = models.CharField(max_length=255, blank=True, default='')
@@ -303,6 +311,9 @@ class Invoice(models.Model):
     net_payable_amount = models.DecimalField(max_digits=20, decimal_places=2, default=0)
     due_date = models.DateField(null=True, blank=True)
     document = models.CharField(max_length=500, blank=True, default='')
+    delivery_note = models.CharField(max_length=500, blank=True, default='')
+    zamra_certificate = models.CharField(max_length=500, blank=True, default='')
+    temperature_log = models.CharField(max_length=500, blank=True, default='')
     status = models.CharField(max_length=50, choices=INVOICE_STATUS_CHOICES, default='draft')
     approval_route = models.CharField(max_length=50, choices=INVOICE_APPROVAL_ROUTES, null=True, blank=True)
     rejection_reason = models.TextField(blank=True, default='')

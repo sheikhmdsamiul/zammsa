@@ -1,4 +1,6 @@
+from decimal import Decimal
 from rest_framework import serializers
+from django.db import connection
 from .models import Contract, ContractSecurity, ContractAmendment, ContractMilestone, LiquidatedDamages, ContractTermination, Appeal, ClosureChecklist
 
 
@@ -83,10 +85,12 @@ class ContractListSerializer(serializers.ModelSerializer):
     solicitation_number = serializers.CharField(source='solicitation.sol_number', read_only=True)
     performance_bond = serializers.SerializerMethodField()
     requires_performance_bond = serializers.SerializerMethodField()
+    purchase_orders = serializers.SerializerMethodField()
+    delivery_progress = serializers.SerializerMethodField()
 
     class Meta:
         model = Contract
-        fields = ('id', 'contract_id', 'contract_number', 'title', 'vendor_name', 'vendor', 'contract_type', 'value', 'currency', 'start_date', 'end_date', 'status', 'award_date', 'created_at', 'solicitation_number', 'vendor', 'performance_security_required', 'performance_security_uploaded', 'performance_security_validated', 'performance_bond', 'signed_by_vendor', 'signed_by_authority', 'signed_vendor_date', 'signed_authority_date', 'award_notice_published', 'waiting_period_end', 'appeal_pending', 'requires_performance_bond')
+        fields = ('id', 'contract_id', 'contract_number', 'title', 'vendor_name', 'vendor', 'contract_type', 'value', 'currency', 'start_date', 'end_date', 'status', 'award_date', 'created_at', 'solicitation_number', 'vendor', 'performance_security_required', 'performance_security_uploaded', 'performance_security_validated', 'performance_bond', 'signed_by_vendor', 'signed_by_authority', 'signed_vendor_date', 'signed_authority_date', 'award_notice_published', 'waiting_period_end', 'appeal_pending', 'requires_performance_bond', 'purchase_orders', 'delivery_progress')
 
     def get_requires_performance_bond(self, obj):
         return obj.requires_performance_bond()
@@ -104,6 +108,79 @@ class ContractListSerializer(serializers.ModelSerializer):
             }
         return None
 
+    def get_purchase_orders(self, obj):
+        pos = obj.purchase_orders.all().order_by('-created_at')
+        return PurchaseOrderSerializer(pos, many=True).data
+
+    def get_delivery_progress(self, obj):
+        from finance.models import PurchaseOrderLineItem, GoodsReceiptNote
+        from collections import defaultdict
+        from decimal import Decimal
+        try:
+            has_grn_items = 'fin_grn_line_item' in connection.introspection.table_names()
+            po_items = PurchaseOrderLineItem.objects.filter(
+                po__contract=obj, po__status='active'
+            ).order_by('line_number')
+            if not po_items:
+                return []
+
+            received_by_key = defaultdict(lambda: Decimal('0'))
+            if has_grn_items:
+                grns = GoodsReceiptNote.objects.filter(contract=obj)
+                for grn in grns:
+                    for li in grn.line_items.all():
+                        for key in [li.item_code, li.item_name]:
+                            if key:
+                                received_by_key[key] += li.quantity_received
+
+            result = []
+            for po_item in po_items:
+                display_name = po_item.item_name or po_item.description
+                qty_ordered = po_item.quantity
+                qty_received = Decimal('0')
+                for key in [po_item.item_code, po_item.item_name, po_item.description]:
+                    if key and key in received_by_key:
+                        qty_received = received_by_key[key]
+                        break
+                pct = float(qty_received / qty_ordered * 100) if qty_ordered > 0 else 0
+                result.append({
+                    'item_code': po_item.item_code,
+                    'item_name': display_name,
+                    'quantity_ordered': float(qty_ordered),
+                    'quantity_received': float(qty_received),
+                    'unit_price': float(po_item.unit_price),
+                    'total_ordered_value': float(po_item.total_price),
+                    'total_received_value': float(qty_received * po_item.unit_price),
+                    'progress_pct': round(pct, 1),
+                })
+            return result
+        except Exception:
+            return []
+
+
+class PurchaseOrderLineItemSerializer(serializers.Serializer):
+    id = serializers.UUIDField(source='line_item_id', read_only=True)
+    line_number = serializers.IntegerField()
+    item_code = serializers.CharField()
+    item_name = serializers.CharField()
+    description = serializers.CharField()
+    quantity = serializers.DecimalField(max_digits=15, decimal_places=2)
+    unit_price = serializers.DecimalField(max_digits=20, decimal_places=2)
+    total_price = serializers.DecimalField(max_digits=20, decimal_places=2)
+
+
+class PurchaseOrderSerializer(serializers.Serializer):
+    id = serializers.UUIDField(source='po_id', read_only=True)
+    po_number = serializers.CharField()
+    total_amount = serializers.DecimalField(max_digits=20, decimal_places=2)
+    status = serializers.CharField()
+    created_at = serializers.DateTimeField()
+    line_items = serializers.SerializerMethodField()
+
+    def get_line_items(self, obj):
+        items = obj.line_items.all().order_by('line_number')
+        return PurchaseOrderLineItemSerializer(items, many=True).data
+
 
 class ContractSerializer(serializers.ModelSerializer):
     id = serializers.UUIDField(source='contract_id', read_only=True)
@@ -117,6 +194,8 @@ class ContractSerializer(serializers.ModelSerializer):
     supplier_name = serializers.CharField(source='supplier.name', read_only=True)
     requires_performance_bond = serializers.SerializerMethodField()
     operational_phases = serializers.SerializerMethodField()
+    purchase_orders = serializers.SerializerMethodField()
+    delivery_progress = serializers.SerializerMethodField()
 
     class Meta:
         model = Contract
@@ -283,7 +362,10 @@ class ContractSerializer(serializers.ModelSerializer):
                                 tin=app.tin if app else f"TIN-{reg_no}",
                                 name=user.full_name,
                                 ceec_category=app.ceec_category if app else 'non_citizen',
-                                status='active'
+                                status='active',
+                                bank_name=app.bank_name if app else '',
+                                bank_account_number=app.bank_account_number if app else '',
+                                bank_account_name=app.bank_account_name if app else '',
                             )
                         if hasattr(data, '_mutable'):
                             data = data.copy()
@@ -293,6 +375,61 @@ class ContractSerializer(serializers.ModelSerializer):
             except Exception:
                 pass
         return super().to_internal_value(data)
+
+    def get_purchase_orders(self, obj):
+        pos = obj.purchase_orders.all().order_by('-created_at')
+        return PurchaseOrderSerializer(pos, many=True).data
+
+    def get_delivery_progress(self, obj):
+        """
+        Aggregate delivery progress across all POs and GRNs for this contract.
+        Returns a list of items showing ordered quantity, total received, unit price, and progress.
+        """
+        result = []
+        try:
+            from finance.models import PurchaseOrderLineItem, GoodsReceiptNote, GRNLineItem
+            from collections import defaultdict
+            has_grn_items = 'fin_grn_line_item' in connection.introspection.table_names()
+
+            po_items = PurchaseOrderLineItem.objects.filter(
+                po__contract=obj, po__status='active'
+            ).order_by('line_number')
+
+            # Build mapping: item_code/item_name/description -> total received quantity
+            received_by_key = defaultdict(lambda: Decimal('0'))
+            if has_grn_items:
+                grns = GoodsReceiptNote.objects.filter(contract=obj)
+                for grn in grns:
+                    for li in grn.line_items.all():
+                        for key in [li.item_code, li.item_name]:
+                            if key:
+                                received_by_key[key] += li.quantity_received
+
+            for po_item in po_items:
+                display_name = po_item.item_name or po_item.description
+                qty_ordered = po_item.quantity
+
+                # Try to match by item_code, item_name, or description
+                qty_received = Decimal('0')
+                for key in [po_item.item_code, po_item.item_name, po_item.description]:
+                    if key and key in received_by_key:
+                        qty_received = received_by_key[key]
+                        break
+
+                pct = float(qty_received / qty_ordered * 100) if qty_ordered > 0 else 0
+                result.append({
+                    'item_code': po_item.item_code,
+                    'item_name': display_name,
+                    'quantity_ordered': float(qty_ordered),
+                    'quantity_received': float(qty_received),
+                    'unit_price': float(po_item.unit_price),
+                    'total_ordered_value': float(po_item.total_price),
+                    'total_received_value': float(qty_received * po_item.unit_price),
+                    'progress_pct': round(pct, 1),
+                })
+        except Exception:
+            pass
+        return result
 
     def create(self, validated_data):
         title = self.initial_data.get('title')

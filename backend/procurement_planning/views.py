@@ -816,7 +816,7 @@ def app_consolidate_view(request, pk):
 class APPLineItemListView(BaseView, generics.ListCreateAPIView):
     queryset = APPLineItem.objects.select_related('app__department', 'app__fiscal_year', 'commodity').all()
     serializer_class = APPLineItemSerializer
-    ordering = ['-line_item_id']
+    ordering = ['-app__created_at', 'description']
     filterset_fields = ['app__department', 'app__fiscal_year', 'commodity']
     search_fields = ['description', 'app__department__dept_name']
 
@@ -1153,10 +1153,7 @@ def cpp_submit_view(request, pk):
     if not cpp.method:
         errors.append('Procurement method must be set')
 
-    # If non-open method, check ZPC justification
-    if cpp.method in ('limited', 'simplified', 'direct'):
-        if not cpp.zpc_justification.strip():
-            errors.append('ZPC justification is required for non-open procurement methods')
+    # If non-open method, flag for ZPC review (justification is provided by ZPC during approval)
 
     # BR-CPP-10: At least one risk with mitigation strategy
     if cpp.risks.count() == 0:
@@ -1302,11 +1299,15 @@ def cpp_approve_view(request, pk):
 
     # If approving from pending_zpc, record ZPC approval details
     if cpp.status == 'pending_zpc' and new_status == 'approved':
-        zpc_minutes = request.data.get('zpc_minutes', '')
-        zpc_resolution_number = request.data.get('zpc_resolution_number', '')
-        # Store in a zpc_approval field (we'll add this to model or use JSON)
-        # For now, we'll store in a custom field or just note it
-        pass
+        zpc_grounds = request.data.get('zpc_grounds', '')
+        zpc_justification = request.data.get('zpc_justification', '')
+        zpc_resolution_ref = request.data.get('zpc_resolution_ref', '')
+        if zpc_grounds:
+            cpp.zpc_grounds = zpc_grounds
+        if zpc_justification:
+            cpp.zpc_justification = zpc_justification
+        if zpc_resolution_ref:
+            cpp.zpc_resolution_ref = zpc_resolution_ref
 
     # Record approval trail
     _record_cpp_approval_trail(cpp, 'approved', user, {'new_status': new_status})

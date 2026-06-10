@@ -23,6 +23,9 @@ const VendorProfile: React.FC = () => {
         contact_person: profile.contact_person || '',
         contact_phone: profile.contact_phone || '',
         contact_title: profile.contact_title || '',
+        bank_name: profile.bank_name || '',
+        bank_account_number: profile.bank_account_number || '',
+        bank_account_name: profile.bank_account_name || '',
       });
       setEditing(true);
     }
@@ -95,6 +98,32 @@ const VendorProfile: React.FC = () => {
                 <div><dt className="text-gray-500">Year Established</dt><dd className="font-medium">{profile.year_established}</dd></div>
                 <div><dt className="text-gray-500">Employee Count</dt><dd className="font-medium">{profile.employee_count}</dd></div>
                 <div className="sm:col-span-2"><dt className="text-gray-500">Address</dt><dd className="font-medium">{profile.address}</dd></div>
+              </dl>
+            )}
+          </div>
+
+          <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+            <h2 className="text-lg font-semibold text-gray-900 mb-4">Bank Details</h2>
+            {editing ? (
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Bank Name</label>
+                  <input value={form.bank_name} onChange={(e) => setForm((f: any) => ({ ...f, bank_name: e.target.value }))} className="w-full border-gray-300 rounded-lg" />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Account Number</label>
+                  <input value={form.bank_account_number} onChange={(e) => setForm((f: any) => ({ ...f, bank_account_number: e.target.value }))} className="w-full border-gray-300 rounded-lg" />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Account Holder</label>
+                  <input value={form.bank_account_name} onChange={(e) => setForm((f: any) => ({ ...f, bank_account_name: e.target.value }))} className="w-full border-gray-300 rounded-lg" />
+                </div>
+              </div>
+            ) : (
+              <dl className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-sm">
+                <div><dt className="text-gray-500">Bank Name</dt><dd className="font-medium">{profile.bank_name || '-'}</dd></div>
+                <div><dt className="text-gray-500">Account Number</dt><dd className="font-medium font-mono">{profile.bank_account_number || '-'}</dd></div>
+                <div><dt className="text-gray-500">Account Holder</dt><dd className="font-medium">{profile.bank_account_name || '-'}</dd></div>
               </dl>
             )}
           </div>

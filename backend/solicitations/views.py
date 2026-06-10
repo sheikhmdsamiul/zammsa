@@ -1,4 +1,5 @@
 import uuid
+from datetime import timedelta
 from django.db.models import Q, Max
 from django.utils import timezone
 from django.core.mail import send_mail
@@ -18,6 +19,60 @@ from .serializers import (
     EvaluationCriterionSerializer, SolicitationAddendumSerializer,
     ClarificationRequestSerializer, SolicitationDocumentSerializer,
 )
+
+# BR-SOL-01: Minimum solicitation-to-closing periods by procurement method
+MIN_BIDDING_PERIOD_DAYS = {
+    'open_tender': 21,
+    'international': 30,
+    'limited': 14,
+    'simplified': 14,
+    'direct': 0,
+}
+
+
+def _validate_bidding_period(sol):
+    """Validate closing_date meets minimum bidding period for the method."""
+    min_days = MIN_BIDDING_PERIOD_DAYS.get(sol.method, 0)
+    if min_days <= 0:
+        return None
+    reference_date = sol.issue_date or timezone.now().date()
+    if isinstance(reference_date, timezone.datetime):
+        reference_date = reference_date.date()
+    closing = sol.closing_date
+    if isinstance(closing, timezone.datetime):
+        closing = closing.date()
+    gap = (closing - reference_date).days
+    if gap < min_days:
+        return (
+            f'Minimum bidding period for "{sol.method}" is {min_days} days. '
+            f'Current gap between issue/reference date and closing is {gap} days.'
+        )
+    return None
+
+
+def _validate_clarification_cutoff(sol):
+    """Validate clarification cutoff is at least 5 working days before closing."""
+    if not sol.clarification_cutoff:
+        return None
+    cutoff = sol.clarification_cutoff
+    closing = sol.closing_date
+    if isinstance(cutoff, str):
+        from django.utils.dateparse import parse_datetime
+        cutoff = parse_datetime(cutoff)
+    if isinstance(closing, str):
+        from django.utils.dateparse import parse_datetime
+        closing = parse_datetime(closing)
+    if not cutoff or not closing:
+        return None
+    if cutoff >= closing:
+        return 'Clarification cutoff must be before the closing date.'
+    remaining = (closing - cutoff).days
+    if remaining < 5:
+        return (
+            f'Clarification cutoff must be at least 5 working days before closing. '
+            f'Currently {remaining} day(s) before closing.'
+        )
+    return None
 
 PROCUREMENT_STAFF_ROLES = ('procurement_officer', 'procurement_manager', 'director_procurement', 'system_admin')
 SOLICITATION_APPROVER_ROLES = ('procurement_manager', 'director_procurement', 'system_admin')
@@ -112,7 +167,6 @@ class SolicitationListView(BaseView, generics.ListCreateAPIView):
 
     def perform_create(self, serializer):
         if _normalize_role(self.request.user.role) not in PROCUREMENT_STAFF_ROLES:
-            from rest_framework.exceptions import PermissionDenied
             raise PermissionDenied('Only authorized procurement staff can create solicitations.')
         
         # BR-CPP-01: No solicitation can be published without an approved CPP
@@ -146,6 +200,16 @@ def solicitation_submit_view(request, pk):
     if sol.status != 'draft':
         return Response({'error': 'Only draft solicitations can be submitted'}, status=400)
 
+    # BR-SOL-01: Validate minimum bidding period
+    period_error = _validate_bidding_period(sol)
+    if period_error:
+        return Response({'error': period_error}, status=400)
+
+    # Validate clarification cutoff is ≥ 5 working days before closing
+    cutoff_error = _validate_clarification_cutoff(sol)
+    if cutoff_error:
+        return Response({'error': cutoff_error}, status=400)
+
     criteria_sum = sum(float(c.weight) for c in sol.evaluation_criteria.all())
     if sol.evaluation_criteria.exists() and criteria_sum != 100.0:
         return Response({
@@ -171,6 +235,11 @@ def solicitation_approve_view(request, pk):
 
     if sol.status != 'pending_approval':
         return Response({'error': 'Only pending approval solicitations can be approved'}, status=400)
+
+    # BR-SOL-01: Validate minimum bidding period
+    period_error = _validate_bidding_period(sol)
+    if period_error:
+        return Response({'error': period_error}, status=400)
 
     criteria_sum = sum(float(c.weight) for c in sol.evaluation_criteria.all())
     if sol.evaluation_criteria.exists() and criteria_sum != 100.0:
@@ -231,6 +300,18 @@ def solicitation_publish_view(request, pk):
     user_role = _normalize_role(request.user.role)
     if user_role not in PROCUREMENT_STAFF_ROLES:
         return Response({'error': 'Not authorized to publish'}, status=403)
+
+    # BR-SOL-01: Validate minimum bidding period on publish
+    if not sol.issue_date:
+        sol.issue_date = timezone.now().date()
+    period_error = _validate_bidding_period(sol)
+    if period_error:
+        return Response({'error': period_error}, status=400)
+
+    # Validate clarification cutoff if set
+    cutoff_error = _validate_clarification_cutoff(sol)
+    if cutoff_error:
+        return Response({'error': cutoff_error}, status=400)
 
     # BR-CPP-01: No solicitation can be published without an approved CPP
     if sol.requisition:

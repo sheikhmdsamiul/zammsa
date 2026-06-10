@@ -73,6 +73,88 @@ const ExecutionDashboard: React.FC = () => {
         </div>
       </div>
 
+      {data.delivery_progress && data.delivery_progress.length > 0 && (
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
+          <h2 className="text-lg font-bold text-gray-900 mb-4">Delivery Tracking — Purchase Order Items</h2>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-gray-200 text-left">
+                  <th className="pb-3 pr-4 font-semibold text-gray-600">Item</th>
+                  <th className="pb-3 pr-4 font-semibold text-gray-600 text-right">Qty Ordered</th>
+                  <th className="pb-3 pr-4 font-semibold text-gray-600 text-right">Unit Price</th>
+                  <th className="pb-3 pr-4 font-semibold text-gray-600 text-right">Total Ordered</th>
+                  <th className="pb-3 pr-4 font-semibold text-gray-600 text-right">Qty Received</th>
+                  <th className="pb-3 pr-4 font-semibold text-gray-600 text-right">Total Received</th>
+                  <th className="pb-3 font-semibold text-gray-600 text-right">Progress</th>
+                </tr>
+              </thead>
+              <tbody>
+                {data.delivery_progress.map((item, idx) => {
+                  const remaining = item.quantity_ordered - item.quantity_received;
+                  return (
+                    <tr key={idx} className="border-b border-gray-50">
+                      <td className="py-3 pr-4">
+                        <p className="font-medium text-gray-900">{item.item_name || item.item_code}</p>
+                        {item.item_code && <p className="text-xs text-gray-400">{item.item_code}</p>}
+                      </td>
+                      <td className="py-3 pr-4 text-right font-medium">{item.quantity_ordered}</td>
+                      <td className="py-3 pr-4 text-right">K {item.unit_price.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+                      <td className="py-3 pr-4 text-right">K {item.total_ordered_value.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+                      <td className="py-3 pr-4 text-right">
+                        <span className="font-medium">{item.quantity_received}</span>
+                        {remaining > 0 && (
+                          <span className="text-xs text-amber-600 ml-1">({remaining} left)</span>
+                        )}
+                      </td>
+                      <td className="py-3 pr-4 text-right">K {item.total_received_value.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+                      <td className="py-3 text-right">
+                        <div className="flex items-center justify-end gap-2">
+                          <div className="w-24 bg-gray-200 rounded-full h-2.5">
+                            <div
+                              className={`h-2.5 rounded-full ${
+                                item.progress_pct >= 100
+                                  ? 'bg-emerald-500'
+                                  : item.progress_pct > 0
+                                  ? 'bg-amber-400'
+                                  : 'bg-gray-200'
+                              }`}
+                              style={{ width: `${Math.min(item.progress_pct, 100)}%` }}
+                            />
+                          </div>
+                          <span className="text-xs font-bold text-gray-600 min-w-[3rem] text-right">
+                            {item.progress_pct}%
+                          </span>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+              <tfoot>
+                <tr className="border-t-2 border-gray-300 font-semibold">
+                  <td className="py-3 pr-4 text-gray-700">Totals</td>
+                  <td className="py-3 pr-4 text-right">
+                    {data.delivery_progress.reduce((s, i) => s + i.quantity_ordered, 0)}
+                  </td>
+                  <td className="py-3 pr-4 text-right">—</td>
+                  <td className="py-3 pr-4 text-right">
+                    K {data.delivery_progress.reduce((s, i) => s + i.total_ordered_value, 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                  </td>
+                  <td className="py-3 pr-4 text-right">
+                    {data.delivery_progress.reduce((s, i) => s + i.quantity_received, 0)}
+                  </td>
+                  <td className="py-3 pr-4 text-right">
+                    K {data.delivery_progress.reduce((s, i) => s + i.total_received_value, 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                  </td>
+                  <td className="py-3 text-right">—</td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        </div>
+      )}
+
       {data.shortage_count > 0 && (
         <div className="bg-rose-50 border border-rose-200 rounded-2xl p-6">
           <div className="flex items-center gap-2 mb-3">

@@ -38,10 +38,19 @@ class SupplierSerializer(serializers.ModelSerializer):
 
 
 class VendorApplicationDocumentSerializer(serializers.ModelSerializer):
+    id = serializers.UUIDField(source='document_id', read_only=True)
+    type = serializers.CharField(source='document_type', read_only=True)
+    file = serializers.CharField(source='file_path', read_only=True)
+    filename = serializers.SerializerMethodField()
+    verified = serializers.BooleanField(default=False, read_only=True)
+
     class Meta:
         model = VendorApplicationDocument
-        fields = '__all__'
+        fields = ('id', 'type', 'file', 'filename', 'verified', 'file_path', 'document_type', 'uploaded_at')
         read_only_fields = ('document_id', 'uploaded_at')
+
+    def get_filename(self, obj):
+        return obj.file_path.split('/')[-1] if obj.file_path else ''
 
 
 class VendorApplicationSerializer(serializers.ModelSerializer):

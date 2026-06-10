@@ -117,6 +117,31 @@ const CommitteeFormation: React.FC = () => {
     },
   });
 
+  const selectedSolicitation = useMemo(() => {
+    if (!solicitation) return null;
+    return (solsData?.results || []).find((sol: any) => sol.id === solicitation) || null;
+  }, [solicitation, solsData]);
+
+  const EXPERTISE_LABELS: Record<string, string> = {
+    procurement: 'Procurement / regulatory',
+    laboratory: 'Laboratory / medical sciences',
+    finance: 'Finance / value-for-money',
+    legal: 'Legal',
+    supply_chain: 'Supply chain / logistics',
+    engineering: 'Engineering / technical',
+  };
+
+  const cppRequirements = selectedSolicitation?.cpp_resource_requirements;
+  const cppMinCommitteeSize = useMemo(() => {
+    if (!cppRequirements) return null;
+    return cppRequirements.evaluation_committee_size || cppRequirements.evaluationCommitteeSize || null;
+  }, [cppRequirements]);
+  const cppRequiredExpertise = useMemo(() => {
+    if (!cppRequirements?.requiredExpertise) return null;
+    const keys: string[] = cppRequirements.requiredExpertise;
+    return keys.map((k: string) => EXPERTISE_LABELS[k] || k).join(', ');
+  }, [cppRequirements]);
+
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
 
   const deleteMutation = useMutation({
@@ -226,6 +251,26 @@ const CommitteeFormation: React.FC = () => {
                   ))}
                 </select>
                 {errors.solicitation && <p className="text-xs text-red-500 mt-1">{errors.solicitation}</p>}
+
+                {cppRequirements && (
+                  <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 mt-2">
+                    <div className="flex items-start gap-3">
+                      <ShieldCheckIcon className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+                      <div>
+                        <p className="text-sm font-semibold text-amber-900">CPP Evaluation Committee Requirements</p>
+                        <p className="text-xs text-amber-800 mt-1">
+                          Minimum committee size: <strong>{cppMinCommitteeSize || 'Not specified'}</strong>
+                        </p>
+                        {cppRequiredExpertise && (
+                          <p className="text-xs text-amber-800 mt-0.5">
+                            Required expertise: <strong>{cppRequiredExpertise}</strong>
+                          </p>
+                        )}
+                        <p className="text-xs text-amber-600/70 mt-1 italic">set during CPP creation for this solicitation's CPP</p>
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
 
               <div className="grid grid-cols-2 gap-4">

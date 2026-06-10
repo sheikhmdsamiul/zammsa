@@ -99,6 +99,8 @@ class Solicitation(models.Model):
     contact_phone = models.CharField(max_length=50, blank=True, default='')
     contact_email = models.EmailField(max_length=255, blank=True, default='')
     minimum_technical_threshold = models.IntegerField(null=True, blank=True)
+    clarification_cutoff = models.DateTimeField(null=True, blank=True,
+        help_text='Deadline for suppliers to submit clarification requests (≥5 working days before closing)')
     document_fee_enabled = models.BooleanField(default=False)
     document_fee_amount = models.DecimalField(max_digits=15, decimal_places=2, null=True, blank=True)
 

@@ -37,6 +37,14 @@ export const requisitionsApi = {
   export: (params?: Record<string, any>) =>
     api.get('/requisitions/', { params, responseType: 'blob' }),
 
+  uploadItemAttachment: (itemId: string, file: File) => {
+    const form = new FormData();
+    form.append('attachment', file);
+    return api.post(`/requisitions/items/${itemId}/upload/`, form, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    }).then((r) => r.data);
+  },
+
   import: (file: File) => {
     const form = new FormData();
     form.append('file', file);

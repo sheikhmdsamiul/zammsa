@@ -177,12 +177,14 @@ def _generate_po_for_contract(contract):
             qty = Decimal(str(item.get('quantity', item.get('qty', 0))))
             price = Decimal(str(item.get('unit_price', item.get('price', 0))))
             total_price = qty * price
+            desc = item.get('description', '')
+            raw_name = item.get('item_name', item.get('name', ''))
             PurchaseOrderLineItem.objects.create(
                 po=po,
                 line_number=idx,
                 item_code=item.get('item_code', item.get('code', '')),
-                item_name=item.get('item_name', item.get('name', '')),
-                description=item.get('description', ''),
+                item_name=raw_name or desc,
+                description=desc,
                 quantity=qty,
                 unit_price=price,
                 total_price=total_price,
