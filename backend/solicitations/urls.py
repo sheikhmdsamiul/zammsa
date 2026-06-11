@@ -3,6 +3,8 @@ from . import views
 
 urlpatterns = [
     path('templates/', views.SolicitationTemplateListView.as_view(), name='sol-template-list'),
+    path('templates/preview/', views.template_preview_view, name='sol-template-preview'),
+
     path('templates/<uuid:pk>/', views.SolicitationTemplateDetailView.as_view(), name='sol-template-detail'),
     path('', views.SolicitationListView.as_view(), name='solicitation-list'),
     path('<uuid:pk>/', views.SolicitationDetailView.as_view(), name='solicitation-detail'),
@@ -18,4 +20,7 @@ urlpatterns = [
     path('clarifications/<uuid:pk>/', views.ClarificationRequestDetailView.as_view(), name='clarification-detail'),
     path('clarifications/<uuid:pk>/answer/', views.clarification_answer_view, name='clarification-answer'),
     path('documents/', views.SolicitationDocumentListView.as_view(), name='sol-document-list'),
+    path('<uuid:solicitation_id>/documents/', views.solicitation_document_upload_view, name='sol-document-upload'),
+    path('<uuid:solicitation_id>/documents/<uuid:document_id>/', views.solicitation_document_delete_view, name='sol-document-delete'),
+    path('<uuid:solicitation_id>/copy-cpp-documents/', views.solicitation_copy_cpp_documents_view, name='sol-copy-cpp-docs'),
 ]

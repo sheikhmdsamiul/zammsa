@@ -9,6 +9,7 @@ import {
   ArrowLeftIcon, CheckCircleIcon, ExclamationIcon, DocumentTextIcon,
   CalendarIcon, UserCircleIcon, ClipboardListIcon, ShieldCheckIcon,
   LightningBoltIcon, PlusIcon, TrashIcon, InformationCircleIcon, LockClosedIcon, XCircleIcon,
+  UploadIcon, PaperClipIcon,
 } from '@heroicons/react/outline';
 
 interface RequisitionOption {
@@ -23,7 +24,7 @@ interface RequisitionOption {
   date_required?: string;
   delivery_location?: string;
   encumbrance_ref?: string;
-  items?: { description: string; estimated_total_cost: number; item_code?: string }[];
+  items?: { description: string; estimated_total_cost: number; item_code?: string; attachment_url?: string }[];
   specifications?: { filename: string }[];
 }
 
@@ -50,6 +51,13 @@ interface ResourceRequirements {
   externalExpertRequired: boolean;
   specialInspectionRequired: boolean;
   specialInspectionDetails: string;
+  specialDeliveryRequirements: boolean;
+  submissionFormat: 'single' | 'two';
+  bidValidityDays: number;
+  bidSecurityType: 'bank_guarantee' | 'surety_bond' | 'cash';
+  bidSecurityRate: number;
+  minimumTechnicalThreshold: number;
+  citizenPreference: boolean;
 }
 
 interface NewRiskState {
@@ -84,6 +92,15 @@ const METHOD_OPTIONS: MethodOption[] = [
   { value: 'limited', label: 'Limited Bidding', shortLabel: 'LB', minPeriod: 14, zpcRequired: true, isOpen: false, thresholdRange: 'Special circumstances', citizenPreference: false, reservationScheme: false },
   { value: 'simplified', label: 'Simplified Bidding', shortLabel: 'SB', minPeriod: 7, zpcRequired: true, isOpen: false, thresholdRange: 'K20,001 – K1,000,000', citizenPreference: true, reservationScheme: true },
   { value: 'direct', label: 'Direct Procurement', shortLabel: 'DP', minPeriod: 0, zpcRequired: true, isOpen: false, thresholdRange: '< K20,000', citizenPreference: false, reservationScheme: false },
+];
+
+const DOC_TYPES = [
+  { value: 'strategy_paper', label: 'Strategy Paper' },
+  { value: 'market_research', label: 'Market Research' },
+  { value: 'price_quote', label: 'Price Quote' },
+  { value: 'evaluation_methodology', label: 'Evaluation Methodology' },
+  { value: 'specification', label: 'Specification' },
+  { value: 'other', label: 'Other' },
 ];
 
 const EXPERTISE_OPTIONS = [
@@ -218,6 +235,13 @@ const CPPCreate: React.FC = () => {
     externalExpertRequired: false,
     specialInspectionRequired: false,
     specialInspectionDetails: '',
+    specialDeliveryRequirements: false,
+    submissionFormat: 'single',
+    bidValidityDays: 90,
+    bidSecurityType: 'bank_guarantee',
+    bidSecurityRate: 2,
+    minimumTechnicalThreshold: 70,
+    citizenPreference: true,
   });
   const [risks, setRisks] = useState<CPPRisk[]>([]);
   const [newRisk, setNewRisk] = useState<NewRiskState>({
@@ -231,6 +255,8 @@ const CPPCreate: React.FC = () => {
   const [procurementStrategy, setProcurementStrategy] = useState('');
   const [isMultiYear, setIsMultiYear] = useState(false);
   const [cppNumber] = useState(() => `CPP-${new Date().getFullYear()}-${String(Math.floor(Math.random() * 999)).padStart(3, '0')}`);
+  const [cppDocs, setCppDocs] = useState<{ file: File; documentType: string; description: string }[]>([]);
+  const [uploadingDocs, setUploadingDocs] = useState(false);
 
   const loadRequisitions = useCallback(async () => {
     try {
@@ -247,10 +273,11 @@ const CPPCreate: React.FC = () => {
         date_required: r.date_required || r.required_date || '',
         delivery_location: r.delivery_location || '',
         encumbrance_ref: r.encumbrance_ref || '',
-        items: r.items?.map(item => ({
+        items: r.items?.map((item: any) => ({
           description: item.description,
           estimated_total_cost: Number(item.estimated_total_cost) || 0,
           item_code: item.item_code,
+          attachment_url: item.attachment_url,
         })) || [],
         specifications: r.specifications?.map((s: any) => ({ filename: s.filename || s.file?.split('/').pop() || 'Document' })) || [],
       })));
@@ -452,6 +479,19 @@ const CPPCreate: React.FC = () => {
       };
 
       const created = await procurementPlanningApi.contractPlans.create(cppData);
+
+      if (cppDocs.length > 0) {
+        setUploadingDocs(true);
+        let uploaded = 0;
+        for (const doc of cppDocs) {
+          try {
+            await procurementPlanningApi.contractPlans.documents.upload(created.cpp_id, doc.file, doc.documentType, doc.description);
+            uploaded++;
+          } catch { /* skip failed uploads */ }
+        }
+        setUploadingDocs(false);
+        if (uploaded > 0) toast.success(`${uploaded} document(s) uploaded`);
+      }
 
       if (submitAndApprove && finalMethodOption?.isOpen) {
         await procurementPlanningApi.contractPlans.approve(created.cpp_id);
@@ -668,6 +708,21 @@ const CPPCreate: React.FC = () => {
                     <span className="font-bold">Specifications:</span>
                     {selectedReq.specifications.map((s, idx) => (
                       <span key={idx} className="text-zammsa-green font-bold">{s.filename}{idx < selectedReq.specifications!.length - 1 ? ' | ' : ''}</span>
+                    ))}
+                  </div>
+                )}
+
+                {/* Requisition item attachments */}
+                {selectedReq.items?.some((item: any) => item.attachment_url) && (
+                  <div className="mt-4 flex items-center gap-2 text-sm text-gray-500">
+                    <PaperClipIcon className="w-4 h-4" />
+                    <span className="font-bold">Attachments:</span>
+                    {selectedReq.items.filter((item: any) => item.attachment_url).map((item: any, idx: number) => (
+                      <a key={idx} href={item.attachment_url} target="_blank" rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1 px-2 py-0.5 bg-zammsa-green/5 text-zammsa-green rounded-lg text-xs font-bold hover:bg-zammsa-green/10 transition-colors">
+                        <PaperClipIcon className="w-3 h-3" />
+                        {item.description?.slice(0, 30) || `Attachment ${idx + 1}`}
+                      </a>
                     ))}
                   </div>
                 )}
@@ -1156,6 +1211,143 @@ const CPPCreate: React.FC = () => {
                 )}
               </div>
             </div>
+          </div>
+
+          {/* Solicitation Strategy Settings */}
+          <div className="bg-white rounded-3xl border border-gray-100 shadow-sm p-8">
+            <h2 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-6 flex items-center gap-2">
+              <ClipboardListIcon className="w-4 h-4" />
+              Solicitation Strategy Settings
+            </h2>
+            <p className="text-[10px] font-bold text-gray-300 uppercase tracking-widest mb-6">These will pre-populate the solicitation when it is created from this CPP</p>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="space-y-3">
+                <label className="text-[10px] font-black text-gray-400 uppercase ml-1">Submission Format</label>
+                <div className="flex gap-3">
+                  <label className={`flex-1 p-3 rounded-xl cursor-pointer border-2 transition-all ${resourceRequirements.submissionFormat === 'single' ? 'border-zammsa-green bg-zammsa-green/5' : 'border-gray-100 bg-gray-50'}`}>
+                    <input type="radio" name="submissionFormat" checked={resourceRequirements.submissionFormat === 'single'} onChange={() => setResourceRequirements({ ...resourceRequirements, submissionFormat: 'single' })} className="sr-only" />
+                    <p className="text-sm font-bold text-gray-900 text-center">Single Envelope</p>
+                    <p className="text-[10px] text-gray-400 text-center">Goods/Works</p>
+                  </label>
+                  <label className={`flex-1 p-3 rounded-xl cursor-pointer border-2 transition-all ${resourceRequirements.submissionFormat === 'two' ? 'border-zammsa-green bg-zammsa-green/5' : 'border-gray-100 bg-gray-50'}`}>
+                    <input type="radio" name="submissionFormat" checked={resourceRequirements.submissionFormat === 'two'} onChange={() => setResourceRequirements({ ...resourceRequirements, submissionFormat: 'two' })} className="sr-only" />
+                    <p className="text-sm font-bold text-gray-900 text-center">Two Envelope</p>
+                    <p className="text-[10px] text-gray-400 text-center">Consulting</p>
+                  </label>
+                </div>
+              </div>
+              <div className="space-y-3">
+                <label className="text-[10px] font-black text-gray-400 uppercase ml-1">Citizen Preference Scheme</label>
+                <div className="flex gap-3">
+                  <label className={`flex-1 p-3 rounded-xl cursor-pointer border-2 transition-all ${resourceRequirements.citizenPreference ? 'border-zammsa-green bg-zammsa-green/5' : 'border-gray-100 bg-gray-50'}`}>
+                    <input type="radio" name="citizenPreference" checked={resourceRequirements.citizenPreference} onChange={() => setResourceRequirements({ ...resourceRequirements, citizenPreference: true })} className="sr-only" />
+                    <p className="text-sm font-bold text-gray-900 text-center">Yes</p>
+                    <p className="text-[10px] text-gray-400 text-center">Apply margins</p>
+                  </label>
+                  <label className={`flex-1 p-3 rounded-xl cursor-pointer border-2 transition-all ${!resourceRequirements.citizenPreference ? 'border-zammsa-green bg-zammsa-green/5' : 'border-gray-100 bg-gray-50'}`}>
+                    <input type="radio" name="citizenPreference" checked={!resourceRequirements.citizenPreference} onChange={() => setResourceRequirements({ ...resourceRequirements, citizenPreference: false })} className="sr-only" />
+                    <p className="text-sm font-bold text-gray-900 text-center">No</p>
+                  </label>
+                </div>
+              </div>
+              <div className="space-y-3">
+                <label className="text-[10px] font-black text-gray-400 uppercase ml-1">Bid Validity (Days)</label>
+                <input type="number" value={resourceRequirements.bidValidityDays} onChange={(e) => setResourceRequirements({ ...resourceRequirements, bidValidityDays: parseInt(e.target.value) || 90 })} min={30} className="w-full bg-white border border-gray-100 rounded-2xl px-5 py-4 text-sm font-bold text-gray-700 outline-none focus:ring-4 focus:ring-zammsa-green/5 transition-all" />
+              </div>
+              <div className="space-y-3">
+                <label className="text-[10px] font-black text-gray-400 uppercase ml-1">Minimum Technical Threshold (points)</label>
+                <input type="number" value={resourceRequirements.minimumTechnicalThreshold} onChange={(e) => setResourceRequirements({ ...resourceRequirements, minimumTechnicalThreshold: parseInt(e.target.value) || 70 })} min={0} max={100} className="w-full bg-white border border-gray-100 rounded-2xl px-5 py-4 text-sm font-bold text-gray-700 outline-none focus:ring-4 focus:ring-zammsa-green/5 transition-all" />
+              </div>
+              <div className="space-y-3">
+                <label className="text-[10px] font-black text-gray-400 uppercase ml-1">Bid Security Type</label>
+                <select value={resourceRequirements.bidSecurityType} onChange={(e) => setResourceRequirements({ ...resourceRequirements, bidSecurityType: e.target.value as 'bank_guarantee' | 'surety_bond' | 'cash' })} className="w-full bg-white border border-gray-100 rounded-2xl px-5 py-4 text-sm font-bold text-gray-700 outline-none focus:ring-4 focus:ring-zammsa-green/5 transition-all">
+                  <option value="bank_guarantee">Bank Guarantee (preferred)</option>
+                  <option value="surety_bond">Surety Bond</option>
+                  <option value="cash">Cash Deposit</option>
+                </select>
+              </div>
+              <div className="space-y-3">
+                <label className="text-[10px] font-black text-gray-400 uppercase ml-1">Bid Security Rate (% of bid value)</label>
+                <input type="number" value={resourceRequirements.bidSecurityRate} onChange={(e) => setResourceRequirements({ ...resourceRequirements, bidSecurityRate: parseFloat(e.target.value) || 2 })} min={1} max={5} step={0.5} className="w-full bg-white border border-gray-100 rounded-2xl px-5 py-4 text-sm font-bold text-gray-700 outline-none focus:ring-4 focus:ring-zammsa-green/5 transition-all" />
+              </div>
+            </div>
+          </div>
+
+          {/* Supporting Documents */}
+          <div className="bg-white rounded-3xl border border-gray-100 shadow-sm p-8">
+            <h2 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-6 flex items-center gap-2">
+              <UploadIcon className="w-4 h-4" />
+              Supporting Documents
+            </h2>
+            <p className="text-[10px] font-bold text-gray-300 uppercase tracking-widest mb-6">Strategy papers, market research, price quotes, specifications, etc.</p>
+
+            <div className="space-y-4">
+              {cppDocs.map((doc, idx) => (
+                <div key={idx} className="flex items-center gap-3 p-3 bg-gray-50 rounded-xl border border-gray-100">
+                  <PaperClipIcon className="w-4 h-4 text-gray-400" />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-bold text-gray-700 truncate">{doc.file.name}</p>
+                    <p className="text-[10px] font-semibold text-gray-400">{DOC_TYPES.find(t => t.value === doc.documentType)?.label || doc.documentType}</p>
+                  </div>
+                  <button onClick={() => setCppDocs(prev => prev.filter((_, i) => i !== idx))} className="p-1.5 text-gray-300 hover:text-rose-500 transition-colors">
+                    <TrashIcon className="w-4 h-4" />
+                  </button>
+                </div>
+              ))}
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div>
+                  <label className="text-[10px] font-black text-gray-400 uppercase ml-1 mb-1 block">Document Type</label>
+                  <select
+                    id="cpp-doc-type"
+                    className="w-full bg-white border border-gray-100 rounded-xl px-4 py-3 text-sm font-bold text-gray-700 outline-none focus:ring-2 focus:ring-zammsa-green/10"
+                    defaultValue=""
+                  >
+                    <option value="" disabled>-- Select type --</option>
+                    {DOC_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="text-[10px] font-black text-gray-400 uppercase ml-1 mb-1 block">Description (optional)</label>
+                  <input
+                    id="cpp-doc-desc"
+                    type="text"
+                    placeholder="Brief description..."
+                    className="w-full bg-white border border-gray-100 rounded-xl px-4 py-3 text-sm font-bold text-gray-700 outline-none focus:ring-2 focus:ring-zammsa-green/10"
+                  />
+                </div>
+                <div className="flex items-end">
+                  <label className="flex-1 flex items-center gap-3 px-4 py-3 bg-zammsa-green/5 border-2 border-dashed border-zammsa-green/30 rounded-xl cursor-pointer hover:bg-zammsa-green/10 transition-all">
+                    <UploadIcon className="w-5 h-5 text-zammsa-green" />
+                    <span className="text-sm font-bold text-zammsa-green">Choose File</span>
+                    <input
+                      type="file"
+                      className="hidden"
+                      accept=".pdf,.doc,.docx,.xls,.xlsx,.png,.jpg"
+                      multiple
+                      onChange={(e) => {
+                        const files = e.target.files;
+                        if (!files || files.length === 0) return;
+                        const docType = (document.getElementById('cpp-doc-type') as HTMLSelectElement)?.value || 'other';
+                        const desc = (document.getElementById('cpp-doc-desc') as HTMLInputElement)?.value || '';
+                        if (docType === '') { toast.error('Select document type'); return; }
+                        const newDocs = Array.from(files).map(file => ({ file, documentType: docType, description: desc }));
+                        setCppDocs(prev => [...prev, ...newDocs]);
+                        (document.getElementById('cpp-doc-type') as HTMLSelectElement).value = '';
+                        (document.getElementById('cpp-doc-desc') as HTMLInputElement).value = '';
+                        e.target.value = '';
+                      }}
+                    />
+                  </label>
+                </div>
+              </div>
+            </div>
+            {uploadingDocs && (
+              <div className="mt-4 p-3 bg-blue-50 rounded-xl text-sm font-bold text-blue-700 flex items-center gap-2">
+                <UploadIcon className="w-4 h-4 animate-pulse" />
+                Uploading documents...
+              </div>
+            )}
           </div>
         </div>
       )}

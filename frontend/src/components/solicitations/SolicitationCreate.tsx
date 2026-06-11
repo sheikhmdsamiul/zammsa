@@ -7,7 +7,8 @@ import toast from 'react-hot-toast';
 import {
   CheckCircleIcon, XCircleIcon, PlusIcon, TrashIcon,
   InformationCircleIcon, ShieldCheckIcon, LockClosedIcon,
-  ClockIcon, ExclamationIcon, ChevronLeftIcon, ChevronRightIcon,
+  ClockIcon, ExclamationIcon, ChevronLeftIcon, ChevronRightIcon, EyeIcon,
+  XIcon, DownloadIcon, PaperClipIcon,
 } from '@heroicons/react/outline';
 import DepartmentSelect from '../common/DepartmentSelect';
 
@@ -114,8 +115,14 @@ const SolicitationCreate: React.FC = () => {
   const [docFeeEnabled, setDocFeeEnabled] = useState(false);
   const [docFeeAmount, setDocFeeAmount] = useState(0);
   const [uploadFiles, setUploadFiles] = useState<UploadFile[]>([]);
+  const [templateFiles, setTemplateFiles] = useState<Record<string, UploadFile>>({});
   const [channels, setChannels] = useState<string[]>(['zammsa', 'zppa', 'email']);
   const [confirmed, setConfirmed] = useState(false);
+  const [previewTemplateName, setPreviewTemplateName] = useState<string | null>(null);
+  const [previewHtml, setPreviewHtml] = useState<string | null>(null);
+  const [previewLoading, setPreviewLoading] = useState(false);
+  const [uploadingFiles, setUploadingFiles] = useState(false);
+  const [selectedCppDocIds, setSelectedCppDocIds] = useState<string[]>([]);
 
   const { data: reqsData, isLoading: reqsLoading, error: reqsError } = useQuery({
     queryKey: ['requisitions', 'approved-cpp'],
@@ -144,9 +151,32 @@ const SolicitationCreate: React.FC = () => {
 
   const mutation = useMutation({
     mutationFn: (data: any) => solicitationsApi.create(data),
-    onSuccess: (res) => {
+    onSuccess: async (res) => {
+      const solId = res.id || res.solicitation_id || '';
+      setCreatedId(solId);
+
+      const allDocs = [...uploadFiles, ...Object.values(templateFiles)];
+      if (allDocs.length > 0) {
+        setUploadingFiles(true);
+        let uploaded = 0;
+        for (const doc of allDocs) {
+          try {
+            await solicitationsApi.documents.upload(solId, doc.file);
+            uploaded++;
+          } catch { /* skip failed */ }
+        }
+        setUploadingFiles(false);
+        if (uploaded > 0) toast.success(`${uploaded} document(s) uploaded`);
+      }
+
+      if (selectedCppDocIds.length > 0) {
+        try {
+          const result = await solicitationsApi.documents.copyCppDocuments(solId, selectedCppDocIds);
+          if (result.count > 0) toast.success(`${result.count} CPP document(s) copied to solicitation`);
+        } catch { /* skip failed copy */ }
+      }
+
       setSuccess(true);
-      setCreatedId(res.id || res.solicitation_id || '');
     },
     onError: (err: any) => {
       toast.error(err?.response?.data?.error || err?.message || 'Failed to create solicitation');
@@ -204,9 +234,6 @@ const SolicitationCreate: React.FC = () => {
     if (preBidDate) payload.pre_bid_date = preBidDate;
     if (preBidVenue) payload.pre_bid_venue = preBidVenue;
 
-    if (uploadFiles.length > 0) {
-      payload.additional_documents = uploadFiles.map(f => ({ name: f.name, size: f.size }));
-    }
     mutation.mutate(payload);
   };
 
@@ -272,6 +299,12 @@ const SolicitationCreate: React.FC = () => {
           <div className="w-20 h-20 rounded-full bg-emerald-100 flex items-center justify-center mx-auto mb-6">
             <CheckCircleIcon className="w-10 h-10 text-emerald-600" />
           </div>
+          {uploadingFiles && (
+            <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-2xl flex items-center gap-3 text-sm font-bold text-blue-700">
+              <div className="w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+              Uploading document(s)...
+            </div>
+          )}
           <h2 className="text-2xl font-black text-gray-900 mb-2">Solicitation Submitted for Approval</h2>
           <p className="text-lg font-semibold text-gray-500 mb-4">
             {createdId ? `${(() => { const r = requisitions.find((rq: any) => (rq.id || rq.requisition_id) === requisition); return `SOL-${new Date().getFullYear()}-${r?.department?.slice(0, 3).toUpperCase() || 'XXX'}-${String(Math.floor(Math.random() * 99)).padStart(2, '0')}`; })()} has been submitted.` : 'Submitted successfully.'}
@@ -359,24 +392,74 @@ const SolicitationCreate: React.FC = () => {
               Linked CPP Details
             </h2>
             {selectedReq ? (
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                <div className="p-4 bg-gray-50 rounded-2xl">
-                  <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">CPP</p>
-                  <p className="text-sm font-bold text-gray-900">{(selectedReq as any)?.cpp_number || '---'}</p>
-                  <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-md mt-1 inline-block">Approved — Baseline Locked</span>
+              <div>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  <div className="p-4 bg-gray-50 rounded-2xl">
+                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">CPP</p>
+                    <p className="text-sm font-bold text-gray-900">{(selectedReq as any)?.cpp_number || '---'}</p>
+                    <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-md mt-1 inline-block">Approved — Baseline Locked</span>
+                  </div>
+                  <div className="p-4 bg-gray-50 rounded-2xl">
+                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Method</p>
+                    <p className="text-sm font-bold text-gray-900">{(selectedReq as any)?.recommended_method || (selectedReq as any)?.procurement_method || '---'}</p>
+                  </div>
+                  <div className="p-4 bg-gray-50 rounded-2xl">
+                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Value</p>
+                    <p className="text-sm font-bold text-gray-900">K {selectedReq?.estimated_total?.toLocaleString() || '---'}</p>
+                  </div>
+                  <div className="p-4 bg-gray-50 rounded-2xl">
+                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Type</p>
+                    <p className="text-sm font-bold text-gray-900">{(selectedReq as any)?.procurement_type || (selectedReq as any)?.commodity_category || '---'}</p>
+                  </div>
                 </div>
-                <div className="p-4 bg-gray-50 rounded-2xl">
-                  <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Method</p>
-                  <p className="text-sm font-bold text-gray-900">{(selectedReq as any)?.recommended_method || (selectedReq as any)?.procurement_method || '---'}</p>
-                </div>
-                <div className="p-4 bg-gray-50 rounded-2xl">
-                  <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Value</p>
-                  <p className="text-sm font-bold text-gray-900">K {selectedReq?.estimated_total?.toLocaleString() || '---'}</p>
-                </div>
-                <div className="p-4 bg-gray-50 rounded-2xl">
-                  <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Type</p>
-                  <p className="text-sm font-bold text-gray-900">{(selectedReq as any)?.procurement_type || (selectedReq as any)?.commodity_category || '---'}</p>
-                </div>
+                {/* Upstream requisition item attachments */}
+                {(selectedReq as any).items?.some((item: any) => item.attachment_url) && (
+                  <div className="mt-4 p-4 bg-gray-50 rounded-2xl">
+                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Requisition Attachments</p>
+                    <div className="flex flex-wrap gap-2">
+                      {(selectedReq as any).items.filter((item: any) => item.attachment_url).map((item: any, idx: number) => (
+                        <a key={idx} href={item.attachment_url} target="_blank" rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white border border-gray-200 text-zammsa-green rounded-lg text-xs font-bold hover:bg-zammsa-green/5 transition-colors">
+                          <PaperClipIcon className="w-3.5 h-3.5" />
+                          {item.description?.slice(0, 40) || `Attachment ${idx + 1}`}
+                        </a>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* CPP Documents — select which to forward to solicitation */}
+                {(selectedReq as any).cpp_data?.documents && (selectedReq as any).cpp_data.documents.length > 0 && (
+                  <div className="mt-4 p-4 bg-gray-50 rounded-2xl">
+                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">CPP Documents (forward to solicitation?)</p>
+                    <p className="text-[10px] text-gray-400 mb-3">Check the documents to include as solicitation documents</p>
+                    <div className="space-y-2">
+                      {(selectedReq as any).cpp_data.documents.map((doc: any) => (
+                        <label key={doc.id} className="flex items-start gap-3 p-2 bg-white rounded-xl border border-gray-200 cursor-pointer hover:border-zammsa-green/50 transition-colors">
+                          <input
+                            type="checkbox"
+                            checked={selectedCppDocIds.includes(doc.id)}
+                            onChange={() => {
+                              setSelectedCppDocIds(prev =>
+                                prev.includes(doc.id) ? prev.filter(id => id !== doc.id) : [...prev, doc.id]
+                              );
+                            }}
+                            className="mt-0.5 rounded text-zammsa-green focus:ring-zammsa-green"
+                          />
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-bold text-gray-700 truncate">{doc.filename || 'Unnamed document'}</p>
+                            <p className="text-[10px] text-gray-400">{doc.document_type} — {doc.description || 'No description'}</p>
+                          </div>
+                          <a href={doc.file_url} target="_blank" rel="noopener noreferrer"
+                            className="shrink-0 p-1.5 text-gray-300 hover:text-zammsa-green transition-colors"
+                            onClick={(e) => e.stopPropagation()}>
+                            <DownloadIcon className="w-4 h-4" />
+                          </a>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
             ) : reqsLoading ? (
               <div className="p-6 text-center">
@@ -401,7 +484,37 @@ const SolicitationCreate: React.FC = () => {
               <div>
                 <select
                   value={requisition}
-                  onChange={(e) => { setRequisition(e.target.value); const r = requisitions.find((rq: any) => (rq.id || rq.requisition_id) === e.target.value); if (r) { setTitle(r.title || r.description || ''); setDescription(r.description || ''); setDepartment(r.department || r.department_name || ''); setEstimatedValue(Number(r.estimated_total) || 0); } }}
+                  onChange={(e) => {
+                    setRequisition(e.target.value);
+                    const r = requisitions.find((rq: any) => (rq.id || rq.requisition_id) === e.target.value);
+                    if (r) {
+                      setTitle(r.title || r.description || '');
+                      setDescription(r.description || '');
+                      setDepartment(r.department || r.department_name || '');
+                      setEstimatedValue(Number(r.estimated_total) || 0);
+                      const cppData = (r as any).cpp_data;
+                      if (cppData) {
+                        const milestones: any[] = cppData.milestones || [];
+                        const rr: any = cppData.resource_requirements || {};
+                        const pubMs = milestones.find((m: any) => (m.milestone_name || '').toLowerCase().includes('published') || (m.milestone_name || '').toLowerCase().includes('issued'));
+                        if (pubMs?.planned_date) setIssueDate(pubMs.planned_date);
+                        const closeMs = milestones.find((m: any) => (m.milestone_name || '').toLowerCase().includes('bid closing') || (m.milestone_name || '').toLowerCase().includes('closing'));
+                        if (closeMs?.planned_date) setClosingDate(closeMs.planned_date);
+                        const openMs = milestones.find((m: any) => (m.milestone_name || '').toLowerCase().includes('bid opening') || (m.milestone_name || '').toLowerCase().includes('opening'));
+                        if (openMs?.planned_date) setOpeningDate(openMs.planned_date);
+                        if (rr.submissionFormat) setSubmissionFormat(rr.submissionFormat);
+                        if (rr.bidValidityDays) setBidValidity(rr.bidValidityDays);
+                        if (rr.minimumTechnicalThreshold) setMinTechThreshold(rr.minimumTechnicalThreshold);
+                        if (rr.citizenPreference !== undefined) setCitizenPreference(Boolean(rr.citizenPreference));
+                        if (rr.bidSecurityType) setBidSecurityType(rr.bidSecurityType);
+                        if (rr.bidSecurityRate) setBidSecurityRate(rr.bidSecurityRate);
+                        if (rr.prebidConferenceDate) setPreBidDate(rr.prebidConferenceDate);
+                        const method = (r as any).recommended_method || (r as any).procurement_method || '';
+                        if (method.includes('open') || method.includes('limited')) setTemplate('itb');
+                        else if (method.includes('direct') || method.includes('simplified')) setTemplate('rfq');
+                      }
+                    }
+                  }}
                   className="w-full bg-white border border-gray-200 rounded-2xl px-5 py-4 text-sm font-bold text-gray-700 outline-none focus:ring-4 focus:ring-zammsa-green/5"
                 >
                   <option value="">-- Select Requisition with Approved CPP --</option>
@@ -793,13 +906,76 @@ const SolicitationCreate: React.FC = () => {
             <h2 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-6">Solicitation Documents</h2>
 
             <div className="mb-6">
-              <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-3">Mandatory Clauses (auto-included — read-only)</p>
+              <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-3">Mandatory Clauses & Templates (auto-included — or upload custom)</p>
               <div className="space-y-2">
-                {['General Conditions of Contract (ZPPA v2024)', 'Standard Bid Forms (ZPPA-approved)', 'Conflict of Interest Declaration Form'].map((doc, i) => (
+                {[
+                  template === 'itb' ? 'Invitation to Bid (ITB) Standard Document' : template === 'rfp' ? 'Request for Proposals (RFP) Standard Document' : 'Request for Quotations (RFQ) Standard Document',
+                  'General Conditions of Contract (ZPPA v2024)',
+                  'Standard Bid Forms (ZPPA-approved)',
+                  'Conflict of Interest Declaration Form',
+                  bidSecurityRequired ? 'Bid Security Form (Bank/Surety Guarantee Template)' : 'Bid Securing Declaration Form',
+                  ...(citizenPreference ? ['CEEC Preference Application Form'] : []),
+                  ...(submissionFormat === 'two' ? ['Two-Envelope Submission Guidelines'] : []),
+                ].map((doc, i) => (
                   <div key={i} className="flex items-center gap-3 p-3 bg-emerald-50 rounded-xl">
                     <CheckCircleIcon className="w-4 h-4 text-emerald-500" />
-                    <span className="text-sm font-semibold text-emerald-800">{doc}</span>
-                    <LockClosedIcon className="w-3.5 h-3.5 text-emerald-400 ml-auto" />
+                    <div className="flex-1">
+                      <span className="text-sm font-semibold text-emerald-800">{doc}</span>
+                      {templateFiles[doc] && (
+                        <p className="text-[11px] font-medium text-emerald-600 mt-0.5">Attached: {templateFiles[doc].name}</p>
+                      )}
+                    </div>
+                    {templateFiles[doc] ? (
+                      <button onClick={() => {
+                        const newFiles = { ...templateFiles };
+                        delete newFiles[doc];
+                        setTemplateFiles(newFiles);
+                      }} className="text-xs text-rose-500 font-medium hover:underline px-2">Remove</button>
+                    ) : (
+                      <div className="flex items-center gap-2">
+                        <button onClick={async () => {
+                          setPreviewTemplateName(doc);
+                          setPreviewLoading(true);
+                          setPreviewHtml(null);
+                          try {
+                            const html = await solicitationsApi.templatePreview(doc, template || undefined);
+                            setPreviewHtml(html);
+                          } catch (err: any) {
+                            toast.error(err?.response?.data?.error || err?.message || 'Failed to load template preview');
+                            setPreviewTemplateName(null);
+                          } finally {
+                            setPreviewLoading(false);
+                          }
+                        }} className="text-[11px] font-bold text-indigo-700 bg-indigo-100/50 border border-indigo-200 px-3 py-1.5 rounded-lg hover:bg-indigo-100 transition-colors flex items-center gap-1">
+                          <EyeIcon className="w-3.5 h-3.5" />
+                          View Template
+                        </button>
+                        <input
+                          id={`template-file-${i}`}
+                          type="file"
+                          className="hidden"
+                          onChange={(e) => {
+                            const file = e.target.files?.[0];
+                            if (file) {
+                              setTemplateFiles(prev => ({
+                                ...prev,
+                                [doc]: {
+                                  id: `${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+                                  file,
+                                  name: file.name,
+                                  size: file.size < 1024 ? `${file.size}B` :
+                                        file.size < 1024 * 1024 ? `${(file.size / 1024).toFixed(0)}KB` :
+                                        `${(file.size / (1024 * 1024)).toFixed(1)}MB`,
+                                }
+                              }));
+                            }
+                          }}
+                        />
+                        <button onClick={() => document.getElementById(`template-file-${i}`)?.click()} className="text-[11px] font-bold text-emerald-700 bg-emerald-100/50 border border-emerald-200 px-3 py-1.5 rounded-lg hover:bg-emerald-100 transition-colors">
+                          Upload Custom
+                        </button>
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>
@@ -1023,6 +1199,83 @@ const SolicitationCreate: React.FC = () => {
             </button>
           )}
         </div>
+      {/* Template Preview Modal */}
+      {previewTemplateName && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-gray-900/90 backdrop-blur-xl p-4 sm:p-10 overflow-y-auto">
+          <div className="bg-white rounded-[40px] shadow-2xl max-w-5xl w-full max-h-[90vh] flex flex-col">
+            <div className="flex items-center justify-between p-6 border-b border-gray-50 shrink-0">
+              <div className="flex items-center gap-4">
+                <div className="w-10 h-10 bg-indigo-100 rounded-2xl flex items-center justify-center">
+                  <EyeIcon className="w-5 h-5 text-indigo-600" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-black text-gray-900 uppercase tracking-widest">Template Preview</h3>
+                  <p className="text-xs text-gray-500 mt-0.5">{previewTemplateName}</p>
+                </div>
+              </div>
+              <button onClick={() => { setPreviewTemplateName(null); setPreviewHtml(null); }} className="p-3 bg-gray-50 rounded-2xl text-gray-400 hover:text-rose-600 transition-all">
+                <XIcon className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="flex-1 overflow-auto bg-gray-100 p-6">
+              {previewLoading ? (
+                <div className="flex items-center justify-center h-full min-h-[500px]">
+                  <div className="text-center">
+                    <svg className="animate-spin h-12 w-12 text-indigo-600 mx-auto mb-4" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                    </svg>
+                    <p className="text-sm font-bold text-gray-500 uppercase tracking-widest">Loading template preview...</p>
+                  </div>
+                </div>
+              ) : previewHtml ? (
+                <iframe
+                  srcDoc={previewHtml}
+                  className="w-full h-full min-h-[500px] rounded-2xl border-0"
+                  title="Template Preview"
+                  sandbox="allow-scripts allow-same-origin"
+                />
+              ) : (
+                <div className="flex items-center justify-center h-full min-h-[500px]">
+                  <p className="text-sm text-gray-400">No preview content available.</p>
+                </div>
+              )}
+            </div>
+            <div className="flex items-center justify-between p-6 border-t border-gray-50 bg-gray-50/50 rounded-b-[40px] shrink-0">
+              <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">
+                {previewLoading ? 'Loading...' : previewHtml ? 'Template loaded' : 'Failed to load'}
+              </p>
+              <div className="flex gap-3">
+                <button
+                  onClick={() => { setPreviewTemplateName(null); setPreviewHtml(null); }}
+                  className="px-8 py-3 text-sm font-black text-gray-400 uppercase tracking-widest hover:text-gray-600 transition-colors"
+                >
+                  Close
+                </button>
+                {previewHtml && (
+                  <button
+                    onClick={() => {
+                      const blob = new Blob([previewHtml], { type: 'text/html' });
+                      const url = URL.createObjectURL(blob);
+                      const a = document.createElement('a');
+                      a.href = url;
+                      a.download = `${previewTemplateName?.replace(/[^a-zA-Z0-9]/g, '_')}_preview.html`;
+                      a.click();
+                      URL.revokeObjectURL(url);
+                      toast.success('Template preview downloaded as HTML');
+                    }}
+                    className="flex items-center gap-2 px-8 py-3 bg-indigo-600 text-white rounded-2xl text-sm font-black uppercase tracking-widest shadow-lg shadow-indigo-100 hover:bg-indigo-700 transition-all"
+                  >
+                    <DownloadIcon className="w-4 h-4" />
+                    Download
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       </div>
     </div>
   );

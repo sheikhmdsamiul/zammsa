@@ -19,11 +19,7 @@ type PrelimCheck = {
   passed: boolean;
 };
 
-const DEFAULT_PRELIM_CHECKS: PrelimCheck[] = [
-  { criterion: 'Bid security provided', passed: false },
-  { criterion: 'Bid validity period met', passed: false },
-  { criterion: 'All required forms submitted', passed: false },
-];
+
 
 const TechnicalScoring: React.FC = () => {
   const { committeeId } = useParams<{ committeeId: string }>();
@@ -66,10 +62,20 @@ const TechnicalScoring: React.FC = () => {
   });
 
   const criteria: EvaluationCriterion[] = (solicitation?.evaluation_criteria || []).filter((c: EvaluationCriterion) => c.criterion_type === 'technical');
+  const mandatoryCriteria: EvaluationCriterion[] = (solicitation?.evaluation_criteria || []).filter((c: EvaluationCriterion) => c.criterion_type === 'mandatory');
+  
+  const defaultPrelimChecks: PrelimCheck[] = mandatoryCriteria.length > 0
+    ? mandatoryCriteria.map((c: EvaluationCriterion) => ({ criterion: c.criterion_name, passed: false }))
+    : [
+        { criterion: 'Bid security provided', passed: false },
+        { criterion: 'Bid validity period met', passed: false },
+        { criterion: 'All required forms submitted', passed: false },
+      ];
+
   const bidList = bidsData?.results || [];
   const currentBid = bidList[currentBidIndex];
   const currentScores = scores[currentBid?.id] || {};
-  const currentPrelim = prelim[currentBid?.id] || DEFAULT_PRELIM_CHECKS.map(c => ({ ...c }));
+  const currentPrelim = prelim[currentBid?.id] || defaultPrelimChecks.map(c => ({ ...c }));
 
   const scoredCount = bidList.filter((bid: any) => {
     const s = scores[bid.id];
@@ -240,7 +246,7 @@ const TechnicalScoring: React.FC = () => {
 
   const updatePrelim = (bidId: string, index: number, passed: boolean) => {
     setPrelim(prev => {
-      const checks = [...(prev[bidId] || DEFAULT_PRELIM_CHECKS.map(c => ({ ...c })))];
+      const checks = [...(prev[bidId] || defaultPrelimChecks.map(c => ({ ...c })))];
       checks[index] = { ...checks[index], passed };
       return { ...prev, [bidId]: checks };
     });

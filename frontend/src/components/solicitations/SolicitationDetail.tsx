@@ -9,7 +9,7 @@ import toast from 'react-hot-toast';
 import {
   CheckCircleIcon, XCircleIcon, InformationCircleIcon,
   ClockIcon, ShieldCheckIcon, LockClosedIcon, LockOpenIcon,
-  DocumentTextIcon, UserCircleIcon, PaperClipIcon,
+  DocumentTextIcon, UserCircleIcon, PaperClipIcon, DownloadIcon,
 } from '@heroicons/react/outline';
 
 const WORKFLOW_STEPS = [
@@ -466,8 +466,15 @@ const SolicitationDetail: React.FC = () => {
                 {sol.document_sets.map((doc: any) => (
                   <div key={doc.id} className="flex items-center gap-3 p-3 bg-gray-50 rounded-2xl border border-gray-100">
                     <PaperClipIcon className="w-4 h-4 text-gray-400" />
-                    <span className="text-sm font-semibold text-gray-700 flex-1">{doc.filename || doc.name || 'Document'}</span>
-                    <button className="text-xs font-bold text-zammsa-green hover:underline">Download</button>
+                    <span className="text-sm font-semibold text-gray-700 flex-1 truncate">{doc.filename || doc.name || 'Document'}</span>
+                    {doc.file_url ? (
+                      <a href={doc.file_url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-zammsa-green bg-zammsa-green/5 rounded-lg hover:bg-zammsa-green/10 transition-colors">
+                        <DownloadIcon className="w-3.5 h-3.5" />
+                        Download
+                      </a>
+                    ) : (
+                      <span className="text-xs font-bold text-gray-300">No file</span>
+                    )}
                   </div>
                 ))}
               </div>

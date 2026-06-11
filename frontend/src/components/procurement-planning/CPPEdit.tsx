@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { procurementPlanningApi } from '../../api/procurement_planning';
@@ -7,7 +7,17 @@ import { ContractProcurementPlan, ProcurementMilestone, CPPRisk } from '../../ty
 import { useAuth } from '../../hooks/useAuth';
 import {
   CheckCircleIcon, ChevronLeftIcon, ChevronRightIcon,
+  DocumentTextIcon, PaperClipIcon, UploadIcon, TrashIcon,
 } from '@heroicons/react/outline';
+
+const DOC_TYPES = [
+  { value: 'strategy_paper', label: 'Strategy Paper' },
+  { value: 'market_research', label: 'Market Research' },
+  { value: 'price_quote', label: 'Price Quote' },
+  { value: 'evaluation_methodology', label: 'Evaluation Methodology' },
+  { value: 'specification', label: 'Specification Document' },
+  { value: 'other', label: 'Other' },
+];
 
 interface RequisitionOption {
   requisition_id: string;
@@ -16,6 +26,8 @@ interface RequisitionOption {
   description: string;
   estimated_total: number;
   status: string;
+  items?: { description: string; estimated_total_cost: number; item_code?: string; attachment_url?: string }[];
+  specifications?: { filename: string }[];
 }
 
 type ProcurementMethod = NonNullable<ContractProcurementPlan['method']>;
@@ -31,9 +43,18 @@ interface ResourceRequirements {
   evaluationCommitteeSize: number;
   requiredExpertise: string[];
   prebidConferenceRequired: boolean;
+  prebidConferenceDate: string;
   siteVisitRequired: boolean;
+  externalExpertRequired: boolean;
   specialInspectionRequired: boolean;
+  specialInspectionDetails: string;
   specialDeliveryRequirements: boolean;
+  submissionFormat: 'single' | 'two';
+  bidValidityDays: number;
+  bidSecurityType: 'bank_guarantee' | 'surety_bond' | 'cash';
+  bidSecurityRate: number;
+  minimumTechnicalThreshold: number;
+  citizenPreference: boolean;
 }
 
 const EXPERTISE_OPTIONS = [
@@ -89,11 +110,22 @@ const CPPEdit: React.FC = () => {
     evaluationCommitteeSize: 3,
     requiredExpertise: ['procurement'],
     prebidConferenceRequired: false,
+    prebidConferenceDate: '',
     siteVisitRequired: false,
+    externalExpertRequired: false,
     specialInspectionRequired: false,
+    specialInspectionDetails: '',
     specialDeliveryRequirements: false,
+    submissionFormat: 'single',
+    bidValidityDays: 90,
+    bidSecurityType: 'bank_guarantee',
+    bidSecurityRate: 2,
+    minimumTechnicalThreshold: 70,
+    citizenPreference: true,
   });
   const [risks, setRisks] = useState<CPPRisk[]>([]);
+  const [cppDocs, setCppDocs] = useState<{ file: File; documentType: string; description: string }[]>([]);
+  const [uploadingDocs, setUploadingDocs] = useState(false);
   const [newRisk, setNewRisk] = useState<NewRiskState>({
     category: 'supply',
     description: '',
@@ -112,6 +144,13 @@ const CPPEdit: React.FC = () => {
         description: r.description || '',
         estimated_total: Number(r.estimated_total) || 0,
         status: r.status || '',
+        items: r.items?.map((item: any) => ({
+          description: item.description,
+          estimated_total_cost: Number(item.estimated_total_cost) || 0,
+          item_code: item.item_code,
+          attachment_url: item.attachment_url,
+        })) || [],
+        specifications: r.specifications?.map((s: any) => ({ filename: s.filename || s.file?.split('/').pop() || 'Document' })) || [],
       })));
     } catch { setRequisitions([]); }
   }, []);
@@ -153,9 +192,18 @@ const CPPEdit: React.FC = () => {
           evaluationCommitteeSize: Number(rr.evaluationCommitteeSize) || 3,
           requiredExpertise: Array.isArray(rr.requiredExpertise) ? rr.requiredExpertise : ['procurement'],
           prebidConferenceRequired: Boolean(rr.prebidConferenceRequired),
+          prebidConferenceDate: rr.prebidConferenceDate || '',
           siteVisitRequired: Boolean(rr.siteVisitRequired),
+          externalExpertRequired: Boolean(rr.externalExpertRequired),
           specialInspectionRequired: Boolean(rr.specialInspectionRequired),
+          specialInspectionDetails: rr.specialInspectionDetails || '',
           specialDeliveryRequirements: Boolean(rr.specialDeliveryRequirements),
+          submissionFormat: (rr.submissionFormat as 'single' | 'two') || 'single',
+          bidValidityDays: Number(rr.bidValidityDays) || 90,
+          bidSecurityType: (rr.bidSecurityType as 'bank_guarantee' | 'surety_bond' | 'cash') || 'bank_guarantee',
+          bidSecurityRate: Number(rr.bidSecurityRate) || 2,
+          minimumTechnicalThreshold: Number(rr.minimumTechnicalThreshold) || 70,
+          citizenPreference: rr.citizenPreference !== undefined ? Boolean(rr.citizenPreference) : true,
         });
       } catch (err: any) {
         toast.error(err?.response?.data?.error || 'Failed to load CPP');
@@ -260,13 +308,28 @@ const CPPEdit: React.FC = () => {
       };
 
       const updated = await procurementPlanningApi.contractPlans.update(id, cppData);
+      const cppId = updated.cpp_id || id;
+
+      if (cppDocs.length > 0) {
+        setUploadingDocs(true);
+        let uploaded = 0;
+        for (const doc of cppDocs) {
+          try {
+            await procurementPlanningApi.contractPlans.documents.upload(cppId, doc.file, doc.documentType, doc.description);
+            uploaded++;
+          } catch { /* skip failed uploads */ }
+        }
+        setUploadingDocs(false);
+        if (uploaded > 0) toast.success(`${uploaded} document(s) uploaded`);
+      }
+
       const updatedMethod = updated.method || (methodOverride ? (newMethodOverride as ProcurementMethod) : recommendedMethod);
       if (updated.status === 'approved' && ['open_tender', 'international'].includes((updatedMethod || '') as string)) {
         toast.success('CPP approved — procurement may commence');
       } else {
         toast.success('CPP updated successfully');
       }
-      navigate(`/procurement-planning/cpp/${updated.cpp_id || id}`);
+      navigate(`/procurement-planning/cpp/${cppId}`);
     } catch (err: any) {
       toast.error(err.response?.data?.error || 'Failed to update CPP');
     }
@@ -304,7 +367,8 @@ const CPPEdit: React.FC = () => {
     </div>
   );
 
-  const selectedRequisitionData = requisitions.find(r => r.requisition_id === selectedRequisition);
+  const selectedRequisitionData = useMemo(() => requisitions.find(r => r.requisition_id === selectedRequisition), [requisitions, selectedRequisition]);
+  const selectedReq = selectedRequisitionData;
 
   if (loadingData) {
     return (
@@ -356,13 +420,64 @@ const CPPEdit: React.FC = () => {
                 ))}
               </select>
               {selectedRequisitionData && (
-                <div className="mt-4 p-4 bg-gray-50 rounded-lg">
+                <div className="mt-4 p-4 bg-gray-50 rounded-lg space-y-4">
                   <div className="grid grid-cols-2 gap-2 text-sm">
                     <div><span className="text-gray-500 block">Requisition #</span>{selectedRequisitionData.req_number}</div>
                     <div><span className="text-gray-500 block">Title</span>{selectedRequisitionData.title || selectedRequisitionData.description}</div>
                     <div><span className="text-gray-500 block">Est. Value</span>K{selectedRequisitionData.estimated_total.toLocaleString()}</div>
                     <div><span className="text-gray-500 block">Status</span>{selectedRequisitionData.status}</div>
                   </div>
+
+                  {/* Requisition Items */}
+                  {selectedReq?.items && selectedReq.items.length > 0 && (
+                    <div>
+                      <h3 className="text-xs font-bold text-gray-500 uppercase tracking-wide mb-2">Requisition Line Items</h3>
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="border-b border-gray-200">
+                            <th className="text-left py-1 text-xs text-gray-400 font-medium">Code</th>
+                            <th className="text-left py-1 text-xs text-gray-400 font-medium">Description</th>
+                            <th className="text-right py-1 text-xs text-gray-400 font-medium">Amount</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {selectedReq.items.map((item, idx) => (
+                            <tr key={idx} className="border-b border-gray-100">
+                              <td className="py-2 text-xs font-mono font-bold text-gray-600">{item.item_code || `#${idx + 1}`}</td>
+                              <td className="py-2 text-sm font-bold text-gray-800">{item.description}</td>
+                              <td className="py-2 text-right text-sm font-black text-gray-900">{item.estimated_total_cost.toLocaleString()}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+
+                  {/* Specifications */}
+                  {selectedReq?.specifications && selectedReq.specifications.length > 0 && (
+                    <div className="flex items-center gap-2 text-sm text-gray-500">
+                      <DocumentTextIcon className="w-4 h-4" />
+                      <span className="font-bold">Specifications:</span>
+                      {selectedReq.specifications.map((s, idx) => (
+                        <span key={idx} className="text-zammsa-green font-bold">{s.filename}{idx < selectedReq.specifications!.length - 1 ? ' | ' : ''}</span>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Requisition item attachments */}
+                  {selectedReq?.items?.some((item: any) => item.attachment_url) && (
+                    <div className="flex items-center gap-2 text-sm text-gray-500">
+                      <PaperClipIcon className="w-4 h-4" />
+                      <span className="font-bold">Attachments:</span>
+                      {selectedReq.items.filter((item: any) => item.attachment_url).map((item: any, idx: number) => (
+                        <a key={idx} href={item.attachment_url} target="_blank" rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1 px-2 py-0.5 bg-zammsa-green/5 text-zammsa-green rounded-lg text-xs font-bold hover:bg-zammsa-green/10 transition-colors">
+                          <PaperClipIcon className="w-3 h-3" />
+                          {item.description?.slice(0, 30) || `Attachment ${idx + 1}`}
+                        </a>
+                      ))}
+                    </div>
+                  )}
                 </div>
               )}
             </div>
@@ -519,6 +634,17 @@ const CPPEdit: React.FC = () => {
                 />
                 <span>Pre-bid Conference Required</span>
               </div>
+              {resourceRequirements.prebidConferenceRequired && (
+                <div className="flex items-center gap-3 ml-6">
+                  <label className="text-xs font-bold text-gray-500">Planned date:</label>
+                  <input
+                    type="date"
+                    value={resourceRequirements.prebidConferenceDate}
+                    onChange={(e) => setResourceRequirements({ ...resourceRequirements, prebidConferenceDate: e.target.value })}
+                    className="bg-white border border-gray-200 rounded-xl px-3 py-2 text-sm font-bold text-gray-700 outline-none focus:ring-2 focus:ring-zammsa-green/10"
+                  />
+                </div>
+              )}
               <div className="flex items-center gap-2">
                 <input
                   type="checkbox"
@@ -531,12 +657,32 @@ const CPPEdit: React.FC = () => {
               <div className="flex items-center gap-2">
                 <input
                   type="checkbox"
+                  checked={resourceRequirements.externalExpertRequired}
+                  onChange={(e) => setResourceRequirements({ ...resourceRequirements, externalExpertRequired: e.target.checked })}
+                  className="rounded text-zammsa-green"
+                />
+                <span>External Technical Expert Required</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <input
+                  type="checkbox"
                   checked={resourceRequirements.specialInspectionRequired}
                   onChange={(e) => setResourceRequirements({ ...resourceRequirements, specialInspectionRequired: e.target.checked })}
                   className="rounded text-zammsa-green"
                 />
                 <span>Special Inspection Required (e.g., ZAMRA verification)</span>
               </div>
+              {resourceRequirements.specialInspectionRequired && (
+                <div className="ml-6">
+                  <textarea
+                    value={resourceRequirements.specialInspectionDetails}
+                    onChange={(e) => setResourceRequirements({ ...resourceRequirements, specialInspectionDetails: e.target.value })}
+                    placeholder="Describe special inspection requirements..."
+                    rows={2}
+                    className="w-full bg-white border border-gray-200 rounded-xl px-4 py-3 text-sm font-bold text-gray-700 outline-none focus:ring-2 focus:ring-zammsa-green/10"
+                  />
+                </div>
+              )}
               <div className="flex items-center gap-2">
                 <input
                   type="checkbox"
@@ -547,6 +693,135 @@ const CPPEdit: React.FC = () => {
                 <span>Special Delivery Requirements (e.g., Cold Chain 2-8°C)</span>
               </div>
             </div>
+          </div>
+
+          {/* Solicitation Strategy Settings */}
+          <div className="bg-white rounded-lg border border-gray-200 p-6 space-y-6">
+            <h2 className="font-semibold text-gray-900">Solicitation Strategy Settings</h2>
+            <p className="text-xs text-gray-500 -mt-4">These will pre-populate the solicitation when it is created from this CPP</p>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <label className="block text-sm font-medium text-gray-700">Submission Format</label>
+                <div className="flex gap-2">
+                  <label className={`flex-1 p-3 rounded-lg cursor-pointer border-2 text-center ${resourceRequirements.submissionFormat === 'single' ? 'border-zammsa-green bg-zammsa-green/5' : 'border-gray-200 bg-gray-50'}`}>
+                    <input type="radio" name="edit_submissionFormat" checked={resourceRequirements.submissionFormat === 'single'} onChange={() => setResourceRequirements({ ...resourceRequirements, submissionFormat: 'single' })} className="sr-only" />
+                    <span className="text-sm font-medium">Single Envelope</span>
+                  </label>
+                  <label className={`flex-1 p-3 rounded-lg cursor-pointer border-2 text-center ${resourceRequirements.submissionFormat === 'two' ? 'border-zammsa-green bg-zammsa-green/5' : 'border-gray-200 bg-gray-50'}`}>
+                    <input type="radio" name="edit_submissionFormat" checked={resourceRequirements.submissionFormat === 'two'} onChange={() => setResourceRequirements({ ...resourceRequirements, submissionFormat: 'two' })} className="sr-only" />
+                    <span className="text-sm font-medium">Two Envelope</span>
+                  </label>
+                </div>
+              </div>
+              <div className="space-y-2">
+                <label className="block text-sm font-medium text-gray-700">Citizen Preference Scheme</label>
+                <div className="flex gap-2">
+                  <label className={`flex-1 p-3 rounded-lg cursor-pointer border-2 text-center ${resourceRequirements.citizenPreference ? 'border-zammsa-green bg-zammsa-green/5' : 'border-gray-200 bg-gray-50'}`}>
+                    <input type="radio" name="edit_citizenPref" checked={resourceRequirements.citizenPreference} onChange={() => setResourceRequirements({ ...resourceRequirements, citizenPreference: true })} className="sr-only" />
+                    <span className="text-sm font-medium">Yes</span>
+                  </label>
+                  <label className={`flex-1 p-3 rounded-lg cursor-pointer border-2 text-center ${!resourceRequirements.citizenPreference ? 'border-zammsa-green bg-zammsa-green/5' : 'border-gray-200 bg-gray-50'}`}>
+                    <input type="radio" name="edit_citizenPref" checked={!resourceRequirements.citizenPreference} onChange={() => setResourceRequirements({ ...resourceRequirements, citizenPreference: false })} className="sr-only" />
+                    <span className="text-sm font-medium">No</span>
+                  </label>
+                </div>
+              </div>
+              <div className="space-y-2">
+                <label className="block text-sm font-medium text-gray-700">Bid Validity (Days)</label>
+                <input type="number" value={resourceRequirements.bidValidityDays} onChange={(e) => setResourceRequirements({ ...resourceRequirements, bidValidityDays: parseInt(e.target.value) || 90 })} min={30} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" />
+              </div>
+              <div className="space-y-2">
+                <label className="block text-sm font-medium text-gray-700">Min. Technical Threshold (points)</label>
+                <input type="number" value={resourceRequirements.minimumTechnicalThreshold} onChange={(e) => setResourceRequirements({ ...resourceRequirements, minimumTechnicalThreshold: parseInt(e.target.value) || 70 })} min={0} max={100} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" />
+              </div>
+              <div className="space-y-2">
+                <label className="block text-sm font-medium text-gray-700">Bid Security Type</label>
+                <select value={resourceRequirements.bidSecurityType} onChange={(e) => setResourceRequirements({ ...resourceRequirements, bidSecurityType: e.target.value as 'bank_guarantee' | 'surety_bond' | 'cash' })} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm">
+                  <option value="bank_guarantee">Bank Guarantee (preferred)</option>
+                  <option value="surety_bond">Surety Bond</option>
+                  <option value="cash">Cash Deposit</option>
+                </select>
+              </div>
+              <div className="space-y-2">
+                <label className="block text-sm font-medium text-gray-700">Bid Security Rate (% of bid value)</label>
+                <input type="number" value={resourceRequirements.bidSecurityRate} onChange={(e) => setResourceRequirements({ ...resourceRequirements, bidSecurityRate: parseFloat(e.target.value) || 2 })} min={1} max={5} step={0.5} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" />
+              </div>
+            </div>
+          </div>
+
+          {/* Supporting Documents */}
+          <div className="bg-white rounded-lg border border-gray-200 p-6 space-y-4">
+            <h2 className="font-semibold text-gray-900 flex items-center gap-2">
+              <UploadIcon className="w-4 h-4" />
+              Supporting Documents
+            </h2>
+            <p className="text-xs text-gray-400">Strategy papers, market research, price quotes, specifications, etc.</p>
+
+            <div className="space-y-3">
+              {cppDocs.map((doc, idx) => (
+                <div key={idx} className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg border border-gray-100">
+                  <PaperClipIcon className="w-4 h-4 text-gray-400" />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-bold text-gray-700 truncate">{doc.file.name}</p>
+                    <p className="text-xs text-gray-400">{DOC_TYPES.find(t => t.value === doc.documentType)?.label || doc.documentType}</p>
+                  </div>
+                  <button onClick={() => setCppDocs(prev => prev.filter((_, i) => i !== idx))} className="p-1.5 text-gray-300 hover:text-red-500 transition-colors">
+                    <TrashIcon className="w-4 h-4" />
+                  </button>
+                </div>
+              ))}
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 mb-1">Document Type</label>
+                  <select
+                    id="cpp-edit-doc-type"
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
+                    defaultValue=""
+                  >
+                    <option value="" disabled>-- Select type --</option>
+                    {DOC_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 mb-1">Description (optional)</label>
+                  <input
+                    id="cpp-edit-doc-desc"
+                    type="text"
+                    placeholder="Brief description..."
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
+                  />
+                </div>
+                <div className="flex items-end">
+                  <label className="flex-1 flex items-center gap-3 px-4 py-2.5 bg-green-50 border-2 border-dashed border-green-300 rounded-lg cursor-pointer hover:bg-green-100 transition-all">
+                    <UploadIcon className="w-5 h-5 text-zammsa-green" />
+                    <span className="text-sm font-bold text-zammsa-green">Choose File</span>
+                    <input
+                      type="file"
+                      className="hidden"
+                      accept=".pdf,.doc,.docx,.xls,.xlsx,.png,.jpg"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (!file) return;
+                        const docType = (document.getElementById('cpp-edit-doc-type') as HTMLSelectElement)?.value || 'other';
+                        const desc = (document.getElementById('cpp-edit-doc-desc') as HTMLInputElement)?.value || '';
+                        if (docType === '') { toast.error('Select document type'); return; }
+                        setCppDocs(prev => [...prev, { file, documentType: docType, description: desc }]);
+                        (document.getElementById('cpp-edit-doc-type') as HTMLSelectElement).value = '';
+                        (document.getElementById('cpp-edit-doc-desc') as HTMLInputElement).value = '';
+                        e.target.value = '';
+                      }}
+                    />
+                  </label>
+                </div>
+              </div>
+            </div>
+            {uploadingDocs && (
+              <div className="p-3 bg-blue-50 rounded-lg text-sm font-bold text-blue-700 flex items-center gap-2">
+                <UploadIcon className="w-4 h-4 animate-pulse" />
+                Uploading documents...
+              </div>
+            )}
           </div>
         </div>
       )}

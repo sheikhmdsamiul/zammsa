@@ -8,6 +8,7 @@ from rest_framework import generics, filters, status
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
+from django.http import HttpResponse
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.exceptions import PermissionDenied
 from django_filters.rest_framework import DjangoFilterBackend
@@ -537,3 +538,288 @@ class SolicitationDocumentListView(BaseView, generics.ListCreateAPIView):
     queryset = SolicitationDocument.objects.select_related('solicitation').all()
     serializer_class = SolicitationDocumentSerializer
     ordering = ['-document_id']
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def template_preview_view(request):
+    """Return template content as HTML for preview."""
+    name = request.query_params.get('name', '').strip()
+    method = request.query_params.get('method', '').strip()
+
+    if not name:
+        return Response({'error': 'Template name is required'}, status=400)
+
+    # Build a query that tries to match by name and optionally by method
+    q = Q(template_name__icontains=name) | Q(template_name__icontains=name.replace('Standard Document', '').strip())
+    if method:
+        q &= Q(method=method)
+
+    template = SolicitationTemplate.objects.filter(q, is_active=True).first()
+
+    if not template:
+        # Try a broader search
+        keywords = [w for w in name.split() if len(w) > 3]
+        for kw in keywords:
+            template = SolicitationTemplate.objects.filter(
+                Q(template_name__icontains=kw) | Q(template_content__icontains=kw),
+                is_active=True
+            ).first()
+            if template:
+                break
+
+    if not template:
+        # Return a generated preview using the name as a title
+        html = _generate_fallback_preview(name, method)
+        return HttpResponse(html, content_type='text/html; charset=utf-8')
+
+    html = _render_template_preview(template)
+    return HttpResponse(html, content_type='text/html; charset=utf-8')
+
+
+def _render_template_preview(template):
+    """Render a SolicitationTemplate as an HTML document preview."""
+    content = template.template_content or ''
+    clauses_html = ''
+    if template.mandatory_clauses:
+        clauses = template.mandatory_clauses if isinstance(template.mandatory_clauses, list) else []
+        if clauses:
+            items = ''.join(
+                '<li style="padding:8px 0;border-bottom:1px solid #e5e7eb;'
+                'display:flex;align-items:start;gap:10px;">'
+                '<span style="color:#059669;font-weight:bold;">ok</span> '
+                '<span>' + c.get("clause_text", "") + '</span></li>'
+                for c in clauses
+            )
+            clauses_html = (
+                '<div style="margin-top:24px;">'
+                '<h4 style="font-size:14px;font-weight:700;color:#111827;'
+                'text-transform:uppercase;letter-spacing:0.05em;margin-bottom:12px;'
+                'border-bottom:2px solid #d1d5db;padding-bottom:8px;">'
+                'Mandatory Clauses</h4>'
+                '<ul style="list-style:none;padding:0;margin:0;">' + items + '</ul></div>'
+            )
+
+    return (
+        '<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8">'
+        '<meta name="viewport" content="width=device-width, initial-scale=1.0">'
+        '<style>'
+        '@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Merriweather:wght@400;700;900&display=swap");'
+        '*{margin:0;padding:0;box-sizing:border-box;}'
+        'body{font-family:"Merriweather",Georgia,serif;background:#f3f4f6;padding:40px;color:#1f2937;line-height:1.8;}'
+        '.document{max-width:900px;margin:0 auto;background:white;border-radius:32px;'
+        'box-shadow:0 25px 50px -12px rgba(0,0,0,0.25);overflow:hidden;}'
+        '.header{background:linear-gradient(135deg,#1e3a5f,#0f2440);color:white;padding:40px 48px;text-align:center;}'
+        '.header h1{font-size:22px;font-weight:900;text-transform:uppercase;letter-spacing:0.1em;margin-bottom:8px;}'
+        '.header .subtitle{font-size:13px;opacity:0.8;}'
+        '.badge{display:inline-block;margin-top:16px;background:rgba(255,255,255,0.15);'
+        'border:1px solid rgba(255,255,255,0.3);padding:6px 20px;border-radius:100px;'
+        'font-size:11px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;}'
+        '.body{padding:48px;}'
+        '.body h2{font-size:18px;font-weight:700;margin-bottom:16px;padding-bottom:8px;border-bottom:2px solid #e5e7eb;}'
+        '.body p{margin-bottom:16px;text-align:justify;font-size:14px;line-height:1.9;}'
+        '.watermark{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%) rotate(-30deg);'
+        'font-size:120px;font-weight:900;color:rgba(0,0,0,0.03);pointer-events:none;z-index:0;text-transform:uppercase;}'
+        '.footer{padding:24px 48px;border-top:1px solid #e5e7eb;text-align:center;'
+        'font-size:11px;color:#9ca3af;font-family:"Inter",sans-serif;text-transform:uppercase;letter-spacing:0.1em;}'
+        '</style></head><body>'
+        '<div class="watermark">DRAFT</div>'
+        '<div class="document">'
+        '<div class="header">'
+        '<h1>' + template.template_name + '</h1>'
+        '<p class="subtitle">Zambia Medicines and Medical Supplies Agency - Standard Solicitation Document</p>'
+        '<span class="badge">Version ' + template.version
+        + (' - ZPPA-Approved' if template.is_zppa_template else ' - Internal Template') + '</span>'
+        '</div><div class="body">'
+        '<h2>Document Overview</h2>'
+        + _format_content(content) + clauses_html
+        + '</div><div class="footer">'
+        'ZAMMSA Procurement System - Template ID: ' + str(template.template_id) + ' - Generated Preview'
+        '</div></div></body></html>'
+    )
+
+def _generate_fallback_preview(name, method):
+    """Generate a realistic-looking fallback preview when no template is found."""
+    method_label = {
+        'itb': 'Invitation to Bid (Goods)',
+        'rfp': 'Request for Proposals (Consulting)',
+        'rfq': 'Request for Quotations'
+    }.get(method, 'Procurement Document')
+
+    return (
+        '<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8">'
+        '<meta name="viewport" content="width=device-width, initial-scale=1.0">'
+        '<style>'
+        '*{margin:0;padding:0;box-sizing:border-box;}'
+        'body{font-family:Georgia,serif;background:#f3f4f6;padding:40px;color:#1f2937;line-height:1.8;}'
+        '.document{max-width:900px;margin:0 auto;background:white;border-radius:32px;'
+        'box-shadow:0 25px 50px -12px rgba(0,0,0,0.25);overflow:hidden;}'
+        '.header{background:linear-gradient(135deg,#1e3a5f,#0f2440);color:white;padding:40px 48px;text-align:center;}'
+        '.header h1{font-size:20px;font-weight:900;text-transform:uppercase;letter-spacing:0.1em;margin-bottom:8px;}'
+        '.badge{display:inline-block;margin-top:16px;background:rgba(255,255,255,0.15);'
+        'border:1px solid rgba(255,255,255,0.3);padding:6px 20px;border-radius:100px;'
+        'font-size:11px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;}'
+        '.body{padding:48px;}'
+        '.body h2{font-size:18px;font-weight:700;margin-bottom:16px;padding-bottom:8px;border-bottom:2px solid #e5e7eb;}'
+        '.body p{margin-bottom:16px;text-align:justify;font-size:14px;line-height:1.9;}'
+        '.section{margin-bottom:32px;}'
+        '.section h3{font-size:15px;font-weight:700;margin-bottom:12px;color:#1e3a5f;}'
+        '.section ul{padding-left:20px;}'
+        '.section ul li{margin-bottom:8px;font-size:14px;}'
+        '.watermark{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%) rotate(-30deg);'
+        'font-size:120px;font-weight:900;color:rgba(0,0,0,0.03);pointer-events:none;z-index:0;text-transform:uppercase;}'
+        '.footer{padding:24px 48px;border-top:1px solid #e5e7eb;text-align:center;'
+        'font-size:11px;color:#9ca3af;font-family:sans-serif;text-transform:uppercase;letter-spacing:0.1em;}'
+        '</style></head><body>'
+        '<div class="watermark">DRAFT</div>'
+        '<div class="document">'
+        '<div class="header">'
+        '<h1>' + name + '</h1>'
+        '<p style="font-size:13px;opacity:0.8;margin-top:8px;">Zambia Medicines and Medical Supplies Agency - ' + method_label + '</p>'
+        '<span class="badge">Standard Template - ZPPA Compliant</span>'
+        '</div><div class="body">'
+        '<h2>Document Structure</h2>'
+        '<div class="section">'
+        '<h3>1. Purpose &amp; Scope</h3>'
+        '<p>This document serves as the official ' + name.lower() + ' for procurement activities.</p>'
+        '</div><div class="section">'
+        '<h3>2. Key Provisions</h3><ul>'
+        '<li><strong>Bid Submission:</strong> All bids must be submitted before the closing date and time.</li>'
+        '<li><strong>Bid Security:</strong> As specified in the solicitation documents.</li>'
+        '<li><strong>Evaluation:</strong> Bids evaluated in accordance with published criteria.</li>'
+        '<li><strong>Tax Compliance:</strong> Valid ZRA Tax Clearance Certificate is mandatory.</li>'
+        '</ul></div><div class="section">'
+        '<h3>3. Compliance Framework</h3>'
+        '<p>Complies with ZPPA regulations and ZAMMSA Procurement Policy.</p>'
+        '</div><div class="section">'
+        '<h3>4. Instructions to Bidders</h3><ul>'
+        '<li>Examine all instructions, conditions, and specifications carefully.</li>'
+        '<li>Non-compliance may result in disqualification.</li>'
+        '<li>Enquiries must be submitted in writing within the clarification period.</li>'
+        '</ul></div></div>'
+        '<div class="footer">ZAMMSA Procurement System - Generated Preview</div>'
+        '</div></body></html>'
+    )
+
+
+def _format_content(text):
+    """Convert plain text or markdown-like text to HTML paragraphs.
+    If the text already contains HTML block-level tags, return it as-is."""
+    if not text:
+        return '<p style="color:#9ca3af;font-style:italic;">No template content available.</p>'
+    if '<h' in text or '<div' in text or '<p>' in text or '<table' in text or '<ul>' in text:
+        return text
+    paragraphs = text.split('\n')
+    html_parts = []
+    for p in paragraphs:
+        p = p.strip()
+        if not p:
+            continue
+        if p.startswith('## '):
+            html_parts.append(
+                '<h3 style="font-size:15px;font-weight:700;margin:24px 0 12px;'
+                'color:#1e3a5f;">' + p[3:] + '</h3>'
+            )
+        elif p.startswith('### '):
+            html_parts.append(
+                '<h4 style="font-size:14px;font-weight:600;margin:20px 0 8px;'
+                'color:#374151;">' + p[4:] + '</h4>'
+            )
+        elif p.startswith('- ') or p.startswith('* '):
+            html_parts.append('<li style="padding:4px 0;font-size:14px;">' + p[2:] + '</li>')
+        else:
+            html_parts.append(
+                '<p style="margin-bottom:14px;font-size:14px;line-height:1.9;'
+                'text-align:justify;">' + p + '</p>'
+            )
+    return ''.join(html_parts)
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def solicitation_document_upload_view(request, solicitation_id):
+    """Upload a document to a solicitation."""
+    from .models import SolicitationDocument
+
+    try:
+        sol = Solicitation.objects.get(solicitation_id=solicitation_id)
+    except Solicitation.DoesNotExist:
+        return Response({'error': 'Solicitation not found'}, status=status.HTTP_404_NOT_FOUND)
+
+    file = request.FILES.get('file')
+    if not file:
+        return Response({'error': 'No file provided'}, status=status.HTTP_400_BAD_REQUEST)
+
+    doc = SolicitationDocument.objects.create(
+        solicitation=sol,
+        document_type=request.POST.get('document_type', 'other'),
+        file=file,
+        file_path=file.name,
+        is_public=request.POST.get('is_public', 'true') == 'true',
+    )
+
+    serializer = SolicitationDocumentSerializer(doc, context={'request': request})
+    return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def solicitation_copy_cpp_documents_view(request, solicitation_id):
+    """Copy selected CPP documents into a solicitation's document store."""
+    from django.core.files.base import ContentFile
+    from procurement_planning.models import CPPDocument
+
+    try:
+        sol = Solicitation.objects.get(solicitation_id=solicitation_id)
+    except Solicitation.DoesNotExist:
+        return Response({'error': 'Solicitation not found'}, status=status.HTTP_404_NOT_FOUND)
+
+    cpp_document_ids = request.data.get('cpp_document_ids', [])
+    if not cpp_document_ids:
+        return Response({'error': 'No CPP document IDs provided'}, status=status.HTTP_400_BAD_REQUEST)
+
+    cpp_docs = CPPDocument.objects.filter(document_id__in=cpp_document_ids)
+    if not cpp_docs.exists():
+        return Response({'error': 'No valid CPP documents found'}, status=status.HTTP_404_NOT_FOUND)
+
+    mapped = []
+    for cpp_doc in cpp_docs:
+        if not cpp_doc.document:
+            continue
+        try:
+            source_file = cpp_doc.document
+            source_file.open('rb')
+            file_bytes = source_file.read()
+            source_file.close()
+        except Exception:
+            continue
+
+        sol_doc = SolicitationDocument(
+            solicitation=sol,
+            document_type='specification' if cpp_doc.document_type == 'specification' else 'other',
+            file_path=cpp_doc.document.name,
+            is_public=True,
+        )
+        sol_doc.file.save(cpp_doc.document.name, ContentFile(file_bytes))
+        sol_doc.save()
+
+        serializer = SolicitationDocumentSerializer(sol_doc, context={'request': request})
+        mapped.append(serializer.data)
+
+    return Response({'copied': mapped, 'count': len(mapped)}, status=status.HTTP_201_CREATED)
+
+
+@api_view(['DELETE'])
+@permission_classes([IsAuthenticated])
+def solicitation_document_delete_view(request, solicitation_id, document_id):
+    """Delete a solicitation document."""
+    from .models import SolicitationDocument
+
+    try:
+        doc = SolicitationDocument.objects.get(document_id=document_id, solicitation__solicitation_id=solicitation_id)
+    except SolicitationDocument.DoesNotExist:
+        return Response({'error': 'Document not found'}, status=status.HTTP_404_NOT_FOUND)
+
+    if doc.file:
+        doc.file.delete()
+    doc.delete()
+    return Response({'message': 'Document deleted'}, status=status.HTTP_200_OK)

@@ -134,7 +134,7 @@ const CommitteeFormation: React.FC = () => {
   const cppRequirements = selectedSolicitation?.cpp_resource_requirements;
   const cppMinCommitteeSize = useMemo(() => {
     if (!cppRequirements) return null;
-    return cppRequirements.evaluation_committee_size || cppRequirements.evaluationCommitteeSize || null;
+    return (cppRequirements as any).evaluation_committee_size || (cppRequirements as any).evaluationCommitteeSize || null;
   }, [cppRequirements]);
   const cppRequiredExpertise = useMemo(() => {
     if (!cppRequirements?.requiredExpertise) return null;

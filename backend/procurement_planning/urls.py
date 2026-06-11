@@ -40,4 +40,7 @@ urlpatterns = [
     path('notices/<uuid:pk>/archive/', views.gpn_archive_view, name='gpn-archive'),
     path('public/gpns/', views.public_gpn_list_view, name='public-gpn-list'),
     path('public/gpns/<uuid:pk>/', views.public_gpn_detail_view, name='public-gpn-detail'),
+
+    path('contract-plans/<uuid:cpp_id>/documents/', views.cpp_document_upload_view, name='cpp-document-upload'),
+    path('contract-plans/<uuid:cpp_id>/documents/<uuid:document_id>/', views.cpp_document_delete_view, name='cpp-document-delete'),
 ]

@@ -99,7 +99,13 @@ const FinancialEvaluation: React.FC = () => {
       .filter((b: PassedTechBid) => b.passed)
       .map((b: PassedTechBid) => {
         const pref = ceecPreferenceMap[b.preference_category || 'non_citizen'] || ceecPreferenceMap.non_citizen;
-        const prefMargin = Number(b.preference_margin ?? pref.margin ?? 0);
+        let prefMargin = Number(b.preference_margin ?? pref.margin ?? 0);
+        
+        // Disable margin if solicitation disables citizen preference
+        if (solicitation && solicitation.citizen_preference === false) {
+          prefMargin = 0;
+        }
+
         const price = Number(b.original_price || 0);
         const evalPrice = b.evaluated_price != null ? Number(b.evaluated_price) : (price * (1 - prefMargin / 100));
         return {
@@ -107,14 +113,14 @@ const FinancialEvaluation: React.FC = () => {
           bidderName: b.bidder_name || 'Unknown',
           bidPrice: price,
           ceec: b.preference_category || 'non_citizen',
-          ceecLabel: pref.label,
+          ceecLabel: prefMargin > 0 ? pref.label : 'None',
           prefMargin,
           evaluatedPrice: evalPrice,
           techScore: b.overall_technical_score || 0,
           financialScore: b.financial_score != null ? Number(b.financial_score) : 0,
         };
       });
-  }, [passedBids]);
+  }, [passedBids, solicitation]);
 
   const financialScores = useMemo(() => {
     if (evaluatedBids.length === 0) return [];
@@ -398,7 +404,7 @@ const FinancialEvaluation: React.FC = () => {
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
                 <CalculatorIcon className="w-5 h-5 text-indigo-500" />
-                Step 4: QCBS Combined Scores
+                {solicitation?.type === 'rfp' ? 'Step 4: QCBS Combined Scores' : 'Step 4: Compute Evaluated Rankings'}
               </h2>
               <div className="flex items-center gap-3">
                 {computedQcbsData && (
@@ -413,7 +419,7 @@ const FinancialEvaluation: React.FC = () => {
                     disabled={computeMutation.isPending}
                     className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white text-sm font-bold rounded-lg hover:bg-indigo-700 disabled:opacity-50 transition-colors"
                   >
-                    {computeMutation.isPending ? 'Computing...' : 'Compute QCBS'}
+                    {computeMutation.isPending ? 'Computing...' : (solicitation?.type === 'rfp' ? 'Compute QCBS' : 'Persist Rankings')}
                   </button>
                 )}
               </div>
@@ -422,11 +428,11 @@ const FinancialEvaluation: React.FC = () => {
               <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 mb-4">
                 <p className="text-xs text-amber-800 flex items-center gap-1">
                   <ExclamationIcon className="w-4 h-4 shrink-0" />
-                  Preview — Click "Compute QCBS" to persist combined scores to backend and unlock winner selection.
+                  Preview — Click "{solicitation?.type === 'rfp' ? 'Compute QCBS' : 'Persist Rankings'}" to save scores to the backend and unlock winner selection.
                 </p>
               </div>
             )}
-            {qcbsResults.length > 0 && (
+            {qcbsResults.length > 0 && solicitation?.type === 'rfp' && (
               <>
                 <div className="overflow-x-auto">
                   <table className="min-w-full divide-y divide-gray-200 text-sm">
@@ -479,16 +485,19 @@ const FinancialEvaluation: React.FC = () => {
         </>
       )}
 
-      {!winnerSelected && computedQcbsData && qcbsResults.length > 0 && (
+      {!winnerSelected && (solicitation?.type === 'rfp' ? computedQcbsData && qcbsResults.length > 0 : evaluatedBids.length > 0) && financialOpened && (
         <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
           <h2 className="text-lg font-semibold text-gray-900 mb-4">Step 5: Select Winner</h2>
           <div className="space-y-3">
-            {qcbsResults.map((bid) => (
+            {(solicitation?.type === 'rfp' ? qcbsResults : [...evaluatedBids].sort((a,b) => a.evaluatedPrice - b.evaluatedPrice)).map((bid) => (
               <div key={bid.bidId} className="flex items-center justify-between p-4 bg-gray-50 rounded-xl hover:bg-emerald-50 transition-colors">
                 <div>
                   <p className="font-semibold text-gray-900">{bid.bidderName}</p>
                   <p className="text-sm text-gray-500">
-                    QCBS: {bid.totalScore.toFixed(2)} | Price: ZMW {Number(bid.bidPrice).toLocaleString()}
+                    {solicitation?.type === 'rfp'
+                      ? `QCBS: ${('totalScore' in bid ? (bid as any).totalScore.toFixed(2) : 'N/A')} | `
+                      : `Evaluated Price: ZMW ${Number(bid.evaluatedPrice).toLocaleString(undefined, { minimumFractionDigits: 2 })} | `}
+                    Bid Price: ZMW {Number(bid.bidPrice).toLocaleString()}
                   </p>
                 </div>
                 <button

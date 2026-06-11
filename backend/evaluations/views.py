@@ -620,17 +620,21 @@ def calculate_qcbs_view(request, solicitation_pk):
             )
 
         avg_tech = overall_pct
-        total_score = (avg_tech * tech_weight / Decimal('100')) + (Decimal(str(fin_score)) * fin_weight / Decimal('100'))
+        if sol.method == 'rfp':
+            total_score = (avg_tech * tech_weight / Decimal('100')) + (Decimal(str(fin_score)) * fin_weight / Decimal('100'))
 
-        CombinedScore.objects.update_or_create(
-            bid=bid,
-            defaults={
-                'technical_score': avg_tech,
-                'financial_score': fin_score,
-                'total_score': total_score,
-                'rank': 0,
-            }
-        )
+            CombinedScore.objects.update_or_create(
+                bid=bid,
+                defaults={
+                    'technical_score': avg_tech,
+                    'financial_score': fin_score,
+                    'total_score': total_score,
+                    'rank': 0,
+                }
+            )
+        else:
+            total_score = Decimal('0')
+            
         from suppliers.models import Supplier as SupplierModel
         sup = SupplierModel.objects.filter(registration_number=bid.supplier.employee_id.replace('SUP-', '', 1)).first()
         opening_detail = BidOpeningDetail.objects.filter(bid=bid).first()
@@ -654,10 +658,15 @@ def calculate_qcbs_view(request, solicitation_pk):
         })
 
     # Rank by total_score descending and persist to database
-    results.sort(key=lambda x: x.get('total_score', 0), reverse=True)
-    for i, bid_data in enumerate(results):
-        bid_data['rank'] = i + 1
-        CombinedScore.objects.filter(bid_id=bid_data['bid_id']).update(rank=i + 1)
+    if sol.method == 'rfp':
+        results.sort(key=lambda x: x.get('total_score', 0), reverse=True)
+        for i, bid_data in enumerate(results):
+            bid_data['rank'] = i + 1
+            CombinedScore.objects.filter(bid_id=bid_data['bid_id']).update(rank=i + 1)
+    else:
+        results.sort(key=lambda x: x.get('evaluated_price', 0))
+        for i, bid_data in enumerate(results):
+            bid_data['rank'] = i + 1
 
     winner_name = None
     if sol.status == 'awarded':
@@ -887,8 +896,12 @@ def ber_generate_view(request, solicitation_pk):
     if not is_chair:
         return Response({'error': 'Only the committee chair can generate the BER'}, status=403)
 
-    if not CombinedScore.objects.filter(bid__solicitation=sol).exists():
-        return Response({'error': 'QCBS must be calculated before generating the BER. Calculate QCBS from the Score Consolidation page first.'}, status=400)
+    if sol.method == 'rfp':
+        if not CombinedScore.objects.filter(bid__solicitation=sol).exists():
+            return Response({'error': 'QCBS must be calculated before generating the BER. Calculate QCBS from the Score Consolidation page first.'}, status=400)
+    else:
+        if not FinancialEvaluation.objects.filter(bid__solicitation=sol).exists():
+            return Response({'error': 'Rankings must be calculated before generating the BER. Compute Rankings from the Score Consolidation page first.'}, status=400)
 
     if BidEvaluationReport.objects.filter(solicitation=sol).exclude(status='rejected').exists():
         return Response({'error': 'A BER already exists for this solicitation'}, status=400)

@@ -84,7 +84,8 @@ const PreliminaryExamination: React.FC = () => {
   const examList = Object.values(exams);
   const allExamined = bids.length > 0 && bids.every((b: any) => {
     const e = exams[b.bid_id || b.id];
-    return e && e.securityVerified && e.docsComplete && e.eligibilityPass && e.conformityPass;
+    const secPass = solicitation?.bid_security_required === false ? true : e?.securityVerified;
+    return e && secPass && e.docsComplete && e.eligibilityPass && e.conformityPass;
   });
 
   return (
@@ -116,11 +117,11 @@ const PreliminaryExamination: React.FC = () => {
         </div>
         <div className="p-4 bg-white rounded-xl shadow-sm border border-gray-100 text-center">
           <p className="text-xs text-gray-500 font-medium">Passed</p>
-          <p className="text-2xl font-bold text-emerald-600">{examList.filter(e => e.securityVerified && e.docsComplete && e.eligibilityPass && e.conformityPass).length}</p>
+          <p className="text-2xl font-bold text-emerald-600">{examList.filter(e => (solicitation?.bid_security_required === false || e.securityVerified) && e.docsComplete && e.eligibilityPass && e.conformityPass).length}</p>
         </div>
         <div className="p-4 bg-white rounded-xl shadow-sm border border-gray-100 text-center">
           <p className="text-xs text-gray-500 font-medium">Failed</p>
-          <p className="text-2xl font-bold text-rose-600">{examList.filter(e => !e.securityVerified || !e.docsComplete || !e.eligibilityPass || !e.conformityPass).length}</p>
+          <p className="text-2xl font-bold text-rose-600">{examList.filter(e => !(solicitation?.bid_security_required === false || e.securityVerified) || !e.docsComplete || !e.eligibilityPass || !e.conformityPass).length}</p>
         </div>
       </div>
 
@@ -166,14 +167,14 @@ const PreliminaryExamination: React.FC = () => {
                       Run Threshold
                     </button>
                     <StatusBadge status={
-                      exam.securityVerified && exam.docsComplete && exam.eligibilityPass && exam.conformityPass ? 'approved' : 'draft'
+                      (solicitation?.bid_security_required === false || exam.securityVerified) && exam.docsComplete && exam.eligibilityPass && exam.conformityPass ? 'approved' : 'draft'
                     } />
                   </div>
                 </div>
 
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                   {[
-                    { key: 'securityVerified' as const, label: 'Bid Security', desc: 'Bank guarantee / bond valid' },
+                    ...(solicitation?.bid_security_required !== false ? [{ key: 'securityVerified' as const, label: 'Bid Security', desc: 'Bank guarantee / bond valid' }] : []),
                     { key: 'docsComplete' as const, label: 'Documents', desc: 'All required docs submitted' },
                     { key: 'eligibilityPass' as const, label: 'Eligibility', desc: 'Supplier qualified & registered' },
                     { key: 'conformityPass' as const, label: 'Conformity', desc: 'Bid conforms to solicitation' },
@@ -184,13 +185,13 @@ const PreliminaryExamination: React.FC = () => {
                         [bidId]: { ...prev[bidId], [check.key]: !prev[bidId][check.key] },
                       }))}
                       className={`p-3 rounded-xl text-left border transition-all ${
-                        exam[check.key]
+                        exam[check.key as keyof BidExamination]
                           ? 'bg-emerald-50 border-emerald-200'
                           : 'bg-gray-50 border-gray-200 hover:border-gray-300'
                       }`}>
                       <div className="flex items-center justify-between mb-1">
                         <span className="text-xs font-medium text-gray-700">{check.label}</span>
-                        {exam[check.key]
+                        {exam[check.key as keyof BidExamination]
                           ? <CheckCircleIcon className="w-4 h-4 text-emerald-500" />
                           : <XCircleIcon className="w-4 h-4 text-gray-300" />
                         }
@@ -234,7 +235,7 @@ const PreliminaryExamination: React.FC = () => {
           <ShieldCheckIcon className="w-12 h-12 text-emerald-500 mx-auto mb-3" />
           <h2 className="text-lg font-bold text-emerald-800 mb-2">Preliminary Examination Complete</h2>
           <p className="text-sm text-emerald-600 mb-4">
-            {examList.filter(e => e.securityVerified && e.docsComplete && e.eligibilityPass && e.conformityPass).length} of {examList.length} bids passed
+            {examList.filter(e => (solicitation?.bid_security_required === false || e.securityVerified) && e.docsComplete && e.eligibilityPass && e.conformityPass).length} of {examList.length} bids passed
           </p>
           <button onClick={() => navigate(primaryCommittee ? `/evaluations/${primaryCommittee.id}/scoring` : `/evaluations`)}
             className="px-6 py-3 bg-purple-600 text-white rounded-xl text-sm font-bold">

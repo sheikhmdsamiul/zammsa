@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import AnnualProcurementPlan, APPLineItem, ContractProcurementPlan, ProcurementMilestone, GeneralProcurementNotice, CPPRisk
+from .models import AnnualProcurementPlan, APPLineItem, ContractProcurementPlan, ProcurementMilestone, GeneralProcurementNotice, CPPRisk, CPPDocument
 
 
 class APPLineItemSerializer(serializers.ModelSerializer):
@@ -71,9 +71,37 @@ class ProcurementMilestoneSerializer(serializers.ModelSerializer):
         read_only_fields = ('milestone_id', 'variance_days', 'variance_flag')
 
 
+class CPPDocumentSerializer(serializers.ModelSerializer):
+    id = serializers.UUIDField(source='document_id', read_only=True)
+    filename = serializers.SerializerMethodField()
+    file_url = serializers.SerializerMethodField()
+    uploaded_by_name = serializers.SerializerMethodField()
+
+    class Meta:
+        model = CPPDocument
+        fields = ('id', 'document_id', 'cpp', 'document', 'filename', 'file_url', 'document_type', 'description', 'uploaded_at', 'uploaded_by', 'uploaded_by_name')
+        read_only_fields = ('document_id', 'uploaded_at')
+
+    def get_filename(self, obj):
+        if obj.document:
+            return obj.document.name
+        return None
+
+    def get_file_url(self, obj):
+        if obj.document:
+            return obj.document.url
+        return None
+
+    def get_uploaded_by_name(self, obj):
+        if obj.uploaded_by:
+            return obj.uploaded_by.full_name or obj.uploaded_by.email
+        return None
+
+
 class ContractProcurementPlanSerializer(serializers.ModelSerializer):
     milestones = ProcurementMilestoneSerializer(many=True, read_only=True, source='procurement_milestones')
     risks = CPPRiskSerializer(many=True, read_only=True)
+    documents = CPPDocumentSerializer(many=True, read_only=True)
     requisition_number = serializers.CharField(source='requisition.req_number', read_only=True)
     requisition_description = serializers.CharField(source='requisition.description', read_only=True)
     requisition_department = serializers.CharField(source='requisition.department.dept_name', read_only=True)
@@ -173,3 +201,5 @@ class GeneralProcurementNoticeSerializer(serializers.ModelSerializer):
 
     def get_published_by_name(self, obj):
         return obj.published_by.full_name if obj.published_by else None
+
+

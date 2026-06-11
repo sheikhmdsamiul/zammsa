@@ -8,11 +8,17 @@ class RequisitionItemSerializer(serializers.ModelSerializer):
     unit = serializers.CharField(source='unit_of_measure.uom_name', read_only=True, allow_null=True)
     estimated_unit_cost = serializers.DecimalField(source='unit_price_estimate', max_digits=15, decimal_places=2, read_only=True)
     uom_name = serializers.CharField(source='unit_of_measure.uom_name', read_only=True, allow_null=True)
+    attachment_url = serializers.SerializerMethodField()
 
     class Meta:
         model = RequisitionItem
-        fields = ('id', 'item_id', 'requisition', 'item_code', 'description', 'quantity', 'unit', 'unit_of_measure', 'uom_name', 'estimated_unit_cost', 'unit_price_estimate', 'total_estimate')
+        fields = ('id', 'item_id', 'requisition', 'item_code', 'description', 'quantity', 'unit', 'unit_of_measure', 'uom_name', 'estimated_unit_cost', 'unit_price_estimate', 'total_estimate', 'attachment', 'attachment_url')
         read_only_fields = ('item_id', 'total_estimate')
+
+    def get_attachment_url(self, obj):
+        if obj.attachment:
+            return obj.attachment.url
+        return None
 
 
 class SpecificationSerializer(serializers.ModelSerializer):
@@ -44,17 +50,50 @@ class RequisitionListSerializer(serializers.ModelSerializer):
     requester_name = serializers.CharField(source='requester.full_name', read_only=True)
     department_name = serializers.CharField(source='department.dept_name', read_only=True)
     cpp_number = serializers.SerializerMethodField()
+    cpp_data = serializers.SerializerMethodField()
     recommended_method = serializers.SerializerMethodField()
     procurement_type = serializers.SerializerMethodField()
     commodity_category = serializers.SerializerMethodField()
 
     class Meta:
         model = Requisition
-        fields = ('id', 'requisition_id', 'req_number', 'title', 'department', 'department_name', 'requester_name', 'estimated_total', 'required_date', 'status', 'current_approver', 'submitted_at', 'approved_at', 'created_at', 'days_at_current_stage', 'app_line_item', 'cpp_number', 'recommended_method', 'procurement_type', 'commodity_category')
+        fields = ('id', 'requisition_id', 'req_number', 'title', 'department', 'department_name', 'requester_name', 'estimated_total', 'required_date', 'status', 'current_approver', 'submitted_at', 'approved_at', 'created_at', 'days_at_current_stage', 'app_line_item', 'cpp_number', 'cpp_data', 'recommended_method', 'procurement_type', 'commodity_category')
 
     def get_cpp_number(self, obj):
         cpp = obj.cpp.filter(status='approved').first()
         return cpp.cpp_number if cpp else None
+
+    def get_cpp_data(self, obj):
+        cpp = obj.cpp.filter(status='approved').first()
+        if not cpp:
+            return None
+        milestones_data = []
+        if cpp.procurement_milestones.exists():
+            milestones_data = [
+                {
+                    'milestone_name': m.milestone_name,
+                    'planned_date': m.planned_date.isoformat() if m.planned_date else None,
+                    'sequence_number': m.sequence_number,
+                }
+                for m in cpp.procurement_milestones.all().order_by('sequence_number')
+            ]
+        documents_data = []
+        if cpp.documents.exists():
+            documents_data = [
+                {
+                    'id': str(doc.document_id),
+                    'filename': doc.document.name if doc.document else None,
+                    'file_url': doc.document.url if doc.document else None,
+                    'document_type': doc.document_type,
+                    'description': doc.description,
+                }
+                for doc in cpp.documents.all()
+            ]
+        return {
+            'milestones': milestones_data,
+            'resource_requirements': cpp.resource_requirements or {},
+            'documents': documents_data,
+        }
 
     def get_recommended_method(self, obj):
         cpp = obj.cpp.filter(status='approved').first()

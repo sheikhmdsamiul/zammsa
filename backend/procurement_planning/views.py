@@ -10,12 +10,13 @@ from rest_framework.pagination import PageNumberPagination
 from django_filters.rest_framework import DjangoFilterBackend
 import django_filters
 
-from .models import AnnualProcurementPlan, APPLineItem, ContractProcurementPlan, ProcurementMilestone, GeneralProcurementNotice, CPPRisk
+from .models import AnnualProcurementPlan, APPLineItem, ContractProcurementPlan, ProcurementMilestone, GeneralProcurementNotice, CPPRisk, CPPDocument
 from .serializers import (
     AnnualProcurementPlanSerializer, AnnualProcurementPlanListSerializer,
     APPLineItemSerializer, ContractProcurementPlanListSerializer,
     ContractProcurementPlanSerializer, ProcurementMilestoneSerializer,
     GeneralProcurementNoticeSerializer, CPPRiskSerializer,
+    CPPDocumentSerializer,
 )
 
 
@@ -1036,7 +1037,7 @@ class ContractProcurementPlanListView(BaseView, generics.ListCreateAPIView):
 
 
 class ContractProcurementPlanDetailView(generics.RetrieveUpdateDestroyAPIView):
-    queryset = ContractProcurementPlan.objects.select_related('requisition', 'created_by').prefetch_related('procurement_milestones', 'risks').all()
+    queryset = ContractProcurementPlan.objects.select_related('requisition', 'created_by').prefetch_related('procurement_milestones', 'risks', 'documents').all()
     serializer_class = ContractProcurementPlanSerializer
     permission_classes = [IsAuthenticated]
 
@@ -2095,3 +2096,48 @@ def app_zppa_deadline_alerts_view(request):
         'overdue': [serialize_app(a) for a in overdue],
         'total_alerts': approaching.count() + overdue.count(),
     })
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def cpp_document_upload_view(request, cpp_id):
+    """Upload a document to a CPP."""
+    try:
+        cpp = ContractProcurementPlan.objects.get(cpp_id=cpp_id)
+    except ContractProcurementPlan.DoesNotExist:
+        return Response({'error': 'CPP not found'}, status=status.HTTP_404_NOT_FOUND)
+
+    if cpp.is_baseline_locked and request.method == 'POST':
+        return Response({'error': 'Cannot modify CPP after baseline is locked'}, status=status.HTTP_400_BAD_REQUEST)
+
+    file = request.FILES.get('document')
+    if not file:
+        return Response({'error': 'No file provided'}, status=status.HTTP_400_BAD_REQUEST)
+
+    doc = CPPDocument.objects.create(
+        cpp=cpp,
+        document=file,
+        document_type=request.POST.get('document_type', 'other'),
+        description=request.POST.get('description', ''),
+        uploaded_by=request.user,
+    )
+
+    serializer = CPPDocumentSerializer(doc, context={'request': request})
+    return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+
+@api_view(['DELETE'])
+@permission_classes([IsAuthenticated])
+def cpp_document_delete_view(request, cpp_id, document_id):
+    """Delete a CPP document."""
+    try:
+        doc = CPPDocument.objects.get(document_id=document_id, cpp__cpp_id=cpp_id)
+    except CPPDocument.DoesNotExist:
+        return Response({'error': 'Document not found'}, status=status.HTTP_404_NOT_FOUND)
+
+    if doc.cpp.is_baseline_locked:
+        return Response({'error': 'Cannot modify CPP after baseline is locked'}, status=status.HTTP_400_BAD_REQUEST)
+
+    doc.document.delete()
+    doc.delete()
+    return Response({'message': 'Document deleted'}, status=status.HTTP_200_OK)

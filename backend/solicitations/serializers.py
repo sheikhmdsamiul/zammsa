@@ -71,11 +71,22 @@ class ClarificationRequestSerializer(serializers.ModelSerializer):
 
 class SolicitationDocumentSerializer(serializers.ModelSerializer):
     id = serializers.UUIDField(source='document_id', read_only=True)
-    filename = serializers.CharField(source='file_path', read_only=True)
+    filename = serializers.SerializerMethodField()
+    file_url = serializers.SerializerMethodField()
 
     class Meta:
         model = SolicitationDocument
         fields = '__all__'
+
+    def get_filename(self, obj):
+        if obj.file:
+            return obj.file.name
+        return obj.file_path
+
+    def get_file_url(self, obj):
+        if obj.file:
+            return obj.file.url
+        return None
 
 
 class SolicitationListSerializer(serializers.ModelSerializer):
@@ -399,6 +410,14 @@ class SolicitationSerializer(serializers.ModelSerializer):
                 solicitation=instance,
                 document_type=template.document_type,
                 file_path=template.template_content,
+            )
+
+        additional_documents = self.initial_data.get('additional_documents', [])
+        for doc in additional_documents:
+            SolicitationDocument.objects.create(
+                solicitation=instance,
+                document_type='other',
+                file_path=doc.get('name', 'uploaded_document'),
             )
 
         return instance

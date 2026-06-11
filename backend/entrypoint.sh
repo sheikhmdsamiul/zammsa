@@ -17,6 +17,9 @@ if [ "$1" = "gunicorn" ]; then
     echo "Seeding Contract Procurement Plans..."
     python manage.py seed_cpp
 
+    echo "Seeding solicitation templates..."
+    python manage.py seed_solicitation_templates
+
     echo "Collecting static files..."
     python manage.py collectstatic --noinput --clear
 fi

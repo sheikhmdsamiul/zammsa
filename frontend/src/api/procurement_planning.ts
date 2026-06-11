@@ -131,6 +131,20 @@ export const procurementPlanningApi = {
       api.get<{ alerts: any[]; total_alerts: number }>('/procurement-planning/contract-plans/variance-alerts/').then(r => r.data),
     archive: (id: string) =>
       api.post<{ message: string; status: string; archived_at: string; retention_expiry: string }>(`/procurement-planning/contract-plans/${id}/archive/`).then(r => r.data),
+
+    documents: {
+      upload: (cppId: string, file: File, documentType?: string, description?: string) => {
+        const fd = new FormData();
+        fd.append('file', file);
+        if (documentType) fd.append('document_type', documentType);
+        if (description) fd.append('description', description);
+        return api.post<{ message: string; document: any }>(`/procurement-planning/contract-plans/${cppId}/documents/`, fd, {
+          headers: { 'Content-Type': 'multipart/form-data' },
+        }).then(r => r.data);
+      },
+      delete: (cppId: string, documentId: string) =>
+        api.delete(`/procurement-planning/contract-plans/${cppId}/documents/${documentId}/`).then(r => r.data),
+    },
   },
 
   milestones: {

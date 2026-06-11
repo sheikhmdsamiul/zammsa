@@ -15,6 +15,7 @@ import {
   ExclamationIcon, ChatAlt2Icon, DatabaseIcon,
   OfficeBuildingIcon, UserCircleIcon, CalendarIcon,
   GlobeIcon, ScaleIcon, CheckCircleIcon, RefreshIcon,
+  PaperClipIcon, DownloadIcon, TrashIcon,
 } from '@heroicons/react/outline';
 
 const ZPC_GROUNDS = [
@@ -330,6 +331,30 @@ export default function CPPDetail() {
                   <p className="text-sm text-gray-700 leading-relaxed font-medium bg-gray-50/50 p-6 rounded-2xl">"{cpp.zpc_grounds}"</p>
                 </div>
               )}
+            </div>
+          )}
+
+          {/* Documents */}
+          {cpp.documents && cpp.documents.length > 0 && (
+            <div className="bg-white rounded-3xl border border-gray-100 shadow-sm p-8">
+              <h2 className="text-sm font-black text-gray-400 uppercase tracking-[0.2em] mb-6">Supporting Documents</h2>
+              <div className="space-y-2">
+                {cpp.documents.map((doc: any) => (
+                  <div key={doc.id || doc.document_id} className="flex items-center gap-3 p-3 bg-gray-50 rounded-2xl border border-gray-100">
+                    <PaperClipIcon className="w-4 h-4 text-gray-400" />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-bold text-gray-700 truncate">{doc.filename}</p>
+                      <p className="text-[10px] font-semibold text-gray-400">{doc.document_type?.replace(/_/g, ' ')}{doc.uploaded_by_name ? ` — by ${doc.uploaded_by_name}` : ''}</p>
+                    </div>
+                    {doc.file_url && (
+                      <a href={doc.file_url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-zammsa-green bg-zammsa-green/5 rounded-lg hover:bg-zammsa-green/10 transition-colors">
+                        <DownloadIcon className="w-3.5 h-3.5" />
+                        Download
+                      </a>
+                    )}
+                  </div>
+                ))}
+              </div>
             </div>
           )}
 

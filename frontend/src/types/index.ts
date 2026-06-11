@@ -84,6 +84,11 @@ export interface Requisition {
   specifications?: any[];
   approvals?: any[];
   attachments?: Attachment[];
+  cpp_data?: CPPData | null;
+  cpp_number?: string;
+  recommended_method?: string;
+  procurement_type?: string;
+  commodity_category?: string;
 }
 
 export interface RequisitionItem {
@@ -95,6 +100,18 @@ export interface RequisitionItem {
   unit: string;
   estimated_unit_cost: number;
   estimated_total_cost: number;
+  attachment?: string | null;
+  attachment_url?: string | null;
+}
+
+export interface CPPData {
+  milestones?: {
+    milestone_name: string;
+    planned_date: string;
+    sequence_number: number;
+  }[];
+  resource_requirements?: ResourceRequirements;
+  documents?: CPPDocument[];
 }
 
 export interface Attachment {
@@ -103,6 +120,19 @@ export interface Attachment {
   filename: string;
   file_type: string;
   uploaded_at: string;
+}
+
+export interface SolicitationDocument {
+  id: string;
+  document_id?: string;
+  solicitation?: string;
+  filename?: string;
+  file_url?: string;
+  document_type: string;
+  file?: string;
+  file_path?: string;
+  is_public?: boolean;
+  fee_amount?: number;
 }
 
 export interface Solicitation {
@@ -130,7 +160,8 @@ export interface Solicitation {
   published_at?: string;
   sol_number?: string;
   addenda: Addendum[];
-  document_sets: Attachment[];
+  document_sets: SolicitationDocument[];
+  documents?: SolicitationDocument[];
   clarification_responses: Clarification[];
   evaluation_criteria?: EvaluationCriterion[];
   created_at: string;
@@ -158,7 +189,7 @@ export interface Solicitation {
   document_fee_enabled?: boolean;
   document_fee_amount?: number;
   clarification_cutoff?: string;
-  cpp_resource_requirements?: Record<string, any>;
+  cpp_resource_requirements?: ResourceRequirements | Record<string, any>;
 }
 
 export interface Addendum {
@@ -1471,9 +1502,10 @@ export interface ContractProcurementPlan {
     estimated_value?: number;
     overall_risk_level?: 'low' | 'medium' | 'high';
     overall_risk_display?: string;
-   resource_requirements?: Record<string, any>;
-   risks?: CPPRisk[];
-   milestones?: ProcurementMilestone[];
+    resource_requirements?: ResourceRequirements;
+    risks?: CPPRisk[];
+    milestones?: ProcurementMilestone[];
+    documents?: CPPDocument[];
    status?: 'draft' | 'pending_zpc' | 'approved' | 'rejected' | 'active' | 'amended' | 'completed' | 'cancelled';
    created_by?: string;
    created_by_name?: string;
@@ -1504,7 +1536,38 @@ export interface CPPRisk {
    mitigation_strategy: string;
    risk_owner?: string;
    created_at: string;
- }
+  }
+
+export interface CPPDocument {
+  id: string;
+  document_id?: string;
+  cpp?: string;
+  filename?: string | null;
+  file_url?: string | null;
+  document_type: string;
+  description: string;
+  uploaded_at?: string;
+  uploaded_by?: string;
+  uploaded_by_name?: string;
+}
+
+export interface ResourceRequirements {
+  evaluationCommitteeSize: number;
+  requiredExpertise: string[];
+  prebidConferenceRequired: boolean;
+  prebidConferenceDate: string;
+  siteVisitRequired: boolean;
+  externalExpertRequired: boolean;
+  specialInspectionRequired: boolean;
+  specialInspectionDetails: string;
+  specialDeliveryRequirements: boolean;
+  submissionFormat: 'single' | 'two';
+  bidValidityDays: number;
+  bidSecurityType: 'bank_guarantee' | 'surety_bond' | 'cash';
+  bidSecurityRate: number;
+  minimumTechnicalThreshold: number;
+  citizenPreference: boolean;
+}
 
 export interface ProcurementMilestone {
    milestone_id: string;

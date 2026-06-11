@@ -183,7 +183,10 @@ class SolicitationDocument(models.Model):
     document_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     solicitation = models.ForeignKey(Solicitation, on_delete=models.CASCADE, related_name='documents')
     document_type = models.CharField(max_length=50, choices=DOCUMENT_TYPE_CHOICES)
-    file_path = models.CharField(max_length=500)
+    file = models.FileField(upload_to='solicitation_documents/', blank=True, null=True,
+        help_text='Uploaded solicitation document file')
+    file_path = models.CharField(max_length=500, blank=True, default='',
+        help_text='Legacy path/name reference')
     is_public = models.BooleanField(default=True)
     fee_amount = models.DecimalField(max_digits=15, decimal_places=2, default=0)
 

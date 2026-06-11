@@ -314,3 +314,32 @@ class GeneralProcurementNotice(models.Model):
 
     def __str__(self):
         return f'GPN for {self.app}'
+
+
+CPP_DOCUMENT_TYPE_CHOICES = [
+    ('strategy', 'Strategy Paper'),
+    ('market_research', 'Market Research'),
+    ('price_quote', 'Price Quote'),
+    ('evaluation', 'Evaluation Methodology'),
+    ('specification', 'Specification'),
+    ('other', 'Other Supporting Document'),
+]
+
+
+class CPPDocument(models.Model):
+    document_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    cpp = models.ForeignKey(ContractProcurementPlan, on_delete=models.CASCADE, related_name='documents')
+    document = models.FileField(upload_to='cpp_documents/')
+    document_type = models.CharField(max_length=50, choices=CPP_DOCUMENT_TYPE_CHOICES, default='other')
+    description = models.TextField(blank=True, default='')
+    uploaded_at = models.DateTimeField(auto_now_add=True)
+    uploaded_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True)
+
+    class Meta:
+        db_table = 'proc_cpp_document'
+        verbose_name = 'CPP Document'
+        verbose_name_plural = 'CPP Documents'
+        ordering = ['-uploaded_at']
+
+    def __str__(self):
+        return f'{self.get_document_type_display()} - {self.document.name}'

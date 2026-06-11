@@ -45,4 +45,27 @@ export const solicitationsApi = {
 
   export: (params?: Record<string, any>) =>
     api.get('/solicitations/', { params, responseType: 'blob' }),
+
+  /** Fetch template preview HTML content */
+  templatePreview: (name: string, method?: string) =>
+    api.get('/solicitations/templates/preview/', {
+      params: { name, method },
+      responseType: 'text' as any,
+    }).then((r) => r.data as string),
+
+  documents: {
+    upload: (solicitationId: string, file: File, documentType?: string, isPublic?: boolean) => {
+      const fd = new FormData();
+      fd.append('file', file);
+      if (documentType) fd.append('document_type', documentType);
+      if (isPublic !== undefined) fd.append('is_public', String(isPublic));
+      return api.post<{ message: string; document: any }>(`/solicitations/${solicitationId}/documents/`, fd, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      }).then(r => r.data);
+    },
+    delete: (solicitationId: string, documentId: string) =>
+      api.delete(`/solicitations/${solicitationId}/documents/${documentId}/`).then(r => r.data),
+    copyCppDocuments: (solicitationId: string, cppDocumentIds: string[]) =>
+      api.post(`/solicitations/${solicitationId}/copy-cpp-documents/`, { cpp_document_ids: cppDocumentIds }).then(r => r.data),
+  },
 };
