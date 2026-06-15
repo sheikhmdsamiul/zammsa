@@ -163,7 +163,7 @@ const ZPCApproval: React.FC = () => {
                   </div>
                   <div>
                     <dt className="text-gray-500">Method</dt>
-                    <dd className="font-semibold">QCBS (Two-Envelope)</dd>
+                    <dd className="font-semibold">{reviewPanel.procurement_method || reviewPanel.report_content?.solicitation?.method || 'Open Tender'}</dd>
                   </div>
                   <div>
                     <dt className="text-gray-500">Submitted</dt>
@@ -185,7 +185,7 @@ const ZPCApproval: React.FC = () => {
                       <tr>
                         <th className="px-3 py-2 text-left font-medium text-gray-500">#</th>
                         <th className="px-3 py-2 text-left font-medium text-gray-500">Bidder</th>
-                        <th className="px-3 py-2 text-center font-medium text-gray-500">QCBS Score</th>
+                        <th className="px-3 py-2 text-center font-medium text-gray-500">Total Score</th>
                         <th className="px-3 py-2 text-center font-medium text-gray-500">Result</th>
                       </tr>
                     </thead>

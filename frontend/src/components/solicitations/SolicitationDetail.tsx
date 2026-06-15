@@ -10,12 +10,13 @@ import {
   CheckCircleIcon, XCircleIcon, InformationCircleIcon,
   ClockIcon, ShieldCheckIcon, LockClosedIcon, LockOpenIcon,
   DocumentTextIcon, UserCircleIcon, PaperClipIcon, DownloadIcon,
+  EnvelopeIcon, ShieldExclamationIcon, ExclamationCircleIcon,
 } from '@heroicons/react/outline';
 
 const WORKFLOW_STEPS = [
-  { label: 'Draft', statuses: ['draft'], getPerson: (sol: any) => sol.created_by?.full_name ? `by ${sol.created_by.full_name}` : null },
+  { label: 'Draft', statuses: ['draft'], getPerson: (sol: any) => sol.created_by ? `by ${getUserName(sol.created_by)}` : null },
   { label: 'Pending Approval', statuses: ['pending_approval'], getPerson: (_: any) => '→ Procurement Manager / Director' },
-  { label: 'Approved', statuses: ['approved'], getPerson: (sol: any) => sol.approved_by?.full_name ? `by ${sol.approved_by.full_name}` : null },
+  { label: 'Approved', statuses: ['approved'], getPerson: (sol: any) => sol.approved_by ? `by ${getUserName(sol.approved_by)}` : null },
   { label: 'Published', statuses: ['published'], getPerson: () => null },
   { label: 'Closed', statuses: ['closed'], getPerson: () => null },
   { label: 'Awarded', statuses: ['awarded'], getPerson: () => null },
@@ -53,6 +54,17 @@ function fmtDateTime(d: string | undefined): string {
   } catch {
     return String(d);
   }
+}
+
+function getUserName(user: string | { full_name?: string; email?: string } | undefined): string {
+  if (!user) return '---';
+  if (typeof user === 'string') return user;
+  return user.full_name || user.email || '---';
+}
+
+function getUserEmail(user: string | { full_name?: string; email?: string } | undefined): string | undefined {
+  if (!user || typeof user === 'string') return undefined;
+  return user.email;
 }
 
 const SolicitationDetail: React.FC = () => {
@@ -209,7 +221,7 @@ const SolicitationDetail: React.FC = () => {
               </button>
             )}
             {canOpen && (
-              <button onClick={() => navigate(`/bids/opening/${id}`)} className="inline-flex items-center gap-1.5 px-4 py-2.5 text-sm font-bold text-white bg-purple-600 rounded-xl hover:bg-purple-700 transition-colors">
+              <button onClick={() => navigate(`/bids/opening/setup`)} className="inline-flex items-center gap-1.5 px-4 py-2.5 text-sm font-bold text-white bg-purple-600 rounded-xl hover:bg-purple-700 transition-colors">
                 <LockOpenIcon className="w-4 h-4" /> Conduct Opening
               </button>
             )}
@@ -330,6 +342,16 @@ const SolicitationDetail: React.FC = () => {
                 <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Min. Technical Threshold</p>
                 <p className="text-sm font-bold text-gray-900 mt-0.5">{sol.minimum_technical_threshold ? `${sol.minimum_technical_threshold} points` : '---'}</p>
               </div>
+              <div className="p-3 bg-gray-50 rounded-2xl">
+                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Evaluation Method</p>
+                <p className="text-sm font-bold text-gray-900 mt-0.5 capitalize">
+                  {sol.evaluation_method === 'lowest_price' ? 'Lowest Evaluated Price' :
+                   sol.evaluation_method === 'qcbs' ? `QCBS (${sol.financial_weight ? 100 - sol.financial_weight : 80}:${sol.financial_weight || 20})` :
+                   sol.evaluation_method === 'qbs' ? 'Quality Based Selection' :
+                   sol.evaluation_method === 'lcs' ? 'Least Cost Selection' :
+                   sol.evaluation_method === 'fbs' ? 'Fixed Budget Selection' : '---'}
+                </p>
+              </div>
               {sol.pre_bid_date && (
                 <div className="p-3 bg-gray-50 rounded-2xl">
                   <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Pre-Bid Conference</p>
@@ -354,6 +376,33 @@ const SolicitationDetail: React.FC = () => {
                   <p className="text-sm font-bold text-gray-900 mt-0.5">{fmtDateTime(sol.published_at)}</p>
                 </div>
               )}
+              {sol.created_by && (
+                <div className="p-3 bg-gray-50 rounded-2xl">
+                  <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Created By</p>
+                  <p className="text-sm font-bold text-gray-900 mt-0.5">{getUserName(sol.created_by)}</p>
+                  {getUserEmail(sol.created_by) && (
+                    <p className="text-xs font-semibold text-gray-500 mt-0.5">{getUserEmail(sol.created_by)}</p>
+                  )}
+                </div>
+              )}
+              {sol.approved_by && (
+                <div className="p-3 bg-gray-50 rounded-2xl">
+                  <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Approved By</p>
+                  <p className="text-sm font-bold text-gray-900 mt-0.5">{getUserName(sol.approved_by)}</p>
+                  {getUserEmail(sol.approved_by) && (
+                    <p className="text-xs font-semibold text-gray-500 mt-0.5">{getUserEmail(sol.approved_by)}</p>
+                  )}
+                </div>
+              )}
+              {sol.rejected_by && (
+                <div className="p-3 bg-gray-50 rounded-2xl">
+                  <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Rejected By</p>
+                  <p className="text-sm font-bold text-gray-900 mt-0.5">{getUserName(sol.rejected_by)}</p>
+                  {getUserEmail(sol.rejected_by) && (
+                    <p className="text-xs font-semibold text-gray-500 mt-0.5">{getUserEmail(sol.rejected_by)}</p>
+                  )}
+                </div>
+              )}
             </div>
             {sol.description && (
               <div className="mt-4 p-4 bg-gray-50 rounded-2xl">
@@ -362,6 +411,60 @@ const SolicitationDetail: React.FC = () => {
               </div>
             )}
           </div>
+
+          {/* Non-Open Justifications */}
+          {sol.non_open_justifications && sol.non_open_justifications.length > 0 && (
+            <div className="bg-white rounded-3xl border border-gray-200 shadow-sm p-6">
+              <h2 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-4">Non-Open Justifications</h2>
+              <div className="space-y-3">
+                {sol.non_open_justifications.map((j: any) => (
+                  <div key={j.id} className="p-4 bg-gray-50 rounded-2xl border border-gray-100">
+                    <div className="flex items-start gap-2 mb-2">
+                      <ExclamationCircleIcon className="w-4 h-4 text-amber-500 shrink-0 mt-0.5" />
+                      <div>
+                        <p className="text-sm font-bold text-gray-900">{j.method} - {j.reason_code}</p>
+                        <p className="text-xs text-gray-600 mt-0.5">{j.reason_text}</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-4 mt-2 text-xs font-semibold">
+                      <span className={`px-2 py-0.5 rounded-full ${
+                        j.status === 'approved' ? 'bg-green-100 text-green-700' :
+                        j.status === 'pending' ? 'bg-yellow-100 text-yellow-700' :
+                        j.status === 'rejected' ? 'bg-red-100 text-red-700' :
+                        'bg-gray-100 text-gray-700'
+                      }`}>{j.status}</span>
+                      {j.submitted_by && (
+                        <span className="text-gray-500">Submitted by {getUserName(j.submitted_by)}</span>
+                      )}
+                      {j.zpc_approved_at && (
+                        <span className="text-gray-500">Approved on {fmtDate(j.zpc_approved_at)}</span>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* CPP Resource Requirements */}
+          {sol.cpp_resource_requirements && (
+            <div className="bg-white rounded-3xl border border-gray-200 shadow-sm p-6">
+              <h2 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-4">CPP Resource Requirements</h2>
+              <div className="space-y-3">
+                {Object.entries(sol.cpp_resource_requirements).map(([key, value]) => (
+                  <div key={key} className="p-3 bg-gray-50 rounded-2xl">
+                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">{key.replace(/_/g, ' ')}</p>
+                    <p className="text-sm font-bold text-gray-900 mt-0.5">
+                      {typeof value === 'boolean' ? (value ? 'Yes' : 'No') :
+                       typeof value === 'number' ? value :
+                       typeof value === 'string' ? value :
+                       JSON.stringify(value)}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* Bid Security */}
           <div className="bg-white rounded-3xl border border-gray-200 shadow-sm p-6">
@@ -413,15 +516,29 @@ const SolicitationDetail: React.FC = () => {
               <h2 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-4">Evaluation Criteria</h2>
               <div className="space-y-2">
                 {sol.evaluation_criteria.map((c: any) => (
-                  <div key={c.criterion_id || c.id} className="flex items-center justify-between p-4 bg-gray-50 rounded-2xl border border-gray-100">
-                    <div className="flex items-center gap-2">
-                      <CheckCircleIcon className="w-4 h-4 text-zammsa-green" />
-                      <div>
-                        <span className="text-sm font-bold text-gray-900">{c.criterion_name}</span>
-                        {c.criterion_type && <span className="ml-2 text-[10px] font-bold text-gray-400 uppercase">({c.criterion_type})</span>}
+                  <div key={c.criterion_id || c.id} className="p-4 bg-gray-50 rounded-2xl border border-gray-100">
+                    <div className="flex items-start justify-between">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <CheckCircleIcon className="w-4 h-4 text-zammsa-green shrink-0" />
+                        <div>
+                          <span className="text-sm font-bold text-gray-900">{c.criterion_name}</span>
+                          {c.criterion_type && <span className="ml-2 text-[10px] font-bold text-gray-400 uppercase">({c.criterion_type})</span>}
+                          {c.scoring_guidance && (
+                            <p className="text-[10px] text-gray-400 mt-0.5">{c.scoring_guidance}</p>
+                          )}
+                        </div>
+                      </div>
+                      <div className="text-right shrink-0 ml-4">
+                        {c.criterion_type === 'technical' && (
+                          <>
+                            <span className="text-sm font-black text-zammsa-green">{c.weight}%</span>
+                            {c.max_score != null && (
+                              <p className="text-[10px] text-gray-400">Max: {c.max_score}</p>
+                            )}
+                          </>
+                        )}
                       </div>
                     </div>
-                    <span className="text-sm font-black text-zammsa-green">{c.weight}%</span>
                   </div>
                 ))}
                 <div className="flex justify-end pt-2">
@@ -459,24 +576,62 @@ const SolicitationDetail: React.FC = () => {
           )}
 
           {/* Documents */}
-          {sol.document_sets?.length > 0 && (
+          {(sol.document_sets?.length > 0 || (sol.documents?.length ?? 0) > 0) && (
             <div className="bg-white rounded-3xl border border-gray-200 shadow-sm p-6">
               <h2 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-4">Documents</h2>
-              <div className="space-y-2">
-                {sol.document_sets.map((doc: any) => (
-                  <div key={doc.id} className="flex items-center gap-3 p-3 bg-gray-50 rounded-2xl border border-gray-100">
-                    <PaperClipIcon className="w-4 h-4 text-gray-400" />
-                    <span className="text-sm font-semibold text-gray-700 flex-1 truncate">{doc.filename || doc.name || 'Document'}</span>
-                    {doc.file_url ? (
-                      <a href={doc.file_url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-zammsa-green bg-zammsa-green/5 rounded-lg hover:bg-zammsa-green/10 transition-colors">
-                        <DownloadIcon className="w-3.5 h-3.5" />
-                        Download
-                      </a>
-                    ) : (
-                      <span className="text-xs font-bold text-gray-300">No file</span>
-                    )}
+              <div className="space-y-4">
+                {sol.document_sets?.length > 0 && (
+                  <div>
+                    <p className="text-xs font-bold text-gray-500 mb-2">Document Sets</p>
+                    <div className="space-y-2">
+                       {sol.document_sets.map((doc: any) => (
+                        <div key={doc.id} className="flex items-center gap-3 p-3 bg-gray-50 rounded-2xl border border-gray-100">
+                          <PaperClipIcon className="w-4 h-4 text-gray-400" />
+                          <div className="flex-1 truncate min-w-0">
+                            <span className="text-sm font-semibold text-gray-700">{doc.filename || doc.name || 'Document'}</span>
+                            {doc.document_type && (
+                              <p className="text-xs text-gray-500 mt-0.5 capitalize">{doc.document_type.replace(/_/g, ' ')}</p>
+                            )}
+                          </div>
+                          {doc.file_url ? (
+                            <a href={doc.file_url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-zammsa-green bg-zammsa-green/5 rounded-lg hover:bg-zammsa-green/10 transition-colors">
+                              <DownloadIcon className="w-3.5 h-3.5" />
+                              Download
+                            </a>
+                          ) : (
+                            <span className="text-xs font-bold text-gray-300">No file</span>
+                          )}
+                        </div>
+                      ))}
+                    </div>
                   </div>
-                ))}
+                )}
+                {(sol.documents?.length ?? 0) > 0 && (
+                  <div>
+                    <p className="text-xs font-bold text-gray-500 mb-2">Additional Documents</p>
+                    <div className="space-y-2">
+                       {(sol.documents ?? []).map((doc: any) => (
+                        <div key={doc.id} className="flex items-center gap-3 p-3 bg-gray-50 rounded-2xl border border-gray-100">
+                          <DocumentTextIcon className="w-4 h-4 text-zammsa-green" />
+                          <div className="flex-1 truncate min-w-0">
+                            <span className="text-sm font-semibold text-gray-700">{doc.filename || doc.name || 'Document'}</span>
+                            {doc.document_type && (
+                              <p className="text-xs text-gray-500 mt-0.5 capitalize">{doc.document_type.replace(/_/g, ' ')}</p>
+                            )}
+                          </div>
+                          {doc.file_url ? (
+                            <a href={doc.file_url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-zammsa-green bg-zammsa-green/5 rounded-lg hover:bg-zammsa-green/10 transition-colors">
+                              <DownloadIcon className="w-3.5 h-3.5" />
+                              Download
+                            </a>
+                          ) : (
+                            <span className="text-xs font-bold text-gray-300">No file</span>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           )}
@@ -543,8 +698,8 @@ const SolicitationDetail: React.FC = () => {
                   <input type="text" value={addendumReason} onChange={(e) => setAddendumReason(e.target.value)} className="w-full bg-white border border-gray-200 rounded-xl px-4 py-3 text-sm font-semibold text-gray-700 outline-none focus:ring-2 focus:ring-zammsa-green/20" />
                 </div>
                 <div>
-                  <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1 block ml-1">Extend Closing (days)</label>
-                  <input type="number" min={1} value={addendumExtend} onChange={(e) => setAddendumExtend(e.target.value)} className="w-full bg-white border border-gray-200 rounded-xl px-4 py-3 text-sm font-semibold text-gray-700 outline-none focus:ring-2 focus:ring-zammsa-green/20" />
+                  <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1 block ml-1">Extend Closing (days) <span className="text-gray-300 font-normal normal-case">— optional; auto-set to 7 if within 7 days of closing</span></label>
+                  <input type="number" min={1} value={addendumExtend} onChange={(e) => setAddendumExtend(e.target.value)} placeholder="e.g. 14" className="w-full bg-white border border-gray-200 rounded-xl px-4 py-3 text-sm font-semibold text-gray-700 outline-none focus:ring-2 focus:ring-zammsa-green/20" />
                 </div>
                 <div className="flex gap-2 pt-2">
                   <button onClick={handleAddAddendum} disabled={!addendumDesc || addendumMutation.isPending} className="flex-1 px-4 py-2.5 text-sm font-bold text-white bg-amber-600 rounded-xl hover:bg-amber-700 transition-colors disabled:opacity-50">

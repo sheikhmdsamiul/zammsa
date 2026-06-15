@@ -104,4 +104,13 @@ export const evaluationsApi = {
 
   getBER: (reportId: string) =>
     api.get<any>(`/evaluations/reports/${reportId}/`).then((r) => r.data),
+
+  listPreliminaryExams: (params?: Record<string, any>) =>
+    api.get<PaginatedResponse<any>>('/evaluations/preliminary/', { params }).then((r) => r.data),
+
+  savePreliminaryExam: (data: { bid: string; criterion: string; is_compliant: boolean; comment?: string }) =>
+    api.post<any>('/evaluations/preliminary/', data).then((r) => r.data),
+
+  updatePreliminaryExam: (examId: string, data: { is_compliant?: boolean; comment?: string }) =>
+    api.patch<any>(`/evaluations/preliminary/${examId}/`, data).then((r) => r.data),
 };

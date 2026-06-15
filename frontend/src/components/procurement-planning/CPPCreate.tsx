@@ -9,7 +9,7 @@ import {
   ArrowLeftIcon, CheckCircleIcon, ExclamationIcon, DocumentTextIcon,
   CalendarIcon, UserCircleIcon, ClipboardListIcon, ShieldCheckIcon,
   LightningBoltIcon, PlusIcon, TrashIcon, InformationCircleIcon, LockClosedIcon, XCircleIcon,
-  UploadIcon, PaperClipIcon,
+  UploadIcon, PaperClipIcon, DownloadIcon,
 } from '@heroicons/react/outline';
 
 interface RequisitionOption {
@@ -1304,7 +1304,19 @@ const CPPCreate: React.FC = () => {
                     defaultValue=""
                   >
                     <option value="" disabled>-- Select type --</option>
-                    {DOC_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
+                    {DOC_TYPES.map(t => {
+                      const isDuplicate = cppDocs.some(d => d.documentType === t.value);
+                      return (
+                        <option 
+                          key={t.value} 
+                          value={t.value} 
+                          disabled={isDuplicate}
+                          className={isDuplicate ? 'text-gray-300' : ''}
+                        >
+                          {t.label}{isDuplicate ? ' (Already added)' : ''}
+                        </option>
+                      );
+                    })}
                   </select>
                 </div>
                 <div>
@@ -1331,6 +1343,10 @@ const CPPCreate: React.FC = () => {
                         const docType = (document.getElementById('cpp-doc-type') as HTMLSelectElement)?.value || 'other';
                         const desc = (document.getElementById('cpp-doc-desc') as HTMLInputElement)?.value || '';
                         if (docType === '') { toast.error('Select document type'); return; }
+                        if (cppDocs.some(d => d.documentType === docType)) {
+                          toast.error('This document type already exists');
+                          return;
+                        }
                         const newDocs = Array.from(files).map(file => ({ file, documentType: docType, description: desc }));
                         setCppDocs(prev => [...prev, ...newDocs]);
                         (document.getElementById('cpp-doc-type') as HTMLSelectElement).value = '';

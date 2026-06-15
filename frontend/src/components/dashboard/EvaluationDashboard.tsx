@@ -112,7 +112,7 @@ const EvaluationDashboard: React.FC = () => {
             <div className="space-y-3">
               {finAuthPending.length > 0 && (
                 <div className="border border-amber-200 bg-amber-50 rounded-lg p-4">
-                  <p className="text-sm font-medium text-amber-900">SOL-2026-LAB-07</p>
+                  <p className="text-sm font-medium text-amber-900">{assignments[0]?.solicitation || 'SOL-2026-LAB-07'}</p>
                   <p className="text-xs text-amber-700 mt-1">All 4 members scored → Authorise Fin. Env.</p>
                   <button
                     onClick={() => navigate(`/evaluations/${assignments[0]?.id}/scoring`)}
@@ -124,7 +124,7 @@ const EvaluationDashboard: React.FC = () => {
               )}
               {berReady.length > 0 && (
                 <div className="border border-amber-200 bg-amber-50 rounded-lg p-4">
-                  <p className="text-sm font-medium text-amber-900">SOL-2026-IT-02</p>
+                  <p className="text-sm font-medium text-amber-900">{assignments[0]?.solicitation || 'SOL-2026-IT-02'}</p>
                   <p className="text-xs text-amber-700 mt-1">Post-qualification complete → Generate BER</p>
                   <button
                     onClick={() => navigate(`/evaluations/ber/${assignments[0]?.id}`)}
@@ -142,9 +142,10 @@ const EvaluationDashboard: React.FC = () => {
 
           {/* Evaluation Status */}
           <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-5">
-            <h2 className="text-sm font-bold text-gray-900 mb-4">SOL-2026-LAB-07 — Evaluation Status</h2>
+            <h2 className="text-sm font-bold text-gray-900 mb-4">Evaluation Status</h2>
             <div className="space-y-2">
               {[
+                { label: 'COI Declaration', status: 'complete', detail: 'All members declared' },
                 { label: 'Preliminary Examination', status: 'complete', detail: '5 of 6 passed' },
                 { label: 'Technical Scoring', status: 'complete', detail: 'all 4 members scored' },
                 { label: 'Financial Envelopes', status: 'pending', detail: 'Awaiting your authorisation' },

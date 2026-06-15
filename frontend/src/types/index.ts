@@ -135,6 +135,24 @@ export interface SolicitationDocument {
   fee_amount?: number;
 }
 
+export interface SolicitationUser {
+  full_name: string;
+  email: string;
+}
+
+export interface NonOpenJustification {
+  id: string;
+  method: string;
+  reason_code: string;
+  reason_text: string;
+  status: string;
+  submitted_by?: string;
+  approved_by?: string;
+  zpc_approved_at?: string;
+  rejection_reason?: string;
+  created_at: string;
+}
+
 export interface Solicitation {
   id: string;
   solicitation_id?: string;
@@ -153,10 +171,11 @@ export interface Solicitation {
   budget_code: string;
   procurement_method: string;
   total_bids?: number;
-  created_by: string;
+  created_by?: string | SolicitationUser;
   department: string;
   department_name?: string;
-  approved_by?: string;
+  approved_by?: string | SolicitationUser;
+  rejected_by?: string | SolicitationUser;
   published_at?: string;
   sol_number?: string;
   addenda: Addendum[];
@@ -171,7 +190,6 @@ export interface Solicitation {
   publication_proofs?: Record<string, any>;
   egp_reference?: string;
   rejection_reason?: string;
-  rejected_by?: string;
   rejected_at?: string;
   // Extended solicitation detail fields
   submission_format?: 'single' | 'two';
@@ -189,7 +207,16 @@ export interface Solicitation {
   document_fee_enabled?: boolean;
   document_fee_amount?: number;
   clarification_cutoff?: string;
+  evaluation_method?: 'lowest_price' | 'qcbs' | 'qbs' | 'lcs' | 'fbs';
+  financial_weight?: number | null;
   cpp_resource_requirements?: ResourceRequirements | Record<string, any>;
+  // Additional fields from backend
+  non_open_justifications?: NonOpenJustification[];
+  created_by_name?: string;
+  approved_by_name?: string;
+  rejected_by_name?: string;
+  non_open_justification_submitted_by?: string;
+  non_open_justification_approved_by?: string;
 }
 
 export interface Addendum {
@@ -832,6 +859,8 @@ export interface TenderPublic {
   bid_validity_days: number;
   items: TenderItem[];
   created_at: string;
+  evaluation_method?: 'lowest_price' | 'qcbs' | 'qbs' | 'lcs' | 'fbs';
+  financial_weight?: number | null;
 }
 
 export interface EvaluationCriterion {
@@ -840,6 +869,8 @@ export interface EvaluationCriterion {
   criterion_name: string;
   criterion_type: 'mandatory' | 'technical' | 'financial';
   weight: number;
+  max_score: number | null;
+  scoring_guidance: string;
   minimum_threshold: number | null;
   order_index: number;
 }

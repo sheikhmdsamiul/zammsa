@@ -67,10 +67,13 @@ const BERWorkflow: React.FC = () => {
     enabled: !!solId && !currentBer && !!isChair,
   });
 
+  const evalMethod = solicitation?.evaluation_method || (solicitation?.type === 'rfp' ? 'qcbs' : 'lowest_price');
+  const isCombinedMethod = evalMethod === 'qcbs' || evalMethod === 'qbs';
+
   const { data: qcbsData } = useQuery({
     queryKey: ['qcbs-ber', solId],
     queryFn: () => evaluationsApi.calculateQCBS(solId!),
-    enabled: !!solId && !currentBer && !!isChair,
+    enabled: !!solId && !currentBer && !!isChair && isCombinedMethod,
   });
 
   const passedBids = useMemo<any[]>(() => {
@@ -100,18 +103,20 @@ const BERWorkflow: React.FC = () => {
         combined_total_score: te.combined_total_score,
         rank: te.rank,
         financial_score: te.financial_score,
+        evaluated_price: te.evaluated_price || 0,
       }));
     }
     return qcbsData?.results || [];
   }, [currentBer, reportContent, qcbsData]);
 
   const qcbsMap = useMemo(() => {
-    const map = new Map<string, { combined_score: number; rank: number; financial_score: number }>();
+    const map = new Map<string, { combined_score: number; rank: number; financial_score: number; evaluated_price: number }>();
     (Array.isArray(qcbsBids) ? qcbsBids : []).forEach((entry: any) => {
       map.set(entry.bid_id || entry.submission_id, {
         combined_score: entry.combined_total_score || entry.total_score || 0,
         rank: entry.rank || 999,
         financial_score: entry.financial_score || 0,
+        evaluated_price: entry.evaluated_price || 0,
       });
     });
     return map;
@@ -151,18 +156,29 @@ const BERWorkflow: React.FC = () => {
           financialScore: qcbs?.financial_score || bid.financial_score || 0,
           passed: bid.passed,
           details: bid.details || [],
-          evaluatedPrice: bid.evaluated_price || 0,
+          evaluatedPrice: bid.evaluated_price || bid.original_price || 0,
         };
       })
       .sort((a: RankingRow, b: RankingRow) => {
         if (a.passed !== b.passed) return a.passed ? -1 : 1;
-        return (a.rank || 999) - (b.rank || 999);
+        if (isCombinedMethod) return (a.rank || 999) - (b.rank || 999);
+        return (a.evaluatedPrice || 0) - (b.evaluatedPrice || 0);
       })
       .map((row: RankingRow, idx: number) => ({ ...row, displayRank: idx + 1 }));
-  }, [passedBids, qcbsMap]);
+  }, [passedBids, qcbsMap, isCombinedMethod]);
 
   const winner = useMemo(() => {
-    const winnerBid = passedBids.find((b: any) => b.passed);
+    const sorted = [...passedBids]
+      .filter((b: any) => b.passed)
+      .sort((a: any, b: any) => {
+        if (isCombinedMethod) {
+          const aRank = qcbsMap.get(a.bid_id || a.submission_id || '')?.rank || 999;
+          const bRank = qcbsMap.get(b.bid_id || b.submission_id || '')?.rank || 999;
+          return aRank - bRank;
+        }
+        return (a.evaluated_price || a.original_price || 0) - (b.evaluated_price || b.original_price || 0);
+      });
+    const winnerBid = sorted[0];
     const bidId = winnerBid?.bid_id || winnerBid?.submission_id || '';
     const qcbs = qcbsMap.get(bidId);
     return winnerBid
@@ -170,11 +186,11 @@ const BERWorkflow: React.FC = () => {
           name: winnerBid.bidder_name || winnerBid.vendor_name || '',
           price: qcbs?.combined_score
             ? winnerBid.evaluated_price || winnerBid.original_price || 0
-            : winnerBid.original_price || 0,
+            : (isCombinedMethod ? winnerBid.original_price || 0 : winnerBid.evaluated_price || winnerBid.original_price || 0),
           combinedScore: qcbs?.combined_score || 0,
         }
       : null;
-  }, [passedBids, qcbsMap]);
+  }, [passedBids, qcbsMap, isCombinedMethod]);
 
   useEffect(() => {
     if (!currentBer) return;
@@ -299,7 +315,7 @@ const BERWorkflow: React.FC = () => {
           </div>
           <div className="bg-gray-50 rounded-lg p-3">
             <dt className="text-xs text-gray-500">Method</dt>
-            <dd className="font-semibold text-gray-900 mt-0.5">{solicitation?.procurement_method || 'QCBS (Two-Envelope)'}</dd>
+            <dd className="font-semibold text-gray-900 mt-0.5">{solicitation?.procurement_method || 'Open Tender'}{isCombinedMethod ? ` (${evalMethod.toUpperCase()})` : ''}</dd>
           </div>
           <div className="bg-gray-50 rounded-lg p-3">
             <dt className="text-xs text-gray-500">Status</dt>
@@ -347,7 +363,7 @@ const BERWorkflow: React.FC = () => {
       </div>
 
       <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
-        <h2 className="text-lg font-semibold text-gray-900 mb-4">SECTION 3: Evaluation Summary (QCBS)</h2>
+        <h2 className="text-lg font-semibold text-gray-900 mb-4">SECTION 3: Evaluation Summary {isCombinedMethod ? '(Combined Scores)' : '(Price Ranking)'}</h2>
         <div className="overflow-x-auto">
           <table className="min-w-full divide-y divide-gray-200 text-sm">
             <thead className="bg-gray-50">
@@ -355,8 +371,8 @@ const BERWorkflow: React.FC = () => {
                 <th className="px-4 py-2 text-left font-medium text-gray-500">Rank</th>
                 <th className="px-4 py-2 text-left font-medium text-gray-500">Bidder</th>
                 <th className="px-4 py-2 text-center font-medium text-gray-500">Technical</th>
-                <th className="px-4 py-2 text-center font-medium text-gray-500">Financial</th>
-                <th className="px-4 py-2 text-center font-medium text-gray-500">QCBS Combined</th>
+                {isCombinedMethod && <th className="px-4 py-2 text-center font-medium text-gray-500">Financial</th>}
+                <th className="px-4 py-2 text-center font-medium text-gray-500">{isCombinedMethod ? 'Combined Score' : 'Evaluated Price (ZMW)'}</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
@@ -371,15 +387,17 @@ const BERWorkflow: React.FC = () => {
                   </td>
                   <td className="px-4 py-2 font-medium text-gray-900">{row.name}</td>
                   <td className="px-4 py-2 text-center font-mono">{row.technicalScore.toFixed(2)}</td>
-                  <td className="px-4 py-2 text-center font-mono">{row.financialScore.toFixed(2)}</td>
+                  {isCombinedMethod && <td className="px-4 py-2 text-center font-mono">{row.financialScore.toFixed(2)}</td>}
                   <td className="px-4 py-2 text-center font-mono font-bold text-zammsa-green">
-                    {row.combinedScore > 0 ? row.combinedScore.toFixed(2) : '-'}
+                    {isCombinedMethod
+                      ? (row.combinedScore > 0 ? row.combinedScore.toFixed(2) : '-')
+                      : `ZMW ${Number(row.evaluatedPrice).toLocaleString()}`}
                   </td>
                 </tr>
               ))}
               {rankingRows.filter(r => r.passed).length === 0 && (
                 <tr>
-                  <td colSpan={5} className="px-4 py-6 text-center text-sm text-gray-400">No passing bids</td>
+                  <td colSpan={isCombinedMethod ? 5 : 4} className="px-4 py-6 text-center text-sm text-gray-400">No passing bids</td>
                 </tr>
               )}
             </tbody>
@@ -401,8 +419,12 @@ const BERWorkflow: React.FC = () => {
                 <dd className="font-semibold text-blue-900 mt-0.5">ZMW {Number(winner.price).toLocaleString()}</dd>
               </div>
               <div>
-                <dt className="text-xs text-blue-500">QCBS Combined Score</dt>
-                <dd className="font-semibold text-blue-900 mt-0.5">{winner.combinedScore > 0 ? winner.combinedScore.toFixed(2) : 'N/A'}</dd>
+                <dt className="text-xs text-blue-500">{isCombinedMethod ? 'Combined Score' : 'Evaluated Price'}</dt>
+                <dd className="font-semibold text-blue-900 mt-0.5">
+                  {isCombinedMethod
+                    ? (winner.combinedScore > 0 ? winner.combinedScore.toFixed(2) : 'N/A')
+                    : `ZMW ${Number(winner.price).toLocaleString()}`}
+                </dd>
               </div>
             </dl>
           </div>

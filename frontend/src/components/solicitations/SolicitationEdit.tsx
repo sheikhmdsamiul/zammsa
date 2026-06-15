@@ -104,6 +104,8 @@ const SolicitationEdit: React.FC = () => {
       minimum_technical_threshold: parseInt(form.minimum_technical_threshold, 10) || null,
       document_fee_enabled: !!form.document_fee_enabled,
       document_fee_amount: form.document_fee_enabled ? (parseFloat(form.document_fee_amount) || 0) : null,
+      evaluation_method: sol?.evaluation_method,
+      financial_weight: sol?.financial_weight,
     };
 
     // Preserve other read-only fields the serializer needs

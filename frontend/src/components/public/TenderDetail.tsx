@@ -36,6 +36,15 @@ const TenderDetail: React.FC = () => {
               tender.type === 'rfq' ? 'bg-green-100 text-green-700' :
               'bg-gray-100 text-gray-700'
             }`}>{tender.type?.toUpperCase()}</span>
+            {tender.evaluation_method && (
+              <span className="px-2 py-1 text-xs font-medium rounded-full bg-amber-100 text-amber-700">
+                {tender.evaluation_method === 'lowest_price' ? 'Lowest Price' :
+                 tender.evaluation_method === 'qcbs' ? 'QCBS' :
+                 tender.evaluation_method === 'qbs' ? 'QBS' :
+                 tender.evaluation_method === 'lcs' ? 'LCS' :
+                 tender.evaluation_method === 'fbs' ? 'FBS' : tender.evaluation_method}
+              </span>
+            )}
             <StatusBadge status={tender.status} />
             <span className="text-sm text-gray-400">{tender.tender_number}</span>
           </div>

@@ -160,6 +160,7 @@ class SolicitationSerializer(serializers.ModelSerializer):
     rejected_by = serializers.SerializerMethodField()
     non_open_justifications = serializers.SerializerMethodField()
     total_bids = serializers.SerializerMethodField()
+    items = serializers.SerializerMethodField()
 
     class Meta:
         model = Solicitation
@@ -224,11 +225,26 @@ class SolicitationSerializer(serializers.ModelSerializer):
             'created_at': j.created_at.isoformat(),
         } for j in justs]
 
+    def get_items(self, obj):
+        if obj.requisition:
+            return [
+                {
+                    'description': item.description,
+                    'quantity': float(item.quantity),
+                    'unit': item.unit_of_measure.uom_name if item.unit_of_measure else '',
+                    'unit_price': float(item.unit_price_estimate) if item.unit_price_estimate else 0,
+                    'total_estimate': float(item.total_estimate) if item.total_estimate else 0,
+                }
+                for item in obj.requisition.items.all()
+            ]
+        return []
+
     EXTRA_FIELDS = [
         'submission_format', 'bid_validity_days', 'pre_bid_date', 'pre_bid_venue',
         'citizen_preference', 'bid_security_required', 'bid_security_type',
         'bid_security_rate', 'contact_person', 'contact_phone', 'contact_email',
         'minimum_technical_threshold', 'document_fee_enabled', 'document_fee_amount',
+        'evaluation_method', 'financial_weight',
     ]
 
     @staticmethod
@@ -387,7 +403,8 @@ class SolicitationSerializer(serializers.ModelSerializer):
                 criterion_name=tc.get('criterion_name', ''),
                 criterion_type='technical',
                 weight=tc.get('weight', 0),
-                minimum_threshold=tc.get('max_score', 100),
+                max_score=tc.get('max_score', 100),
+                scoring_guidance=tc.get('scoring_guidance', ''),
                 order_index=i,
             )
 
@@ -446,4 +463,33 @@ class SolicitationSerializer(serializers.ModelSerializer):
         if channels:
             validated_data['publication_targets'] = channels
 
-        return super().update(instance, validated_data)
+        instance = super().update(instance, validated_data)
+
+        technical_criteria = self.initial_data.get('technical_criteria')
+        if technical_criteria is not None:
+            instance.evaluation_criteria.filter(criterion_type='technical').delete()
+            for i, tc in enumerate(technical_criteria):
+                EvaluationCriterion.objects.create(
+                    solicitation=instance,
+                    criterion_name=tc.get('criterion_name', ''),
+                    criterion_type='technical',
+                    weight=tc.get('weight', 0),
+                    max_score=tc.get('max_score', 100),
+                    scoring_guidance=tc.get('scoring_guidance', ''),
+                    order_index=i,
+                )
+
+        mandatory_criteria = self.initial_data.get('mandatory_criteria')
+        if mandatory_criteria is not None:
+            instance.evaluation_criteria.filter(criterion_type='mandatory').delete()
+            tech_count = instance.evaluation_criteria.filter(criterion_type='technical').count()
+            for i, mc in enumerate(mandatory_criteria):
+                EvaluationCriterion.objects.create(
+                    solicitation=instance,
+                    criterion_name=mc.get('name', ''),
+                    criterion_type='mandatory',
+                    weight=0,
+                    order_index=tech_count + i,
+                )
+
+        return instance

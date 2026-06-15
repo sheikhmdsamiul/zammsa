@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { evaluationsApi } from '../../api/evaluations';
@@ -8,6 +8,7 @@ import { LoadingSpinner } from '../common/LoadingSpinner';
 import { useAuth } from '../../hooks/useAuth';
 import { ROLES } from '../../config/rbac';
 import { ExclamationIcon } from '@heroicons/react/outline';
+import { EVALUATION_PHASES, EvaluationPhaseStepper, EvaluationPhaseId } from './EvaluationPhaseStepper';
 
 const EvaluationDetail: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -32,7 +33,7 @@ const EvaluationDetail: React.FC = () => {
     enabled: !!committee?.solicitation,
   });
 
-  const [view, setView] = useState<'overview' | 'scoring' | 'financial' | 'ber'>('overview');
+  const [currentPhase, setCurrentPhase] = useState<EvaluationPhaseId>('coi');
 
   // COI Gate - computed before early return for hooks rule
   const isChairperson = committee?.chairperson === user?.id;
@@ -45,6 +46,31 @@ const EvaluationDetail: React.FC = () => {
   );
   const isRecused = coiState?.recused_members?.includes(user?.id || '');
   const needsCoiDeclaration = isMember && !isRecused && !alreadyDeclared;
+
+  // Check which phases are complete for this committee
+  const phasesComplete = useMemo(() => {
+    const complete: Record<string, boolean> = {
+      coi: !!alreadyDeclared && !isRecused,
+    };
+    return complete;
+  }, [alreadyDeclared, isRecused]);
+
+  // Build phasesBlocked map based on dependencies
+  const phasesBlocked = useMemo(() => {
+    const blocked: Record<string, boolean> = {};
+    EVALUATION_PHASES.forEach((phase) => {
+      blocked[phase.id] = false;
+    });
+    return blocked;
+  }, []);
+
+  // User role label
+  const userRoleLabel = useMemo(() => {
+    if (isChairperson) return 'chairperson';
+    if (isSecretary) return 'secretary';
+    if (isMember) return 'member';
+    return 'external';
+  }, [isChairperson, isSecretary, isMember]);
 
   useEffect(() => {
     if (needsCoiDeclaration && id) {
@@ -86,30 +112,17 @@ const EvaluationDetail: React.FC = () => {
         </div>
       </div>
 
-      {/* Evaluation Workflow Navigation */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
-        <div className="flex items-center gap-4">
-          <button onClick={() => setView('overview')} className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${view === 'overview' ? 'bg-zammsa-green text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>Overview</button>
-          <button onClick={() => setView('scoring')} className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${view === 'scoring' ? 'bg-zammsa-green text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>Technical Scoring</button>
-          {isChairperson && (
-            <>
-              <button onClick={() => setView('financial')} className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${view === 'financial' ? 'bg-zammsa-green text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>Financial Evaluation</button>
-            </>
-          )}
-          <button onClick={() => setView('ber')} className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${view === 'ber' ? 'bg-zammsa-green text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>BER & Approval</button>
-          <div className="ml-auto flex gap-2">
-            {isChairperson && (
-              <>
-                <button onClick={() => navigate(`/evaluations/preliminary/${committee.solicitation}`)} className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-bold">Preliminary Exam</button>
-                <button onClick={() => navigate(`/evaluations/${id}/scoring`)} className="px-4 py-2 bg-zammsa-green text-white rounded-lg text-sm font-bold">Score Bids</button>
-                <button onClick={() => navigate(`/evaluations/${committee.solicitation}/financial`)} className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-bold">Financial Eval</button>
-              </>
-            )}
-            <button onClick={() => navigate(`/evaluations/ber/${committee.solicitation}`)} className="px-4 py-2 bg-purple-600 text-white rounded-lg text-sm font-bold">
-              {isChairperson ? 'Generate BER' : 'View BER'}
-            </button>
-          </div>
-        </div>
+      {/* Evaluation Phase Stepper */}
+      <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+        <EvaluationPhaseStepper
+          currentPhase={currentPhase}
+          phasesComplete={phasesComplete}
+          phasesBlocked={phasesBlocked}
+          onPhaseChange={setCurrentPhase}
+          userRole={userRoleLabel}
+          committeeStatus="active"
+          solicitationTitle={committee.solicitation_title || committee.solicitation}
+        />
       </div>
 
       {isRecused && (
@@ -126,140 +139,92 @@ const EvaluationDetail: React.FC = () => {
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 space-y-6">
-          {view === 'overview' && (
-          <>
-          <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
-            <h2 className="text-lg font-semibold text-gray-900 mb-4">Committee Members</h2>
-            <div className="space-y-3">
-              <div className="flex items-center gap-2 text-sm">
-                <span className="font-medium text-gray-600 w-24">Chairperson:</span>
-                <span>{committee.chairperson_name}</span>
-                {isChairperson && <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded">You</span>}
-              </div>
-              <div className="flex items-center gap-2 text-sm">
-                <span className="font-medium text-gray-600 w-24">Secretary:</span>
-                <span>{committee.secretary_name}</span>
-                {isSecretary && <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded">You</span>}
-              </div>
-              <div className="border-t pt-3 mt-3">
-                <p className="text-sm font-medium text-gray-600 mb-2">Members ({memberList.length})</p>
-                {memberList.map((m: any, i: number) => {
-                  const mid = m.user || m;
-                  const recused = coiState?.recused_members?.includes(mid);
-                  return (
-                    <div key={i} className="flex items-center gap-2 text-sm py-1">
-                      <span className={`w-2 h-2 rounded-full ${recused ? 'bg-red-400' : 'bg-green-400'}`} />
-                      <span className={recused ? 'text-red-500 line-through' : ''}>{m.full_name || mid.slice(0, 8)}</span>
-                      {mid === user?.id && <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded">You</span>}
-                      {recused && <span className="text-xs bg-red-100 text-red-600 px-1.5 py-0.5 rounded">Recused</span>}
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          </div>
-
-          {isMember && !isRecused && !alreadyDeclared && (
-            <div className="bg-amber-50 border border-amber-200 rounded-xl p-6">
-              <h2 className="text-lg font-semibold text-amber-900 mb-4">Conflict of Interest Declaration Required</h2>
-              <p className="text-sm text-amber-800 mb-4">
-                You must complete a conflict of interest declaration before accessing bid documents.
-              </p>
-              <button
-                onClick={() => navigate(`/evaluations/${id}/coi`)}
-                className="px-6 py-3 bg-amber-600 text-white rounded-xl text-sm font-bold hover:bg-amber-700"
-              >
-                Complete COI Declaration
-              </button>
-            </div>
-          )}
-
-          {isChairperson && alreadyDeclared && !isRecused && (
+          {/* COI Declaration Phase Content */}
+          {currentPhase === 'coi' && (
             <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
-              <div className="flex items-center justify-between mb-4">
-                <h2 className="text-lg font-semibold text-gray-900">Quick Actions</h2>
-                {alreadyDeclared && !isRecused && (
-                  <button onClick={() => navigate(`/evaluations/${id}/scoring`)}
-                    className="px-4 py-2 bg-zammsa-green text-white rounded-lg text-sm font-bold hover:bg-green-700">
-                    Proceed to Scoring
-                  </button>
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-10 h-10 rounded-full bg-amber-100 flex items-center justify-center">
+                  <ExclamationIcon className="w-6 h-6 text-amber-700" />
+                </div>
+                <div>
+                  <h2 className="text-lg font-semibold text-gray-900">Conflict of Interest Declaration</h2>
+                  <p className="text-sm text-gray-500">Phase 1 of 7 - Required before any evaluation</p>
+                </div>
+              </div>
+              <div className="space-y-4">
+                {alreadyDeclared && !isRecused ? (
+                  <>
+                    <div className="bg-green-50 border border-green-200 rounded-xl p-4">
+                      <h3 className="text-sm font-semibold text-green-900">✅ COI Declaration Complete</h3>
+                      <p className="text-sm text-green-700 mt-1">You have successfully declared no conflict of interest.</p>
+                      <div className="mt-3 text-xs text-green-600 bg-green-100/50 p-3 rounded-lg">
+                        <span className="font-medium">Next Phase:</span> Preliminary Examination (Phase 2)
+                      </div>
+                    </div>
+                    {isChairperson && (
+                      <div className="flex flex-wrap gap-3 mt-4">
+                        <button
+                          onClick={() => navigate(`/evaluations/preliminary/${committee.solicitation}`)}
+                          className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-bold"
+                        >
+                          Proceed to Preliminary Exam
+                        </button>
+                        <button
+                          onClick={() => setCurrentPhase('technical')}
+                          className="px-4 py-2 bg-zammsa-green text-white rounded-lg text-sm font-bold"
+                        >
+                          Skip to Technical Scoring
+                        </button>
+                      </div>
+                    )}
+                    {!isChairperson && !isMember && (
+                      <button
+                        onClick={() => setCurrentPhase('technical')}
+                        className="px-4 py-2 bg-zammsa-green text-white rounded-lg text-sm font-bold"
+                      >
+                        Proceed to Technical Scoring
+                      </button>
+                    )}
+                  </>
+                ) : isRecused ? (
+                  <div className="bg-red-50 border border-red-200 rounded-xl p-4">
+                    <h3 className="text-sm font-semibold text-red-900">Recused from Evaluation</h3>
+                    <p className="text-sm text-red-700 mt-1">
+                      Due to a declared conflict of interest, you cannot participate in this evaluation.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="bg-amber-50 border border-amber-200 rounded-xl p-6">
+                    <h3 className="text-sm font-semibold text-amber-900 mb-3">Required: COI Declaration</h3>
+                    <p className="text-sm text-amber-800 mb-4">
+                      All evaluation committee members must complete a conflict of interest declaration before accessing bid documents and performing any scoring.
+                    </p>
+                    <button
+                      onClick={() => navigate(`/evaluations/${id}/coi`)}
+                      className="px-6 py-3 bg-amber-600 text-white rounded-xl text-sm font-bold hover:bg-amber-700"
+                    >
+                      Complete COI Declaration
+                    </button>
+                  </div>
                 )}
               </div>
-              <div className="grid grid-cols-2 gap-3">
-                <button onClick={() => navigate(`/evaluations/${committee.solicitation}/consolidation`)}
-                  className="px-4 py-3 bg-blue-600 text-white rounded-xl text-sm font-bold hover:bg-blue-700">
-                  Score Consolidation
-                </button>
-                <button onClick={() => navigate(`/evaluations/${committee.solicitation}/financial`)}
-                  className="px-4 py-3 bg-blue-600 text-white rounded-xl text-sm font-bold hover:bg-blue-700">
-                  Financial Evaluation
-                </button>
-                <button onClick={() => navigate(`/evaluations/ber/${committee.solicitation}`)}
-                  className="px-4 py-3 bg-purple-600 text-white rounded-xl text-sm font-bold hover:bg-purple-700">
-                  BER Workflow
-                </button>
-                <button onClick={() => navigate(`/evaluations/zpc-approval`)}
-                  className="px-4 py-3 bg-indigo-600 text-white rounded-xl text-sm font-bold hover:bg-indigo-700">
-                  ZPC Approval
-                </button>
-              </div>
             </div>
           )}
 
-          {!isChairperson && isMember && alreadyDeclared && !isRecused && (
+          {/* Technical Scoring Phase Content */}
+          {currentPhase === 'technical' && (
             <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h2 className="text-lg font-semibold text-gray-900">COI Declaration Complete</h2>
-                  <p className="text-sm text-gray-500 mt-1">You can now proceed to evaluate bids</p>
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center">
+                  <svg className="w-6 h-6 text-blue-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 10a4.471 4.471 0 01-1.006 1.007M14 10a4.471 4.471 0 01-1.006-1.007l-.707-.707a5 5 0 117.072 0l.548.547z" />
+                  </svg>
                 </div>
-                <button onClick={() => navigate(`/evaluations/${id}/scoring`)}
-                  className="px-6 py-3 bg-zammsa-green text-white rounded-xl text-sm font-bold hover:bg-green-700">
-                  Proceed to Scoring
-                </button>
+                <div>
+                  <h2 className="text-lg font-semibold text-gray-900">Technical Scoring</h2>
+                  <p className="text-sm text-gray-500">Phase 3 of 7 - Evaluate technical proposals</p>
+                </div>
               </div>
-            </div>
-          )}
-
-          {coiState && coiState.declarations.length > 0 && (
-            <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
-              <h2 className="text-lg font-semibold text-gray-900 mb-4">All COI Declarations</h2>
-              <div className="overflow-x-auto">
-                <table className="min-w-full divide-y divide-gray-200 text-sm">
-                  <thead className="bg-gray-50">
-                    <tr>
-                      <th className="px-3 py-2 text-left font-medium text-gray-500">Member</th>
-                      <th className="px-3 py-2 text-left font-medium text-gray-500">Type</th>
-                      <th className="px-3 py-2 text-center font-medium text-gray-500">Has Conflict</th>
-                      <th className="px-3 py-2 text-center font-medium text-gray-500">Recused</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-100">
-                    {coiState.declarations.map((d: any) => (
-                      <tr key={d.id} className={d.recused ? 'bg-red-50' : ''}>
-                        <td className="px-3 py-2">{d.member_name}</td>
-                        <td className="px-3 py-2 text-gray-600 text-xs">{d.declaration_type || (d.has_conflict ? 'Conflict' : 'No Conflict')}</td>
-                        <td className="px-3 py-2 text-center">
-                          <span className={`px-2 py-0.5 rounded text-xs ${d.has_conflict ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'}`}>
-                            {d.has_conflict ? 'Yes' : 'No'}
-                          </span>
-                        </td>
-                        <td className="px-3 py-2 text-center">
-                          {d.recused ? <span className="text-red-600 font-medium">Recused</span> : '-'}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          )}
-          </>
-          )}
-
-          {view === 'scoring' && (
-            <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
-              <h2 className="text-lg font-semibold text-gray-900 mb-4">Technical Scoring</h2>
               <p className="text-sm text-gray-500 mb-4">Your scores are private. You cannot see other members' scores until you submit all your scores.</p>
               <div className="space-y-3">
                 {bidsData?.results?.length ? bidsData.results.map((bid: any) => (
@@ -268,18 +233,37 @@ const EvaluationDetail: React.FC = () => {
                       <span className="text-sm font-medium text-gray-900">{bid.vendor_name || bid.supplier_name || bid.id}</span>
                       <span className="text-xs text-gray-400 ml-2">({bid.bid_id || bid.submission_id})</span>
                     </div>
-                    <button onClick={() => navigate(`/evaluations/${id}/scoring`)} className="px-4 py-2 bg-zammsa-green text-white rounded-lg text-sm font-bold">Score</button>
+                    <button
+                      onClick={() => navigate(`/evaluations/${id}/scoring`)}
+                      className="px-4 py-2 bg-zammsa-green text-white rounded-lg text-sm font-bold"
+                    >
+                      Score Bids
+                    </button>
                   </div>
                 )) : <p className="text-sm text-gray-400">No bids available for scoring.</p>}
               </div>
             </div>
           )}
-          {view === 'financial' && (
+
+          {/* Financial Evaluation Phase Content */}
+          {currentPhase === 'financial' && (
             <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
-              <h2 className="text-lg font-semibold text-gray-900 mb-4">Financial Evaluation</h2>
-              <p className="text-sm text-gray-500 mb-4">Review and evaluate financial proposals. Apply preference margins.</p>
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-10 h-10 rounded-full bg-emerald-100 flex items-center justify-center">
+                  <svg className="w-6 h-6 text-emerald-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                </div>
+                <div>
+                  <h2 className="text-lg font-semibold text-gray-900">Financial Evaluation</h2>
+                  <p className="text-sm text-gray-500">Phase 4 of 7 - Review financial proposals & apply preferences</p>
+                </div>
+              </div>
               {user && [ROLES.EVALUATION_COMMITTEE_CHAIR, ROLES.DIRECTOR_PROCUREMENT].includes(user.role as any) ? (
-                <button onClick={() => navigate(`/evaluations/${committee.solicitation}/financial`)} className="px-6 py-3 bg-zammsa-green text-white rounded-xl text-sm font-bold">
+                <button
+                  onClick={() => navigate(`/evaluations/${committee.solicitation}/financial`)}
+                  className="px-6 py-3 bg-zammsa-green text-white rounded-xl text-sm font-bold"
+                >
                   Open Financial Evaluation
                 </button>
               ) : (
@@ -287,12 +271,82 @@ const EvaluationDetail: React.FC = () => {
               )}
             </div>
           )}
-          {view === 'ber' && (
+
+          {/* Consolidation Phase Content */}
+          {currentPhase === 'consolidation' && (
             <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
-              <h2 className="text-lg font-semibold text-gray-900 mb-4">Bid Evaluation Report</h2>
-              <p className="text-sm text-gray-500 mb-4">Generate the BER, collect committee signatures, and submit to ZPC for approval.</p>
-              <button onClick={() => navigate(`/evaluations/ber/${committee.solicitation}`)} className="px-6 py-3 bg-purple-600 text-white rounded-xl text-sm font-bold">
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-10 h-10 rounded-full bg-purple-100 flex items-center justify-center">
+                  <svg className="w-6 h-6 text-purple-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 3.055A9.001 9.001 0 1020.945 13H11V3.055z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20.488 9H15V3.512A9.025 9.025 0 0120.488 9z" />
+                  </svg>
+                </div>
+                <div>
+                  <h2 className="text-lg font-semibold text-gray-900">Score Consolidation</h2>
+                  <p className="text-sm text-gray-500">Phase 5 of 7 - Merge scores & calculate combined QCBS</p>
+                </div>
+              </div>
+              <p className="text-sm text-gray-500 mb-4">
+                Merge technical scores from all committee members and calculate combined QCBS/QBS scores if applicable.
+              </p>
+              <button
+                onClick={() => navigate(`/evaluations/${committee.solicitation}/consolidation`)}
+                className="px-6 py-3 bg-blue-600 text-white rounded-xl text-sm font-bold"
+              >
+                Launch Score Consolidation
+              </button>
+            </div>
+          )}
+
+          {/* BER Workflow Phase Content */}
+          {currentPhase === 'ber' && (
+            <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-10 h-10 rounded-full bg-indigo-100 flex items-center justify-center">
+                  <svg className="w-6 h-6 text-indigo-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                  </svg>
+                </div>
+                <div>
+                  <h2 className="text-lg font-semibold text-gray-900">BER Workflow</h2>
+                  <p className="text-sm text-gray-500">Phase 6 of 7 - Generate report & collect signatures</p>
+                </div>
+              </div>
+              <p className="text-sm text-gray-500 mb-4">
+                Generate the Bid Evaluation Report (BER), collect digital signatures from all committee members, and submit to ZPC for approval.
+              </p>
+              <button
+                onClick={() => navigate(`/evaluations/ber/${committee.solicitation}`)}
+                className="px-6 py-3 bg-purple-600 text-white rounded-xl text-sm font-bold"
+              >
                 Go to BER Workflow
+              </button>
+            </div>
+          )}
+
+          {/* Post-Qualification Phase Content */}
+          {currentPhase === 'post-qual' && (
+            <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-10 h-10 rounded-full bg-teal-100 flex items-center justify-center">
+                  <svg className="w-6 h-6 text-teal-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                </div>
+                <div>
+                  <h2 className="text-lg font-semibold text-gray-900">Post-Qualification</h2>
+                  <p className="text-sm text-gray-500">Phase 7 of 7 - Verify awarded supplier credentials</p>
+                </div>
+              </div>
+              <p className="text-sm text-gray-500 mb-4">
+                Perform post-qualification verification of the winning supplier to ensure they meet all requirements before contract award.
+              </p>
+              <button
+                onClick={() => navigate(`/evaluations/post-qualification`)}
+                className="px-6 py-3 bg-teal-600 text-white rounded-xl text-sm font-bold"
+              >
+                Launch Post-Qualification
               </button>
             </div>
           )}

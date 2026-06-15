@@ -103,6 +103,17 @@ class Solicitation(models.Model):
         help_text='Deadline for suppliers to submit clarification requests (≥5 working days before closing)')
     document_fee_enabled = models.BooleanField(default=False)
     document_fee_amount = models.DecimalField(max_digits=15, decimal_places=2, null=True, blank=True)
+    evaluation_method = models.CharField(max_length=20, blank=True, default='lowest_price',
+        choices=[
+            ('lowest_price', 'Lowest Evaluated Price'),
+            ('qcbs', 'QCBS — Quality and Cost Based Selection'),
+            ('qbs', 'QBS — Quality Based Selection'),
+            ('lcs', 'LCS — Least Cost Selection'),
+            ('fbs', 'FBS — Fixed Budget Selection'),
+        ],
+        help_text='Evaluation methodology used for bid scoring and ranking')
+    financial_weight = models.IntegerField(null=True, blank=True,
+        help_text='Weight of financial score in QCBS combined scoring (e.g. 20 = 80:20 quality:cost)')
 
     class Meta:
         db_table = 'sol_solicitation'
@@ -126,6 +137,10 @@ class EvaluationCriterion(models.Model):
     criterion_name = models.CharField(max_length=255)
     criterion_type = models.CharField(max_length=20, choices=CRITERION_TYPE_CHOICES)
     weight = models.DecimalField(max_digits=5, decimal_places=2, default=0)
+    max_score = models.DecimalField(max_digits=5, decimal_places=2, default=100,
+        help_text='Maximum possible score for this criterion (default: 100)')
+    scoring_guidance = models.TextField(blank=True, default='',
+        help_text='Detailed guidance shown to evaluators during scoring')
     minimum_threshold = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True)
     order_index = models.IntegerField(default=0)
 

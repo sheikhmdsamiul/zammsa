@@ -116,6 +116,13 @@ const BidSubmission: React.FC = () => {
   const addendaList = tender?.addenda || [];
   const hasAddenda = addendaList.length > 0;
   const submissionType = tender?.submission_format === 'two' ? 'Two-Envelope System' : 'Single Envelope System';
+  const evaluationMethodLabel =
+    tender?.evaluation_method === 'lowest_price' ? 'Lowest Evaluated Price' :
+    tender?.evaluation_method === 'qcbs' ? `Quality & Cost Based Selection (QCBS) — ${tender.financial_weight || 20}% financial, ${100 - (tender.financial_weight || 20)}% technical` :
+    tender?.evaluation_method === 'qbs' ? 'Quality Based Selection (QBS)' :
+    tender?.evaluation_method === 'lcs' ? 'Least Cost Selection (LCS)' :
+    tender?.evaluation_method === 'fbs' ? 'Fixed Budget Selection (FBS)' :
+    tender?.type === 'rfp' ? 'Quality & Cost Based Selection (QCBS)' : 'Lowest Evaluated Price';
   const isGoods = tender?.type === 'rfb' || tender?.type === 'rfq';
   const zamraRequired = isGoods;
   const bidSecurityRequired = tender?.bid_security_required !== false;
@@ -444,6 +451,10 @@ const BidSubmission: React.FC = () => {
                   <p className="text-sm font-bold text-gray-900">Submission Type</p>
                   <p className="text-sm text-gray-500">This solicitation uses: <strong>{submissionType}</strong></p>
                   <p className="text-xs text-gray-400 mt-1">(Technical and financial documents submitted together. Prices are read out at public bid opening.)</p>
+                  <div className="mt-2 inline-flex items-center gap-1.5 px-2.5 py-1 bg-blue-50 border border-blue-200 rounded-lg">
+                    <span className="text-[10px] font-bold text-blue-700 uppercase tracking-wider">Evaluation:</span>
+                    <span className="text-xs font-semibold text-blue-800">{evaluationMethodLabel}</span>
+                  </div>
                 </div>
               </div>
             </div>
@@ -621,9 +632,14 @@ const BidSubmission: React.FC = () => {
                 <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Your Bid Price</p>
                 <p className="text-sm font-bold text-gray-900 mt-1">K {parsedBidPrice.toLocaleString()}</p>
               </div>
-              <div className="p-5 bg-gray-50 rounded-2xl border-2 border-emerald-200">
+              <div className="p-5 bg-gray-50 rounded-2xl border-2 border-emerald-200 md:col-span-2">
                 <p className="text-[10px] font-black text-emerald-600 uppercase tracking-widest">Evaluated Price (for ranking)</p>
-                <p className="text-sm font-bold text-emerald-700 mt-1">K {evaluatedPrice.toLocaleString()} (K{parsedBidPrice.toLocaleString()} \u00d7 {(100 - ceecInfo.margin) / 100})</p>
+                <p className="text-lg font-bold text-emerald-700 mt-1">K {evaluatedPrice.toLocaleString()}</p>
+                <div className="mt-2 pt-2 border-t border-emerald-100 text-[11px] text-emerald-600 space-y-0.5 font-mono">
+                  <p>Bid Price: K {parsedBidPrice.toLocaleString()}</p>
+                  <p>Preference Discount ({ceecInfo.margin}%): &minus; K {Math.round(parsedBidPrice * ceecInfo.margin / 100).toLocaleString()}</p>
+                  <p className="font-bold text-emerald-700">= K {evaluatedPrice.toLocaleString()}</p>
+                </div>
               </div>
             </div>
             <p className="text-[11px] text-gray-400 mt-3 flex items-center gap-1"><InformationCircleIcon className="w-3.5 h-3.5" /> Evaluated price is used ONLY for ranking during evaluation. If awarded, your CONTRACT price = K{parsedBidPrice.toLocaleString()} (actual bid).</p>

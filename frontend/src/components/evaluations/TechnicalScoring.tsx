@@ -594,22 +594,28 @@ const TechnicalScoring: React.FC = () => {
                       <div className="flex items-start justify-between mb-3">
                         <div>
                           <p className="text-sm font-semibold text-gray-900">{criterion.order_index}. {criterion.criterion_name}</p>
-                          <p className="text-xs text-gray-500">Weight: {criterion.weight}%</p>
+                          <p className="text-xs text-gray-500">Weight: {criterion.weight}% &bull; Max score: {criterion.max_score || 100}</p>
                         </div>
                         <div className="text-right">
                           <p className="text-xs text-gray-500">Weighted</p>
                           <p className="text-lg font-bold text-zammsa-green">{weightedScore.toFixed(1)}</p>
                         </div>
                       </div>
+                      {criterion.scoring_guidance && (
+                        <div className="mb-3 p-3 bg-blue-50 border border-blue-100 rounded-lg">
+                          <p className="text-[11px] font-medium text-blue-700 mb-1">Scoring Guidance:</p>
+                          <p className="text-[11px] text-blue-600 whitespace-pre-line">{criterion.scoring_guidance}</p>
+                        </div>
+                      )}
                       <div className="flex items-center gap-4">
                         <div className="flex items-center gap-2">
-                          <span className="text-xs text-gray-500">Score (0-100):</span>
+                          <span className="text-xs text-gray-500">Score (0-{criterion.max_score || 100}):</span>
                           <input
                             type="number"
                             min={0}
-                            max={100}
+                            max={criterion.max_score || 100}
                             value={entry.score || ''}
-                            onChange={(e) => updateScore(currentBid.id, criterion.id, 'score', Math.min(100, Math.max(0, Number(e.target.value))))}
+                            onChange={(e) => updateScore(currentBid.id, criterion.id, 'score', Math.min(criterion.max_score || 100, Math.max(0, Number(e.target.value))))}
                             className="w-20 border border-gray-300 rounded-lg px-3 py-2 text-sm font-bold text-center"
                             placeholder="0"
                           />

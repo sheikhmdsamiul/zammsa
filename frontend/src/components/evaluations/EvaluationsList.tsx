@@ -179,6 +179,27 @@ const EvaluationsList: React.FC = () => {
           ),
         },
         {
+          key: 'phase_progress',
+          label: 'Phase Progress',
+          render: (_: any, row: any) => {
+            const coiStatus = getMemberStatus(row.id);
+            const currentPhase = coiStatus.label.includes('Conflict') ? 'COI Declaration' : 'Technical Scoring';
+            const phaseColor = coiStatus.label.includes('Conflict') ? 'bg-amber-100 text-amber-700' : 'bg-blue-100 text-blue-700';
+            const phaseIcon = coiStatus.label.includes('Conflict') ? '🔴' : '🟡';
+            return (
+              <div className="flex items-center gap-2">
+                <span className={`text-xs ${phaseColor} px-2 py-1 rounded-full font-medium`}>{phaseIcon} {currentPhase}</span>
+                <div className="w-16 h-1.5 bg-gray-200 rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-zammsa-green transition-all duration-300"
+                    style={{ width: coiStatus.label.includes('Conflict') ? '10%' : '30%' }}
+                  />
+                </div>
+              </div>
+            );
+          },
+        },
+        {
           key: 'status',
           label: 'Your Status',
           render: (_: any, row: any) => {

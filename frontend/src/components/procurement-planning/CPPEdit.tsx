@@ -7,7 +7,7 @@ import { ContractProcurementPlan, ProcurementMilestone, CPPRisk } from '../../ty
 import { useAuth } from '../../hooks/useAuth';
 import {
   CheckCircleIcon, ChevronLeftIcon, ChevronRightIcon,
-  DocumentTextIcon, PaperClipIcon, UploadIcon, TrashIcon,
+  DocumentTextIcon, PaperClipIcon, UploadIcon, TrashIcon, DownloadIcon,
 } from '@heroicons/react/outline';
 
 const DOC_TYPES = [
@@ -124,8 +124,9 @@ const CPPEdit: React.FC = () => {
     citizenPreference: true,
   });
   const [risks, setRisks] = useState<CPPRisk[]>([]);
-  const [cppDocs, setCppDocs] = useState<{ file: File; documentType: string; description: string }[]>([]);
+  const [cppDocs, setCppDocs] = useState<{ file?: File; documentType: string; description: string; isExisting?: boolean; documentId?: string; filename?: string; file_url?: string }[]>([]);
   const [uploadingDocs, setUploadingDocs] = useState(false);
+  const [deletingDocId, setDeletingDocId] = useState<string | null>(null);
   const [newRisk, setNewRisk] = useState<NewRiskState>({
     category: 'supply',
     description: '',
@@ -205,6 +206,18 @@ const CPPEdit: React.FC = () => {
           minimumTechnicalThreshold: Number(rr.minimumTechnicalThreshold) || 70,
           citizenPreference: rr.citizenPreference !== undefined ? Boolean(rr.citizenPreference) : true,
         });
+
+        // Load existing documents
+        if (res.documents && res.documents.length > 0) {
+          setCppDocs(res.documents.map((doc: any) => ({
+            documentType: doc.document_type,
+            description: doc.description,
+            isExisting: true,
+            documentId: doc.id || doc.document_id,
+            filename: doc.filename,
+            file_url: doc.file_url,
+          })));
+        }
       } catch (err: any) {
         toast.error(err?.response?.data?.error || 'Failed to load CPP');
         navigate('/procurement-planning/cpp');
@@ -214,6 +227,23 @@ const CPPEdit: React.FC = () => {
     };
     loadCPP();
   }, [id, navigate]);
+
+  const handleDeleteDocument = async (doc: any, idx: number) => {
+    if (doc.isExisting && doc.documentId) {
+      setDeletingDocId(doc.documentId);
+      try {
+        await procurementPlanningApi.contractPlans.documents.delete(id, doc.documentId);
+        toast.success('Document deleted');
+        setCppDocs(prev => prev.filter((_, i) => i !== idx));
+      } catch (err: any) {
+        toast.error(err?.response?.data?.error || 'Failed to delete document');
+      } finally {
+        setDeletingDocId(null);
+      }
+    } else {
+      setCppDocs(prev => prev.filter((_, i) => i !== idx));
+    }
+  };
 
   const addMilestone = () => {
     if (!newMilestone.name || !newMilestone.date) return;
@@ -310,12 +340,13 @@ const CPPEdit: React.FC = () => {
       const updated = await procurementPlanningApi.contractPlans.update(id, cppData);
       const cppId = updated.cpp_id || id;
 
-      if (cppDocs.length > 0) {
+      const newDocs = cppDocs.filter(doc => doc.file && !doc.isExisting);
+      if (newDocs.length > 0) {
         setUploadingDocs(true);
         let uploaded = 0;
-        for (const doc of cppDocs) {
+        for (const doc of newDocs) {
           try {
-            await procurementPlanningApi.contractPlans.documents.upload(cppId, doc.file, doc.documentType, doc.description);
+            await procurementPlanningApi.contractPlans.documents.upload(cppId, doc.file!, doc.documentType, doc.description);
             uploaded++;
           } catch { /* skip failed uploads */ }
         }
@@ -762,10 +793,20 @@ const CPPEdit: React.FC = () => {
                 <div key={idx} className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg border border-gray-100">
                   <PaperClipIcon className="w-4 h-4 text-gray-400" />
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-bold text-gray-700 truncate">{doc.file.name}</p>
-                    <p className="text-xs text-gray-400">{DOC_TYPES.find(t => t.value === doc.documentType)?.label || doc.documentType}</p>
+                    <p className="text-sm font-bold text-gray-700 truncate">{doc.filename || doc.file?.name}</p>
+                    <p className="text-xs text-gray-400">{DOC_TYPES.find(t => t.value === doc.documentType)?.label || doc.documentType}{doc.isExisting ? ' (Existing)' : ''}</p>
                   </div>
-                  <button onClick={() => setCppDocs(prev => prev.filter((_, i) => i !== idx))} className="p-1.5 text-gray-300 hover:text-red-500 transition-colors">
+                  {doc.isExisting && doc.file_url && (
+                    <a href={doc.file_url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-zammsa-green bg-zammsa-green/5 rounded-lg hover:bg-zammsa-green/10 transition-colors">
+                      <DownloadIcon className="w-3.5 h-3.5" />
+                      Download
+                    </a>
+                  )}
+                  <button 
+                    onClick={() => handleDeleteDocument(doc, idx)}
+                    disabled={deletingDocId === (doc.documentId || idx.toString())}
+                    className="p-1.5 text-gray-300 hover:text-red-500 transition-colors disabled:opacity-50"
+                  >
                     <TrashIcon className="w-4 h-4" />
                   </button>
                 </div>
@@ -780,7 +821,19 @@ const CPPEdit: React.FC = () => {
                     defaultValue=""
                   >
                     <option value="" disabled>-- Select type --</option>
-                    {DOC_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
+                    {DOC_TYPES.map(t => {
+                      const isDuplicate = cppDocs.some(d => d.documentType === t.value);
+                      return (
+                        <option 
+                          key={t.value} 
+                          value={t.value} 
+                          disabled={isDuplicate}
+                          className={isDuplicate ? 'text-gray-300' : ''}
+                        >
+                          {t.label}{isDuplicate ? ' (Already added)' : ''}
+                        </option>
+                      );
+                    })}
                   </select>
                 </div>
                 <div>
@@ -806,7 +859,11 @@ const CPPEdit: React.FC = () => {
                         const docType = (document.getElementById('cpp-edit-doc-type') as HTMLSelectElement)?.value || 'other';
                         const desc = (document.getElementById('cpp-edit-doc-desc') as HTMLInputElement)?.value || '';
                         if (docType === '') { toast.error('Select document type'); return; }
-                        setCppDocs(prev => [...prev, { file, documentType: docType, description: desc }]);
+                        if (cppDocs.some(d => d.documentType === docType)) {
+                          toast.error('This document type already exists');
+                          return;
+                        }
+                        setCppDocs(prev => [...prev, { file, documentType: docType, description: desc, isExisting: false }]);
                         (document.getElementById('cpp-edit-doc-type') as HTMLSelectElement).value = '';
                         (document.getElementById('cpp-edit-doc-desc') as HTMLInputElement).value = '';
                         e.target.value = '';

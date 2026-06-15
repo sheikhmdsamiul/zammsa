@@ -1028,6 +1028,7 @@ class ContractProcurementPlanListView(BaseView, generics.ListCreateAPIView):
                 'is_baseline_locked', 'baseline_locked_at', 'baseline_locked_by',
                 'previous_baseline',
             ])
+        
         _record_cpp_approval_trail(cpp, 'created', self.request.user, {
             'method': cpp.method,
             'recommended_method': cpp.recommended_method,
@@ -1040,6 +1041,11 @@ class ContractProcurementPlanDetailView(generics.RetrieveUpdateDestroyAPIView):
     queryset = ContractProcurementPlan.objects.select_related('requisition', 'created_by').prefetch_related('procurement_milestones', 'risks', 'documents').all()
     serializer_class = ContractProcurementPlanSerializer
     permission_classes = [IsAuthenticated]
+
+    def get_serializer_context(self):
+        context = super().get_serializer_context()
+        context['request'] = self.request
+        return context
 
     def perform_update(self, serializer):
         cpp = self.get_object()

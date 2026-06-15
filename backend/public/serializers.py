@@ -69,6 +69,8 @@ class TenderPublicSerializer(serializers.ModelSerializer):
     award_notice = serializers.SerializerMethodField()
     bid_opening_results = serializers.SerializerMethodField()
     items = serializers.SerializerMethodField()
+    evaluation_method = serializers.CharField(default=None)
+    financial_weight = serializers.IntegerField(default=None)
 
     class Meta:
         model = Solicitation
@@ -80,6 +82,7 @@ class TenderPublicSerializer(serializers.ModelSerializer):
             'documents', 'addenda', 'clarifications', 'evaluation_criteria',
             'award_notice', 'bid_opening_results', 'bid_security_rate',
             'bid_validity_days', 'created_at', 'items',
+            'evaluation_method', 'financial_weight',
         )
 
     def get_items(self, obj):

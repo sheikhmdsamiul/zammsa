@@ -552,8 +552,18 @@ def calculate_qcbs_view(request, solicitation_pk):
         return Response({'error': 'Only the committee chair or Director of Procurement can calculate QCBS'}, status=403)
 
     criteria = EvaluationCriterion.objects.filter(solicitation=sol)
-    tech_weight = Decimal('80')
-    fin_weight = Decimal('20')
+
+    eval_method = sol.evaluation_method or ('qcbs' if sol.method == 'rfp' else 'lowest_price')
+
+    if eval_method == 'qcbs' and sol.financial_weight is not None:
+        fin_weight = Decimal(str(sol.financial_weight))
+        tech_weight = Decimal('100') - fin_weight
+    elif eval_method == 'qbs':
+        tech_weight = Decimal('100')
+        fin_weight = Decimal('0')
+    else:
+        tech_weight = Decimal('80')
+        fin_weight = Decimal('20')
 
     threshold = Decimal(str(sol.minimum_technical_threshold or TECHNICAL_THRESHOLD_DEFAULT))
     tech_criteria = criteria.filter(criterion_type='technical')
@@ -620,7 +630,7 @@ def calculate_qcbs_view(request, solicitation_pk):
             )
 
         avg_tech = overall_pct
-        if sol.method == 'rfp':
+        if eval_method in ('qcbs', 'qbs'):
             total_score = (avg_tech * tech_weight / Decimal('100')) + (Decimal(str(fin_score)) * fin_weight / Decimal('100'))
 
             CombinedScore.objects.update_or_create(
@@ -658,7 +668,7 @@ def calculate_qcbs_view(request, solicitation_pk):
         })
 
     # Rank by total_score descending and persist to database
-    if sol.method == 'rfp':
+    if eval_method in ('qcbs', 'qbs'):
         results.sort(key=lambda x: x.get('total_score', 0), reverse=True)
         for i, bid_data in enumerate(results):
             bid_data['rank'] = i + 1
@@ -821,15 +831,31 @@ def select_winner_view(request, solicitation_pk):
     if not bid_id:
         return Response({'error': 'bid_id is required'}, status=400)
 
-    # Verify that evaluation has produced a defensible top-ranked bid.
-    top_ranked = CombinedScore.objects.filter(
-        bid__solicitation=sol
-    ).order_by('rank').first()
+    eval_method = sol.evaluation_method or ('qcbs' if sol.method == 'rfp' else 'lowest_price')
 
-    if top_ranked:
+    # Verify that evaluation has produced a defensible top-ranked bid.
+    if eval_method in ('qcbs', 'qbs'):
+        top_ranked = CombinedScore.objects.filter(
+            bid__solicitation=sol
+        ).order_by('rank').first()
+        if not top_ranked:
+            return Response({'error': f'{eval_method.upper()} combined scores must be calculated before selecting a winner.'}, status=400)
         if str(top_ranked.bid_id) != str(bid_id):
             return Response({
                 'error': f'Only the top-ranked bid can be selected as winner. The current top-ranked bid is "{top_ranked.bid.supplier.full_name}".'
+            }, status=400)
+    elif eval_method == 'fbs':
+        budget = sol.estimated_value or 0
+        within_budget = FinancialEvaluation.objects.filter(
+            bid__solicitation=sol, evaluated_price__lte=budget
+        ).select_related('bid__supplier')
+        if not within_budget.exists():
+            return Response({'error': f'No responsive bids are within the fixed budget of K{budget}.'}, status=400)
+        # Among bids within budget, pick the one with the highest technical score
+        best_bid = max(within_budget, key=lambda f: TechnicalScore.objects.filter(bid=f.bid).aggregate(avg=Avg('raw_score'))['avg'] or 0)
+        if str(best_bid.bid_id) != str(bid_id):
+            return Response({
+                'error': f'Only the highest technically-scored bid within budget can be selected as winner. The current highest-scored bid within budget is "{best_bid.bid.supplier.full_name}".'
             }, status=400)
     else:
         lowest_financial = FinancialEvaluation.objects.filter(
@@ -896,9 +922,10 @@ def ber_generate_view(request, solicitation_pk):
     if not is_chair:
         return Response({'error': 'Only the committee chair can generate the BER'}, status=403)
 
-    if sol.method == 'rfp':
+    eval_method = sol.evaluation_method or ('qcbs' if sol.method == 'rfp' else 'lowest_price')
+    if eval_method in ('qcbs', 'qbs'):
         if not CombinedScore.objects.filter(bid__solicitation=sol).exists():
-            return Response({'error': 'QCBS must be calculated before generating the BER. Calculate QCBS from the Score Consolidation page first.'}, status=400)
+            return Response({'error': f'{eval_method.upper()} combined scores must be calculated before generating the BER. Calculate scores from the Score Consolidation page first.'}, status=400)
     else:
         if not FinancialEvaluation.objects.filter(bid__solicitation=sol).exists():
             return Response({'error': 'Rankings must be calculated before generating the BER. Compute Rankings from the Score Consolidation page first.'}, status=400)

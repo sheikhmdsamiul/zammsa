@@ -54,6 +54,9 @@ const ScoreConsolidation: React.FC = () => {
   });
 
   const solicitationAwarded = solicitation?.status === 'awarded';
+  const isCombinedMethod = solicitation?.evaluation_method === 'qcbs' || solicitation?.evaluation_method === 'qbs' || (!solicitation?.evaluation_method && solicitation?.type === 'rfp');
+  const computeLabel = isCombinedMethod ? 'Calculate Combined Scores' : 'Persist Rankings';
+  const methodTitle = isCombinedMethod ? 'Combined Scores' : 'Evaluated Rankings';
 
   const { data: consolidatedData, isLoading: consolidatedLoading } = useQuery({
     queryKey: ['consolidated-scores', solId],
@@ -179,10 +182,15 @@ const ScoreConsolidation: React.FC = () => {
     onSuccess: (data) => {
       setShowQCBSModal(true);
       queryClient.invalidateQueries({ queryKey: ['consolidated-scores', solId] });
-      toast.success(`QCBS calculated: Tech ${data.tech_weight}% / Fin ${data.fin_weight}%`);
+      if (isCombinedMethod) {
+        toast.success(`Combined scores calculated: Tech ${data.tech_weight}% / Fin ${data.fin_weight}%`);
+      } else {
+        toast.success('Rankings persisted successfully');
+      }
     },
     onError: (err: any) => {
-      toast.error(err?.response?.data?.error || 'Failed to calculate QCBS');
+      const label = isCombinedMethod ? 'combined scores' : 'rankings';
+      toast.error(err?.response?.data?.error || `Failed to calculate ${label}`);
     },
   });
 
@@ -599,7 +607,7 @@ const ScoreConsolidation: React.FC = () => {
               className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white text-sm font-bold rounded-lg hover:bg-indigo-700 disabled:opacity-50 transition-colors"
             >
               <ChartBarIcon className="w-4 h-4" />
-              {qcbsMutation.isPending ? 'Calculating...' : 'Calculate QCBS'}
+              {qcbsMutation.isPending ? 'Calculating...' : computeLabel}
             </button>
           )}
         </div>
@@ -750,10 +758,12 @@ const ScoreConsolidation: React.FC = () => {
         open={showQcbsConfirm}
         onClose={() => setShowQcbsConfirm(false)}
         onConfirm={() => { setShowQcbsConfirm(false); qcbsMutation.mutate(); }}
-        title="Calculate QCBS?"
-        message="This will compute combined technical and financial scores for all technically passing bids. Ensure all financial evaluations are complete."
+        title={isCombinedMethod ? "Calculate Combined Scores?" : "Persist Rankings?"}
+        message={isCombinedMethod
+          ? "This will compute combined technical and financial scores for all technically passing bids. Ensure all financial evaluations are complete."
+          : "This will persist the current rankings for all technically passing bids. Ensure all financial evaluations are complete."}
         variant="info"
-        confirmText="Calculate"
+        confirmText={isCombinedMethod ? "Calculate" : "Persist"}
         cancelText="Cancel"
       />
 
@@ -762,10 +772,14 @@ const ScoreConsolidation: React.FC = () => {
           <div className="bg-white rounded-xl shadow-xl max-w-2xl w-full mx-4 max-h-[80vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
             <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between">
               <div>
-                <h2 className="text-lg font-bold text-gray-900">QCBS Results</h2>
-                <p className="text-xs text-gray-500">
-                  Weight: Tech {qcbsMutation.data.tech_weight}% / Financial {qcbsMutation.data.fin_weight}%
-                </p>
+                <h2 className="text-lg font-bold text-gray-900">{isCombinedMethod ? 'Combined Scores' : 'Rankings'} Results</h2>
+                {isCombinedMethod ? (
+                  <p className="text-xs text-gray-500">
+                    Weight: Tech {qcbsMutation.data.tech_weight}% / Financial {qcbsMutation.data.fin_weight}%
+                  </p>
+                ) : (
+                  <p className="text-xs text-gray-500">Evaluated price-based ranking</p>
+                )}
               </div>
               <button onClick={() => setShowQCBSModal(false)} className="text-gray-400 hover:text-gray-600">&times;</button>
             </div>

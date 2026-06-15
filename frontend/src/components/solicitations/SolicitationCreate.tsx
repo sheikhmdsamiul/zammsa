@@ -112,6 +112,8 @@ const SolicitationCreate: React.FC = () => {
     { id: '3', name: 'After-sales support and warranty plan', weight: 30, maxScore: 100, guidance: 'Quality of proposed support and warranty terms' },
   ]);
   const [minTechThreshold, setMinTechThreshold] = useState(70);
+  const [evaluationMethod, setEvaluationMethod] = useState<'lowest_price' | 'qcbs' | 'qbs' | 'lcs' | 'fbs'>('lowest_price');
+  const [financialWeight, setFinancialWeight] = useState(20);
   const [docFeeEnabled, setDocFeeEnabled] = useState(false);
   const [docFeeAmount, setDocFeeAmount] = useState(0);
   const [uploadFiles, setUploadFiles] = useState<UploadFile[]>([]);
@@ -223,6 +225,8 @@ const SolicitationCreate: React.FC = () => {
         scoring_guidance: c.guidance,
       })),
       minimum_technical_threshold: minTechThreshold,
+      evaluation_method: evaluationMethod,
+      financial_weight: evaluationMethod === 'qcbs' ? financialWeight : null,
       publication_channels: channels,
       document_fee_enabled: docFeeEnabled,
       document_fee_amount: docFeeEnabled ? docFeeAmount : 0,
@@ -539,7 +543,7 @@ const SolicitationCreate: React.FC = () => {
                 <label key={opt.key} className={`flex items-start gap-4 p-5 rounded-2xl cursor-pointer border-2 transition-all ${
                   template === opt.key ? 'border-zammsa-green bg-zammsa-green/5' : 'border-gray-100 bg-gray-50 hover:border-gray-200'
                 }`}>
-                  <input type="radio" name="template" checked={template === opt.key} onChange={() => { setTemplate(opt.key); if (opt.key === 'itb') setSubmissionFormat('single'); if (opt.key === 'rfp') setSubmissionFormat('two'); }} className="mt-1 text-zammsa-green focus:ring-zammsa-green" />
+                  <input type="radio" name="template" checked={template === opt.key} onChange={() => { setTemplate(opt.key); if (opt.key === 'itb') { setSubmissionFormat('single'); setEvaluationMethod('lowest_price'); } if (opt.key === 'rfp') { setSubmissionFormat('two'); setEvaluationMethod('qcbs'); } if (opt.key === 'rfq') { setEvaluationMethod('lcs'); } }} className="mt-1 text-zammsa-green focus:ring-zammsa-green" />
                   <div className="flex-1">
                     <p className="text-sm font-bold text-gray-900">{opt.label}</p>
                     <p className="text-xs text-gray-500 mt-0.5">{opt.desc}</p>
@@ -803,18 +807,68 @@ const SolicitationCreate: React.FC = () => {
 
           <div className="bg-white rounded-3xl border border-gray-200 shadow-sm p-8">
             <h2 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-6">Evaluation Methodology</h2>
-            <div className="p-4 bg-gray-50 rounded-2xl mb-4">
-              <p className="text-sm font-bold text-gray-700">For ITB (Goods): Lowest evaluated price wins</p>
-              <p className="text-xs text-gray-500 mt-1">(after technical pass/fail — no QCBS weighting for goods)</p>
+
+            <div className="space-y-4 mb-6">
+              {([
+                { key: 'lowest_price' as const, label: 'Lowest Evaluated Price', desc: 'Price-only comparison after mandatory pass/fail. No technical scoring weights.', showFor: ['itb'] },
+                { key: 'qcbs' as const, label: 'QCBS — Quality & Cost Based Selection', desc: 'Combined technical (weighted) + financial scoring. Standard for consulting services.', showFor: ['rfp'] },
+                { key: 'qbs' as const, label: 'QBS — Quality Based Selection', desc: 'Technical quality determines winner; financial proposal is pass/fail.', showFor: ['rfp'] },
+                { key: 'lcs' as const, label: 'LCS — Least Cost Selection', desc: 'Bids above minimum technical threshold; lowest price wins.', showFor: ['rfp', 'rfq'] },
+                { key: 'fbs' as const, label: 'FBS — Fixed Budget Selection', desc: 'Highest technical score within the fixed budget wins.', showFor: ['rfp', 'rfq'] },
+              ]).filter(opt => template && opt.showFor.includes(template)).map(opt => (
+                <label key={opt.key} className={`flex items-start gap-3 p-4 rounded-2xl cursor-pointer border-2 transition-all ${
+                  evaluationMethod === opt.key ? 'border-zammsa-green bg-zammsa-green/5' : 'border-gray-100 bg-gray-50'
+                }`}>
+                  <input type="radio" name="evalMethod" checked={evaluationMethod === opt.key} onChange={() => setEvaluationMethod(opt.key)} className="mt-0.5 text-zammsa-green focus:ring-zammsa-green" />
+                  <div>
+                    <p className="text-sm font-bold text-gray-900">{opt.label}</p>
+                    <p className="text-xs text-gray-500 mt-0.5">{opt.desc}</p>
+                  </div>
+                </label>
+              ))}
             </div>
-            <div>
-              <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5 block ml-1">Minimum Technical Threshold</label>
-              <p className="text-[11px] text-gray-400 mb-2 ml-1">Minimum score to pass to financial evaluation</p>
-              <div className="flex items-center gap-3">
-                <input type="number" value={minTechThreshold} onChange={(e) => setMinTechThreshold(parseInt(e.target.value) || 70)} min={0} max={100} className="w-32 bg-white border border-gray-200 rounded-2xl px-5 py-4 text-sm font-bold text-gray-700 outline-none focus:ring-4 focus:ring-zammsa-green/5" />
-                <span className="text-sm font-bold text-gray-400">points (out of 100)</span>
+
+            <div className="p-4 bg-blue-50 border border-blue-200 rounded-2xl mb-6">
+              <p className="text-xs font-bold text-blue-800 flex items-center gap-1">
+                <InformationCircleIcon className="w-3.5 h-3.5" />
+                {template === 'itb' && 'Goods/Works — lowest evaluated price after bid correction and preference margins.'}
+                {template === 'rfp' && evaluationMethod === 'qcbs' && 'Consulting Services — combined technical + financial score with weighted methodology.'}
+                {template === 'rfp' && evaluationMethod === 'qbs' && 'Complex consulting — winner determined by technical quality; financial within budget.'}
+                {template === 'rfp' && evaluationMethod === 'lcs' && 'Standard consulting — minimum technical threshold, then lowest price.'}
+                {template === 'rfp' && evaluationMethod === 'fbs' && 'Fixed budget — highest technical score within budget wins.'}
+                {template === 'rfq' && 'Simplified procurement — quick price comparison with minimal evaluation.'}
+              </p>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div>
+                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5 block ml-1">Minimum Technical Threshold</label>
+                <p className="text-[11px] text-gray-400 mb-2 ml-1">Minimum score to pass to financial evaluation</p>
+                <div className="flex items-center gap-3">
+                  <input type="number" value={minTechThreshold} onChange={(e) => setMinTechThreshold(parseInt(e.target.value) || 70)} min={0} max={100} className="w-32 bg-white border border-gray-200 rounded-2xl px-5 py-4 text-sm font-bold text-gray-700 outline-none focus:ring-4 focus:ring-zammsa-green/5" />
+                  <span className="text-sm font-bold text-gray-400">points (out of 100)</span>
+                </div>
               </div>
-              <p className="text-[11px] text-gray-400 mt-2 ml-1 flex items-center gap-1"><InformationCircleIcon className="w-3 h-3" /> Bids scoring below this threshold will not have their financial proposals opened.</p>
+
+              {evaluationMethod === 'qcbs' && (
+                <div>
+                  <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5 block ml-1">Financial Weight</label>
+                  <p className="text-[11px] text-gray-400 mb-2 ml-1">Weight of financial score in combined QCBS scoring</p>
+                  <div className="flex items-center gap-3">
+                    <input type="number" value={financialWeight} onChange={(e) => setFinancialWeight(parseInt(e.target.value) || 20)} min={5} max={50} className="w-32 bg-white border border-gray-200 rounded-2xl px-5 py-4 text-sm font-bold text-gray-700 outline-none focus:ring-4 focus:ring-zammsa-green/5" />
+                    <span className="text-sm font-bold text-gray-400">%  (quality {100 - financialWeight}% : cost {financialWeight}%)</span>
+                  </div>
+                </div>
+              )}
+
+              {template !== 'itb' && (
+                <div className="p-3 bg-amber-50 border border-amber-200 rounded-2xl md:col-span-2">
+                  <p className="text-[11px] font-bold text-amber-700 flex items-center gap-1">
+                    <InformationCircleIcon className="w-3.5 h-3.5" />
+                    Bids scoring below the minimum technical threshold will not have their financial proposals opened.
+                  </p>
+                </div>
+              )}
             </div>
           </div>
         </div>

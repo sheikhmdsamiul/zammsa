@@ -95,7 +95,7 @@ export const procurementPlanningApi = {
       api.post<{ message: string; status: string }>(`/procurement-planning/notices/${id}/archive/`).then(r => r.data),
   },
 
-  contractPlans: {
+    contractPlans: {
     list: (params?: Record<string, any>) =>
       api.get<PaginatedResponse<ContractProcurementPlan>>('/procurement-planning/contract-plans/', { params }).then(r => r.data),
     create: (data: Partial<ContractProcurementPlan>) =>
@@ -135,7 +135,7 @@ export const procurementPlanningApi = {
     documents: {
       upload: (cppId: string, file: File, documentType?: string, description?: string) => {
         const fd = new FormData();
-        fd.append('file', file);
+        fd.append('document', file);
         if (documentType) fd.append('document_type', documentType);
         if (description) fd.append('description', description);
         return api.post<{ message: string; document: any }>(`/procurement-planning/contract-plans/${cppId}/documents/`, fd, {

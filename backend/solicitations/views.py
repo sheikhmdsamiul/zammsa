@@ -392,6 +392,35 @@ def _publish_to_egp_portal(sol):
     return ref
 
 
+def _notify_addendum_issued(sol, addendum):
+    """Send addendum notifications to suppliers who downloaded/submitted bids."""
+    from django.core.mail import send_mail
+    from bids.models import BidSubmission
+    bid_contacts = BidSubmission.objects.filter(
+        solicitation=sol, status__in=['draft', 'submitted']
+    ).select_related('supplier').values_list('supplier__email', flat=True)
+    recipient_emails = [e for e in bid_contacts if e]
+    if not recipient_emails:
+        return
+    subject = f'Addendum No. {addendum.addendum_number}: {sol.sol_number} - {sol.title}'
+    body = (
+        f'An addendum has been issued for solicitation {sol.sol_number}.\n\n'
+        f'Addendum No: {addendum.addendum_number}\n'
+        f'Description: {addendum.description}\n'
+        f'Reason: {addendum.reason or "N/A"}\n'
+        f'Previous closing date: {sol.closing_date - (addendum.extended_closing_date - sol.closing_date) if addendum.extended_closing_date else sol.closing_date}\n'
+        f'Updated closing date: {sol.closing_date}\n\n'
+        f'Please log in to the portal to view the full addendum and acknowledge before submitting.\n\n'
+        f'This is an automated notification from the ZAMMSA Procurement System.'
+    )
+    send_mail(
+        subject, body,
+        getattr(settings, 'DEFAULT_FROM_EMAIL', 'noreply@zammsa.gov.zm'),
+        recipient_emails,
+        fail_silently=False,
+    )
+
+
 def _notify_suppliers_of_publication(sol):
     """Send email notifications to registered suppliers."""
     from suppliers.models import Supplier
@@ -452,6 +481,14 @@ def solicitation_add_addendum_view(request, pk):
         return Response({'error': 'Description is required'}, status=400)
 
     last_num = sol.addenda.aggregate(m=Max('addendum_number'))['m'] or 0
+    days_remaining = (sol.closing_date - timezone.now()).days
+
+    if days_remaining <= 7:
+        extend_days = int(extend_days) if extend_days else 7
+    elif extend_days:
+        extend_days = int(extend_days)
+    else:
+        extend_days = None
 
     addendum = SolicitationAddendum.objects.create(
         solicitation=sol,
@@ -460,21 +497,13 @@ def solicitation_add_addendum_view(request, pk):
         reason=reason,
     )
 
-    days_remaining = (sol.closing_date - timezone.now()).days
-    if days_remaining <= 7:
-        if not extend_days:
-            return Response({
-                'error': f'Only {days_remaining} days remaining until closing. You must provide extend_closing_days to issue an addendum.'
-            }, status=400)
-        addendum.extended_closing_date = sol.closing_date + timezone.timedelta(days=int(extend_days))
+    if extend_days:
+        addendum.extended_closing_date = sol.closing_date + timezone.timedelta(days=extend_days)
         sol.closing_date = addendum.extended_closing_date
         sol.save()
         addendum.save()
-    elif extend_days:
-        addendum.extended_closing_date = sol.closing_date + timezone.timedelta(days=int(extend_days))
-        sol.closing_date = addendum.extended_closing_date
-        sol.save()
-        addendum.save()
+
+    _notify_addendum_issued(sol, addendum)
 
     return Response({
         'message': f'Addendum {addendum.addendum_number} issued',
