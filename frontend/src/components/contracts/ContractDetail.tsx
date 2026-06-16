@@ -130,6 +130,12 @@ const ContractDetail: React.FC = () => {
       path: `/contracts/${id}/archive`,
       className: 'bg-gray-600 hover:bg-gray-700 text-white',
     },
+    {
+      show: c.completed_at != null,
+      label: 'Release Retention',
+      path: `/contracts/${id}/retention-release`,
+      className: 'bg-cyan-600 hover:bg-cyan-700 text-white',
+    },
   ].filter((a) => a.show);
 
   return (

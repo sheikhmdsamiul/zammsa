@@ -107,6 +107,7 @@ const SupplierPerformanceList = React.lazy(() => import('./components/contracts/
 const ContractClosureList = React.lazy(() => import('./components/contracts/ContractClosureList'));
 const ExecutionDashboard = React.lazy(() => import('./components/contracts/ExecutionDashboard'));
 const DeliveryManager = React.lazy(() => import('./components/contracts/DeliveryManager'));
+const RetentionReleasePanel = React.lazy(() => import('./components/contracts/RetentionReleasePanel'));
 
 const FinanceDashboard = React.lazy(() => import('./components/finance/FinanceDashboard'));
 const FinanceBudgets = React.lazy(() => import('./components/finance/Budgets'));
@@ -446,6 +447,11 @@ function App() {
                   <Route path="contracts/:id/archive" element={
                     <ProtectedRoute roles={[ROLES.CONTRACT_MANAGER, ROLES.PROCUREMENT_MANAGER, ROLES.DIRECTOR_PROCUREMENT, ROLES.SYSTEM_ADMIN]}>
                       <ContractArchiving />
+                    </ProtectedRoute>
+                  } />
+                  <Route path="contracts/:id/retention-release" element={
+                    <ProtectedRoute roles={[ROLES.FINANCE_OFFICER, ROLES.BUDGET_CONTROLLER, ROLES.DIRECTOR_GENERAL, ROLES.CONTRACT_MANAGER]}>
+                      <RetentionReleasePanel />
                     </ProtectedRoute>
                   } />
                   <Route path="finance" element={

@@ -1287,23 +1287,32 @@ export interface ContractFinancialSummary {
   title: string;
   value: number;
   currency: string;
-  po_number?: string;
+  po_number?: string | null;
   purchase_orders?: {
     id: string;
     po_number: string;
     total_amount: number;
     status: string;
   }[];
+  original_value: number;
+  amendment_total: number;
+  final_contract_value: number;
+  total_invoiced: number;
+  total_ld_deducted: number;
   payments_to_date: number;
   retained_to_date: number;
+  retention_released_to_date: number;
+  budget_savings: number;
   balance: number;
   retention_rate: number;
   payment_terms: string;
   milestones: {
     milestone_id: string;
     milestone_name: string;
+    actual_date?: string | null;
     due_date: string;
     status: string;
+    variance_flag?: string | null;
   }[];
   grns: {
     grn_id: string;
@@ -1313,6 +1322,7 @@ export interface ContractFinancialSummary {
     unit_price: number;
     total_amount: number;
     received_date: string;
+    status?: string;
   }[];
   start_date: string;
   end_date: string;

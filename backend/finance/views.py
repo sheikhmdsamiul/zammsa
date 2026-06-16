@@ -1472,8 +1472,9 @@ def retention_release_view(request, pk):
     except Contract.DoesNotExist:
         return Response({'error': 'Contract not found'}, status=404)
 
-    if request.user.role not in FINANCE_PAYMENT_ROLES:
-        return Response({'error': 'Only finance officers can release retention'}, status=403)
+    RETENTION_RELEASE_ROLES = FINANCE_PAYMENT_ROLES + ('contract_manager',)
+    if request.user.role not in RETENTION_RELEASE_ROLES:
+        return Response({'error': 'Only finance officers or contract managers can release retention'}, status=403)
 
     if contract.completed_at:
         releasable_on = contract.completed_at + timedelta(days=30)
@@ -1593,7 +1594,7 @@ def contract_financial_summary_view(request, pk):
         'retention_released_to_date': float(total_retention_released),
         'budget_savings': float(budget_savings),
         'balance': float(final_value - total_paid - total_retained),
-        'retention_rate': 0.05,
+        'retention_rate': float(contract.retention_rate),
         'payment_terms': '30 days from invoice approval',
         'milestones': list(milestones),
         'grns': list(grns),
