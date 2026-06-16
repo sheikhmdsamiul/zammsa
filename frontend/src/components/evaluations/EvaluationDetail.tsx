@@ -7,7 +7,7 @@ import { StatusBadge } from '../common/StatusBadge';
 import { LoadingSpinner } from '../common/LoadingSpinner';
 import { useAuth } from '../../hooks/useAuth';
 import { ROLES } from '../../config/rbac';
-import { ExclamationIcon } from '@heroicons/react/outline';
+import { ExclamationIcon, CheckCircleIcon } from '@heroicons/react/outline';
 import { EVALUATION_PHASES, EvaluationPhaseStepper, EvaluationPhaseId } from './EvaluationPhaseStepper';
 
 const EvaluationDetail: React.FC = () => {
@@ -33,6 +33,14 @@ const EvaluationDetail: React.FC = () => {
     enabled: !!committee?.solicitation,
   });
 
+  // Fetch phase status from unified backend endpoint
+  const { data: phaseStatus } = useQuery({
+    queryKey: ['phase-status', committee?.solicitation],
+    queryFn: () => evaluationsApi.getPhaseStatus(committee!.solicitation),
+    enabled: !!committee?.solicitation,
+    refetchInterval: 10000,
+  });
+
   const [currentPhase, setCurrentPhase] = useState<EvaluationPhaseId>('coi');
 
   // COI Gate - computed before early return for hooks rule
@@ -47,22 +55,29 @@ const EvaluationDetail: React.FC = () => {
   const isRecused = coiState?.recused_members?.includes(user?.id || '');
   const needsCoiDeclaration = isMember && !isRecused && !alreadyDeclared;
 
-  // Check which phases are complete for this committee
+  // Check which phases are complete using the unified backend response
   const phasesComplete = useMemo(() => {
-    const complete: Record<string, boolean> = {
+    const phases = phaseStatus?.phases || {};
+    return {
       coi: !!alreadyDeclared && !isRecused,
+      preliminary: phases.preliminary?.complete || false,
+      technical: phases.technical?.complete || false,
+      financial: phases.financial?.complete || false,
+      consolidation: phases.consolidation?.complete || false,
+      ber: phases.ber?.complete || false,
+      'post-qual': phases['post-qual']?.complete || false,
     };
-    return complete;
-  }, [alreadyDeclared, isRecused]);
+  }, [alreadyDeclared, isRecused, phaseStatus]);
 
-  // Build phasesBlocked map based on dependencies
+  // Build phasesBlocked map based on dependencies and completion status
   const phasesBlocked = useMemo(() => {
     const blocked: Record<string, boolean> = {};
-    EVALUATION_PHASES.forEach((phase) => {
-      blocked[phase.id] = false;
+    EVALUATION_PHASES.forEach((phase, index) => {
+      // A phase is blocked if any of its dependencies are not complete
+      blocked[phase.id] = phase.dependencies.some(dep => !phasesComplete[dep]);
     });
     return blocked;
-  }, []);
+  }, [phasesComplete]);
 
   // User role label
   const userRoleLabel = useMemo(() => {
@@ -71,6 +86,32 @@ const EvaluationDetail: React.FC = () => {
     if (isMember) return 'member';
     return 'external';
   }, [isChairperson, isSecretary, isMember]);
+
+  // Auto-advance current phase when current phase becomes complete
+  useEffect(() => {
+    const phaseOrder = EVALUATION_PHASES.map(p => p.id);
+    const currentIndex = phaseOrder.indexOf(currentPhase);
+    if (phasesComplete[currentPhase] && currentIndex < phaseOrder.length - 1) {
+      const nextIncomplete = phaseOrder.find((phaseId, idx) => idx > currentIndex && !phasesComplete[phaseId]);
+      if (nextIncomplete) {
+        setCurrentPhase(nextIncomplete);
+        return;
+      }
+    }
+    // If all phases complete, stay on last phase
+    const allDone = phaseOrder.every(phaseId => phasesComplete[phaseId]);
+    if (allDone && currentPhase !== phaseOrder[phaseOrder.length - 1]) {
+      setCurrentPhase(phaseOrder[phaseOrder.length - 1]);
+    }
+  }, [phasesComplete, currentPhase]);
+
+  // Pre-compute phase completion flags for cleaner JSX
+  const isPreliminaryComplete = phasesComplete.preliminary || false;
+  const isTechnicalComplete = phasesComplete.technical || false;
+  const isFinancialComplete = phasesComplete.financial || false;
+  const isConsolidationComplete = phasesComplete.consolidation || false;
+  const isBERComplete = phasesComplete.ber || false;
+  const isPostQualComplete = phasesComplete['post-qual'] || false;
 
   useEffect(() => {
     if (needsCoiDeclaration && id) {
@@ -163,27 +204,47 @@ const EvaluationDetail: React.FC = () => {
                     </div>
                     {isChairperson && (
                       <div className="flex flex-wrap gap-3 mt-4">
-                        <button
-                          onClick={() => navigate(`/evaluations/preliminary/${committee.solicitation}`)}
-                          className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-bold"
-                        >
-                          Proceed to Preliminary Exam
-                        </button>
-                        <button
-                          onClick={() => setCurrentPhase('technical')}
-                          className="px-4 py-2 bg-zammsa-green text-white rounded-lg text-sm font-bold"
-                        >
-                          Skip to Technical Scoring
-                        </button>
+                        {!phasesComplete.preliminary ? (
+                          <button
+                            onClick={() => navigate(`/evaluations/preliminary/${committee.solicitation}`)}
+                            className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-bold"
+                          >
+                            Proceed to Preliminary Exam
+                          </button>
+                        ) : (
+                          <span className="px-4 py-2 bg-green-100 text-green-700 rounded-lg text-sm font-bold">
+                            ✅ Preliminary Exam Complete
+                          </span>
+                        )}
+                        {!phasesComplete.technical ? (
+                          <button
+                            onClick={() => setCurrentPhase('technical')}
+                            className="px-4 py-2 bg-zammsa-green text-white rounded-lg text-sm font-bold"
+                          >
+                            {phasesComplete.preliminary ? 'Proceed to Technical Scoring' : 'Skip to Technical Scoring'}
+                          </button>
+                        ) : (
+                          <span className="px-4 py-2 bg-green-100 text-green-700 rounded-lg text-sm font-bold">
+                            ✅ Technical Scoring Complete
+                          </span>
+                        )}
                       </div>
                     )}
                     {!isChairperson && !isMember && (
-                      <button
-                        onClick={() => setCurrentPhase('technical')}
-                        className="px-4 py-2 bg-zammsa-green text-white rounded-lg text-sm font-bold"
-                      >
-                        Proceed to Technical Scoring
-                      </button>
+                      <div className="flex flex-wrap gap-3 mt-4">
+                        {!phasesComplete.technical ? (
+                          <button
+                            onClick={() => setCurrentPhase('technical')}
+                            className="px-4 py-2 bg-zammsa-green text-white rounded-lg text-sm font-bold"
+                          >
+                            Proceed to Technical Scoring
+                          </button>
+                        ) : (
+                          <span className="px-4 py-2 bg-green-100 text-green-700 rounded-lg text-sm font-bold">
+                            ✅ Technical Scoring Complete
+                          </span>
+                        )}
+                      </div>
                     )}
                   </>
                 ) : isRecused ? (
@@ -208,6 +269,28 @@ const EvaluationDetail: React.FC = () => {
                   </div>
                 )}
               </div>
+            </div>
+          )}
+
+          {/* Preliminary Examination Phase Content */}
+          {currentPhase === 'preliminary' && (
+            <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-10 h-10 rounded-full bg-yellow-100 flex items-center justify-center">
+                  <CheckCircleIcon className="w-6 h-6 text-yellow-700" />
+                </div>
+                <div>
+                  <h2 className="text-lg font-semibold text-gray-900">Preliminary Examination</h2>
+                  <p className="text-sm text-gray-500">Phase 2 of 7 - Mandatory criteria pass/fail checks</p>
+                </div>
+              </div>
+              <p className="text-sm text-gray-500 mb-4">Review and verify mandatory compliance requirements for all submitted bids.</p>
+              <button
+                onClick={() => navigate(`/evaluations/preliminary/${committee.solicitation}`)}
+                className="px-6 py-3 bg-blue-600 text-white rounded-xl text-sm font-bold"
+              >
+                Launch Preliminary Examination
+              </button>
             </div>
           )}
 
@@ -245,8 +328,40 @@ const EvaluationDetail: React.FC = () => {
             </div>
           )}
 
+          {/* Score Consolidation Phase Content */}
+          {currentPhase === 'consolidation' && (
+            <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-10 h-10 rounded-full bg-purple-100 flex items-center justify-center">
+                  <svg className="w-6 h-6 text-purple-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 3.055A9.001 9.001 0 1020.945 13H11V3.055z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20.488 9H15V3.512A9.025 9.025 0 0120.488 9z" />
+                  </svg>
+                </div>
+                <div>
+                  <h2 className="text-lg font-semibold text-gray-900">Score Consolidation</h2>
+                  <p className="text-sm text-gray-500">Phase 4 of 7 - Merge scores & calculate combined QCBS</p>
+                </div>
+              </div>
+              <p className="text-sm text-gray-500 mb-4">
+                Merge technical scores from all committee members and calculate combined QCBS/QBS scores if applicable.
+              </p>
+              <button
+                onClick={() => navigate(`/evaluations/${committee.solicitation}/consolidation`)}
+                className="px-6 py-3 bg-blue-600 text-white rounded-xl text-sm font-bold"
+              >
+                Launch Score Consolidation
+              </button>
+              <div className={`mt-4 p-4 bg-green-50 border border-green-200 rounded-xl text-center ${!isConsolidationComplete || isChairperson ? 'hidden' : ''}`}>
+                <span className="px-4 py-2 bg-green-100 text-green-700 rounded-lg text-sm font-bold">
+                  ✅ Score Consolidation Complete
+                </span>
+              </div>
+            </div>
+          )}
+
           {/* Financial Evaluation Phase Content */}
-          {currentPhase === 'financial' && (
+          {currentPhase === 'financial' && (<>
             <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
               <div className="flex items-center gap-3 mb-4">
                 <div className="w-10 h-10 rounded-full bg-emerald-100 flex items-center justify-center">
@@ -256,7 +371,7 @@ const EvaluationDetail: React.FC = () => {
                 </div>
                 <div>
                   <h2 className="text-lg font-semibold text-gray-900">Financial Evaluation</h2>
-                  <p className="text-sm text-gray-500">Phase 4 of 7 - Review financial proposals & apply preferences</p>
+                  <p className="text-sm text-gray-500">Phase 5 of 7 - Review financial proposals & apply preferences</p>
                 </div>
               </div>
               {user && [ROLES.EVALUATION_COMMITTEE_CHAIR, ROLES.DIRECTOR_PROCUREMENT].includes(user.role as any) ? (
@@ -270,34 +385,13 @@ const EvaluationDetail: React.FC = () => {
                 <p className="text-sm text-gray-500">Only the committee chair or director of procurement can access the financial evaluation.</p>
               )}
             </div>
-          )}
-
-          {/* Consolidation Phase Content */}
-          {currentPhase === 'consolidation' && (
-            <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
-              <div className="flex items-center gap-3 mb-4">
-                <div className="w-10 h-10 rounded-full bg-purple-100 flex items-center justify-center">
-                  <svg className="w-6 h-6 text-purple-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 3.055A9.001 9.001 0 1020.945 13H11V3.055z" />
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20.488 9H15V3.512A9.025 9.025 0 0120.488 9z" />
-                  </svg>
-                </div>
-                <div>
-                  <h2 className="text-lg font-semibold text-gray-900">Score Consolidation</h2>
-                  <p className="text-sm text-gray-500">Phase 5 of 7 - Merge scores & calculate combined QCBS</p>
-                </div>
-              </div>
-              <p className="text-sm text-gray-500 mb-4">
-                Merge technical scores from all committee members and calculate combined QCBS/QBS scores if applicable.
-              </p>
-              <button
-                onClick={() => navigate(`/evaluations/${committee.solicitation}/consolidation`)}
-                className="px-6 py-3 bg-blue-600 text-white rounded-xl text-sm font-bold"
-              >
-                Launch Score Consolidation
-              </button>
+            <div className={`mt-4 p-4 bg-green-50 border border-green-200 rounded-xl text-center ${!isFinancialComplete || isChairperson ? 'hidden' : ''}`}>
+              <span className="px-4 py-2 bg-green-100 text-green-700 rounded-lg text-sm font-bold">
+                ✅ Financial Evaluation Complete
+              </span>
             </div>
-          )}
+          </>)}
+          {/* end financial phase */}
 
           {/* BER Workflow Phase Content */}
           {currentPhase === 'ber' && (
@@ -316,13 +410,18 @@ const EvaluationDetail: React.FC = () => {
               <p className="text-sm text-gray-500 mb-4">
                 Generate the Bid Evaluation Report (BER), collect digital signatures from all committee members, and submit to ZPC for approval.
               </p>
-              <button
-                onClick={() => navigate(`/evaluations/ber/${committee.solicitation}`)}
-                className="px-6 py-3 bg-purple-600 text-white rounded-xl text-sm font-bold"
-              >
-                Go to BER Workflow
-              </button>
-            </div>
+                <button
+                  onClick={() => navigate(`/evaluations/ber/${committee.solicitation}`)}
+                  className="px-6 py-3 bg-purple-600 text-white rounded-xl text-sm font-bold"
+                >
+                  Go to BER Workflow
+                </button>
+                <div className={`mt-4 p-4 bg-green-50 border border-green-200 rounded-xl text-center ${!isBERComplete || isChairperson ? 'hidden' : ''}`}>
+                  <div className="px-4 py-2 bg-green-100 text-green-700 rounded-lg text-sm font-bold">
+                    ✅ BER Workflow Complete
+                  </div>
+                </div>
+              </div>
           )}
 
           {/* Post-Qualification Phase Content */}
@@ -348,10 +447,15 @@ const EvaluationDetail: React.FC = () => {
               >
                 Launch Post-Qualification
               </button>
+              <div className={`mt-4 p-4 bg-green-50 border border-green-200 rounded-xl text-center ${!isPostQualComplete || isChairperson ? 'hidden' : ''}`}>
+                <span className="px-4 py-2 bg-green-100 text-green-700 rounded-lg text-sm font-bold">
+                  ✅ Post-Qualification Complete
+                </span>
+              </div>
             </div>
           )}
-        </div>
 
+        </div>
         <div className="space-y-6">
           <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
             <h2 className="text-lg font-semibold text-gray-900 mb-4">Quick Info</h2>

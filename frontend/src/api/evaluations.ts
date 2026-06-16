@@ -113,4 +113,7 @@ export const evaluationsApi = {
 
   updatePreliminaryExam: (examId: string, data: { is_compliant?: boolean; comment?: string }) =>
     api.patch<any>(`/evaluations/preliminary/${examId}/`, data).then((r) => r.data),
+
+  getPhaseStatus: (solicitationId: string) =>
+    api.get<any>(`/evaluations/phase-status/${solicitationId}/`).then((r) => r.data),
 };

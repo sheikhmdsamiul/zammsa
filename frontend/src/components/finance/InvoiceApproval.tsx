@@ -67,12 +67,22 @@ const InvoiceApproval: React.FC = () => {
   const acceptPartialMutation = useMutation({
     mutationFn: () => {
       if (!invoice) throw new Error('Invoice not loaded');
+      const invoiceAmount = Number(invoice.amount) || 0;
       const grnQty = Number(displayMatch?.grn_qty || displayMatch?.grn_quantity || 0);
       const invoiceQty = Number(displayMatch?.invoice_qty || displayMatch?.invoice_quantity || 0);
-      const invoiceUnitPrice = Number(displayMatch?.invoice_price || (invoiceQty ? invoice.amount / invoiceQty : invoice.amount));
+      const invoiceUnitPrice = Number(displayMatch?.invoice_price || (invoiceQty ? invoiceAmount / invoiceQty : invoiceAmount));
       const adjustedAmount = grnQty > 0 && invoiceUnitPrice > 0
-        ? Math.min(invoice.amount, grnQty * invoiceUnitPrice)
-        : invoice.amount;
+        ? Math.min(invoiceAmount, grnQty * invoiceUnitPrice)
+        : invoiceAmount;
+      console.log('[acceptPartial] calling API with:', {
+        invoiceId: invoiceId!,
+        approved_amount: Number(adjustedAmount.toFixed(2)),
+        invoice_amount: invoice.amount,
+        grnQty,
+        invoiceQty,
+        invoiceUnitPrice,
+        adjustedAmount,
+      });
       return financeApi.acceptPartialInvoice(invoiceId!, {
         approved_amount: Number(adjustedAmount.toFixed(2)),
         notes: reason || 'Partial receipt accepted for adjusted payment.',
@@ -83,7 +93,10 @@ const InvoiceApproval: React.FC = () => {
       queryClient.invalidateQueries({ queryKey: ['invoice', invoiceId] });
       setDecision(null);
     },
-    onError: (err: any) => toast.error(err?.response?.data?.error || 'Failed to accept partial invoice'),
+    onError: (err: any) => {
+      console.error('[acceptPartial] error:', err);
+      toast.error(err?.response?.data?.error || 'Failed to accept partial invoice');
+    },
   });
 
   const rejectMutation = useMutation({
@@ -273,21 +286,15 @@ const InvoiceApproval: React.FC = () => {
                       <tbody className="divide-y divide-gray-50">
                         <tr>
                           <td className="px-6 py-4 text-sm font-bold text-gray-900">Quantity</td>
-                          <td className="px-6 py-4 text-right text-sm text-gray-600 font-medium">{Number(displayMatch.po_qty || displayMatch.po_quantity || 0).toLocaleString()}</td>
+                          <td className="px-6 py-4 text-right text-sm text-gray-600 font-medium">{Number(displayMatch.po_quantity || (displayMatch.line_matches?.reduce?.((s: number, lm: any) => s + (lm.po_qty || 0), 0)) || 0).toLocaleString()}</td>
                           <td className="px-6 py-4 text-right text-sm text-gray-600 font-medium">{Number(displayMatch.grn_qty || displayMatch.grn_quantity || 0).toLocaleString()}</td>
                           <td className="px-6 py-4 text-right text-sm font-black text-gray-900">{Number(displayMatch.invoice_qty || displayMatch.invoice_quantity || 0).toLocaleString()}</td>
                         </tr>
                         <tr>
-                          <td className="px-6 py-4 text-sm font-bold text-gray-900">Unit Price / Value</td>
-                          <td className="px-6 py-4 text-right text-sm text-gray-600 font-medium">K {Number(displayMatch.po_price || invoice.contract_value || 0).toLocaleString()}</td>
-                          <td className="px-6 py-4 text-right text-sm text-gray-600 font-medium">K {Number(displayMatch.po_price || invoice.grn_details?.unit_price || 0).toLocaleString()}</td>
-                          <td className="px-6 py-4 text-right text-sm font-black text-gray-900">K {Number(displayMatch.invoice_price || (invoice.amount / (displayMatch.invoice_qty || displayMatch.invoice_quantity || 1))).toLocaleString()}</td>
-                        </tr>
-                        <tr className="bg-zammsa-green/5">
-                          <td className="px-6 py-4 text-sm font-bold text-zammsa-green">Total Impact</td>
-                          <td className="px-6 py-4 text-right text-sm font-bold text-gray-600">K {Number((displayMatch.po_qty || displayMatch.po_quantity || 1) * (displayMatch.po_price || invoice.contract_value || 0)).toLocaleString()}</td>
-                          <td className="px-6 py-4 text-right text-sm font-bold text-gray-600">K {Number((displayMatch.grn_qty || displayMatch.grn_quantity || 1) * (displayMatch.po_price || invoice.grn_details?.unit_price || 0)).toLocaleString()}</td>
-                          <td className="px-6 py-4 text-right text-sm font-black text-zammsa-green">K {Number(invoice.amount).toLocaleString()}</td>
+                          <td className="px-6 py-4 text-sm font-bold text-gray-900">Total Value</td>
+                          <td className="px-6 py-4 text-right text-sm text-gray-600 font-medium">K {Number(displayMatch.po_amount || invoice.contract_value || 0).toLocaleString()}</td>
+                          <td className="px-6 py-4 text-right text-sm text-gray-600 font-medium">K {Number(displayMatch.grn_amount || invoice.grn_details?.total_amount || 0).toLocaleString()}</td>
+                          <td className="px-6 py-4 text-right text-sm font-black text-gray-900">K {Number(displayMatch.invoice_amount || invoice.amount).toLocaleString()}</td>
                         </tr>
                       </tbody>
                     </table>
@@ -295,17 +302,21 @@ const InvoiceApproval: React.FC = () => {
 
                   <div className="space-y-3">
                     {[
-                      { label: 'Amount Verification', matched: displayMatch.invoice_vs_po || displayMatch.match_status === 'complete', detail: 'Invoice matches PO value' },
-                      { label: 'Receipt Verification', matched: displayMatch.invoice_vs_grn || displayMatch.match_status === 'complete', detail: 'Invoice matches items received' },
-                      { label: 'Quantity Check', matched: displayMatch.quantity_match || displayMatch.match_status === 'complete', detail: 'Units ordered = Units received = Units billed' },
+                      { label: 'Amount Verification', matched: !(displayMatch as any).has_overbilling && !(displayMatch as any).has_price_above_po, warn: (displayMatch as any).has_price_below_po, detail: (displayMatch as any).has_overbilling ? 'Overbilling detected' : (displayMatch as any).has_price_above_po ? 'Price exceeds PO' : (displayMatch as any).has_price_below_po ? 'Price below PO — flagged for R-07' : 'Invoice matches PO value' },
+                      { label: 'Receipt Verification', matched: !(displayMatch as any).has_overbilling, warn: false, detail: (displayMatch as any).has_overbilling ? 'Invoice exceeds GRN' : 'Invoice matches items received' },
+                      { label: 'Quantity Check', matched: !(displayMatch as any).has_overbilling, warn: (displayMatch as any).has_warnings && !(displayMatch as any).has_overbilling, detail: (displayMatch as any).has_overbilling ? 'Overbilling detected' : (displayMatch as any).has_warnings ? 'Minor qty discrepancies (under-billing/over-delivery)' : 'Quantities match across documents' },
                     ].map((item, i) => (
                     <div key={i} className={`flex items-center justify-between p-4 rounded-2xl border transition-all ${
-                      item.matched ? 'bg-emerald-50/30 border-emerald-100' : 'bg-rose-50/30 border-rose-100'
+                      item.matched ? 'bg-emerald-50/30 border-emerald-100' : item.warn ? 'bg-amber-50/30 border-amber-100' : 'bg-rose-50/30 border-rose-100'
                     }`}>
                       <div className="flex items-center gap-3">
                         {item.matched ? (
                           <div className="w-8 h-8 bg-emerald-100 rounded-full flex items-center justify-center">
                             <CheckCircleIcon className="w-5 h-5 text-emerald-600" />
+                          </div>
+                        ) : item.warn ? (
+                          <div className="w-8 h-8 bg-amber-100 rounded-full flex items-center justify-center">
+                            <ExclamationIcon className="w-5 h-5 text-amber-600" />
                           </div>
                         ) : (
                           <div className="w-8 h-8 bg-rose-100 rounded-full flex items-center justify-center">
@@ -317,12 +328,76 @@ const InvoiceApproval: React.FC = () => {
                           <p className="text-xs text-gray-500">{item.detail}</p>
                         </div>
                       </div>
-                      <span className={`text-xs font-black uppercase tracking-widest ${item.matched ? 'text-emerald-600' : 'text-rose-600'}`}>
-                        {item.matched ? 'Passed' : 'Failed'}
+                      <span className={`text-xs font-black uppercase tracking-widest ${
+                        item.matched ? 'text-emerald-600' : item.warn ? 'text-amber-600' : 'text-rose-600'
+                      }`}>
+                        {item.matched ? 'Passed' : item.warn ? 'Warn' : 'Failed'}
                       </span>
                     </div>
                   ))}
                   </div>
+
+                  {/* Line-Item Comparison */}
+                  {(displayMatch as any).line_matches?.length > 0 && (
+                    <div className="mt-4 pt-4 border-t border-gray-100">
+                      <h3 className="text-sm font-semibold text-gray-900 mb-3">Line-Item Comparison</h3>
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-sm">
+                          <thead>
+                            <tr className="border-b border-gray-200">
+                              <th className="text-left py-2 px-2 font-semibold text-gray-600">Item</th>
+                              <th className="text-right py-2 px-2 font-semibold text-gray-600">PO Qty</th>
+                              <th className="text-right py-2 px-2 font-semibold text-gray-600">GRN Qty</th>
+                              <th className="text-right py-2 px-2 font-semibold text-gray-600">Inv Qty</th>
+                              <th className="text-right py-2 px-2 font-semibold text-gray-600">PO Price</th>
+                              <th className="text-right py-2 px-2 font-semibold text-gray-600">Inv Price</th>
+                              <th className="text-center py-2 px-2 font-semibold text-gray-600">Qty</th>
+                              <th className="text-center py-2 px-2 font-semibold text-gray-600">Price</th>
+                              <th className="text-center py-2 px-2 font-semibold text-gray-600">Item</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {(displayMatch as any).line_matches.map((lm: any, i: number) => (
+                              <tr key={i} className="border-b border-gray-100">
+                                <td className="py-2 px-2">
+                                  <p className="font-medium text-gray-900">{lm.item_name || `Line ${lm.line_number}`}</p>
+                                  {lm.item_code && <p className="text-xs text-gray-400">{lm.item_code}</p>}
+                                </td>
+                                <td className="py-2 px-2 text-right font-semibold text-purple-700">{lm.po_qty}</td>
+                                <td className="py-2 px-2 text-right">{lm.grn_qty}</td>
+                                <td className="py-2 px-2 text-right">{lm.invoice_qty}</td>
+                                <td className="py-2 px-2 text-right font-semibold text-purple-700">K {lm.po_price?.toLocaleString()}</td>
+                                <td className="py-2 px-2 text-right">K {lm.invoice_price?.toLocaleString()}</td>
+                                <td className="py-2 px-2 text-center">
+                                  {lm.qty_status === 'pass' ? (
+                                    <CheckCircleIcon className="w-4 h-4 text-emerald-500 inline" />
+                                  ) : lm.qty_status === 'warn' ? (
+                                    <ExclamationIcon className="w-4 h-4 text-amber-500 inline" />
+                                  ) : (
+                                    <XCircleIcon className="w-4 h-4 text-rose-500 inline" />
+                                  )}
+                                </td>
+                                <td className="py-2 px-2 text-center">
+                                  {lm.price_status === 'pass' ? (
+                                    <CheckCircleIcon className="w-4 h-4 text-emerald-500 inline" />
+                                  ) : (
+                                    <XCircleIcon className="w-4 h-4 text-rose-500 inline" />
+                                  )}
+                                </td>
+                                <td className="py-2 px-2 text-center">
+                                  {lm.item_match ? (
+                                    <CheckCircleIcon className="w-4 h-4 text-emerald-500 inline" />
+                                  ) : (
+                                    <XCircleIcon className="w-4 h-4 text-rose-500 inline" />
+                                  )}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  )}
                 </div>
               ) : (
                 <div className="text-center py-12 bg-gray-50/50 rounded-2xl border border-dashed border-gray-200">

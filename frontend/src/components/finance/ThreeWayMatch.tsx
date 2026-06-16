@@ -6,7 +6,7 @@ import { StatusBadge } from '../common/StatusBadge';
 import { LoadingSpinner } from '../common/LoadingSpinner';
 import toast from 'react-hot-toast';
 import {
-  CheckCircleIcon, XCircleIcon, SearchIcon,
+  CheckCircleIcon, XCircleIcon, SearchIcon, ExclamationIcon,
   DocumentTextIcon, ClipboardListIcon, CashIcon,
 } from '@heroicons/react/outline';
 
@@ -158,16 +158,18 @@ const ThreeWayMatch: React.FC = () => {
               <h2 className="text-lg font-semibold text-gray-900 mb-4">Match Results</h2>
               <div className="space-y-3">
                 {([
-                  { label: 'Invoice Amount vs PO Value', status: (matchResult as any).invoice_vs_po, detail: `K ${(matchResult as any).invoice_amount?.toLocaleString()} vs K ${(matchResult as any).po_amount?.toLocaleString()}` },
+                  { label: 'Invoice Amount vs PO Value', status: (matchResult as any).invoice_vs_po && !(matchResult as any).has_overbilling && !(matchResult as any).has_price_above_po, detail: `K ${(matchResult as any).invoice_amount?.toLocaleString()} vs K ${(matchResult as any).po_amount?.toLocaleString()}` },
                   { label: 'PO Value vs GRN Value', status: (matchResult as any).po_vs_grn, detail: `K ${(matchResult as any).po_amount?.toLocaleString()} vs K ${(matchResult as any).grn_amount?.toLocaleString()}` },
-                  { label: 'Invoice vs GRN', status: (matchResult as any).invoice_vs_grn, detail: `K ${(matchResult as any).invoice_amount?.toLocaleString()} vs K ${(matchResult as any).grn_amount?.toLocaleString()}` },
-                  { label: 'Quantity Verification', status: (matchResult as any).quantity_match, detail: `${(matchResult as any).invoice_qty || 0} vs ${(matchResult as any).grn_qty || 0} units` },
-                  { label: 'ZAMRA Certificate Verification', status: (matchResult as any).zamra_certificate_verified, detail: (matchResult as any).zamra_certificate_verified ? 'Verified regulatory compliance' : 'Pending regulatory verification' },
+                  { label: 'Invoice vs GRN', status: !(matchResult as any).has_overbilling, detail: `K ${(matchResult as any).invoice_amount?.toLocaleString()} vs K ${(matchResult as any).grn_amount?.toLocaleString()}` },
+                  { label: 'Quantity Verification', status: !(matchResult as any).has_overbilling, detail: `${(matchResult as any).invoice_qty || 0} vs ${(matchResult as any).grn_qty || 0} units` },
+                  { label: 'Item Description Match', status: (matchResult as any).item_match, detail: (matchResult as any).item_match ? 'Items match across PO, GRN, and Invoice' : 'Item mismatch detected' },
+                  { label: 'Unit Price Match', status: (matchResult as any).price_match && !(matchResult as any).has_price_below_po, detail: (matchResult as any).has_price_below_po ? 'Price below PO — flagged for R-07 review' : (matchResult as any).price_match ? 'Price matches PO (±0.5% tolerance)' : 'Price exceeds PO' },
+                  { label: 'ZAMRA Certificate', status: (matchResult as any).zamra_certificate_verified, detail: (matchResult as any).zamra_certificate_verified ? 'Verified regulatory compliance' : 'Pending regulatory verification' },
                   { label: 'Cold Chain Compliance', status: (matchResult as any).cold_chain_maintained, detail: (matchResult as any).cold_chain_maintained ? 'Temperature maintained within safety limits' : 'Cold chain breach detected or unchecked' },
-                  { label: 'Temperature Log Verification', status: (matchResult as any).temperature_log_attached, detail: (matchResult as any).temperature_log_attached ? 'Data log verified and attached' : 'No temperature data log attached' },
+                  { label: 'Temperature Log', status: (matchResult as any).temperature_log_attached, detail: (matchResult as any).temperature_log_attached ? 'Data log verified and attached' : 'No temperature data log attached' },
                 ]).map((item, i) => (
                   <div key={i} className={`flex items-center justify-between p-4 rounded-xl ${
-                    item.status ? 'bg-emerald-50 border border-emerald-200' : 'bg-rose-50 border border-rose-200'
+                    item.status ? 'bg-emerald-50 border border-emerald-200' : (matchResult as any).has_warnings && !item.status && i < 4 ? 'bg-amber-50 border border-amber-200' : 'bg-rose-50 border border-rose-200'
                   }`}>
                     <div>
                       <p className="text-sm font-medium text-gray-900">{item.label}</p>
@@ -175,25 +177,32 @@ const ThreeWayMatch: React.FC = () => {
                     </div>
                     {item.status ? (
                       <span className="flex items-center gap-1 text-emerald-600 text-sm font-medium">
-                        <CheckCircleIcon className="w-5 h-5" /> Match
+                        <CheckCircleIcon className="w-5 h-5" /> Pass
+                      </span>
+                    ) : (matchResult as any).has_warnings && i < 4 ? (
+                      <span className="flex items-center gap-1 text-amber-600 text-sm font-medium">
+                        <ExclamationIcon className="w-5 h-5" /> Warn
                       </span>
                     ) : (
                       <span className="flex items-center gap-1 text-rose-600 text-sm font-medium">
-                        <XCircleIcon className="w-5 h-5" /> Mismatch
+                        <XCircleIcon className="w-5 h-5" /> Fail
                       </span>
                     )}
                   </div>
                 ))}
               </div>
 
-              <div className="mt-6 p-4 bg-gray-50 rounded-xl">
-                <p className="text-sm font-medium text-gray-900">Match Status</p>
+              <div className={`mt-6 p-4 rounded-xl ${
+                (matchResult as any).match_status === 'complete' ? 'bg-emerald-50' :
+                (matchResult as any).match_status === 'partial' ? 'bg-amber-50' : 'bg-rose-50'
+              }`}>
+                <p className="text-sm font-medium text-gray-900">Match Status: {(matchResult as any).match_status === 'complete' ? 'Complete' : (matchResult as any).match_status === 'partial' ? 'Partial' : 'No Match'}</p>
                 <p className="text-xs text-gray-500 mt-1">
-                  {(matchResult as any).overall_match
+                  {(matchResult as any).match_status === 'complete'
                     ? 'All checks passed. Invoice can be approved.'
-                    : (matchResult as any).flag_for_review
-                      ? 'Flagged for review due to discrepancies.'
-                      : 'Discrepancies found. Manual review required.'}
+                    : (matchResult as any).match_status === 'partial'
+                      ? 'Minor discrepancies found (under-billing, price below PO). Review recommended.'
+                      : `Discrepancies found. Manual review required.${(matchResult as any).has_overbilling ? ' Overbilling detected.' : ''}${(matchResult as any).has_price_above_po ? ' Prices exceed PO.' : ''}`}
                 </p>
               </div>
 
@@ -201,7 +210,7 @@ const ThreeWayMatch: React.FC = () => {
                 <div className="mt-6">
                   <h3 className="text-sm font-semibold text-gray-900 mb-3">Line-Item Comparison</h3>
                   <div className="overflow-x-auto">
-                    <table className="w-full text-sm">
+                      <table className="w-full text-sm">
                       <thead>
                         <tr className="border-b border-gray-200">
                           <th className="text-left py-2 px-2 font-semibold text-gray-600">Item</th>
@@ -209,9 +218,10 @@ const ThreeWayMatch: React.FC = () => {
                           <th className="text-right py-2 px-2 font-semibold text-gray-600">GRN Qty</th>
                           <th className="text-right py-2 px-2 font-semibold text-gray-600">Inv Qty</th>
                           <th className="text-right py-2 px-2 font-semibold text-gray-600">PO Price</th>
-                          <th className="text-right py-2 px-2 font-semibold text-gray-600">GRN Price</th>
                           <th className="text-right py-2 px-2 font-semibold text-gray-600">Inv Price</th>
-                          <th className="text-center py-2 px-2 font-semibold text-gray-600">Match</th>
+                          <th className="text-center py-2 px-2 font-semibold text-gray-600">Qty</th>
+                          <th className="text-center py-2 px-2 font-semibold text-gray-600">Price</th>
+                          <th className="text-center py-2 px-2 font-semibold text-gray-600">Item</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -225,12 +235,29 @@ const ThreeWayMatch: React.FC = () => {
                             <td className="py-2 px-2 text-right">{lm.grn_qty}</td>
                             <td className="py-2 px-2 text-right">{lm.invoice_qty}</td>
                             <td className="py-2 px-2 text-right font-semibold text-purple-700">K {lm.po_price?.toLocaleString()}</td>
-                            <td className="py-2 px-2 text-right">K {lm.grn_price?.toLocaleString()}</td>
                             <td className="py-2 px-2 text-right">K {lm.invoice_price?.toLocaleString()}</td>
                             <td className="py-2 px-2 text-center">
-                              {lm.qty_match && lm.price_match
-                                ? <CheckCircleIcon className="w-5 h-5 text-emerald-500 inline" />
-                                : <XCircleIcon className="w-5 h-5 text-rose-500 inline" />}
+                              {lm.qty_status === 'pass' ? (
+                                <CheckCircleIcon className="w-5 h-5 text-emerald-500 inline" title="Qty match" />
+                              ) : lm.qty_status === 'warn' ? (
+                                <ExclamationIcon className="w-5 h-5 text-amber-500 inline" title="Qty warning" />
+                              ) : (
+                                <XCircleIcon className="w-5 h-5 text-rose-500 inline" title="Qty mismatch" />
+                              )}
+                            </td>
+                            <td className="py-2 px-2 text-center">
+                              {lm.price_status === 'pass' ? (
+                                <CheckCircleIcon className="w-5 h-5 text-emerald-500 inline" title="Price match" />
+                              ) : (
+                                <XCircleIcon className="w-5 h-5 text-rose-500 inline" title="Price above PO" />
+                              )}
+                            </td>
+                            <td className="py-2 px-2 text-center">
+                              {lm.item_match ? (
+                                <CheckCircleIcon className="w-5 h-5 text-emerald-500 inline" title="Item match" />
+                              ) : (
+                                <XCircleIcon className="w-5 h-5 text-rose-500 inline" title="Item mismatch" />
+                              )}
                             </td>
                           </tr>
                         ))}
@@ -240,17 +267,29 @@ const ThreeWayMatch: React.FC = () => {
                 </div>
               )}
 
-              {(matchResult as any).overall_match && (
+              {(matchResult as any).match_status === 'complete' && (
                 <button onClick={() => approveMutation.mutate()} disabled={approveMutation.isPending}
                   className="mt-4 w-full px-6 py-3 bg-zammsa-green text-white rounded-xl text-sm font-bold disabled:opacity-50">
                   {approveMutation.isPending ? 'Approving...' : 'Approve Invoice After Match'}
                 </button>
               )}
 
-              {!(matchResult as any).overall_match && (
-                <div className="mt-4 p-4 bg-amber-50 border border-amber-200 rounded-lg">
-                  <p className="text-sm font-medium text-amber-800">Invoice flagged for manual review</p>
-                  <p className="text-xs text-amber-700 mt-1">Discrepancies found. Contact procurement for resolution.</p>
+              {(matchResult as any).match_status !== 'complete' && (
+                <div className={`mt-4 p-4 rounded-lg ${
+                  (matchResult as any).match_status === 'partial' ? 'bg-amber-50 border border-amber-200' : 'bg-rose-50 border border-rose-200'
+                }`}>
+                  <p className={`text-sm font-medium ${
+                    (matchResult as any).match_status === 'partial' ? 'text-amber-800' : 'text-rose-800'
+                  }`}>
+                    {(matchResult as any).match_status === 'partial' ? 'Invoice flagged for review' : 'Invoice rejected'}
+                  </p>
+                  <p className={`text-xs mt-1 ${
+                    (matchResult as any).match_status === 'partial' ? 'text-amber-700' : 'text-rose-700'
+                  }`}>
+                    {(matchResult as any).match_status === 'partial'
+                      ? 'Minor discrepancies flagged. Procurement review recommended.'
+                      : 'Significant discrepancies found. Invoice requires manual resolution.'}
+                  </p>
                 </div>
               )}
             </div>

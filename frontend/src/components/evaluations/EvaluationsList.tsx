@@ -74,7 +74,7 @@ const EvaluationsList: React.FC = () => {
 
   const coiStatuses: CommitteeCOIStatus[] = committees.map((c: any) => {
     const myDecl = (c.coi_declarations || []).find(
-      (d: any) => d.member === user?.id
+      (d: any) => d.member === user?.id || d.user === user?.id || d.user_id === user?.id
     );
     const isRecused = myDecl?.recused === true;
     return {
@@ -182,17 +182,35 @@ const EvaluationsList: React.FC = () => {
           key: 'phase_progress',
           label: 'Phase Progress',
           render: (_: any, row: any) => {
-            const coiStatus = getMemberStatus(row.id);
-            const currentPhase = coiStatus.label.includes('Conflict') ? 'COI Declaration' : 'Technical Scoring';
-            const phaseColor = coiStatus.label.includes('Conflict') ? 'bg-amber-100 text-amber-700' : 'bg-blue-100 text-blue-700';
-            const phaseIcon = coiStatus.label.includes('Conflict') ? '🔴' : '🟡';
+            const phaseInfo = row.current_phase || { id: 'coi', label: 'COI Declaration' };
+            const progress = row.phase_progress || { completed: 0, total: 7, percent: 0 };
+            const phaseColors: Record<string, string> = {
+              coi: 'bg-amber-100 text-amber-700',
+              preliminary: 'bg-yellow-100 text-yellow-700',
+              technical: 'bg-blue-100 text-blue-700',
+              financial: 'bg-emerald-100 text-emerald-700',
+              consolidation: 'bg-purple-100 text-purple-700',
+              ber: 'bg-indigo-100 text-indigo-700',
+              'post-qual': 'bg-teal-100 text-teal-700',
+            };
+            const phaseIcons: Record<string, string> = {
+              coi: '🔴',
+              preliminary: '🟡',
+              technical: '🔵',
+              financial: '🟢',
+              consolidation: '🟣',
+              ber: '🟠',
+              'post-qual': '🔷',
+            };
             return (
               <div className="flex items-center gap-2">
-                <span className={`text-xs ${phaseColor} px-2 py-1 rounded-full font-medium`}>{phaseIcon} {currentPhase}</span>
+                <span className={`text-xs ${phaseColors[phaseInfo.id] || 'bg-gray-100 text-gray-700'} px-2 py-1 rounded-full font-medium`}>
+                  {phaseIcons[phaseInfo.id] || '📋'} {phaseInfo.label}
+                </span>
                 <div className="w-16 h-1.5 bg-gray-200 rounded-full overflow-hidden">
                   <div
                     className="h-full bg-zammsa-green transition-all duration-300"
-                    style={{ width: coiStatus.label.includes('Conflict') ? '10%' : '30%' }}
+                    style={{ width: `${progress.percent}%` }}
                   />
                 </div>
               </div>

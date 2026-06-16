@@ -300,6 +300,8 @@ export interface EvaluationCommittee {
   status: string;
   member_count?: number;
   coi_declarations?: ConflictOfInterest[];
+  current_phase?: { id: string; label: string };
+  phase_progress?: { completed: number; total: number; percent: number };
 }
 
 export interface EvaluationMember {
@@ -659,6 +661,24 @@ export interface DeliveryAdvice {
   official_grn_number?: string;
 }
 
+export interface LineMatch {
+  line_number: number;
+  item_name: string;
+  item_code: string;
+  po_qty: number;
+  grn_qty: number;
+  invoice_qty: number;
+  po_price: number;
+  grn_price: number;
+  invoice_price: number;
+  qty_match: boolean;
+  qty_status: 'pass' | 'warn' | 'fail';
+  price_match: boolean;
+  price_status: 'pass' | 'fail';
+  item_match: boolean;
+  grn_qty_match?: boolean;
+}
+
 export interface ThreeWayMatch {
   match_id: string;
   invoice: string;
@@ -669,6 +689,30 @@ export interface ThreeWayMatch {
   invoice_price: number;
   match_status: MatchStatus;
   discrepancies: Record<string, any>;
+  // Extended match result fields from invoice_match_view
+  overall_match?: boolean;
+  flag_for_review?: boolean;
+  has_overbilling?: boolean;
+  has_price_above_po?: boolean;
+  has_price_below_po?: boolean;
+  has_item_mismatch?: boolean;
+  has_warnings?: boolean;
+  invoice_amount?: number;
+  po_amount?: number;
+  grn_amount?: number;
+  invoice_vs_po?: boolean;
+  po_vs_grn?: boolean;
+  invoice_vs_grn?: boolean;
+  invoice_qty?: number;
+  grn_qty?: number;
+  line_matches?: LineMatch[];
+  quantity_match?: boolean;
+  price_match?: boolean;
+  item_match?: boolean;
+  zamra_certificate_verified?: boolean;
+  cold_chain_maintained?: boolean;
+  temperature_log_attached?: boolean;
+  finance_review?: Record<string, any>;
 }
 
 export interface Invoice {

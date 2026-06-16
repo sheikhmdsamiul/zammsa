@@ -197,6 +197,7 @@ const FinancialEvaluation: React.FC = () => {
     onSuccess: (data: SelectWinnerResponse) => {
       setWinner(data.winner_name);
       setWinnerSelected(true);
+      queryClient.invalidateQueries({ queryKey: ['phase-status', solId] });
       toast.success(`Winner selected: ${data.winner_name}`);
     },
     onError: (err: any) => toast.error(err?.response?.data?.error || 'Failed to select winner'),
@@ -497,7 +498,7 @@ const FinancialEvaluation: React.FC = () => {
         </>
       )}
 
-      {!winnerSelected && (isCombinedMethod ? computedQcbsData && qcbsResults.length > 0 : evaluatedBids.length > 0) && financialOpened && (
+      {!awardedWinner && (isCombinedMethod ? computedQcbsData && qcbsResults.length > 0 : evaluatedBids.length > 0) && financialOpened && (
         <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
           <h2 className="text-lg font-semibold text-gray-900 mb-4">Step 5: Select Winner</h2>
           <div className="space-y-3">

@@ -1,6 +1,7 @@
 from decimal import Decimal
 from rest_framework import serializers
 from django.db import connection
+from django.db.models import Q
 from .models import Contract, ContractSecurity, ContractAmendment, ContractMilestone, LiquidatedDamages, ContractTermination, Appeal, ClosureChecklist
 
 
@@ -209,17 +210,35 @@ class ContractSerializer(serializers.ModelSerializer):
         return obj.requires_performance_bond()
 
     def get_operational_phases(self, obj):
-        invoices = list(getattr(obj, 'invoices').all())
-        goods_receipts = list(getattr(obj, 'goods_receipt_notes').all())
-        payments = list(getattr(obj, 'payments').all())
-        retention_releases = list(getattr(obj, 'retention_releases').all())
-        supplier_performances = list(getattr(obj, 'supplier_performances').all())
-        closure_manager = getattr(obj, 'closure_checklists')
-        closure_checklists = list(
-            closure_manager.order_by('-completed_at', '-checklist_id')
-            if hasattr(closure_manager, 'order_by')
-            else closure_manager.all()
-        )
+        try:
+            invoices = list(getattr(obj, 'invoices').all())
+        except Exception:
+            invoices = []
+        try:
+            goods_receipts = list(getattr(obj, 'goods_receipt_notes').all())
+        except Exception:
+            goods_receipts = []
+        try:
+            payments = list(getattr(obj, 'payments').all())
+        except Exception:
+            payments = []
+        try:
+            retention_releases = list(getattr(obj, 'retention_releases').all())
+        except Exception:
+            retention_releases = []
+        try:
+            supplier_performances = list(getattr(obj, 'supplier_performances').all())
+        except Exception:
+            supplier_performances = []
+        try:
+            closure_manager = getattr(obj, 'closure_checklists')
+            closure_checklists = list(
+                closure_manager.order_by('-completed_at', '-checklist_id')
+                if hasattr(closure_manager, 'order_by')
+                else closure_manager.all()
+            )
+        except Exception:
+            closure_checklists = []
         latest_closure = closure_checklists[0] if closure_checklists else None
 
         active_or_beyond = obj.status in ('active', 'completed', 'terminated', 'closed', 'archived')
@@ -346,45 +365,48 @@ class ContractSerializer(serializers.ModelSerializer):
     def to_internal_value(self, data):
         from suppliers.models import Supplier, VendorApplication
         from accounts.models import User
-        
+
         supplier_val = data.get('supplier')
-        if supplier_val:
-            try:
-                if not Supplier.objects.filter(pk=supplier_val).exists():
-                    user = User.objects.filter(pk=supplier_val).first()
-                    if user and user.role == 'supplier_user':
-                        reg_no = user.employee_id.replace('SUP-', '', 1)
-                        supplier = Supplier.objects.filter(registration_number=reg_no).first()
-                        if not supplier:
-                            app = VendorApplication.objects.filter(email=user.email).first()
-                            supplier = Supplier.objects.create(
-                                registration_number=reg_no,
-                                tin=app.tin if app else f"TIN-{reg_no}",
-                                name=user.full_name,
-                                ceec_category=app.ceec_category if app else 'non_citizen',
-                                status='active',
-                                bank_name=app.bank_name if app else '',
-                                bank_account_number=app.bank_account_number if app else '',
-                                bank_account_name=app.bank_account_name if app else '',
-                            )
-                        if hasattr(data, '_mutable'):
-                            data = data.copy()
-                        else:
-                            data = dict(data)
-                        data['supplier'] = str(supplier.supplier_id)
-            except Exception:
-                pass
+        if supplier_val and not isinstance(supplier_val, bool):
+            if not Supplier.objects.filter(pk=supplier_val).exists():
+                user = User.objects.filter(pk=supplier_val).first()
+                if not user:
+                    raise serializers.ValidationError(
+                        {'supplier': f'No supplier or user found with id {supplier_val}'}
+                    )
+
+                emp_id = getattr(user, 'employee_id', '') or ''
+                reg_no = emp_id.replace('SUP-', '', 1) if emp_id.startswith('SUP-') else user.id.hex[:8].upper()
+                supplier = Supplier.objects.filter(
+                    Q(registration_number=reg_no) | Q(name=user.full_name)
+                ).first()
+                if not supplier:
+                    app = VendorApplication.objects.filter(email=user.email).first()
+                    supplier = Supplier.objects.create(
+                        registration_number=reg_no,
+                        tin=app.tin if app else f"TIN-{reg_no}",
+                        name=user.full_name,
+                        ceec_category=app.ceec_category if app else 'non_citizen',
+                        status='active',
+                        bank_name=app.bank_name if app else '',
+                        bank_account_number=app.bank_account_number if app else '',
+                        bank_account_name=app.bank_account_name if app else '',
+                    )
+                if hasattr(data, '_mutable'):
+                    data = data.copy()
+                else:
+                    data = dict(data)
+                data['supplier'] = str(supplier.supplier_id)
         return super().to_internal_value(data)
 
     def get_purchase_orders(self, obj):
-        pos = obj.purchase_orders.all().order_by('-created_at')
-        return PurchaseOrderSerializer(pos, many=True).data
+        try:
+            pos = obj.purchase_orders.all().order_by('-created_at')
+            return PurchaseOrderSerializer(pos, many=True).data
+        except Exception:
+            return []
 
     def get_delivery_progress(self, obj):
-        """
-        Aggregate delivery progress across all POs and GRNs for this contract.
-        Returns a list of items showing ordered quantity, total received, unit price, and progress.
-        """
         result = []
         try:
             from finance.models import PurchaseOrderLineItem, GoodsReceiptNote, GRNLineItem

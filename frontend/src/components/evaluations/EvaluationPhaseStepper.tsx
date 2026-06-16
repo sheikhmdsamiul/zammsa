@@ -29,22 +29,22 @@ export const EVALUATION_PHASES = [
     dependencies: ['preliminary'],
   },
   {
-    id: 'financial',
-    label: 'Financial Evaluation',
-    description: 'Review financial proposals and apply preferences',
-    icon: 'currency-dollar',
+    id: 'consolidation',
+    label: 'Score Consolidation',
+    description: 'Merge technical scores, calculate combined QCBS scores',
+    icon: 'chart-bar',
     order: 4,
     roles: ['chairperson', 'director_procurement'],
     dependencies: ['technical'],
   },
   {
-    id: 'consolidation',
-    label: 'Score Consolidation',
-    description: 'Merge technical scores, calculate combined QCBS scores',
-    icon: 'chart-bar',
+    id: 'financial',
+    label: 'Financial Evaluation',
+    description: 'Review financial proposals and apply preferences',
+    icon: 'currency-dollar',
     order: 5,
     roles: ['chairperson', 'director_procurement'],
-    dependencies: ['financial'],
+    dependencies: ['consolidation'],
   },
   {
     id: 'ber',
@@ -52,8 +52,8 @@ export const EVALUATION_PHASES = [
     description: 'Generate Bid Evaluation Report with signatures',
     icon: 'document-text',
     order: 6,
-    roles: ['chairperson', 'secretary'],
-    dependencies: ['financial', 'consolidation'],
+    roles: ['chairperson', 'secretary', 'member'],
+    dependencies: ['financial'],
   },
   {
     id: 'post-qual',
@@ -271,7 +271,7 @@ export const EvaluationPhaseStepper: React.FC<EvaluationPhaseStepperProps> = ({
         <div className="text-right">
           {userRole === 'chairperson' && 'Full access: All phases'}
           {userRole === 'secretary' && 'Access: COI, BER, Post-Qual'}
-          {userRole === 'member' && 'Access: COI, Preliminary, Technical'}
+          {userRole === 'member' && 'Access: COI, Preliminary, Technical, BER'}
         </div>
       </div>
 

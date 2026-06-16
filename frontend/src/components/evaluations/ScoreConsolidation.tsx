@@ -1,4 +1,4 @@
-import React, { useMemo, useState, useRef } from 'react';
+import React, { useMemo, useState, useRef, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { evaluationsApi } from '../../api/evaluations';
@@ -95,6 +95,14 @@ const ScoreConsolidation: React.FC = () => {
   const consolidatedScores: ConsolidatedBid[] = consolidatedData?.bids || [];
   const passedBids: any[] = passedBidsData?.bids || [];
   const awardedWinner = passedBidsData?.winner_name || null;
+  const financialOpened = passedBids.some((bid: any) => bid.financial_sealed === false);
+
+  useEffect(() => {
+    if (financialOpened) {
+      setAuthChecked(true);
+    }
+  }, [financialOpened]);
+
   const criteria: EvaluationCriterion[] = (solicitation?.evaluation_criteria || []).filter(
     (c: EvaluationCriterion) => c.criterion_type === 'technical'
   );
@@ -170,6 +178,7 @@ const ScoreConsolidation: React.FC = () => {
       toast.success(`Financial envelopes opened for ${data.opened_count} bids`);
       queryClient.invalidateQueries({ queryKey: ['passed-tech-bids', solId] });
       queryClient.invalidateQueries({ queryKey: ['consolidated-scores', solId] });
+      queryClient.invalidateQueries({ queryKey: ['phase-status', solId] });
     },
     onError: (err: any) => {
       const errorMessage = err?.response?.data?.error || 'Failed to authorize';
@@ -182,6 +191,9 @@ const ScoreConsolidation: React.FC = () => {
     onSuccess: (data) => {
       setShowQCBSModal(true);
       queryClient.invalidateQueries({ queryKey: ['consolidated-scores', solId] });
+      queryClient.invalidateQueries({ queryKey: ['phase-status', solId] });
+      queryClient.invalidateQueries({ queryKey: ['evaluation-committee'] });
+      queryClient.invalidateQueries({ queryKey: ['evaluation-committees'] });
       if (isCombinedMethod) {
         toast.success(`Combined scores calculated: Tech ${data.tech_weight}% / Fin ${data.fin_weight}%`);
       } else {
@@ -267,7 +279,6 @@ const ScoreConsolidation: React.FC = () => {
     );
   }
 
-  const financialOpened = passedBids.some((bid: any) => bid.financial_sealed === false);
   const passedBidsCount = consolidatedScores.filter(b => b.passed).length;
   const totalBids = consolidatedScores.length;
 

@@ -96,6 +96,16 @@ const ConflictOfInterestDeclaration: React.FC = () => {
     && confidentialityAgreed
     && (declarationType === 'no_conflict' || (declarationType === 'specific_conflict' && conflictedBidders.length > 0) || (declarationType === 'general_conflict' && explanation.trim().length > 0));
 
+  // Auto-redirect after successful COI declaration
+  React.useEffect(() => {
+    if (submitted && localDeclaration && !localDeclaration.recused) {
+      const timer = setTimeout(() => {
+        navigate(`/evaluations/${committeeId}`);
+      }, 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [submitted, localDeclaration, committeeId, navigate]);
+
   if (committeeLoading || coiLoading) return <LoadingSpinner className="py-12" />;
   if (!committee) return <p className="text-center text-gray-500 py-12">Committee not found</p>;
 
@@ -185,14 +195,19 @@ const ConflictOfInterestDeclaration: React.FC = () => {
                 ← Back to Evaluations
               </button>
             </div>
-          ) : (
-            <div className="flex justify-end">
-              <button
-                onClick={() => navigate(`/evaluations/${committeeId}/scoring`)}
-                className="px-6 py-3 bg-zammsa-green text-white rounded-xl text-sm font-bold hover:bg-green-700"
-              >
-                Proceed to Evaluation →
-              </button>
+           ) : (
+            <div className="bg-green-50 border border-green-200 rounded-xl p-6 text-center">
+              <div className="w-12 h-12 rounded-full bg-green-100 flex items-center justify-center mx-auto mb-3">
+                <CheckCircleIcon className="w-7 h-7 text-green-600" />
+              </div>
+              <h3 className="text-lg font-semibold text-green-900">COI Declaration Complete</h3>
+              <p className="text-sm text-green-700 mt-2">
+                You have successfully completed your Conflict of Interest declaration.
+                The evaluation workflow will continue automatically.
+              </p>
+              <p className="text-xs text-green-600 mt-4">
+                You will be redirected to the evaluation committee page shortly.
+              </p>
             </div>
           )}
         </div>

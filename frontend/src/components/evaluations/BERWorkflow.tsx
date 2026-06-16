@@ -221,6 +221,7 @@ const BERWorkflow: React.FC = () => {
     onSuccess: () => {
       setSigned((prev) => ({ ...prev, [user?.id || '']: true }));
       queryClient.invalidateQueries({ queryKey: ['ber-for-solicitation', solId] });
+      queryClient.invalidateQueries({ queryKey: ['phase-status', solId] });
       toast.success('BER signed');
     },
     onError: (err: any) => toast.error(err?.response?.data?.error || 'Failed to sign BER'),
@@ -272,7 +273,7 @@ const BERWorkflow: React.FC = () => {
             {solicitation?.sol_number || ''} — {solicitation?.title || ''}
           </p>
         </div>
-        {!berGenerated && (
+        {isChair && !berGenerated && (
           <button
             onClick={() => generateMutation.mutate()}
             disabled={generateMutation.isPending}

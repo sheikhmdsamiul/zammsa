@@ -19,10 +19,23 @@ class EvaluationCommitteeSerializer(serializers.ModelSerializer):
     secretary_name = serializers.CharField(source='secretary.full_name', read_only=True)
     formed_date = serializers.DateTimeField(source='formed_at', read_only=True)
     status = serializers.SerializerMethodField()
-    coi_declarations = ConflictOfInterestSerializer(many=True, read_only=True)
+    coi_declarations = ConflictOfInterestSerializer(many=True, read_only=True, source='conflict_declarations')
     member_count = serializers.SerializerMethodField()
     solicitation_number = serializers.CharField(source='solicitation.sol_number', read_only=True, default='')
     solicitation_title = serializers.CharField(source='solicitation.title', read_only=True, default='')
+    current_phase = serializers.SerializerMethodField()
+    phase_progress = serializers.SerializerMethodField()
+
+    PHASE_ORDER = ['coi', 'preliminary', 'technical', 'consolidation', 'financial', 'ber', 'post-qual']
+    PHASE_LABELS = {
+        'coi': 'COI Declaration',
+        'preliminary': 'Preliminary Examination',
+        'technical': 'Technical Scoring',
+        'financial': 'Financial Evaluation',
+        'consolidation': 'Score Consolidation',
+        'ber': 'BER Workflow',
+        'post-qual': 'Post-Qualification',
+    }
 
     class Meta:
         model = EvaluationCommittee
@@ -36,6 +49,58 @@ class EvaluationCommitteeSerializer(serializers.ModelSerializer):
         if isinstance(obj.members, list):
             return len(obj.members)
         return 0
+
+    def _check_phase_completion(self, sol):
+        from .models import PreliminaryExam, TechnicalScore, FinancialEvaluation, CombinedScore, BidEvaluationReport, PostQualification, EvaluationCommittee
+        from bids.models import BidSubmission
+
+        total_bids = BidSubmission.objects.filter(solicitation=sol).count()
+
+        prelim_bids = PreliminaryExam.objects.filter(bid__solicitation=sol).values('bid').distinct().count()
+        prelim_done = prelim_bids >= total_bids and total_bids > 0
+
+        tech_scores = TechnicalScore.objects.filter(bid__solicitation=sol)
+        tech_unique_pairs = tech_scores.values('bid', 'evaluator').distinct().count()
+        total_members = 0
+        committees = EvaluationCommittee.objects.filter(solicitation=sol)
+        for c in committees:
+            total_members = max(total_members, len(c.members or []))
+        expected_pairs = total_bids * total_members if total_members > 0 else 0
+        tech_done = tech_unique_pairs >= expected_pairs and expected_pairs > 0
+
+        fin_bids = FinancialEvaluation.objects.filter(bid__solicitation=sol).values('bid').distinct().count()
+        fin_done = fin_bids >= total_bids and total_bids > 0
+
+        cons_done = CombinedScore.objects.filter(bid__solicitation=sol).exists()
+
+        ber_done = BidEvaluationReport.objects.filter(solicitation=sol, status__in=['submitted', 'approved']).exists()
+
+        pq_done = PostQualification.objects.filter(ber__solicitation=sol, status='cleared').exists()
+
+        return {
+            'coi': True,
+            'preliminary': prelim_done,
+            'technical': tech_done,
+            'financial': fin_done,
+            'consolidation': cons_done,
+            'ber': ber_done,
+            'post-qual': pq_done,
+        }
+
+    def get_current_phase(self, obj):
+        sol = obj.solicitation
+        phase_done = self._check_phase_completion(sol)
+        for phase_id in self.PHASE_ORDER:
+            if not phase_done.get(phase_id, False):
+                return {'id': phase_id, 'label': self.PHASE_LABELS[phase_id]}
+        return {'id': 'post-qual', 'label': 'Post-Qualification'}
+
+    def get_phase_progress(self, obj):
+        sol = obj.solicitation
+        phase_done = self._check_phase_completion(sol)
+        completed = sum(1 for pid in self.PHASE_ORDER if phase_done.get(pid, False))
+        total = len(self.PHASE_ORDER)
+        return {'completed': completed, 'total': total, 'percent': round((completed / total) * 100) if total else 0}
 
     def validate_members(self, value):
         if not isinstance(value, list):

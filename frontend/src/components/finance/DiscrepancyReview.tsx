@@ -21,8 +21,11 @@ interface LineMatch {
   grn_price: number;
   invoice_price: number;
   qty_match: boolean;
+  qty_status: 'pass' | 'warn' | 'fail';
   price_match: boolean;
-  grn_qty_match: boolean;
+  price_status: 'pass' | 'fail';
+  item_match: boolean;
+  grn_qty_match?: boolean;
 }
 
 const DiscrepancyReview: React.FC = () => {
@@ -173,20 +176,23 @@ const DiscrepancyReview: React.FC = () => {
                           <td className="py-3 px-2 text-right">{lm.grn_qty}</td>
                           <td className="py-3 px-2 text-right">{lm.invoice_qty}</td>
                           <td className="py-3 px-2 text-center">
-                            {lm.qty_match
-                              ? <CheckCircleIcon className="w-5 h-5 text-emerald-500 inline" />
-                              : <XCircleIcon className="w-5 h-5 text-rose-500 inline" />}
-                            {!lm.grn_qty_match && lm.qty_match !== undefined && (
-                              <span className="ml-1 text-xs text-amber-600" title="GRN qty mismatch">⚠</span>
+                            {lm.qty_status === 'pass' ? (
+                              <CheckCircleIcon className="w-5 h-5 text-emerald-500 inline" title="Qty match" />
+                            ) : lm.qty_status === 'warn' ? (
+                              <ExclamationIcon className="w-5 h-5 text-amber-500 inline" title="Qty warning" />
+                            ) : (
+                              <XCircleIcon className="w-5 h-5 text-rose-500 inline" title="Qty mismatch" />
                             )}
                           </td>
                           <td className="py-3 px-2 text-right font-semibold text-purple-700">K {lm.po_price?.toLocaleString()}</td>
                           <td className="py-3 px-2 text-right">K {lm.grn_price?.toLocaleString()}</td>
                           <td className="py-3 px-2 text-right">K {lm.invoice_price?.toLocaleString()}</td>
                           <td className="py-3 px-2 text-center">
-                            {lm.price_match
-                              ? <CheckCircleIcon className="w-5 h-5 text-emerald-500 inline" />
-                              : <XCircleIcon className="w-5 h-5 text-rose-500 inline" />}
+                            {lm.price_status === 'pass' ? (
+                              <CheckCircleIcon className="w-5 h-5 text-emerald-500 inline" title="Price match" />
+                            ) : (
+                              <XCircleIcon className="w-5 h-5 text-rose-500 inline" title="Price mismatch" />
+                            )}
                           </td>
                         </tr>
                       ))}

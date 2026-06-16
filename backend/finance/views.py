@@ -1,9 +1,12 @@
+import logging
 from decimal import Decimal
 import hashlib
 import hmac
 from datetime import timedelta
 from xml.etree.ElementTree import Element, SubElement, tostring
 from django.conf import settings
+
+logger = logging.getLogger(__name__)
 from django.db.models import Q, Sum
 from django.db import connection
 from django.utils.dateparse import parse_date
@@ -317,184 +320,165 @@ def invoice_match_view(request, pk):
     except Invoice.DoesNotExist:
         return Response({'error': 'Invoice not found'}, status=404)
 
-    # Find the Purchase Order for this contract to use as baseline
     po = PurchaseOrder.objects.filter(contract=inv.contract, status='active').prefetch_related('line_items').first()
     po_line_items = list(po.line_items.all().order_by('line_number')) if po else []
-
     inv_line_items = list(inv.line_items.all().order_by('line_number'))
     grn_line_items = list(inv.grn.line_items.all().order_by('line_number')) if inv.grn else []
 
-    # True 3-way matching: PO vs GRN vs Invoice
     line_matches = []
-    overall_qty_match = True
-    overall_price_match = True
     total_discrepancies = {}
+    overall_overbilling = False
+    overall_price_above_po = False
+    overall_price_significantly_low = False
+    overall_item_mismatch = False
+    overall_warnings = False
 
-    if po_line_items:
-        # Use PO line items as the primary reference
-        match_sources = [po_line_items, grn_line_items, inv_line_items]
-        max_lines = max(len(s) for s in match_sources if s) if any(match_sources) else 0
+    max_lines = max(
+        len(po_line_items), len(grn_line_items), len(inv_line_items)
+    ) if any([po_line_items, grn_line_items, inv_line_items]) else 0
 
-        for i in range(max_lines):
-            po_item = po_line_items[i] if i < len(po_line_items) else None
-            grn_item = grn_line_items[i] if i < len(grn_line_items) else None
-            inv_item = inv_line_items[i] if i < len(inv_line_items) else None
+    for i in range(max_lines):
+        po_item = po_line_items[i] if i < len(po_line_items) else None
+        grn_item = grn_line_items[i] if i < len(grn_line_items) else None
+        inv_item = inv_line_items[i] if i < len(inv_line_items) else None
 
-            po_qty = po_item.quantity if po_item else Decimal('0')
-            po_price = po_item.unit_price if po_item else Decimal('0')
-            grn_qty = grn_item.quantity_received if grn_item else Decimal('0')
-            grn_price = grn_item.unit_price if grn_item else Decimal('0')
-            inv_qty = inv_item.quantity if inv_item else Decimal('0')
-            inv_price = inv_item.unit_price if inv_item else Decimal('0')
+        po_qty = po_item.quantity if po_item else Decimal('0')
+        po_price = po_item.unit_price if po_item else Decimal('0')
+        grn_qty = grn_item.quantity_received if grn_item else Decimal('0')
+        grn_price = grn_item.unit_price if grn_item else Decimal('0')
+        inv_qty = inv_item.quantity if inv_item else Decimal('0')
+        inv_price = inv_item.unit_price if inv_item else Decimal('0')
 
-            # Compare invoice to PO (ordered qty) and invoice to GRN (received qty)
-            inv_vs_po_qty = (inv_qty == po_qty)
-            inv_vs_po_price = (inv_price == po_price)
-            inv_vs_grn_qty = (inv_qty == grn_qty)
+        # ---- CHECK 1: Quantity ----
+        qty_overbilled = inv_qty > grn_qty
+        qty_underbilled = inv_qty < grn_qty
+        qty_overdelivered = grn_qty > po_qty
+        qty_exact = inv_qty == grn_qty
+        qty_match = qty_exact or qty_underbilled
 
-            if not inv_vs_grn_qty:
-                overall_qty_match = False
-            if not inv_vs_po_price:
-                overall_price_match = False
-
-            line_match = {
-                'line_number': i + 1,
-                'item_name': po_item.item_name if po_item else (grn_item.item_name if grn_item else (inv_item.item_name if inv_item else '')),
-                'item_code': po_item.item_code if po_item else (grn_item.item_code if grn_item else (inv_item.item_code if inv_item else '')),
-                'po_qty': float(po_qty),
-                'grn_qty': float(grn_qty),
-                'invoice_qty': float(inv_qty),
-                'po_price': float(po_price),
-                'grn_price': float(grn_price),
-                'invoice_price': float(inv_price),
-                'qty_match': inv_vs_po_qty,
-                'price_match': inv_vs_po_price,
-                'grn_qty_match': inv_vs_grn_qty,
-            }
-            line_matches.append(line_match)
-
-            if not inv_vs_po_qty:
-                total_discrepancies[f'line_{i+1}_qty'] = {
-                    'po': float(po_qty), 'grn': float(grn_qty), 'invoice': float(inv_qty),
-                }
-            if not inv_vs_po_price:
-                total_discrepancies[f'line_{i+1}_price'] = {
-                    'po': float(po_price), 'invoice': float(inv_price),
-                }
-    elif inv_line_items and grn_line_items:
-        # Fallback: GRN vs Invoice (no PO)
-        max_lines = max(len(inv_line_items), len(grn_line_items))
-        for i in range(max_lines):
-            inv_item = inv_line_items[i] if i < len(inv_line_items) else None
-            grn_item = grn_line_items[i] if i < len(grn_line_items) else None
-
-            inv_qty = inv_item.quantity if inv_item else Decimal('0')
-            inv_price = inv_item.unit_price if inv_item else Decimal('0')
-            grn_qty = grn_item.quantity_received if grn_item else Decimal('0')
-            grn_price = grn_item.unit_price if grn_item else Decimal('0')
-
-            qty_ok = (inv_qty == grn_qty)
-            price_ok = (inv_price == grn_price)
-
-            if not qty_ok:
-                overall_qty_match = False
-            if not price_ok:
-                overall_price_match = False
-
-            line_match = {
-                'line_number': i + 1,
-                'item_name': (inv_item.item_name if inv_item else grn_item.item_name),
-                'item_code': (inv_item.item_code if inv_item else grn_item.item_code),
-                'po_qty': float(grn_qty),
-                'grn_qty': float(grn_qty),
-                'invoice_qty': float(inv_qty),
-                'po_price': float(grn_price),
-                'grn_price': float(grn_price),
-                'invoice_price': float(inv_price),
-                'qty_match': qty_ok,
-                'price_match': price_ok,
-                'grn_qty_match': qty_ok,
-            }
-            line_matches.append(line_match)
-
-            if not qty_ok:
-                total_discrepancies[f'line_{i+1}_qty'] = {
-                    'grn': float(grn_qty), 'invoice': float(inv_qty),
-                }
-            if not price_ok:
-                total_discrepancies[f'line_{i+1}_price'] = {
-                    'grn': float(grn_price), 'invoice': float(inv_price),
-                }
-    else:
-        # Fallback: header-level matching (legacy — no line items)
-        po_qty = Decimal('1')
-        po_price = inv.contract.value
-
-        grn_qty = Decimal('0')
-        grn_price = Decimal('0')
-
-        if inv.grn:
-            grn_qty = inv.grn.quantity_received
-            grn_price = inv.grn.unit_price
-            po_price = inv.grn.unit_price
-            po_qty = inv.grn.quantity_received
-
-        inv_qty = Decimal('1')
-        inv_price = inv.amount
-
-        if request.data:
-            po_qty = Decimal(str(request.data.get('po_quantity', po_qty)))
-            grn_qty = Decimal(str(request.data.get('grn_quantity', grn_qty)))
-            inv_qty = Decimal(str(request.data.get('invoice_quantity', inv_qty)))
-            po_price = Decimal(str(request.data.get('po_price', po_price)))
-            inv_price = Decimal(str(request.data.get('invoice_price', inv_price)))
-        elif inv.grn:
-            inv_qty = grn_qty
-            inv_price = (inv.amount / inv_qty) if inv_qty else Decimal('0')
-
-        overall_qty_match = (grn_qty == inv_qty)
-        overall_price_match = (po_price == inv_price)
-
-        if not overall_qty_match:
-            total_discrepancies['quantity_mismatch_grn_inv'] = {
+        if qty_overbilled:
+            overall_overbilling = True
+            total_discrepancies[f'line_{i+1}_qty_overbilled'] = {
                 'grn': float(grn_qty), 'invoice': float(inv_qty),
+                'severity': 'error', 'message': f'Invoice qty ({inv_qty}) exceeds GRN qty ({grn_qty}) — overbilling',
             }
-        if not overall_price_match:
-            total_discrepancies['price_mismatch'] = {
-                'po': float(po_price), 'invoice': float(inv_price),
+        elif qty_underbilled:
+            overall_warnings = True
+            total_discrepancies[f'line_{i+1}_qty_underbilled'] = {
+                'grn': float(grn_qty), 'invoice': float(inv_qty),
+                'severity': 'warn', 'message': f'Invoice qty ({inv_qty}) is less than GRN qty ({grn_qty}) — acceptable',
+            }
+        if qty_overdelivered:
+            overall_warnings = True
+            total_discrepancies[f'line_{i+1}_qty_overdelivered'] = {
+                'po': float(po_qty), 'grn': float(grn_qty),
+                'severity': 'warn', 'message': f'GRN qty ({grn_qty}) exceeds PO qty ({po_qty}) — over-delivery',
             }
 
-        line_matches = [{
-            'line_number': 1,
-            'item_name': inv.grn.item_description if inv.grn else '',
-            'item_code': '',
+        # ---- CHECK 2: Unit Price ----
+        price_tolerance = po_price * Decimal('0.005') if po_price else Decimal('0')
+        price_above_po = po_price > 0 and (inv_price - po_price) > price_tolerance
+        price_below_po = po_price > 0 and (po_price - inv_price) > price_tolerance
+        price_match = not price_above_po and not price_below_po
+
+        if price_above_po:
+            overall_price_above_po = True
+            total_discrepancies[f'line_{i+1}_price_above_po'] = {
+                'po': float(po_price), 'invoice': float(inv_price),
+                'severity': 'error', 'message': f'Invoice unit price ({inv_price}) exceeds PO price ({po_price}) by more than 0.5%',
+            }
+        elif price_below_po:
+            overall_price_significantly_low = True
+            total_discrepancies[f'line_{i+1}_price_below_po'] = {
+                'po': float(po_price), 'invoice': float(inv_price),
+                'severity': 'warn', 'message': f'Invoice unit price ({inv_price}) is below PO price ({po_price}) — flag for R-07 review',
+            }
+
+        # ---- CHECK 3: Item description match ----
+        names = []
+        if po_item and po_item.item_name:
+            names.append(po_item.item_name.lower().strip())
+        if grn_item and grn_item.item_name:
+            names.append(grn_item.item_name.lower().strip())
+        if inv_item and inv_item.item_name:
+            names.append(inv_item.item_name.lower().strip())
+        item_name_matched = len(set(names)) <= 1 if names else True
+        codes = []
+        if po_item and po_item.item_code:
+            codes.append(po_item.item_code.lower().strip())
+        if grn_item and grn_item.item_code:
+            codes.append(grn_item.item_code.lower().strip())
+        if inv_item and inv_item.item_code:
+            codes.append(inv_item.item_code.lower().strip())
+        item_code_matched = len(set(codes)) <= 1 if codes else True
+        item_match = item_name_matched or item_code_matched
+
+        if not item_match:
+            overall_item_mismatch = True
+            total_discrepancies[f'line_{i+1}_item_mismatch'] = {
+                'severity': 'error', 'message': f'Item mismatch across PO/GRN/Invoice — review required',
+                'po_item': po_item.item_name if po_item else '',
+                'grn_item': grn_item.item_name if grn_item else '',
+                'inv_item': inv_item.item_name if inv_item else '',
+            }
+
+        item_display = (po_item.item_name if po_item else
+                        grn_item.item_name if grn_item else
+                        inv_item.item_name if inv_item else '')
+
+        line_matches.append({
+            'line_number': i + 1,
+            'item_name': item_display,
+            'item_code': po_item.item_code if po_item else (grn_item.item_code if grn_item else (inv_item.item_code if inv_item else '')),
             'po_qty': float(po_qty),
             'grn_qty': float(grn_qty),
             'invoice_qty': float(inv_qty),
             'po_price': float(po_price),
             'grn_price': float(grn_price),
             'invoice_price': float(inv_price),
-            'qty_match': overall_qty_match,
-            'price_match': overall_price_match,
-            'grn_qty_match': overall_qty_match,
-        }]
+            'qty_match': qty_match,
+            'qty_status': 'pass' if qty_exact else ('warn' if qty_underbilled or qty_overdelivered else 'fail'),
+            'price_match': price_match,
+            'price_status': 'pass' if price_match else 'fail',
+            'item_match': item_match,
+        })
 
-    if overall_qty_match and overall_price_match:
-        match_status = 'complete'
-    elif overall_qty_match or overall_price_match:
+    if not max_lines and inv.grn:
+        line_matches.append({
+            'line_number': 1,
+            'item_name': inv.grn.item_description or '',
+            'item_code': '',
+            'po_qty': float(inv.grn.quantity_received),
+            'grn_qty': float(inv.grn.quantity_received),
+            'invoice_qty': float(inv.amount / inv.grn.unit_price) if inv.grn.unit_price else 0,
+            'po_price': float(inv.grn.unit_price),
+            'grn_price': float(inv.grn.unit_price),
+            'invoice_price': float(inv.amount),
+            'qty_match': True,
+            'qty_status': 'pass',
+            'price_match': True,
+            'price_status': 'pass',
+            'item_match': True,
+        })
+        overall_warnings = True
+        total_discrepancies['header_level'] = {
+            'severity': 'info',
+            'message': 'No line items — matched at header level using GRN unit_price and invoice amount',
+        }
+
+    # Determine match status
+    if overall_overbilling or overall_price_above_po or overall_item_mismatch:
+        match_status = 'no_match'
+    elif overall_price_significantly_low or overall_warnings:
         match_status = 'partial'
     else:
-        match_status = 'no_match'
+        match_status = 'complete'
 
-    # Check compliance/safety on GRN
+    # GRN compliance checks
     grn_compliance_fail = False
     if not inv.grn:
-        # If no PO line items and no invoice line items, and we got grn_quantity in request,
-        # it is the legacy test fallback where GRN doesn't exist in DB.
-        is_legacy_fallback = not po_line_items and not inv_line_items and request.data and request.data.get('grn_quantity') is not None
-        if not is_legacy_fallback:
-            match_status = 'no_match'
-            total_discrepancies['missing_grn'] = {'message': 'Invoice does not have a linked Goods Receipt Note (GRN)'}
+        match_status = 'no_match'
+        total_discrepancies['missing_grn'] = {'message': 'Invoice does not have a linked Goods Receipt Note (GRN)'}
     else:
         if not inv.grn.zamra_certificate_verified:
             grn_compliance_fail = True
@@ -505,7 +489,6 @@ def invoice_match_view(request, pk):
         if not inv.grn.temperature_log_attached:
             grn_compliance_fail = True
             total_discrepancies['temperature_log_missing'] = {'grn_value': False, 'required': True}
-
         if grn_compliance_fail:
             match_status = 'no_match'
 
@@ -521,6 +504,9 @@ def invoice_match_view(request, pk):
         discrepancies={'line_matches': line_matches, **total_discrepancies},
     )
 
+    has_no_match_issues = overall_overbilling or overall_price_above_po or overall_item_mismatch or grn_compliance_fail
+    has_warnings = overall_price_significantly_low or overall_warnings
+
     finance_review = None
     if match_status == 'complete':
         finance_review = _apply_invoice_finance_review(inv, inv.original_amount or inv.amount)
@@ -529,19 +515,48 @@ def invoice_match_view(request, pk):
         inv.approval_route = None
         inv.save()
 
-    status_label = 'Ready for Approval' if match_status == 'complete' else 'Discrepancy - Requires Review'
+    status_label = (
+        'Ready for Approval' if match_status == 'complete'
+        else 'Partial Match — Acceptable Discrepancies' if match_status == 'partial'
+        else 'Discrepancy — Requires Review'
+    )
+
+    po_total = sum((m['po_qty'] * m['po_price']) for m in line_matches)
+    grn_total = sum((m['grn_qty'] * m['grn_price']) for m in line_matches)
+    inv_total_qty = sum(m['invoice_qty'] for m in line_matches)
+    grn_total_qty = sum(m['grn_qty'] for m in line_matches)
+    inv_amount_val = float(inv.amount)
+
+    overbilling = any(m.get('qty_status') == 'fail' for m in line_matches)
+    price_issues = any(m.get('price_status') == 'fail' for m in line_matches)
+    item_issues = any(not m.get('item_match', True) for m in line_matches)
 
     return Response({
         'message': f'3-way match completed: {match_status}',
         'match_status': match_status,
         'workflow_status': status_label,
         'match': {
+            'match_status': match_status,
             'overall_match': match_status == 'complete',
             'flag_for_review': match_status != 'complete',
-            'invoice_amount': float(inv.amount),
+            'has_overbilling': overall_overbilling,
+            'has_price_above_po': overall_price_above_po,
+            'has_price_below_po': overall_price_significantly_low,
+            'has_item_mismatch': overall_item_mismatch,
+            'has_warnings': has_warnings,
+            'invoice_amount': inv_amount_val,
+            'invoice_price': inv_amount_val / inv_total_qty if inv_total_qty else 0,
+            'po_amount': po_total,
+            'grn_amount': grn_total,
+            'invoice_vs_po': not overbilling and not price_issues,
+            'po_vs_grn': abs(po_total - grn_total) < 0.01,
+            'invoice_vs_grn': not overbilling,
+            'invoice_qty': inv_total_qty,
+            'grn_qty': grn_total_qty,
             'line_matches': line_matches,
-            'quantity_match': overall_qty_match,
-            'price_match': overall_price_match,
+            'quantity_match': not overall_overbilling,
+            'price_match': not overall_price_above_po,
+            'item_match': not overall_item_mismatch,
             'zamra_certificate_verified': inv.grn.zamra_certificate_verified if inv.grn else False,
             'cold_chain_maintained': inv.grn.cold_chain_maintained if inv.grn else True,
             'temperature_log_attached': inv.grn.temperature_log_attached if inv.grn else False,
@@ -631,6 +646,14 @@ def invoice_approve_view(request, pk):
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def invoice_accept_partial_view(request, pk):
+    try:
+        return _invoice_accept_partial(request, pk)
+    except Exception as e:
+        logger.exception('Error in invoice_accept_partial_view: %s', e)
+        return Response({'error': f'Server error: {str(e)}'}, status=500)
+
+
+def _invoice_accept_partial(request, pk):
     if request.user.role not in FINANCE_PAYMENT_ROLES:
         return Response({'error': 'Only finance officers can accept partial match discrepancies'}, status=403)
 

@@ -34,4 +34,5 @@ urlpatterns = [
     path('reports/<uuid:pk>/pdf/', views.ber_pdf_view, name='ber-pdf'),
     path('post-qualifications/', views.PostQualificationListView.as_view(), name='pq-list'),
     path('post-qualifications/<uuid:pk>/', views.PostQualificationDetailView.as_view(), name='pq-detail'),
+    path('phase-status/<uuid:solicitation_pk>/', views.evaluation_phase_status_view, name='phase-status'),
 ]
