@@ -100,7 +100,22 @@ class VendorApplicationListView(BaseView, generics.ListCreateAPIView):
         return super().get_permissions()
 
     def perform_create(self, serializer):
-        serializer.save()
+        app = serializer.save()
+        # Handle embedded document uploads (doc_<type>)
+        for key, file in self.request.FILES.items():
+            if key.startswith('doc_'):
+                doc_type = key.replace('doc_', '', 1)
+                safe_name = os.path.basename(file.name)
+                stored_path = default_storage.save(
+                    f'vendor_applications/{app.application_id}/{safe_name}',
+                    file,
+                )
+                file_path = default_storage.url(stored_path)
+                VendorApplicationDocument.objects.create(
+                    application=app,
+                    document_type=doc_type,
+                    file_path=file_path,
+                )
 
 
 class VendorApplicationDetailView(generics.RetrieveUpdateDestroyAPIView):

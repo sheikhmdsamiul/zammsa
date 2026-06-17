@@ -311,6 +311,20 @@ class SolicitationSerializer(serializers.ModelSerializer):
                         {'clarification_cutoff': f'Clarification cutoff must be at least 5 working days before closing. Currently {remaining} day(s).'}
                     )
 
+        # BR-SOL-04: Validate bid opening is on or after closing
+        opening = data.get('opening_date', getattr(self.instance, 'opening_date', None))
+        if opening and closing:
+            if isinstance(opening, str):
+                from django.utils.dateparse import parse_datetime
+                opening = parse_datetime(opening)
+            if isinstance(closing, str):
+                from django.utils.dateparse import parse_datetime
+                closing = parse_datetime(closing)
+            if opening and closing and opening < closing:
+                raise serializers.ValidationError(
+                    {'opening_date': 'Bid opening date must be on or after the closing date.'}
+                )
+
         return data
 
     def validate_method(self, value):

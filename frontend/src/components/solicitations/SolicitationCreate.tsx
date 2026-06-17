@@ -73,6 +73,24 @@ function daysBetween(a: string, b: string): number {
   return Math.round((new Date(b).getTime() - new Date(a).getTime()) / (1000 * 60 * 60 * 24));
 }
 
+function addWorkingDays(date: Date, days: number): Date {
+  const result = new Date(date);
+  if (days >= 0) {
+    let added = 0;
+    while (added < days) {
+      result.setDate(result.getDate() + 1);
+      if (result.getDay() !== 0 && result.getDay() !== 6) added++;
+    }
+  } else {
+    let subtracted = 0;
+    while (subtracted > days) {
+      result.setDate(result.getDate() - 1);
+      if (result.getDay() !== 0 && result.getDay() !== 6) subtracted--;
+    }
+  }
+  return result;
+}
+
 const SolicitationCreate: React.FC = () => {
   const navigate = useNavigate();
   const [currentStep, setCurrentStep] = useState(0);
@@ -140,9 +158,7 @@ const SolicitationCreate: React.FC = () => {
 
   const clarificationCutoff = useMemo(() => {
     if (!closingDate) return '';
-    const d = new Date(closingDate);
-    d.setDate(d.getDate() - 5);
-    while (d.getDay() === 0 || d.getDay() === 6) d.setDate(d.getDate() - 1);
+    const d = addWorkingDays(new Date(closingDate), -5);
     return d.toISOString().split('T')[0];
   }, [closingDate]);
 
@@ -161,13 +177,17 @@ const SolicitationCreate: React.FC = () => {
       if (allDocs.length > 0) {
         setUploadingFiles(true);
         let uploaded = 0;
+        let failed = 0;
         for (const doc of allDocs) {
           try {
             await solicitationsApi.documents.upload(solId, doc.file);
             uploaded++;
-          } catch { /* skip failed */ }
+          } catch {
+            failed++;
+          }
         }
         setUploadingFiles(false);
+        if (failed > 0) toast.error(`${failed} document(s) failed to upload. You can upload them later from the solicitation detail page.`);
         if (uploaded > 0) toast.success(`${uploaded} document(s) uploaded`);
       }
 
@@ -175,13 +195,16 @@ const SolicitationCreate: React.FC = () => {
         try {
           const result = await solicitationsApi.documents.copyCppDocuments(solId, selectedCppDocIds);
           if (result.count > 0) toast.success(`${result.count} CPP document(s) copied to solicitation`);
-        } catch { /* skip failed copy */ }
+        } catch {
+          toast.error('Failed to copy some CPP documents. You can add them manually from the solicitation detail page.');
+        }
       }
 
       setSuccess(true);
     },
     onError: (err: any) => {
-      toast.error(err?.response?.data?.error || err?.message || 'Failed to create solicitation');
+      const data = err?.response?.data || {};
+      toast.error(data.error || data.detail || data.message || err?.message || 'Failed to create solicitation');
     },
   });
 
@@ -196,6 +219,10 @@ const SolicitationCreate: React.FC = () => {
     if (technicalCriteria.length === 0) { toast.error('At least one technical criterion is required'); return; }
     if (technicalCriteria.some(c => !c.name.trim())) { toast.error('All technical criteria must have a name'); return; }
     if (!confirmed) { toast.error('Please confirm the submission declaration'); return; }
+    if (selectedReq?.cpp_data?.is_baseline_locked === false) {
+      toast.error('CPP baseline must be locked before creating a solicitation. Submit the CPP for approval first.');
+      return;
+    }
 
     const solType = template === 'itb' ? 'rfb' : template === 'rfp' ? 'rfp' : 'rfq';
 
@@ -528,6 +555,30 @@ const SolicitationCreate: React.FC = () => {
                     </option>
                   ))}
                 </select>
+              </div>
+            )}
+
+            {selectedReq && selectedReq.cpp_data?.is_baseline_locked === false && (
+              <div className="mt-4 p-4 bg-rose-50 border border-rose-200 rounded-2xl flex items-start gap-3">
+                <ExclamationIcon className="w-5 h-5 text-rose-500 shrink-0 mt-0.5" />
+                <div>
+                  <p className="text-sm font-bold text-rose-800">CPP Baseline Not Locked</p>
+                  <p className="text-xs text-rose-700 mt-1">
+                    The CPP for this requisition ({selectedReq.cpp_data.cpp_number || '---'}) has not been locked.
+                    You must submit the CPP for approval to lock the baseline before creating a solicitation.
+                  </p>
+                </div>
+              </div>
+            )}
+            {selectedReq && selectedReq.cpp_data?.is_baseline_locked === true && (
+              <div className="mt-4 p-4 bg-emerald-50 border border-emerald-200 rounded-2xl flex items-start gap-3">
+                <CheckCircleIcon className="w-5 h-5 text-emerald-500 shrink-0 mt-0.5" />
+                <div>
+                  <p className="text-sm font-bold text-emerald-800">CPP Baseline Locked</p>
+                  <p className="text-xs text-emerald-700 mt-1">
+                    CPP {selectedReq.cpp_data.cpp_number || ''} baseline is locked — solicitation may proceed.
+                  </p>
+                </div>
               </div>
             )}
           </div>
@@ -1166,7 +1217,7 @@ const SolicitationCreate: React.FC = () => {
               {[
                 `Template: ${template === 'itb' ? 'ITB (Goods, Single Envelope)' : template === 'rfp' ? 'RFP (Consulting, Two Envelope)' : 'RFQ (Quotations)'}`,
                 `Title and description provided`,
-                `Linked to approved CPP: ${(selectedReq as any)?.cpp_number || '---'}`,
+                `CPP: ${(selectedReq as any)?.cpp_data?.cpp_number || '---'} ${(selectedReq as any)?.cpp_data?.is_baseline_locked ? '(Baseline Locked)' : '(Baseline Not Locked)'}`,
                 `Issue date: ${fmtDate(issueDate)}`,
                 `Closing: ${fmtDate(closingDate)} — ${solicitationPeriodDays} days (ONB minimum met)`,
                 `Opening: ${fmtDate(openingDate)} ${openingHour}:${openingMinute} — after closing`,

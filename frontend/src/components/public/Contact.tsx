@@ -5,6 +5,8 @@ import { z } from 'zod';
 import toast from 'react-hot-toast';
 import publicApi from '../../api/public';
 import { LoadingSpinner } from '../common/LoadingSpinner';
+import { PageHeader } from '../common/PageHeader';
+import { MailIcon, PhoneIcon, LocationMarkerIcon, ClockIcon } from '@heroicons/react/outline';
 
 const schema = z.object({
   name: z.string().min(2, 'Name is required'),
@@ -31,111 +33,84 @@ const Contact: React.FC = () => {
   };
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold text-gray-900">Contact Us</h1>
-        <p className="text-gray-500 mt-2">Get in touch with ZAMMSA</p>
-      </div>
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 space-y-12">
+      <PageHeader 
+        title="Contact Us"
+        description="Have questions? Our team is here to assist you with procurement inquiries and technical support."
+      />
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-12">
         <div className="lg:col-span-2">
-          <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-8">
-            <h2 className="text-xl font-semibold text-gray-900 mb-6">Send us a Message</h2>
-            <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Name</label>
-                  <input {...register('name')} className="w-full border-gray-300 rounded-lg focus:ring-zammsa-green focus:border-zammsa-green" />
-                  {errors.name && <p className="text-xs text-red-600 mt-1">{errors.name.message}</p>}
+          <div className="bg-white rounded-3xl border border-slate-200 p-8 lg:p-12 shadow-sm">
+            <h2 className="text-2xl font-bold text-slate-900 mb-8 tracking-tight">Send us a Message</h2>
+            <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Full Name</label>
+                  <input {...register('name')} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm font-medium focus:ring-2 focus:ring-zammsa-green/10 focus:border-zammsa-green transition-all outline-none" placeholder="John Doe" />
+                  {errors.name && <p className="text-[10px] font-bold text-rose-600 uppercase tracking-tight ml-1">{errors.name.message}</p>}
                 </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
-                  <input {...register('email')} className="w-full border-gray-300 rounded-lg focus:ring-zammsa-green focus:border-zammsa-green" />
-                  {errors.email && <p className="text-xs text-red-600 mt-1">{errors.email.message}</p>}
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Email Address</label>
+                  <input {...register('email')} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm font-medium focus:ring-2 focus:ring-zammsa-green/10 focus:border-zammsa-green transition-all outline-none" placeholder="john@example.com" />
+                  {errors.email && <p className="text-[10px] font-bold text-rose-600 uppercase tracking-tight ml-1">{errors.email.message}</p>}
                 </div>
               </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Subject</label>
-                <input {...register('subject')} className="w-full border-gray-300 rounded-lg focus:ring-zammsa-green focus:border-zammsa-green" />
-                {errors.subject && <p className="text-xs text-red-600 mt-1">{errors.subject.message}</p>}
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Subject</label>
+                <input {...register('subject')} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm font-medium focus:ring-2 focus:ring-zammsa-green/10 focus:border-zammsa-green transition-all outline-none" placeholder="How can we help?" />
+                {errors.subject && <p className="text-[10px] font-bold text-rose-600 uppercase tracking-tight ml-1">{errors.subject.message}</p>}
               </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Message</label>
-                <textarea {...register('message')} rows={5} className="w-full border-gray-300 rounded-lg focus:ring-zammsa-green focus:border-zammsa-green" />
-                {errors.message && <p className="text-xs text-red-600 mt-1">{errors.message.message}</p>}
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Message</label>
+                <textarea {...register('message')} rows={5} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm font-medium focus:ring-2 focus:ring-zammsa-green/10 focus:border-zammsa-green transition-all outline-none" placeholder="Provide details here..." />
+                {errors.message && <p className="text-[10px] font-bold text-rose-600 uppercase tracking-tight ml-1">{errors.message.message}</p>}
               </div>
               <button
                 type="submit"
                 disabled={isSubmitting}
-                className="px-6 py-3 bg-zammsa-green text-white rounded-lg hover:bg-zammsa-green-dark disabled:opacity-50 flex items-center gap-2"
+                className="w-full sm:w-auto px-10 py-4 bg-zammsa-green text-white text-xs font-bold uppercase tracking-widest rounded-xl hover:bg-zammsa-green-dark transition-all disabled:opacity-50 flex items-center justify-center gap-3 shadow-lg shadow-zammsa-green/10"
               >
-                {isSubmitting && <LoadingSpinner size="sm" />}
-                Send Message
+                {isSubmitting ? <LoadingSpinner /> : 'Send Message'}
               </button>
             </form>
           </div>
         </div>
 
-        <div className="space-y-6">
-          <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
-            <h3 className="font-semibold text-gray-900 mb-4">Contact Information</h3>
-            <div className="space-y-4 text-sm">
-              <div className="flex items-start gap-3">
-                <div className="w-10 h-10 bg-zammsa-green bg-opacity-10 rounded-lg flex items-center justify-center flex-shrink-0">
-                  <svg className="h-5 w-5 text-zammsa-green" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-                  </svg>
+        <div className="space-y-8">
+          <div className="bg-white rounded-3xl border border-slate-200 p-8 shadow-sm">
+            <h3 className="text-lg font-bold text-slate-900 mb-8 tracking-tight">Information</h3>
+            <div className="space-y-8">
+              {[
+                { label: 'Address', value: 'Plot 12345, Great East Road, Lusaka, Zambia', icon: <LocationMarkerIcon /> },
+                { label: 'Phone', value: '+260 211 123 456 / 457', icon: <PhoneIcon /> },
+                { label: 'Email', value: 'info@zammsa.gov.zm', icon: <MailIcon /> },
+                { label: 'Working Hours', value: 'Mon-Fri: 08:00 - 17:00', icon: <ClockIcon /> },
+              ].map((item) => (
+                <div key={item.label} className="flex gap-4">
+                  <div className="w-10 h-10 bg-slate-50 border border-slate-100 rounded-xl flex items-center justify-center text-zammsa-green shrink-0">
+                    {React.isValidElement(item.icon) 
+                      ? React.cloneElement(item.icon as React.ReactElement<{ className?: string }>, { 
+                          className: 'w-5 h-5' 
+                        }) 
+                      : item.icon}
+                  </div>
+                  <div>
+                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">{item.label}</p>
+                    <p className="text-sm font-semibold text-slate-700 leading-snug">{item.value}</p>
+                  </div>
                 </div>
-                <div>
-                  <p className="font-medium text-gray-900">Address</p>
-                  <p className="text-gray-500 mt-0.5">Plot 12345, Great East Road<br />Lusaka, Zambia</p>
-                </div>
-              </div>
-              <div className="flex items-start gap-3">
-                <div className="w-10 h-10 bg-zammsa-green bg-opacity-10 rounded-lg flex items-center justify-center flex-shrink-0">
-                  <svg className="h-5 w-5 text-zammsa-green" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
-                  </svg>
-                </div>
-                <div>
-                  <p className="font-medium text-gray-900">Phone</p>
-                  <p className="text-gray-500 mt-0.5">+260 211 123 456</p>
-                  <p className="text-gray-500">+260 211 123 457</p>
-                </div>
-              </div>
-              <div className="flex items-start gap-3">
-                <div className="w-10 h-10 bg-zammsa-green bg-opacity-10 rounded-lg flex items-center justify-center flex-shrink-0">
-                  <svg className="h-5 w-5 text-zammsa-green" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-                  </svg>
-                </div>
-                <div>
-                  <p className="font-medium text-gray-900">Email</p>
-                  <p className="text-gray-500 mt-0.5">info@zammsa.gov.zm</p>
-                  <p className="text-gray-500">procurement@zammsa.gov.zm</p>
-                </div>
-              </div>
-              <div className="flex items-start gap-3">
-                <div className="w-10 h-10 bg-zammsa-green bg-opacity-10 rounded-lg flex items-center justify-center flex-shrink-0">
-                  <svg className="h-5 w-5 text-zammsa-green" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
-                </div>
-                <div>
-                  <p className="font-medium text-gray-900">Working Hours</p>
-                  <p className="text-gray-500 mt-0.5">Monday - Friday: 08:00 - 17:00</p>
-                  <p className="text-gray-500">Saturday - Sunday: Closed</p>
-                </div>
-              </div>
+              ))}
             </div>
           </div>
 
-          <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
-            <h3 className="font-semibold text-gray-900 mb-4">Location</h3>
-            <div className="bg-gray-200 rounded-lg h-64 flex items-center justify-center text-gray-400 text-sm">
-              Map Placeholder
-            </div>
+          <div className="bg-slate-900 rounded-3xl p-8 text-white relative overflow-hidden">
+             <div className="relative z-10">
+                <h3 className="text-lg font-bold mb-2">Technical Support</h3>
+                <p className="text-sm text-slate-400 font-medium leading-relaxed mb-6">Need help with supplier registration or bid submission?</p>
+                <a href="mailto:support@zammsa.gov.zm" className="text-xs font-bold uppercase tracking-widest text-zammsa-green hover:underline">Support Desk →</a>
+             </div>
+             <div className="absolute -bottom-4 -right-4 w-24 h-24 bg-zammsa-green/10 rounded-full blur-2xl" />
           </div>
         </div>
       </div>

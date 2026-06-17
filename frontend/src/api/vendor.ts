@@ -15,10 +15,15 @@ export const vendorApi = {
     api.get<VendorNotification[]>('/audit-logs/', { params: { limit: 10 } }).then((r) => r.data as any),
 
   registration: {
-    saveDraft: (data: Partial<VendorRegistration>) =>
+    saveDraft: (data: Partial<VendorRegistration> | FormData) =>
       api.post<VendorRegistration>('/suppliers/applications/', data).then((r) => r.data),
-    submit: (data: Partial<VendorRegistration>) =>
-      api.post<VendorRegistration>('/suppliers/applications/', { ...data, status: 'submitted' }).then((r) => r.data),
+    submit: (data: Partial<VendorRegistration> | FormData) => {
+      if (data instanceof FormData) {
+        if (!data.has('status')) data.append('status', 'submitted');
+        return api.post<VendorRegistration>('/suppliers/applications/', data).then((r) => r.data);
+      }
+      return api.post<VendorRegistration>('/suppliers/applications/', { ...data, status: 'submitted' }).then((r) => r.data);
+    },
     get: () =>
       api.get<VendorRegistration>('/suppliers/applications/').then((r) => r.data),
     update: (data: Partial<VendorRegistration>) =>

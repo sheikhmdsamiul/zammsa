@@ -1,8 +1,11 @@
 import uuid
+import logging
 from datetime import timedelta
 from django.db.models import Q, Max
 from django.utils import timezone
 from django.core.mail import send_mail
+
+logger = logging.getLogger(__name__)
 from django.conf import settings
 from rest_framework import generics, filters, status
 from rest_framework.decorators import api_view, permission_classes
@@ -170,8 +173,7 @@ class SolicitationListView(BaseView, generics.ListCreateAPIView):
         if _normalize_role(self.request.user.role) not in PROCUREMENT_STAFF_ROLES:
             raise PermissionDenied('Only authorized procurement staff can create solicitations.')
         
-        # BR-CPP-01: No solicitation can be published without an approved CPP
-        # Check that the requisition has an approved CPP
+        # BR-CPP-01: No solicitation can be created without an approved CPP with locked baseline
         requisition = serializer.validated_data.get('requisition')
         if requisition:
             approved_cpp = requisition.cpp.filter(status='approved').first()
@@ -179,6 +181,11 @@ class SolicitationListView(BaseView, generics.ListCreateAPIView):
                 raise PermissionDenied(
                     f'Cannot create solicitation for requisition {requisition.req_number}. '
                     'An approved Contract Procurement Plan (CPP) is required first.'
+                )
+            if not approved_cpp.is_baseline_locked:
+                raise PermissionDenied(
+                    f'Cannot create solicitation until CPP {approved_cpp.cpp_number} baseline is locked. '
+                    'Please submit the CPP for approval to lock the milestone baseline schedule.'
                 )
         
         serializer.save(created_by=self.request.user)
@@ -193,9 +200,11 @@ class SolicitationDetailView(generics.RetrieveUpdateDestroyAPIView):
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def solicitation_submit_view(request, pk):
+    logger.info('Solicitation submit: pk=%s, user=%s, role=%s', pk, request.user.email, request.user.role)
     try:
         sol = Solicitation.objects.get(pk=pk)
     except Solicitation.DoesNotExist:
+        logger.warning('Solicitation not found for submit: pk=%s', pk)
         return Response({'error': 'Solicitation not found'}, status=404)
 
     if sol.status != 'draft':
@@ -229,12 +238,15 @@ def solicitation_submit_view(request, pk):
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def solicitation_approve_view(request, pk):
+    logger.info('Solicitation approve: pk=%s, user=%s, role=%s', pk, request.user.email, request.user.role)
     try:
         sol = Solicitation.objects.get(pk=pk)
     except Solicitation.DoesNotExist:
+        logger.warning('Solicitation not found for approval: pk=%s', pk)
         return Response({'error': 'Solicitation not found'}, status=404)
 
     if sol.status != 'pending_approval':
+        logger.warning('Solicitation not in pending_approval state: pk=%s, status=%s', pk, sol.status)
         return Response({'error': 'Only pending approval solicitations can be approved'}, status=400)
 
     # BR-SOL-01: Validate minimum bidding period
@@ -290,12 +302,15 @@ def solicitation_reject_view(request, pk):
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def solicitation_publish_view(request, pk):
+    logger.info('Solicitation publish: pk=%s, user=%s, role=%s', pk, request.user.email, request.user.role)
     try:
         sol = Solicitation.objects.get(pk=pk)
     except Solicitation.DoesNotExist:
+        logger.warning('Solicitation not found for publish: pk=%s', pk)
         return Response({'error': 'Solicitation not found'}, status=404)
 
     if sol.status != 'approved':
+        logger.warning('Solicitation not in approved state: pk=%s, status=%s', pk, sol.status)
         return Response({'error': 'Only approved solicitations can be published'}, status=400)
 
     user_role = _normalize_role(request.user.role)

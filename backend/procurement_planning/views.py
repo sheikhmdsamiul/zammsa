@@ -1,7 +1,10 @@
+import logging
 from decimal import Decimal
 from django.db.models import Q, Sum
 from django.utils import timezone
 from rest_framework import generics, filters, status
+
+logger = logging.getLogger(__name__)
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.exceptions import PermissionDenied
@@ -420,6 +423,22 @@ def _validate_milestone_minimum_periods(milestones, method):
                     f'Closing date must be at least {min_days} days after publication date '
                     f'for method "{method}". Current gap: {gap} days.'
                 )
+        except (ValueError, TypeError):
+            errors.append('Invalid date format in milestones. Use YYYY-MM-DD.')
+
+    # BR-CPP-09: Validate bid opening is on or after closing
+    opening_date = None
+    for m in milestones:
+        name_lower = (m.get('milestone_name') or '').lower()
+        if 'bid opening' in name_lower or 'opening' in name_lower:
+            opening_date = m.get('planned_date')
+            break
+    if opening_date and closing_date:
+        try:
+            opening = date.fromisoformat(opening_date) if isinstance(opening_date, str) else opening_date
+            closing = date.fromisoformat(closing_date) if isinstance(closing_date, str) else closing_date
+            if opening < closing:
+                errors.append('Bid opening date must be on or after the closing date.')
         except (ValueError, TypeError):
             errors.append('Invalid date format in milestones. Use YYYY-MM-DD.')
 
@@ -1133,6 +1152,7 @@ class GeneralProcurementNoticeDetailView(generics.RetrieveUpdateDestroyAPIView):
 @permission_classes([IsAuthenticated])
 def cpp_submit_view(request, pk):
     """Submit CPP for approval (triggers ZPC approval if method is non-open)"""
+    logger.info('CPP submit requested: pk=%s, user=%s, role=%s', pk, request.user.email, request.user.role)
     try:
         cpp = ContractProcurementPlan.objects.get(pk=pk)
     except ContractProcurementPlan.DoesNotExist:
@@ -1517,9 +1537,11 @@ def cpp_method_override_approve_view(request, pk):
 @permission_classes([IsAuthenticated])
 def cpp_lock_baseline_view(request, pk):
     """Lock the baseline for a CPP (prevents milestone changes)"""
+    logger.info('CPP baseline lock requested: pk=%s, user=%s', pk, request.user.email)
     try:
         cpp = ContractProcurementPlan.objects.get(pk=pk)
     except ContractProcurementPlan.DoesNotExist:
+        logger.warning('CPP not found for baseline lock: pk=%s', pk)
         return Response({'error': 'CPP not found'}, status=status.HTTP_404_NOT_FOUND)
 
     user = request.user

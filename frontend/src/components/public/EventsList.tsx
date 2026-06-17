@@ -3,17 +3,19 @@ import { useQuery } from '@tanstack/react-query';
 import publicApi from '../../api/public';
 import { Pagination } from '../common/Pagination';
 import { LoadingSpinner } from '../common/LoadingSpinner';
+import { PageHeader } from '../common/PageHeader';
 import { Event } from '../../types';
+import { LocationMarkerIcon, ClockIcon, CalendarIcon, ChevronRightIcon } from '@heroicons/react/outline';
 
 const PAGE_SIZE = 12;
 
 const typeBadges: Record<string, string> = {
-  meeting: 'bg-purple-100 text-purple-700',
-  workshop: 'bg-blue-100 text-blue-700',
-  conference: 'bg-green-100 text-green-700',
-  training: 'bg-orange-100 text-orange-700',
-  deadline: 'bg-red-100 text-red-700',
-  other: 'bg-gray-100 text-gray-700',
+  meeting: 'bg-purple-50 text-purple-600',
+  workshop: 'bg-blue-50 text-blue-600',
+  conference: 'bg-emerald-50 text-emerald-600',
+  training: 'bg-amber-50 text-amber-600',
+  deadline: 'bg-rose-50 text-rose-600',
+  other: 'bg-slate-50 text-slate-600',
 };
 
 const EventsList: React.FC = () => {
@@ -36,70 +38,80 @@ const EventsList: React.FC = () => {
   };
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold text-gray-900">Events</h1>
-        <p className="text-gray-500 mt-2">Upcoming procurement events and activities</p>
-      </div>
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 space-y-12">
+      <PageHeader 
+        title="Agency Events"
+        description="Stay updated with procurement workshops, vendor briefings, and official agency meetings."
+      />
 
-      <div className="flex gap-2 mb-8">
-        <button
-          onClick={() => { setTab('upcoming'); setPage(1); }}
-          className={`px-6 py-2 rounded-lg text-sm font-medium transition-colors ${tab === 'upcoming' ? 'bg-zammsa-green text-white' : 'bg-white text-gray-600 border border-gray-300 hover:bg-gray-50'}`}
-        >
-          Upcoming
-        </button>
-        <button
-          onClick={() => { setTab('past'); setPage(1); }}
-          className={`px-6 py-2 rounded-lg text-sm font-medium transition-colors ${tab === 'past' ? 'bg-zammsa-green text-white' : 'bg-white text-gray-600 border border-gray-300 hover:bg-gray-50'}`}
-        >
-          Past Events
-        </button>
+      <div className="flex gap-1 bg-slate-100 p-1 rounded-xl w-fit">
+        {(['upcoming', 'past'] as const).map((t) => (
+          <button
+            key={t}
+            onClick={() => { setTab(t); setPage(1); }}
+            className={`px-6 py-2 text-xs font-bold uppercase tracking-widest rounded-lg transition-all ${
+              tab === t ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'
+            }`}
+          >
+            {t} Events
+          </button>
+        ))}
       </div>
 
       {isLoading ? (
-        <LoadingSpinner size="lg" className="py-20" />
+        <div className="py-24 flex justify-center"><LoadingSpinner /></div>
       ) : !data?.results?.length ? (
-        <div className="text-center py-20 text-gray-400">No events found.</div>
+        <div className="py-32 text-center bg-white rounded-3xl border border-slate-100 shadow-sm">
+           <div className="w-16 h-16 bg-slate-50 rounded-2xl flex items-center justify-center mx-auto mb-6">
+              <CalendarIcon className="w-8 h-8 text-slate-200" />
+           </div>
+           <h3 className="text-lg font-bold text-slate-900 tracking-tight">No Events Found</h3>
+           <p className="text-slate-500 font-medium mt-1">There are no {tab} events scheduled at this time.</p>
+        </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
           {data.results.map((event: Event) => {
-            const isUpcoming = new Date(event.start_date) > new Date();
+            const startDate = new Date(event.start_date);
             return (
-              <div key={event.id} className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden hover:shadow-md transition-shadow">
-                <div className={`px-5 py-4 text-white ${isUpcoming ? 'bg-zammsa-green' : 'bg-gray-500'}`}>
-                  <div className="text-2xl font-bold">{new Date(event.start_date).getDate()} {new Date(event.start_date).toLocaleString('default', { month: 'short' })}</div>
-                  <div className="text-sm opacity-80">{new Date(event.start_date).toLocaleDateString('en-ZM', { weekday: 'long' })}</div>
-                </div>
-                <div className="p-5">
-                  <div className="flex items-center gap-2 mb-2">
-                    <span className={`px-2 py-0.5 text-xs font-medium rounded ${typeBadges[event.type] || 'bg-gray-100 text-gray-700'}`}>
+              <div key={event.id} className="group bg-white rounded-3xl border border-slate-200 overflow-hidden hover:border-zammsa-green/30 transition-all flex flex-col shadow-sm">
+                <div className={`p-8 pb-4 flex items-center justify-between`}>
+                   <div className="flex items-center gap-4">
+                      <div className={`w-12 h-12 rounded-2xl flex flex-col items-center justify-center ${tab === 'upcoming' ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-400'}`}>
+                         <span className="text-sm font-bold leading-none">{startDate.getDate()}</span>
+                         <span className="text-[9px] font-bold uppercase tracking-tighter mt-1">{startDate.toLocaleString('default', { month: 'short' })}</span>
+                      </div>
+                      <div>
+                         <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{startDate.getFullYear()}</p>
+                         <p className="text-xs font-bold text-slate-900">{startDate.toLocaleDateString('en-GB', { weekday: 'long' })}</p>
+                      </div>
+                   </div>
+                   <span className={`px-2.5 py-1 text-[9px] font-bold uppercase tracking-wider rounded-lg ${typeBadges[event.type] || 'bg-slate-50 text-slate-600'}`}>
                       {event.type}
-                    </span>
-                    {event.is_featured && <span className="text-xs text-zammsa-orange font-medium">Featured</span>}
-                  </div>
-                  <h3 className="font-semibold text-gray-900 mb-2">{event.title}</h3>
-                  <p className="text-sm text-gray-500 mb-3 line-clamp-2">{event.description}</p>
-                  <div className="text-sm text-gray-500 space-y-1 mb-4">
-                    <div className="flex items-center gap-1">
-                      <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-                      </svg>
-                      {event.location}
+                   </span>
+                </div>
+
+                <div className="p-8 pt-4 flex-1 flex flex-col">
+                  <h3 className="text-lg font-bold text-slate-900 mb-3 group-hover:text-zammsa-green transition-colors leading-snug">{event.title}</h3>
+                  <p className="text-sm font-medium text-slate-500 mb-6 line-clamp-2">{event.description}</p>
+                  
+                  <div className="space-y-3 mt-auto pt-6 border-t border-slate-50">
+                    <div className="flex items-center gap-3 text-slate-400">
+                      <LocationMarkerIcon className="w-4 h-4 text-zammsa-green" />
+                      <span className="text-xs font-semibold">{event.location}</span>
                     </div>
-                    <div className="flex items-center gap-1">
-                      <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                      </svg>
-                      {new Date(event.start_date).toLocaleTimeString()} - {new Date(event.end_date).toLocaleTimeString()}
+                    <div className="flex items-center gap-3 text-slate-400">
+                      <ClockIcon className="w-4 h-4 text-zammsa-green" />
+                      <span className="text-xs font-semibold">
+                         {startDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} - {new Date(event.end_date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                      </span>
                     </div>
                   </div>
+                  
                   <button
                     onClick={() => addToCalendar(event)}
-                    className="w-full px-4 py-2 border border-zammsa-green text-zammsa-green text-sm rounded-lg hover:bg-green-50 transition-colors"
+                    className="mt-8 w-full py-3 bg-slate-50 text-zammsa-green text-xs font-bold uppercase tracking-widest rounded-xl hover:bg-zammsa-green hover:text-white transition-all shadow-sm flex items-center justify-center gap-2"
                   >
-                    Add to Calendar
+                    Add to Calendar <ChevronRightIcon className="w-4 h-4" />
                   </button>
                 </div>
               </div>
@@ -108,15 +120,17 @@ const EventsList: React.FC = () => {
         </div>
       )}
 
-      {data && (
-        <Pagination
-          currentPage={page}
-          totalPages={Math.ceil(data.count / pageSize)}
-          pageSize={pageSize}
-          totalItems={data.count}
-          onPageChange={setPage}
-          onPageSizeChange={(s) => { setPageSize(s); setPage(1); }}
-        />
+      {data && data.count > pageSize && (
+        <div className="pt-12">
+          <Pagination
+            currentPage={page}
+            totalPages={Math.ceil(data.count / pageSize)}
+            pageSize={pageSize}
+            totalItems={data.count}
+            onPageChange={setPage}
+            onPageSizeChange={(s) => { setPageSize(s); setPage(1); }}
+          />
+        </div>
       )}
     </div>
   );

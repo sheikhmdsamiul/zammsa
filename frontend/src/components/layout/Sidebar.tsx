@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { ChevronLeftIcon, ChevronRightIcon, ChevronDownIcon, ChevronRightIcon as ChevronRightSmall } from '@heroicons/react/outline';
+import { ChevronLeftIcon, ChevronRightIcon, ChevronDownIcon } from '@heroicons/react/outline';
 
 export interface NavSubItem {
   label: string;
@@ -61,10 +61,10 @@ const Sidebar: React.FC<SidebarProps> = ({
 
   const isChildActive = (childPath: string) => location.pathname.startsWith(pathOnly(childPath));
 
-  const activeClass = `bg-${accentColor} text-white shadow-lg shadow-${accentColor}/20`;
-  const activeChildClass = `bg-${accentColor}/10 text-${accentColor} font-bold`;
-  const inactiveClass = 'text-gray-400 hover:bg-gray-800 hover:text-white';
-  const inactiveChildClass = 'text-gray-500 hover:text-white hover:bg-gray-800/50';
+  const activeClass = `bg-zammsa-green text-white shadow-sm`;
+  const activeChildClass = `bg-zammsa-green/5 text-zammsa-green font-semibold`;
+  const inactiveClass = 'text-slate-400 hover:bg-slate-800/50 hover:text-white';
+  const inactiveChildClass = 'text-slate-500 hover:text-slate-200 hover:bg-slate-800/30';
 
   const renderNavItem = (item: NavItem) => {
     const active = isActive(item);
@@ -76,12 +76,12 @@ const Sidebar: React.FC<SidebarProps> = ({
           <div>
             <button
               onClick={() => !isCollapsed && toggleSection(item.path)}
-              className={`flex items-center gap-4 px-4 py-3 rounded-xl text-sm font-medium transition-all duration-200 w-full group relative ${
+              className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 w-full group relative ${
                 active ? activeClass : inactiveClass
               }`}
               title={isCollapsed ? item.label : ''}
             >
-              <div className={`shrink-0 transition-transform duration-300 ${active ? 'scale-110' : 'group-hover:scale-110'}`}>
+              <div className={`shrink-0 ${active ? 'text-white' : 'text-slate-400 group-hover:text-white'}`}>
                 {item.icon}
               </div>
               {!isCollapsed && (
@@ -89,7 +89,7 @@ const Sidebar: React.FC<SidebarProps> = ({
                   <span className="truncate flex-1 text-left">{item.label}</span>
                   <div className="flex items-center gap-2">
                     {item.badge !== undefined && item.badge > 0 && (
-                      <span className="inline-flex items-center justify-center w-5 h-5 text-[10px] font-bold text-white bg-red-500 rounded-full">
+                      <span className="inline-flex items-center justify-center w-5 h-5 text-[10px] font-bold text-white bg-rose-600 rounded-full">
                         {item.badge}
                       </span>
                     )}
@@ -97,30 +97,27 @@ const Sidebar: React.FC<SidebarProps> = ({
                   </div>
                 </>
               )}
-              {active && !isCollapsed && (
-                <div className="ml-auto w-1.5 h-1.5 rounded-full bg-white/80" />
-              )}
               {isCollapsed && (
-                <div className="absolute left-full ml-4 px-3 py-1 bg-gray-900 text-white text-xs rounded-md opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity whitespace-nowrap z-50 border border-gray-700">
+                <div className="absolute left-full ml-4 px-3 py-1 bg-slate-900 text-white text-xs rounded-md opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity whitespace-nowrap z-50 border border-slate-800">
                   {item.label}
                 </div>
               )}
             </button>
             {!isCollapsed && expanded && (
-              <div className="ml-8 mt-1 space-y-0.5 border-l border-gray-700/50 pl-3">
+              <div className="ml-4 mt-1 space-y-1 border-l border-slate-800 pl-4">
                 {item.children.map((child) => {
                   const childActive = isChildActive(child.path);
                   return (
                     <Link
                       key={child.path + '|' + child.label}
                       to={child.path}
-                      className={`flex items-center gap-3 px-3 py-2 rounded-lg text-xs font-medium transition-all duration-200 ${
+                      className={`flex items-center gap-3 px-3 py-1.5 rounded-md text-xs font-medium transition-all duration-200 ${
                         childActive ? activeChildClass : inactiveChildClass
                       }`}
                     >
                       <span className="truncate flex-1">{child.label}</span>
                       {child.badge !== undefined && child.badge > 0 && (
-                        <span className="inline-flex items-center justify-center min-w-[18px] h-[18px] text-[10px] font-bold text-white bg-red-500 rounded-full px-1">
+                        <span className="inline-flex items-center justify-center min-w-[18px] h-[18px] text-[10px] font-bold text-white bg-rose-600 rounded-full px-1">
                           {child.badge}
                         </span>
                       )}
@@ -133,27 +130,24 @@ const Sidebar: React.FC<SidebarProps> = ({
         ) : (
           <Link
             to={item.path}
-            className={`flex items-center gap-4 px-4 py-3 rounded-xl text-sm font-medium transition-all duration-200 group relative ${
+            className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 group relative ${
               active ? activeClass : inactiveClass
             }`}
             title={isCollapsed ? item.label : ''}
           >
-            <div className={`shrink-0 transition-transform duration-300 ${active ? 'scale-110' : 'group-hover:scale-110'}`}>
+            <div className={`shrink-0 ${active ? 'text-white' : 'text-slate-400 group-hover:text-white'}`}>
               {item.icon}
             </div>
             {!isCollapsed && (
               <span className="truncate flex-1">{item.label}</span>
             )}
             {!isCollapsed && item.badge !== undefined && item.badge > 0 && (
-              <span className="inline-flex items-center justify-center min-w-[20px] h-5 text-[10px] font-bold text-white bg-red-500 rounded-full px-1">
+              <span className="inline-flex items-center justify-center min-w-[20px] h-5 text-[10px] font-bold text-white bg-rose-600 rounded-full px-1">
                 {item.badge}
               </span>
             )}
-            {active && !isCollapsed && (
-              <div className="ml-auto w-1.5 h-1.5 rounded-full bg-white/80" />
-            )}
             {isCollapsed && (
-              <div className="absolute left-full ml-4 px-3 py-1 bg-gray-900 text-white text-xs rounded-md opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity whitespace-nowrap z-50 border border-gray-700">
+              <div className="absolute left-full ml-4 px-3 py-1 bg-slate-900 text-white text-xs rounded-md opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity whitespace-nowrap z-50 border border-slate-800">
                 {item.label}
               </div>
             )}
@@ -167,38 +161,38 @@ const Sidebar: React.FC<SidebarProps> = ({
     <>
       {isOpen && (
         <div 
-          className="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm lg:hidden transition-opacity duration-300"
+          className="fixed inset-0 z-40 bg-slate-900/60 backdrop-blur-sm lg:hidden transition-opacity duration-300"
           onClick={onClose}
         />
       )}
 
       <aside 
-        className={`fixed inset-y-0 left-0 z-50 flex flex-col bg-zammsa-black border-r border-gray-800 transition-all duration-300 ease-in-out lg:static lg:translate-x-0 ${
+        className={`fixed inset-y-0 left-0 z-50 flex flex-col bg-zammsa-black border-r border-slate-800 transition-all duration-300 ease-in-out lg:static lg:translate-x-0 ${
           isOpen ? 'translate-x-0' : '-translate-x-full'
         } ${isCollapsed ? 'w-20' : 'w-72'}`}
       >
         <div className="flex items-center h-20 px-6 shrink-0">
           <div className="flex items-center gap-3 overflow-hidden">
             {brandLogo || (
-              <div className={`w-10 h-10 bg-${accentColor} rounded-xl flex items-center justify-center shrink-0 shadow-lg shadow-${accentColor}/30`}>
+              <div className={`w-10 h-10 bg-zammsa-green rounded-xl flex items-center justify-center shrink-0`}>
                 <span className="text-white text-lg font-bold">{brandName[0]}</span>
               </div>
             )}
             {!isCollapsed && (
               <div className="flex flex-col">
-                <span className="font-bold text-xl tracking-tight text-white leading-tight">{brandName}</span>
-                <span className="text-[10px] uppercase tracking-[0.2em] text-gray-500 font-semibold">Procurement System</span>
+                <span className="font-bold text-lg tracking-tight text-white leading-tight">{brandName}</span>
+                <span className="text-[10px] uppercase tracking-widest text-slate-500 font-semibold">Procurement System</span>
               </div>
             )}
           </div>
         </div>
 
-        <nav className="flex-1 mt-4 px-4 space-y-1 overflow-y-auto custom-scrollbar">
+        <nav className="flex-1 mt-4 px-4 space-y-1 overflow-y-auto">
           {navItems.map(renderNavItem)}
         </nav>
 
         {footer && !isCollapsed && (
-          <div className="p-4 border-t border-gray-800">
+          <div className="p-4 border-t border-slate-800">
             {footer}
           </div>
         )}
@@ -206,14 +200,14 @@ const Sidebar: React.FC<SidebarProps> = ({
         <div className="hidden lg:block p-4">
           <button
             onClick={() => setIsCollapsed(!isCollapsed)}
-            className="flex items-center justify-center w-full py-2.5 rounded-xl bg-gray-900/50 text-gray-400 hover:text-white hover:bg-gray-800 transition-all duration-200 border border-gray-800"
+            className="flex items-center justify-center w-full py-2 rounded-lg bg-slate-800/50 text-slate-400 hover:text-white hover:bg-slate-800 transition-all duration-200 border border-slate-800"
           >
             {isCollapsed ? (
               <ChevronRightIcon className="h-5 w-5" />
             ) : (
               <div className="flex items-center gap-2">
                 <ChevronLeftIcon className="h-5 w-5" />
-                <span className="text-[10px] font-bold uppercase tracking-widest">Collapse Sidebar</span>
+                <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Collapse</span>
               </div>
             )}
           </button>
@@ -223,10 +217,4 @@ const Sidebar: React.FC<SidebarProps> = ({
   );
 };
 
-/*
-  Safelist for Tailwind (ensure these are not purged):
-  bg-zammsa-green shadow-zammsa-green/20 shadow-zammsa-green/30
-  bg-zammsa-orange shadow-zammsa-orange/20 shadow-zammsa-orange/30
-  bg-zammsa-green/10 text-zammsa-green
-*/
 export default Sidebar;

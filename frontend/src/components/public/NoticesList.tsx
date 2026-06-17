@@ -2,20 +2,20 @@ import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import publicApi from '../../api/public';
-import { SearchBar } from '../common/SearchBar';
 import { Pagination } from '../common/Pagination';
 import { LoadingSpinner } from '../common/LoadingSpinner';
+import { PageHeader } from '../common/PageHeader';
 import { Notice } from '../../types';
-import { BookmarkIcon } from '@heroicons/react/outline';
+import { BookmarkIcon, SearchIcon, ChevronRightIcon, PaperClipIcon } from '@heroicons/react/outline';
 
 const PAGE_SIZE = 15;
 
 const typeColors: Record<string, string> = {
-  general: 'bg-gray-100 text-gray-700',
-  procurement: 'bg-blue-100 text-blue-700',
-  meeting: 'bg-purple-100 text-purple-700',
-  board: 'bg-yellow-100 text-yellow-700',
-  press: 'bg-red-100 text-red-700',
+  general: 'bg-slate-100 text-slate-700',
+  procurement: 'bg-blue-50 text-blue-600',
+  meeting: 'bg-purple-50 text-purple-600',
+  board: 'bg-amber-50 text-amber-600',
+  press: 'bg-rose-50 text-rose-600',
 };
 
 const NoticesList: React.FC = () => {
@@ -34,17 +34,28 @@ const NoticesList: React.FC = () => {
   });
 
   return (
-    <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold text-gray-900">Notices</h1>
-        <p className="text-gray-500 mt-2">Official notices and announcements</p>
-      </div>
+    <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-12 space-y-12">
+      <PageHeader 
+        title="Public Notices"
+        description="Official announcements, board resolutions, and procurement notifications."
+      />
 
-      <div className="flex flex-col sm:flex-row gap-4 mb-8">
-        <div className="flex-1">
-          <SearchBar value={search} onChange={(v) => { setSearch(v); setPage(1); }} placeholder="Search notices..." />
+      <div className="flex flex-col sm:flex-row gap-4">
+        <div className="relative flex-1 max-w-lg">
+           <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+           <input 
+             type="text"
+             value={search}
+             onChange={(e) => { setSearch(e.target.value); setPage(1); }}
+             placeholder="Search notices..."
+             className="w-full pl-9 pr-4 py-2.5 bg-white border border-slate-200 rounded-xl text-sm font-medium focus:ring-2 focus:ring-zammsa-green/10 focus:border-zammsa-green outline-none transition-all"
+           />
         </div>
-        <select value={type} onChange={(e) => { setType(e.target.value); setPage(1); }} className="border-gray-300 rounded-lg text-sm">
+        <select 
+          value={type} 
+          onChange={(e) => { setType(e.target.value); setPage(1); }} 
+          className="bg-white border border-slate-200 rounded-xl px-4 py-2.5 text-xs font-bold uppercase tracking-widest text-slate-600 focus:ring-2 focus:ring-zammsa-green/10 outline-none cursor-pointer"
+        >
           <option value="">All Types</option>
           <option value="general">General</option>
           <option value="procurement">Procurement</option>
@@ -55,54 +66,71 @@ const NoticesList: React.FC = () => {
       </div>
 
       {isLoading ? (
-        <LoadingSpinner size="lg" className="py-20" />
+        <div className="py-24 flex justify-center"><LoadingSpinner /></div>
       ) : !data?.results?.length ? (
-        <div className="text-center py-20 text-gray-400">No notices found.</div>
+        <div className="py-32 text-center bg-white rounded-3xl border border-slate-100 shadow-sm">
+           <div className="w-16 h-16 bg-slate-50 rounded-2xl flex items-center justify-center mx-auto mb-6 text-slate-200">
+              <BookmarkIcon className="w-8 h-8" />
+           </div>
+           <h3 className="text-lg font-bold text-slate-900 tracking-tight">No Notices</h3>
+           <p className="text-slate-500 font-medium mt-1">There are no notices matching your search.</p>
+        </div>
       ) : (
-        <div className="space-y-3">
+        <div className="space-y-4">
           {data.results.map((notice: Notice) => (
             <Link
               key={notice.id}
               to={`/notices/${notice.id}`}
-              className="block bg-white rounded-lg border border-gray-200 p-5 hover:shadow-sm transition-shadow"
+              className="group block bg-white rounded-2xl border border-slate-200 p-6 hover:border-zammsa-green/30 transition-all shadow-sm"
             >
-              <div className="flex items-start gap-4">
-                <div className="flex-shrink-0 text-center w-14">
-                  <div className="text-sm font-bold text-zammsa-green">{new Date(notice.published_at).getDate()}</div>
-                  <div className="text-xs text-gray-400">{new Date(notice.published_at).toLocaleString('default', { month: 'short' })}</div>
-                  <div className="text-xs text-gray-400">{new Date(notice.published_at).getFullYear()}</div>
+              <div className="flex items-start gap-8">
+                <div className="flex-shrink-0 text-center w-16 pt-1">
+                  <div className="text-xl font-bold text-slate-900 leading-none">{new Date(notice.published_at).getDate()}</div>
+                  <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">{new Date(notice.published_at).toLocaleString('default', { month: 'short' })}</div>
+                  <div className="text-[9px] font-bold text-slate-300 mt-0.5">{new Date(notice.published_at).getFullYear()}</div>
                 </div>
+                
                 <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 mb-1">
-                    <span className={`px-2 py-0.5 text-xs font-medium rounded ${typeColors[notice.type] || 'bg-gray-100 text-gray-700'}`}>
+                  <div className="flex items-center gap-3 mb-2">
+                    <span className={`px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider rounded ${typeColors[notice.type] || 'bg-slate-100 text-slate-600'}`}>
                       {notice.type}
                     </span>
-                    {notice.is_pinned && <span className="inline-flex items-center gap-1 text-xs text-red-500"><BookmarkIcon className="h-3 w-3" /> Pinned</span>}
+                    {notice.is_pinned && <span className="inline-flex items-center gap-1 text-[9px] font-bold text-rose-500 uppercase tracking-widest"><BookmarkIcon className="h-3 w-3" /> Pinned</span>}
                   </div>
-                  <h3 className="font-medium text-gray-900">{notice.title}</h3>
-                  <p className="text-sm text-gray-500 mt-1 line-clamp-2">{notice.content}</p>
+                  
+                  <h3 className="text-base font-bold text-slate-900 group-hover:text-zammsa-green transition-colors leading-snug">{notice.title}</h3>
+                  <p className="text-sm font-medium text-slate-500 mt-2 line-clamp-1">{notice.content}</p>
+                  
                   {notice.document && (
-                    <span className="text-xs text-zammsa-green mt-2 inline-block">Has attachment</span>
+                    <div className="flex items-center gap-1.5 text-zammsa-green mt-3">
+                       <PaperClipIcon className="w-3.5 h-3.5" />
+                       <span className="text-[10px] font-bold uppercase tracking-widest">Attachment Included</span>
+                    </div>
                   )}
                 </div>
-                <svg className="h-5 w-5 text-gray-300 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                </svg>
+                
+                <div className="hidden sm:flex self-center">
+                   <div className="p-2 bg-slate-50 text-slate-400 rounded-lg group-hover:bg-zammsa-green group-hover:text-white transition-all">
+                      <ChevronRightIcon className="w-4 h-4" />
+                   </div>
+                </div>
               </div>
             </Link>
           ))}
         </div>
       )}
 
-      {data && (
-        <Pagination
-          currentPage={page}
-          totalPages={Math.ceil(data.count / pageSize)}
-          pageSize={pageSize}
-          totalItems={data.count}
-          onPageChange={setPage}
-          onPageSizeChange={(s) => { setPageSize(s); setPage(1); }}
-        />
+      {data && data.count > pageSize && (
+        <div className="pt-12">
+          <Pagination
+            currentPage={page}
+            totalPages={Math.ceil(data.count / pageSize)}
+            pageSize={pageSize}
+            totalItems={data.count}
+            onPageChange={setPage}
+            onPageSizeChange={(s) => { setPageSize(s); setPage(1); }}
+          />
+        </div>
       )}
     </div>
   );

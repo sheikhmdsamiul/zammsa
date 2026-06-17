@@ -8,6 +8,7 @@ from master_data.models import Department
 from procurement_planning.models import ContractProcurementPlan
 from django.utils import timezone
 from decimal import Decimal
+from datetime import timedelta
 import datetime
 
 class SolicitationPermissionTests(TestCase):
@@ -43,6 +44,9 @@ class SolicitationPermissionTests(TestCase):
             requisition=self.requisition,
             status='approved',
             method='open_tender',
+            is_baseline_locked=True,
+            baseline_locked_at=timezone.now(),
+            baseline_locked_by=self.manager_user,
             created_by=self.manager_user,
         )
         self.solicitation = Solicitation.objects.create(
@@ -223,3 +227,157 @@ class SolicitationBiddingPeriodValidationTests(TestCase):
         self.client.force_authenticate(user=self.officer)
         response = self.client.post(self.submit_url)
         self.assertEqual(response.status_code, 200)
+
+
+class SolicitationBaselineLockingTests(TestCase):
+    """BR-CPP-01: Solicitation requires an approved CPP with locked baseline."""
+
+    def setUp(self):
+        self.client = APIClient()
+        self.manager = User.objects.create_user(
+            email='mgr3@example.com',
+            password='password123',
+            full_name='Proc Manager 3',
+            employee_id='PM003',
+            role='procurement_manager',
+        )
+        self.department = Department.objects.create(
+            dept_code='LOCK',
+            dept_name='Lock Test Dept',
+            level='national',
+        )
+        self.requisition = Requisition.objects.create(
+            department=self.department,
+            requester=self.manager,
+            description='Lock test requisition',
+            required_date=timezone.now().date(),
+            estimated_total=Decimal('50000.00'),
+        )
+
+    def test_create_solicitation_without_locked_baseline_returns_403(self):
+        """Solicitation creation should fail if CPP baseline is not locked."""
+        cpp = ContractProcurementPlan.objects.create(
+            requisition=self.requisition,
+            status='approved',
+            method='open_tender',
+            is_baseline_locked=False,
+            created_by=self.manager,
+        )
+        self.client.force_authenticate(user=self.manager)
+        url = reverse('solicitation-list')
+        data = {
+            'title': 'Baseline Lock Test',
+            'method': 'open_tender',
+            'description': 'Test locked baseline requirement',
+            'closing_date': (timezone.now() + timedelta(days=30)).isoformat(),
+            'requisition': str(self.requisition.requisition_id),
+        }
+        response = self.client.post(url, data)
+        self.assertEqual(response.status_code, 403)
+        self.assertIn('locked', response.data['detail'].lower())
+
+    def test_create_solicitation_with_locked_baseline_passes(self):
+        """Solicitation creation should pass if CPP baseline is locked."""
+        cpp = ContractProcurementPlan.objects.create(
+            requisition=self.requisition,
+            status='approved',
+            method='open_tender',
+            is_baseline_locked=True,
+            baseline_locked_at=timezone.now(),
+            baseline_locked_by=self.manager,
+            created_by=self.manager,
+        )
+        self.client.force_authenticate(user=self.manager)
+        url = reverse('solicitation-list')
+        data = {
+            'title': 'Baseline Pass Test',
+            'method': 'open_tender',
+            'description': 'Test locked baseline passes',
+            'closing_date': (timezone.now() + timedelta(days=30)).isoformat(),
+            'requisition': str(self.requisition.requisition_id),
+        }
+        response = self.client.post(url, data)
+        self.assertEqual(response.status_code, 201)
+
+
+class SolicitationOpeningDateValidationTests(TestCase):
+    """BR-SOL-04: Bid opening must be on or after closing date."""
+
+    def setUp(self):
+        self.client = APIClient()
+        self.manager = User.objects.create_user(
+            email='mgr4@example.com',
+            password='password123',
+            full_name='Proc Manager 4',
+            employee_id='PM004',
+            role='procurement_manager',
+        )
+        self.department = Department.objects.create(
+            dept_code='OPEN',
+            dept_name='Opening Test Dept',
+            level='national',
+        )
+        self.requisition = Requisition.objects.create(
+            department=self.department,
+            requester=self.manager,
+            description='Opening test requisition',
+            required_date=timezone.now().date(),
+            estimated_total=Decimal('50000.00'),
+        )
+        self.cpp = ContractProcurementPlan.objects.create(
+            requisition=self.requisition,
+            status='approved',
+            method='open_tender',
+            is_baseline_locked=True,
+            baseline_locked_at=timezone.now(),
+            baseline_locked_by=self.manager,
+            created_by=self.manager,
+        )
+
+    def test_opening_before_closing_returns_400(self):
+        self.client.force_authenticate(user=self.manager)
+        url = reverse('solicitation-list')
+        closing = timezone.now() + timedelta(days=30)
+        opening = timezone.now() + timedelta(days=28)
+        data = {
+            'title': 'Opening Before Closing',
+            'method': 'open_tender',
+            'description': 'Should fail validation',
+            'closing_date': closing.isoformat(),
+            'opening_date': opening.isoformat(),
+            'requisition': str(self.requisition.requisition_id),
+        }
+        response = self.client.post(url, data)
+        self.assertEqual(response.status_code, 400, f'Expected 400, got {response.status_code}: {response.data}')
+        self.assertIn('opening_date', str(response.data).lower())
+
+    def test_opening_on_closing_passes(self):
+        self.client.force_authenticate(user=self.manager)
+        url = reverse('solicitation-list')
+        closing = timezone.now() + timedelta(days=30)
+        data = {
+            'title': 'Opening On Closing',
+            'method': 'open_tender',
+            'description': 'Should pass validation',
+            'closing_date': closing.isoformat(),
+            'opening_date': closing.isoformat(),
+            'requisition': str(self.requisition.requisition_id),
+        }
+        response = self.client.post(url, data)
+        self.assertEqual(response.status_code, 201, f'Expected 201, got {response.status_code}: {response.data}')
+
+    def test_opening_after_closing_passes(self):
+        self.client.force_authenticate(user=self.manager)
+        url = reverse('solicitation-list')
+        closing = timezone.now() + timedelta(days=30)
+        opening = timezone.now() + timedelta(days=31)
+        data = {
+            'title': 'Opening After Closing',
+            'method': 'open_tender',
+            'description': 'Should pass validation',
+            'closing_date': closing.isoformat(),
+            'opening_date': opening.isoformat(),
+            'requisition': str(self.requisition.requisition_id),
+        }
+        response = self.client.post(url, data)
+        self.assertEqual(response.status_code, 201, f'Expected 201, got {response.status_code}: {response.data}')

@@ -33,6 +33,10 @@ RISK_LEVEL_CHOICES = [
 ]
 
 CEEC_CATEGORY_CHOICES = [
+    ('youth', 'Youth-Owned'),
+    ('woman', 'Woman-Owned'),
+    ('disabled', 'PWD-Owned'),
+    ('general', 'General Citizen Owned'),
     ('citizen_influenced', 'Citizen-Influenced'),
     ('citizen_empowered', 'Citizen-Empowered'),
     ('citizen_owned', 'Citizen-Owned'),
@@ -70,6 +74,10 @@ class VendorApplication(models.Model):
     company_name = models.CharField(max_length=255)
     registration_number = models.CharField(max_length=50)
     tin = models.CharField(max_length=50)
+    business_type = models.CharField(max_length=100, blank=True, default='')
+    year_established = models.CharField(max_length=4, blank=True, default='')
+    employee_count = models.CharField(max_length=50, blank=True, default='')
+    annual_turnover = models.CharField(max_length=100, blank=True, default='')
     ceec_certificate_number = models.CharField(max_length=100, blank=True)
     ceec_category = models.CharField(max_length=50, choices=CEEC_CATEGORY_CHOICES)
     # Step 1: Account (email, password)
@@ -85,6 +93,7 @@ class VendorApplication(models.Model):
     bank_account_number = models.CharField(max_length=100, blank=True, default='')
     bank_account_name = models.CharField(max_length=255, blank=True, default='')
     bank_branch = models.CharField(max_length=255, blank=True, default='')
+    commodity_categories = models.JSONField(default=list, blank=True)
     # Validations
     pacra_validated = models.BooleanField(default=False)
     ceec_validated = models.BooleanField(default=False)

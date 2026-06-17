@@ -257,6 +257,7 @@ const CPPCreate: React.FC = () => {
   const [cppNumber] = useState(() => `CPP-${new Date().getFullYear()}-${String(Math.floor(Math.random() * 999)).padStart(3, '0')}`);
   const [cppDocs, setCppDocs] = useState<{ file: File; documentType: string; description: string }[]>([]);
   const [uploadingDocs, setUploadingDocs] = useState(false);
+  const [showSubmitModal, setShowSubmitModal] = useState(false);
 
   const loadRequisitions = useCallback(async () => {
     try {
@@ -480,29 +481,42 @@ const CPPCreate: React.FC = () => {
 
       const created = await procurementPlanningApi.contractPlans.create(cppData);
 
+      let docUploadFailed = false;
       if (cppDocs.length > 0) {
         setUploadingDocs(true);
         let uploaded = 0;
+        let failed = 0;
         for (const doc of cppDocs) {
           try {
             await procurementPlanningApi.contractPlans.documents.upload(created.cpp_id, doc.file, doc.documentType, doc.description);
             uploaded++;
-          } catch { /* skip failed uploads */ }
+          } catch {
+            failed++;
+          }
         }
         setUploadingDocs(false);
+        if (failed > 0) {
+          docUploadFailed = true;
+          toast.error(`${failed} document(s) failed to upload. You can upload them later from the CPP detail page.`);
+        }
         if (uploaded > 0) toast.success(`${uploaded} document(s) uploaded`);
       }
 
       if (submitAndApprove && finalMethodOption?.isOpen) {
         await procurementPlanningApi.contractPlans.approve(created.cpp_id);
         await procurementPlanningApi.contractPlans.lockBaseline(created.cpp_id);
-        toast.success('CPP approved — baseline locked, procurement may commence');
+        if (docUploadFailed) {
+          toast.success('CPP approved and baseline locked — some documents failed to upload, please re-upload from the detail page');
+        } else {
+          toast.success('CPP approved — baseline locked, procurement may commence');
+        }
       } else {
         toast.success('CPP created successfully');
       }
       navigate(`/procurement-planning/cpp/${created.cpp_id}`);
     } catch (err: any) {
-      toast.error(err.response?.data?.error || 'Failed to create CPP');
+      const data = err.response?.data || {};
+      toast.error(data.error || data.detail || data.message || 'Failed to create CPP');
     }
     setLoading(false);
   };
@@ -948,6 +962,7 @@ const CPPCreate: React.FC = () => {
                     // Compute dynamic validation data
                     let daysToClosing = '';
                     let isAchievable = false;
+                    let openingDateError = '';
                     if (m.validationBadges?.includes('days_to_closing')) {
                       const closingMs = milestones.find(x => x.milestone_name.includes('Bid Closing') || x.milestone_name.includes('Closing'));
                       if (closingMs) {
@@ -959,6 +974,16 @@ const CPPCreate: React.FC = () => {
                     }
                     if (m.validationBadges?.includes('achievable') && selectedReq?.date_required) {
                       isAchievable = true;
+                    }
+                    if ((m.milestone_name.includes('Bid Opening') || m.milestone_name.includes('Opening')) && m.planned_date) {
+                      const closingMs = milestones.find(x => x.milestone_name.includes('Bid Closing') || x.milestone_name.includes('Closing'));
+                      if (closingMs && closingMs.planned_date) {
+                        const openDate = new Date(m.planned_date);
+                        const closeDate = new Date(closingMs.planned_date);
+                        if (openDate < closeDate) {
+                          openingDateError = 'Opening must be on or after closing';
+                        }
+                      }
                     }
 
                     return (
@@ -1023,6 +1048,12 @@ const CPPCreate: React.FC = () => {
                               <div className="mt-0.5 flex items-center gap-1">
                                 <CheckCircleIcon className="w-3 h-3 text-emerald-500" />
                                 <span className="text-[11px] font-black text-emerald-600">Achievable</span>
+                              </div>
+                            )}
+                            {openingDateError && (
+                              <div className="mt-0.5 flex items-center gap-1">
+                                <XCircleIcon className="w-3 h-3 text-red-500" />
+                                <span className="text-[11px] font-black text-red-600">{openingDateError}</span>
                               </div>
                             )}
                           </div>
@@ -1587,7 +1618,7 @@ const CPPCreate: React.FC = () => {
           </button>
           {currentStep === CPPSteps.length - 1 ? (
             <button
-              onClick={() => handleSubmit(true)}
+              onClick={() => setShowSubmitModal(true)}
               disabled={loading}
               className="flex items-center gap-3 px-8 py-5 bg-zammsa-green text-white rounded-3xl text-sm font-black uppercase tracking-widest shadow-2xl shadow-zammsa-green/30 hover:bg-zammsa-green-dark transition-all disabled:opacity-50"
             >
@@ -1604,6 +1635,50 @@ const CPPCreate: React.FC = () => {
           )}
         </div>
       </div>
+
+      {showSubmitModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/60 backdrop-blur-sm p-6">
+          <div className="bg-white rounded-[32px] shadow-2xl max-w-lg w-full p-10 border border-white/20 transform animate-in zoom-in-95 duration-300">
+            <div className="w-16 h-16 rounded-2xl bg-amber-50 text-amber-600 flex items-center justify-center mb-8">
+              <ShieldCheckIcon className="w-8 h-8" />
+            </div>
+            <h3 className="text-2xl font-black text-gray-900 tracking-tight">Submit & Approve Contract Procurement Plan</h3>
+            <p className="text-sm font-medium text-gray-500 mt-2 mb-8">
+              This action will immediately approve the CPP and{' '}
+              <span className="font-bold text-amber-600">lock the milestone baseline schedule</span>.
+              Once locked, milestone dates cannot be modified (only actual dates can be updated).
+            </p>
+
+            <div className="bg-amber-50 border border-amber-200 rounded-2xl p-5 mb-8 space-y-2">
+              <p className="text-xs font-bold text-amber-800 flex items-center gap-2">
+                <ExclamationIcon className="w-4 h-4 shrink-0" />
+                Procurement may commence immediately upon approval
+              </p>
+              <p className="text-xs font-bold text-amber-800 flex items-center gap-2">
+                <LockClosedIcon className="w-4 h-4 shrink-0" />
+                Baseline schedule will be locked — amendments require a formal amendment process
+              </p>
+            </div>
+
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowSubmitModal(false)}
+                disabled={loading}
+                className="flex-1 py-4 text-sm font-bold text-gray-400 bg-gray-100 rounded-2xl hover:bg-gray-200 transition-all uppercase tracking-widest"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => { setShowSubmitModal(false); handleSubmit(true); }}
+                disabled={loading}
+                className="flex-1 py-4 text-sm font-bold text-white bg-zammsa-green rounded-2xl hover:bg-zammsa-green-dark transition-all uppercase tracking-widest shadow-lg shadow-zammsa-green/20"
+              >
+                {loading ? 'Submitting...' : 'Confirm & Submit'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

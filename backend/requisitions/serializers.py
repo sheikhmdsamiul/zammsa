@@ -90,6 +90,8 @@ class RequisitionListSerializer(serializers.ModelSerializer):
                 for doc in cpp.documents.all()
             ]
         return {
+            'cpp_number': cpp.cpp_number,
+            'is_baseline_locked': cpp.is_baseline_locked,
             'milestones': milestones_data,
             'resource_requirements': cpp.resource_requirements or {},
             'documents': documents_data,

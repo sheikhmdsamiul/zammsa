@@ -6,6 +6,7 @@ import { StatusBadge } from '../common/StatusBadge';
 import { Pagination } from '../common/Pagination';
 import { DataTable } from '../common/DataTable';
 import { PageHeader } from '../common/PageHeader';
+import { LoadingSpinner } from '../common/LoadingSpinner';
 import { useAuth } from '../../hooks/useAuth';
 import toast from 'react-hot-toast';
 import { PlusIcon, FilterIcon, CalendarIcon } from '@heroicons/react/outline';
@@ -51,8 +52,8 @@ export default function APPList() {
       label: 'Department',
       render: (v: string, row: any) => (
         <div className="flex flex-col">
-           <span className="font-bold text-gray-900">{v}</span>
-           <span className="text-[10px] font-black text-gray-400 uppercase tracking-tighter">ID: {row.app_id.slice(0, 8)}</span>
+           <span className="font-semibold text-slate-900">{v}</span>
+           <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">ID: {row.app_id.slice(0, 8)}</span>
         </div>
       )
     },
@@ -65,34 +66,36 @@ export default function APPList() {
     { 
       key: 'total_estimated_value', 
       label: 'Total Value', 
-      render: (val: any) => <span className="font-black text-gray-900">ZMW {Number(val).toLocaleString()}</span>
+      render: (val: any) => <span className="font-semibold text-slate-900">ZMW {Number(val).toLocaleString()}</span>
     },
     { 
       key: 'submitted_at', 
       label: 'Submitted', 
-      render: (val: string) => val ? new Date(val).toLocaleDateString('en-GB') : <span className="text-gray-300 italic">Not yet</span>
+      render: (val: string) => <span className="text-slate-500 text-sm">{val ? new Date(val).toLocaleDateString('en-GB') : <span className="text-slate-300 italic">Not yet</span>}</span>
     },
     {
       key: 'zppa_status',
       label: 'ZPPA Registry',
       render: (_: any, row: any) => {
-        if (row.zppa_submitted) return <span className="px-2 py-0.5 rounded text-[10px] font-black uppercase bg-emerald-50 text-emerald-600">Published</span>;
-        if (row.zppa_status === 'overdue') return <span className="px-2 py-0.5 rounded text-[10px] font-black uppercase bg-rose-50 text-rose-600">Overdue</span>;
-        if (row.zppa_status === 'approaching') return <span className="px-2 py-0.5 rounded text-[10px] font-black uppercase bg-amber-50 text-amber-600">{row.zppa_days_remaining}d left</span>;
-        return <span className="text-gray-300">-</span>;
+        if (row.zppa_submitted) return <span className="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase bg-emerald-50 text-emerald-600">Published</span>;
+        if (row.zppa_status === 'overdue') return <span className="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase bg-rose-50 text-rose-600">Overdue</span>;
+        if (row.zppa_status === 'approaching') return <span className="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase bg-amber-50 text-amber-600">{row.zppa_days_remaining}d left</span>;
+        return <span className="text-slate-300">-</span>;
       }
     },
     { 
       key: 'created_at', 
       label: 'Date Created', 
-      render: (val: string) => <span className="text-gray-400">{new Date(val).toLocaleDateString('en-GB')}</span>
+      render: (val: string) => <span className="text-slate-400 text-sm">{new Date(val).toLocaleDateString('en-GB')}</span>
     },
   ];
 
   const statuses = ['draft', 'dept_head_review', 'procurement_review', 'director_review', 'zpc_review', 'approved', 'published', 'rejected'];
 
+  if (loading && plans.length === 0) return <div className="p-12 flex justify-center"><LoadingSpinner /></div>;
+
   return (
-    <div className="pb-12">
+    <div className="space-y-8">
       <PageHeader 
         title="Procurement Plans"
         description="Manage Annual Procurement Plans (APP) and track approval workflows."
@@ -100,7 +103,7 @@ export default function APPList() {
           user?.role && ['user_dept_staff', 'procurement_officer', 'system_admin'].includes(user.role) ? (
             <button 
               onClick={() => navigate('/procurement-planning/create')} 
-              className="flex items-center gap-2 px-4 py-2 bg-zammsa-green text-white rounded-xl shadow-lg shadow-zammsa-green/20 text-xs font-bold uppercase tracking-widest hover:bg-zammsa-green-dark transition-all"
+              className="flex items-center gap-2 px-4 py-2 bg-zammsa-green text-white rounded-lg text-xs font-semibold shadow-sm hover:bg-zammsa-green-dark transition-all"
             >
               <PlusIcon className="w-4 h-4" />
               <span>Create Plan</span>
@@ -110,31 +113,31 @@ export default function APPList() {
       />
 
       {stats && (
-        <div className="flex flex-wrap gap-3 mb-8">
+        <div className="flex flex-wrap gap-2">
           {statuses.map((s) => (
             <button 
               key={s} 
               onClick={() => { setStatusFilter(s === statusFilter ? '' : s); setPage(1); }}
-              className={`px-4 py-3 rounded-2xl border transition-all ${
+              className={`px-4 py-2 rounded-lg border transition-all text-left min-w-[120px] ${
                 s === statusFilter 
-                  ? 'border-zammsa-green bg-zammsa-green text-white shadow-lg shadow-zammsa-green/20' 
-                  : 'border-gray-100 bg-white text-gray-500 hover:border-gray-200 hover:shadow-sm'
+                  ? 'border-zammsa-green bg-zammsa-green text-white shadow-sm' 
+                  : 'border-slate-200 bg-white text-slate-500 hover:border-slate-300 hover:shadow-sm'
               }`}
             >
-              <p className={`text-lg font-black leading-none mb-1 ${s === statusFilter ? 'text-white' : 'text-gray-900'}`}>{stats[s] || 0}</p>
-              <p className={`text-[10px] font-bold uppercase tracking-widest ${s === statusFilter ? 'text-white/70' : 'text-gray-400'}`}>{s.replace(/_/g, ' ')}</p>
+              <p className={`text-lg font-bold leading-none mb-1 ${s === statusFilter ? 'text-white' : 'text-slate-900'}`}>{stats[s] || 0}</p>
+              <p className={`text-[10px] font-bold uppercase tracking-wider ${s === statusFilter ? 'text-white/80' : 'text-slate-500'}`}>{s.replace(/_/g, ' ')}</p>
             </button>
           ))}
         </div>
       )}
 
-      <div className="flex flex-col sm:flex-row gap-4 mb-6">
+      <div className="flex flex-col sm:flex-row gap-3">
         <div className="relative flex-1 max-w-xs">
-           <CalendarIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+           <CalendarIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
            <select 
              value={fiscalYearFilter} 
              onChange={(e) => { setFiscalYearFilter(e.target.value); setPage(1); }} 
-             className="w-full pl-10 pr-4 py-2.5 bg-white border border-gray-100 rounded-xl text-sm font-bold text-gray-600 focus:ring-2 focus:ring-zammsa-green/20 focus:border-zammsa-green outline-none transition-all appearance-none"
+             className="w-full pl-9 pr-4 py-2 bg-white border border-slate-200 rounded-lg text-sm font-semibold text-slate-700 focus:ring-2 focus:ring-zammsa-green/10 focus:border-zammsa-green outline-none transition-all appearance-none"
            >
              <option value="">All Fiscal Years</option>
              {['2024', '2025', '2026', '2027'].map((y) => <option key={y} value={y}>{y}</option>)}
@@ -144,7 +147,7 @@ export default function APPList() {
         {statusFilter && (
           <button 
             onClick={() => setStatusFilter('')} 
-            className="flex items-center gap-2 px-4 py-2 text-xs font-black text-rose-600 uppercase tracking-widest hover:bg-rose-50 rounded-xl transition-colors"
+            className="flex items-center gap-2 px-3 py-2 text-xs font-semibold text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
           >
             <FilterIcon className="w-4 h-4" />
             Clear Filter

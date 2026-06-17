@@ -105,6 +105,8 @@ export interface RequisitionItem {
 }
 
 export interface CPPData {
+  cpp_number?: string;
+  is_baseline_locked?: boolean;
   milestones?: {
     milestone_name: string;
     planned_date: string;

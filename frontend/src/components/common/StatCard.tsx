@@ -11,21 +11,21 @@ interface StatCardProps {
 }
 
 const colorMap = {
-  green: 'bg-green-50 text-green-600 border-green-100',
-  blue: 'bg-blue-50 text-blue-600 border-blue-100',
-  orange: 'bg-orange-50 text-orange-600 border-orange-100',
-  red: 'bg-red-50 text-red-600 border-red-100',
-  purple: 'bg-purple-50 text-purple-600 border-purple-100',
-  gray: 'bg-gray-50 text-gray-600 border-gray-100',
+  green: 'text-zammsa-green',
+  blue: 'text-blue-600',
+  orange: 'text-amber-500',
+  red: 'text-rose-600',
+  purple: 'text-purple-600',
+  gray: 'text-slate-600',
 };
 
-const iconBgMap = {
-  green: 'bg-green-100 text-green-600',
-  blue: 'bg-blue-100 text-blue-600',
-  orange: 'bg-orange-100 text-orange-600',
-  red: 'bg-red-100 text-red-600',
-  purple: 'bg-purple-100 text-purple-600',
-  gray: 'bg-gray-100 text-gray-600',
+const bgMap = {
+  green: 'bg-zammsa-green/5',
+  blue: 'bg-blue-50',
+  orange: 'bg-amber-50',
+  red: 'bg-rose-50',
+  purple: 'bg-purple-50',
+  gray: 'bg-slate-50',
 };
 
 export const StatCard: React.FC<StatCardProps> = ({
@@ -38,33 +38,30 @@ export const StatCard: React.FC<StatCardProps> = ({
   color = 'green'
 }) => {
   return (
-    <div className="bg-white rounded-2xl p-6 border border-gray-100 shadow-sm hover:shadow-md transition-shadow duration-300">
+    <div className="bg-white rounded-xl p-5 border border-slate-200 shadow-sm transition-all duration-300 hover:shadow-md hover:border-slate-300">
       <div className="flex items-center justify-between mb-4">
-        <div className={`p-3 rounded-xl ${iconBgMap[color]}`}>
-          {icon}
+        <div className={`p-2.5 rounded-lg ${bgMap[color]} ${colorMap[color]}`}>
+          {React.isValidElement(icon) 
+            ? React.cloneElement(icon as React.ReactElement<{ className?: string }>, { 
+                className: 'w-5 h-5' 
+              }) 
+            : icon}
         </div>
         {change !== undefined && (
-          <div className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold ${
-            change >= 0 ? 'bg-green-50 text-green-600' : 'bg-red-50 text-red-600'
+          <div className={`flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-bold ${
+            change >= 0 ? 'bg-emerald-50 text-emerald-600' : 'bg-rose-50 text-rose-600'
           }`}>
             {change >= 0 ? '↑' : '↓'} {Math.abs(change)}%
           </div>
         )}
       </div>
       <div>
-        <h3 className="text-sm font-bold text-gray-400 uppercase tracking-wider mb-1">{label}</h3>
-        <div className="flex items-baseline gap-2">
-          <p className="text-3xl font-black text-gray-900 tracking-tight">{value}</p>
-        </div>
+        <h3 className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1">{label}</h3>
+        <p className="text-2xl font-bold text-slate-900 tracking-tight">{value}</p>
         {description && (
-          <p className="mt-2 text-xs text-gray-500 font-medium">{description}</p>
+          <p className="mt-1 text-xs text-slate-500 font-medium">{description}</p>
         )}
       </div>
-      
-      {/* Subtle Background Accent */}
-      <div className={`absolute top-0 right-0 w-24 h-24 -mr-8 -mt-8 rounded-full opacity-[0.03] pointer-events-none ${
-        color === 'green' ? 'bg-zammsa-green' : 'bg-gray-900'
-      }`} />
     </div>
   );
 };
