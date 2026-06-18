@@ -1,9 +1,12 @@
 from decimal import Decimal
+import logging
 import os
 from django.db.models import Q, Avg, Sum as models_Sum
 from django.utils import timezone
 from django.core.files.storage import default_storage
 from rest_framework import generics, filters, status
+
+logger = logging.getLogger(__name__)
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.response import Response
@@ -85,7 +88,7 @@ class SupplierDetailView(generics.RetrieveUpdateDestroyAPIView):
 
 
 class VendorApplicationListView(BaseView, generics.ListCreateAPIView):
-    queryset = VendorApplication.objects.all()
+    queryset = VendorApplication.objects.prefetch_related('documents').all()
     filterset_class = VendorApplicationFilter
     ordering = ['-created_at']
 
@@ -101,6 +104,7 @@ class VendorApplicationListView(BaseView, generics.ListCreateAPIView):
 
     def perform_create(self, serializer):
         app = serializer.save()
+        logger.info('perform_create: application %s saved. FILES keys: %s', app.application_id, list(self.request.FILES.keys()))
         # Handle embedded document uploads (doc_<type>)
         for key, file in self.request.FILES.items():
             if key.startswith('doc_'):
@@ -116,12 +120,21 @@ class VendorApplicationListView(BaseView, generics.ListCreateAPIView):
                     document_type=doc_type,
                     file_path=file_path,
                 )
+                logger.info('perform_create: created document type=%s path=%s', doc_type, file_path)
+        doc_count = VendorApplicationDocument.objects.filter(application=app).count()
+        logger.info('perform_create: total documents for application=%s: %s', app.application_id, doc_count)
 
 
 class VendorApplicationDetailView(generics.RetrieveUpdateDestroyAPIView):
-    queryset = VendorApplication.objects.all()
+    queryset = VendorApplication.objects.prefetch_related('documents').all()
     serializer_class = VendorApplicationSerializer
     permission_classes = [IsAuthenticated]
+
+    def retrieve(self, request, *args, **kwargs):
+        response = super().retrieve(request, *args, **kwargs)
+        doc_count = len(response.data.get('documents', []))
+        logger.info('VendorApplicationDetailView: pk=%s documents_count=%s', kwargs.get('pk'), doc_count)
+        return response
 
 
 @api_view(['POST'])

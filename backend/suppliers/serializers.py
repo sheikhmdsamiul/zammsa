@@ -42,11 +42,10 @@ class VendorApplicationDocumentSerializer(serializers.ModelSerializer):
     type = serializers.CharField(source='document_type', read_only=True)
     file = serializers.CharField(source='file_path', read_only=True)
     filename = serializers.SerializerMethodField()
-    verified = serializers.BooleanField(default=False, read_only=True)
 
     class Meta:
         model = VendorApplicationDocument
-        fields = ('id', 'type', 'file', 'filename', 'verified', 'file_path', 'document_type', 'uploaded_at')
+        fields = ('id', 'type', 'file', 'filename', 'file_path', 'document_type', 'uploaded_at')
         read_only_fields = ('document_id', 'uploaded_at')
 
     def get_filename(self, obj):
@@ -74,9 +73,11 @@ class VendorApplicationSerializer(serializers.ModelSerializer):
 
 
 class VendorApplicationListSerializer(serializers.ModelSerializer):
+    documents = VendorApplicationDocumentSerializer(many=True, read_only=True)
+
     class Meta:
         model = VendorApplication
-        fields = ('application_id', 'company_name', 'registration_number', 'ceec_category', 'status', 'submitted_at', 'email', 'contact_person')
+        fields = ('application_id', 'company_name', 'registration_number', 'ceec_category', 'status', 'submitted_at', 'email', 'contact_person', 'documents')
 
 
 class BlacklistSerializer(serializers.ModelSerializer):
