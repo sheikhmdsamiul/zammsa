@@ -85,6 +85,14 @@ class PurchaseOrder(models.Model):
         verbose_name_plural = 'Purchase Orders'
         ordering = ['-created_at']
 
+    def save(self, *args, **kwargs):
+        from zammsa_backend.utils import generate_traceable_id, needs_traceable_id_regeneration, resolve_contract_context
+
+        if needs_traceable_id_regeneration(self.po_number, 'PO'):
+            dept, fiscal_year = resolve_contract_context(self.contract)
+            self.po_number = generate_traceable_id('PO', dept, PurchaseOrder, 'po_number', fiscal_year)
+        super().save(*args, **kwargs)
+
     def __str__(self):
         return f'{self.po_number} - {self.supplier.name}'
 
@@ -205,6 +213,14 @@ class DeliveryAdvice(models.Model):
         verbose_name_plural = 'Delivery Advices'
         ordering = ['-submitted_at']
 
+    def save(self, *args, **kwargs):
+        from zammsa_backend.utils import generate_traceable_id, needs_traceable_id_regeneration, resolve_contract_context
+
+        if needs_traceable_id_regeneration(self.advice_number, 'DLV'):
+            dept, fiscal_year = resolve_contract_context(self.contract)
+            self.advice_number = generate_traceable_id('DLV', dept, DeliveryAdvice, 'advice_number', fiscal_year)
+        super().save(*args, **kwargs)
+
     def __str__(self):
         return f'{self.advice_number} - {self.contract.contract_number}'
 
@@ -239,8 +255,16 @@ class GoodsReceiptNote(models.Model):
         verbose_name_plural = 'Goods Receipt Notes'
         ordering = ['-received_date']
 
+    def save(self, *args, **kwargs):
+        from zammsa_backend.utils import generate_traceable_id, needs_traceable_id_regeneration, resolve_contract_context
+
+        if needs_traceable_id_regeneration(self.grn_number, 'GRN'):
+            dept, fiscal_year = resolve_contract_context(self.contract)
+            self.grn_number = generate_traceable_id('GRN', dept, GoodsReceiptNote, 'grn_number', fiscal_year)
+        super().save(*args, **kwargs)
+
     def __str__(self):
-        return f'{self.grn_number} - {self.contract.contract_number}'
+        return f'{self.grn_number} - {self.contract.contract_number if self.contract else ""}'
 
 
 class GRNLineItem(models.Model):
@@ -333,8 +357,16 @@ class Invoice(models.Model):
         verbose_name_plural = 'Invoices'
         ordering = ['-created_at']
 
+    def save(self, *args, **kwargs):
+        from zammsa_backend.utils import generate_traceable_id, needs_traceable_id_regeneration, resolve_contract_context
+
+        if needs_traceable_id_regeneration(self.invoice_number, 'INV'):
+            dept, fiscal_year = resolve_contract_context(self.contract)
+            self.invoice_number = generate_traceable_id('INV', dept, Invoice, 'invoice_number', fiscal_year)
+        super().save(*args, **kwargs)
+
     def __str__(self):
-        return f'{self.contract.contract_number} - {self.invoice_number}'
+        return f'{self.invoice_number} - {self.contract.contract_number if self.contract else ""}'
 
     def determine_approval_route(self):
         if self.amount <= Decimal('100000'):
@@ -433,5 +465,13 @@ class LetterOfCredit(models.Model):
         verbose_name = 'Letter of Credit'
         verbose_name_plural = 'Letters of Credit'
 
+    def save(self, *args, **kwargs):
+        from zammsa_backend.utils import generate_traceable_id, needs_traceable_id_regeneration, resolve_contract_context
+
+        if needs_traceable_id_regeneration(self.lc_number, 'LOC'):
+            dept, fiscal_year = resolve_contract_context(self.contract)
+            self.lc_number = generate_traceable_id('LOC', dept, LetterOfCredit, 'lc_number', fiscal_year)
+        super().save(*args, **kwargs)
+
     def __str__(self):
-        return f'{self.contract.contract_number} - LC {self.amount}'
+        return f'{self.lc_number} - LC {self.amount}'

@@ -127,6 +127,14 @@ class Solicitation(models.Model):
             ),
         ]
 
+    def save(self, *args, **kwargs):
+        if not self.sol_number:
+            from zammsa_backend.utils import generate_traceable_id, resolve_solicitation_context
+
+            dept, fiscal_year = resolve_solicitation_context(self)
+            self.sol_number = generate_traceable_id('SOL', dept, Solicitation, 'sol_number', fiscal_year)
+        super().save(*args, **kwargs)
+
     def __str__(self):
         return f'{self.sol_number} - {self.title}'
 

@@ -152,9 +152,8 @@ def _generate_po_for_contract(contract):
         if not bid_line_items:
             return {'error': 'No line items in winning bid'}
         
-        # Build PO number from contract number
-        import datetime
-        po_number = f'PO-{contract.contract_number}'
+        # Let model auto-generate the standard PO number
+        po_number = ''
         
         # Calculate total from bid line items
         total = Decimal('0')
@@ -190,7 +189,7 @@ def _generate_po_for_contract(contract):
                 total_price=total_price,
             )
         
-        return {'success': True, 'po_number': po_number}
+        return {'success': True, 'po_number': po.po_number}
     except Exception as e:
         return {'error': str(e)}
 

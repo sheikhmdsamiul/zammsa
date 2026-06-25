@@ -164,6 +164,7 @@ class CombinedScore(models.Model):
 
 class BidEvaluationReport(models.Model):
     ber_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    ber_number = models.CharField(max_length=50, unique=True, null=True, blank=True)
     solicitation = models.ForeignKey(Solicitation, on_delete=models.CASCADE, related_name='evaluation_reports')
     report_content = models.JSONField(default=dict)
     signatures = models.JSONField(default=list, blank=True,
@@ -182,8 +183,16 @@ class BidEvaluationReport(models.Model):
         verbose_name = 'Bid Evaluation Report'
         verbose_name_plural = 'Bid Evaluation Reports'
 
+    def save(self, *args, **kwargs):
+        if not self.ber_number:
+            from zammsa_backend.utils import generate_traceable_id, resolve_solicitation_context
+
+            dept, fiscal_year = resolve_solicitation_context(self.solicitation)
+            self.ber_number = generate_traceable_id('BER', dept, BidEvaluationReport, 'ber_number', fiscal_year)
+        super().save(*args, **kwargs)
+
     def __str__(self):
-        return f'BER {self.ber_id}'[:30]
+        return self.ber_number or f'BER {self.ber_id}'[:30]
 
     def has_all_signed(self):
         committees = EvaluationCommittee.objects.filter(solicitation=self.solicitation)

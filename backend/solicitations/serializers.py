@@ -368,9 +368,6 @@ class SolicitationSerializer(serializers.ModelSerializer):
         if channels:
             validated_data['publication_targets'] = channels
 
-        if 'sol_number' not in validated_data or not validated_data.get('sol_number'):
-            validated_data['sol_number'] = f"SOL-{timezone.now().strftime('%Y%m%d')}-{secrets.token_hex(3).upper()}"
-
         # Auto-set method from approved CPP if not explicitly provided
         requisition = validated_data.get('requisition')
         approved_cpp = None

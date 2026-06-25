@@ -18,7 +18,7 @@ class APPLineItemSerializer(serializers.ModelSerializer):
         read_only_fields = ('line_item_id',)
 
     def get_app_name(self, obj):
-        return f"APP {obj.app.fiscal_year.year_code} - {obj.app.department.dept_name}"
+        return obj.app.app_number or f"APP {obj.app.fiscal_year.year_code} - {obj.app.department.dept_name}"
 
 
 class AnnualProcurementPlanListSerializer(serializers.ModelSerializer):
@@ -31,7 +31,7 @@ class AnnualProcurementPlanListSerializer(serializers.ModelSerializer):
     class Meta:
         model = AnnualProcurementPlan
         fields = (
-            'app_id', 'fiscal_year', 'fiscal_year_code', 'department',
+            'app_id', 'app_number', 'fiscal_year', 'fiscal_year_code', 'department',
             'department_name', 'status', 'total_estimated_value',
             'submitted_by_name', 'submitted_at',
             'approved_by_name', 'approved_at',
@@ -54,7 +54,7 @@ class AnnualProcurementPlanSerializer(serializers.ModelSerializer):
     class Meta:
         model = AnnualProcurementPlan
         fields = '__all__'
-        read_only_fields = ('app_id', 'created_at', 'updated_at')
+        read_only_fields = ('app_id', 'app_number', 'created_at', 'updated_at')
 
 
 class CPPRiskSerializer(serializers.ModelSerializer):

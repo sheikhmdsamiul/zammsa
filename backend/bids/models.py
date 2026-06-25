@@ -67,6 +67,19 @@ class BidSubmission(models.Model):
         ordering = ['-submission_timestamp']
         unique_together = ('solicitation', 'supplier')
 
+    def save(self, *args, **kwargs):
+        from zammsa_backend.utils import generate_traceable_id, resolve_solicitation_context
+
+        dept, fiscal_year = resolve_solicitation_context(self.solicitation)
+
+        if not self.submission_id:
+            self.submission_id = generate_traceable_id('BID', dept, BidSubmission, 'submission_id', fiscal_year)
+
+        if not self.receipt_number:
+            self.receipt_number = generate_traceable_id('RCT', dept, BidSubmission, 'receipt_number', fiscal_year)
+
+        super().save(*args, **kwargs)
+
     def __str__(self):
         return f'{self.submission_id or self.receipt_number} - {self.supplier.full_name}'
 

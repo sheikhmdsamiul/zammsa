@@ -128,7 +128,12 @@ def _check_budget_and_encumber(req):
                     ba.encumbered_amount += req.estimated_total
                     ba.save(update_fields=['encumbered_amount'])
                 req.budget_validated = True
-                req.encumbrance_ref = f"ENC-{req.req_number}"
+                from requisitions.models import Requisition as ReqModel
+                from zammsa_backend.utils import generate_traceable_id, is_traceable_id, resolve_requisition_context
+
+                if not req.encumbrance_ref or not is_traceable_id(req.encumbrance_ref):
+                    dept, fiscal_year = resolve_requisition_context(req)
+                    req.encumbrance_ref = generate_traceable_id('ENC', dept, ReqModel, 'encumbrance_ref', fiscal_year)
                 req.save(update_fields=['budget_validated', 'encumbrance_ref'])
     except Exception:
         pass

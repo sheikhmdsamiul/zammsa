@@ -40,7 +40,7 @@
 <div class="header">
   <h1>ZAMMSA — BID EVALUATION REPORT</h1>
   <h2>Quality and Cost Based Selection (QCBS)</h2>
-  <div class="meta">Report No: BER-{{ ber_id|slice:":8" }}</div>
+  <div class="meta">Report No: {{ ber.ber_number|default:ber_id }}</div>
   <div class="meta">Generated: {{ ber.generated_at|default:created_at }}</div>
 </div>
 

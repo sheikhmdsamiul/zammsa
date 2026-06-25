@@ -45,6 +45,7 @@ GPN_STATUS_CHOICES = [
 
 class AnnualProcurementPlan(models.Model):
     app_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    app_number = models.CharField(max_length=50, unique=True, null=True, blank=True)
     fiscal_year = models.ForeignKey(FiscalYear, on_delete=models.PROTECT)
     department = models.ForeignKey(Department, on_delete=models.PROTECT)
     status = models.CharField(max_length=50, choices=APP_STATUS_CHOICES, default='draft')
@@ -89,8 +90,16 @@ class AnnualProcurementPlan(models.Model):
         ordering = ['-created_at']
         unique_together = ('fiscal_year', 'department')
 
+    def save(self, *args, **kwargs):
+        if not self.app_number:
+            from zammsa_backend.utils import generate_traceable_id, resolve_app_context
+
+            dept, fiscal_year = resolve_app_context(self)
+            self.app_number = generate_traceable_id('APP', dept, AnnualProcurementPlan, 'app_number', fiscal_year)
+        super().save(*args, **kwargs)
+
     def __str__(self):
-        return f'APP {self.fiscal_year.year_code} - {self.department.dept_name}'
+        return self.app_number or f'APP {self.fiscal_year.year_code} - {self.department.dept_name}'
 
 
 PROCUREMENT_TYPE_CHOICES = [
@@ -197,12 +206,10 @@ class ContractProcurementPlan(models.Model):
 
     def save(self, *args, **kwargs):
         if not self.cpp_number:
-            dept = self.requisition.department.dept_code if self.requisition else 'XX'
-            year = timezone.now().year
-            count = ContractProcurementPlan.objects.filter(
-                requisition__department__dept_code=dept
-            ).count() + 1
-            self.cpp_number = f'CPP-{year}-{dept}-{count:02d}'
+            from zammsa_backend.utils import generate_traceable_id, resolve_requisition_context
+
+            dept, fiscal_year = resolve_requisition_context(self.requisition)
+            self.cpp_number = generate_traceable_id('CPP', dept, ContractProcurementPlan, 'cpp_number', fiscal_year)
         super().save(*args, **kwargs)
 
     def __str__(self):
@@ -285,6 +292,7 @@ class ProcurementMilestone(models.Model):
 
 class GeneralProcurementNotice(models.Model):
     gpn_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    gpn_number = models.CharField(max_length=50, unique=True, null=True, blank=True)
     app = models.ForeignKey(AnnualProcurementPlan, on_delete=models.CASCADE, related_name='gpns')
     generated_at = models.DateTimeField(auto_now_add=True)
     generated_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='generated_gpns')
@@ -312,8 +320,16 @@ class GeneralProcurementNotice(models.Model):
         verbose_name = 'General Procurement Notice'
         verbose_name_plural = 'General Procurement Notices'
 
+    def save(self, *args, **kwargs):
+        if not self.gpn_number:
+            from zammsa_backend.utils import generate_traceable_id, resolve_app_context
+
+            dept, fiscal_year = resolve_app_context(self.app)
+            self.gpn_number = generate_traceable_id('GPN', dept, GeneralProcurementNotice, 'gpn_number', fiscal_year)
+        super().save(*args, **kwargs)
+
     def __str__(self):
-        return f'GPN for {self.app}'
+        return self.gpn_number or f'GPN for {self.app}'
 
 
 CPP_DOCUMENT_TYPE_CHOICES = [

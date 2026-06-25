@@ -114,6 +114,14 @@ class Contract(models.Model):
         verbose_name_plural = 'Contracts'
         ordering = ['-created_at']
 
+    def save(self, *args, **kwargs):
+        from zammsa_backend.utils import generate_traceable_id, needs_traceable_id_regeneration, resolve_solicitation_context
+
+        if needs_traceable_id_regeneration(self.contract_number, 'CON'):
+            dept, fiscal_year = resolve_solicitation_context(self.solicitation)
+            self.contract_number = generate_traceable_id('CON', dept, Contract, 'contract_number', fiscal_year)
+        super().save(*args, **kwargs)
+
     def __str__(self):
         return f'{self.contract_number} - {self.supplier.name}'
 

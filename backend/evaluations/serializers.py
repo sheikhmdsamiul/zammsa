@@ -186,7 +186,7 @@ class BidEvaluationReportSerializer(serializers.ModelSerializer):
     class Meta:
         model = BidEvaluationReport
         fields = '__all__'
-        read_only_fields = ('ber_id', 'created_at', 'updated_at', 'approved_at', 'submitted_at')
+        read_only_fields = ('ber_id', 'ber_number', 'created_at', 'updated_at', 'approved_at', 'submitted_at')
 
     def get_all_signed(self, obj):
         return obj.has_all_signed()

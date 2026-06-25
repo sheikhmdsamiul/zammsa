@@ -80,9 +80,10 @@ class Requisition(models.Model):
 
     def save(self, *args, **kwargs):
         if not self.req_number:
-            import uuid
-            from datetime import datetime
-            self.req_number = f"REQ-{datetime.now().strftime('%Y%m%d')}-{uuid.uuid4().hex[:6].upper()}"
+            from zammsa_backend.utils import generate_traceable_id, resolve_requisition_context
+
+            dept, fiscal_year = resolve_requisition_context(self)
+            self.req_number = generate_traceable_id('REQ', dept, Requisition, 'req_number', fiscal_year)
         super().save(*args, **kwargs)
 
 

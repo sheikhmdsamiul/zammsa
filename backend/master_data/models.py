@@ -92,6 +92,27 @@ class FiscalYear(models.Model):
         return self.year_code
 
 
+class IdSequence(models.Model):
+    """Atomic per-prefix/fiscal-year/department counter for traceable document IDs."""
+
+    sequence_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    prefix = models.CharField(max_length=4)
+    fiscal_year = models.CharField(max_length=4)
+    department_code = models.CharField(max_length=3)
+    last_sequence = models.PositiveIntegerField(default=0)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'master_id_sequence'
+        verbose_name = 'ID Sequence'
+        verbose_name_plural = 'ID Sequences'
+        unique_together = ('prefix', 'fiscal_year', 'department_code')
+        ordering = ['prefix', 'fiscal_year', 'department_code']
+
+    def __str__(self):
+        return f'{self.prefix}-{self.fiscal_year}-{self.department_code}: {self.last_sequence}'
+
+
 class UnitOfMeasure(models.Model):
     uom_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     uom_code = models.CharField(max_length=20, unique=True)
