@@ -53,6 +53,7 @@ class AnnualProcurementPlan(models.Model):
 
     submitted_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='app_submissions')
     submitted_at = models.DateTimeField(null=True, blank=True)
+    created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='app_created')
     approved_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='app_approvals')
     approved_at = models.DateTimeField(null=True, blank=True)
 
@@ -72,6 +73,15 @@ class AnnualProcurementPlan(models.Model):
     gpn_published_at = models.DateTimeField(null=True, blank=True)
     gpn_publication_targets = models.JSONField(default=list, blank=True)  # ['zammsa_website', 'egp_portal', 'govt_gazette']
     gpn_publication_proofs = models.JSONField(default=dict, blank=True)  # {target: {url, timestamp, proof_file}}
+
+    # FR-PLAN-06: Quarterly update tracking
+    version = models.IntegerField(default=1, help_text='APP version number for quarterly updates')
+    amends = models.ForeignKey('self', on_delete=models.SET_NULL, null=True, blank=True, related_name='amendments',
+        help_text='The original APP that this version amends')
+    change_justification = models.TextField(blank=True, default='',
+        help_text='Justification for changes made in this quarterly update')
+    previous_total_value = models.DecimalField(max_digits=20, decimal_places=2, null=True, blank=True,
+        help_text='Total estimated value of the previous version, used for 20% cap enforcement')
 
     # ZPPA submission tracking (must submit within 30 days of approval)
     zppa_deadline = models.DateTimeField(null=True, blank=True)

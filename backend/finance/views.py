@@ -34,6 +34,12 @@ from .serializers import (
 )
 from accounts.audit import log_audit_action
 from contracts.models import Contract, ContractMilestone, LiquidatedDamages
+from system_config.notifications import (
+    alert_integration_manager,
+    create_notification,
+    notify_role,
+    notify_roles,
+)
 
 FINANCE_PAYMENT_ROLES = ('finance_officer', 'budget_controller', 'system_admin')
 APPROVAL_FLOW = ('finance_officer', 'department_head', 'director_general')
@@ -185,6 +191,14 @@ def _apply_invoice_finance_review(invoice, approved_amount, undelivered_amount=D
         'net_before_retention', 'retention_amount', 'net_payable_amount',
         'amount', 'status', 'approval_route', 'updated_at',
     ])
+    _notify_invoice_role(
+        invoice,
+        'finance_officer',
+        title=f'Invoice ready for approval: {invoice.invoice_number}',
+        message=f'Invoice {invoice.invoice_number} passed finance review and is ready for Finance Officer approval.',
+        priority='high',
+        alert_key='invoice_ready_finance_approval',
+    )
     return {
         'original_amount': original_amount,
         'approved_amount': approved_amount,
@@ -194,6 +208,58 @@ def _apply_invoice_finance_review(invoice, approved_amount, undelivered_amount=D
         'retention_amount': invoice.retention_amount,
         'net_payable_amount': invoice.net_payable_amount,
     }
+
+
+def _invoice_supplier_user(invoice):
+    winning_bid = getattr(getattr(invoice, 'contract', None), 'winning_bid', None)
+    return getattr(winning_bid, 'supplier', None)
+
+
+def _invoice_action_url(invoice):
+    return f'/finance/invoices/{invoice.invoice_id}'
+
+
+def _notify_invoice_role(invoice, role, *, title, message, priority='normal', alert_key='invoice_workflow'):
+    return notify_role(
+        role,
+        title=title,
+        message=message,
+        notification_type='finance',
+        priority=priority,
+        source_module='finance',
+        object_id=invoice.pk,
+        action_url=_invoice_action_url(invoice),
+        metadata={
+            'alert_key': alert_key,
+            'invoice_id': str(invoice.pk),
+            'invoice_number': invoice.invoice_number,
+            'status': invoice.status,
+        },
+        email_required=True,
+    )
+
+
+def _notify_invoice_supplier(invoice, *, title, message, priority='normal', alert_key='invoice_supplier'):
+    supplier_user = _invoice_supplier_user(invoice)
+    if not supplier_user:
+        return None
+    return create_notification(
+        supplier_user,
+        title=title,
+        message=message,
+        notification_type='finance',
+        priority=priority,
+        source_module='finance',
+        object_id=invoice.pk,
+        action_url=f'/vendor/invoices/{invoice.invoice_id}',
+        metadata={
+            'alert_key': alert_key,
+            'invoice_id': str(invoice.pk),
+            'invoice_number': invoice.invoice_number,
+            'status': invoice.status,
+        },
+        email_required=True,
+    )
 
 
 class StandardPagination(PageNumberPagination):
@@ -299,6 +365,14 @@ def invoice_submit_view(request, pk):
     log_audit_action(
         user=request.user, action='INVOICE_SUBMITTED', module='finance',
         record_id=str(inv.invoice_id), ip_address=ip,
+    )
+    _notify_invoice_role(
+        inv,
+        'contract_manager',
+        title=f'Invoice submitted: {inv.invoice_number}',
+        message=f'Invoice {inv.invoice_number} was submitted and needs contract/GRN verification.',
+        priority='high',
+        alert_key='invoice_submitted_contract_manager',
     )
 
     return Response({
@@ -514,6 +588,14 @@ def invoice_match_view(request, pk):
         inv.status = 'pending_matching'
         inv.approval_route = None
         inv.save()
+        _notify_invoice_role(
+            inv,
+            'finance_officer',
+            title=f'Invoice match needs review: {inv.invoice_number}',
+            message=f'Invoice {inv.invoice_number} returned a {match_status} 3-way match and needs finance review.',
+            priority='high',
+            alert_key=f'invoice_match_{match_status}',
+        )
 
     status_label = (
         'Ready for Approval' if match_status == 'complete'
@@ -581,6 +663,13 @@ def invoice_reject_view(request, pk):
     inv.status = 'rejected'
     inv.rejection_reason = reason
     inv.save()
+    _notify_invoice_supplier(
+        inv,
+        title=f'Invoice rejected: {inv.invoice_number}',
+        message=f'Invoice {inv.invoice_number} was rejected. Reason: {reason or "No reason provided."}',
+        priority='high',
+        alert_key='invoice_rejected',
+    )
     return Response({'message': 'Invoice rejected', 'status': inv.status, 'rejection_reason': reason})
 
 
@@ -631,11 +720,35 @@ def invoice_approve_view(request, pk):
             user=request.user, action='INVOICE_APPROVED', module='finance',
             record_id=str(inv.invoice_id), ip_address=ip,
         )
+        notify_roles(
+            FINANCE_PAYMENT_ROLES,
+            title=f'Invoice fully approved: {inv.invoice_number}',
+            message=f'Invoice {inv.invoice_number} is fully approved and ready for payment processing.',
+            notification_type='finance',
+            priority='high',
+            source_module='finance',
+            object_id=inv.pk,
+            action_url=_invoice_action_url(inv),
+            metadata={
+                'alert_key': 'invoice_fully_approved',
+                'invoice_id': str(inv.pk),
+                'invoice_number': inv.invoice_number,
+            },
+            email_required=True,
+        )
         return Response({'message': 'Invoice fully approved for payment', 'status': inv.status, 'approval_route': final_route})
 
     next_step = APPROVAL_FLOW[APPROVAL_FLOW.index(current_step) + 1]
     inv.approval_route = next_step
     inv.save(update_fields=['approval_route', 'updated_at'])
+    _notify_invoice_role(
+        inv,
+        next_step,
+        title=f'Invoice approval required: {inv.invoice_number}',
+        message=f'Invoice {inv.invoice_number} was approved by {dict(INVOICE_APPROVAL_ROUTES).get(current_step, current_step)} and now requires your approval.',
+        priority='high',
+        alert_key=f'invoice_routed_{next_step}',
+    )
     return Response({
         'message': f'Invoice approved and routed to {dict(INVOICE_APPROVAL_ROUTES).get(next_step, next_step)}',
         'status': inv.status,
@@ -900,6 +1013,13 @@ def payment_bank_confirm_view(request, pk):
         ContractMilestone.objects.filter(
             contract=inv.contract, milestone_name__icontains='Payment'
         ).update(status='completed', completed_at=timezone.now(), actual_date=timezone.now().date())
+        _notify_invoice_supplier(
+            inv,
+            title=f'Payment confirmed: {inv.invoice_number}',
+            message=f'Payment for invoice {inv.invoice_number} has been confirmed by the bank. Reference: {bank_ref or "N/A"}.',
+            priority='normal',
+            alert_key='payment_confirmed',
+        )
 
         return Response({'message': 'Payment confirmed by bank', 'status': inv.status, 'bank_reference': bank_ref})
     else:
@@ -909,6 +1029,24 @@ def payment_bank_confirm_view(request, pk):
         payment.save(update_fields=['status', 'bank_reconciliation_status', 'bank_reconciled_at'])
         inv.status = 'payment_failed'
         inv.save(update_fields=['status', 'updated_at'])
+        notify_roles(
+            FINANCE_PAYMENT_ROLES,
+            title=f'Payment failed: {inv.invoice_number}',
+            message=f'Payment for invoice {inv.invoice_number} failed bank reconciliation and needs action.',
+            notification_type='finance',
+            priority='urgent',
+            source_module='finance',
+            object_id=inv.pk,
+            action_url=_invoice_action_url(inv),
+            metadata={'alert_key': 'payment_failed', 'invoice_number': inv.invoice_number},
+            email_required=True,
+        )
+        alert_integration_manager(
+            title=f'Bank payment failure: {inv.invoice_number}',
+            message=f'Bank confirmation reported a payment failure for invoice {inv.invoice_number}.',
+            metadata={'alert_key': 'bank_payment_failed', 'invoice_id': str(inv.pk), 'bank_reference': bank_ref},
+            sms_required=True,
+        )
         return Response({'message': 'Payment failed', 'status': payment.status})
 
 
@@ -957,6 +1095,32 @@ def payment_manual_confirm_view(request, pk):
         ContractMilestone.objects.filter(
             contract=inv.contract, milestone_name__icontains='Payment'
         ).update(status='completed', completed_at=timezone.now(), actual_date=timezone.now().date())
+        _notify_invoice_supplier(
+            inv,
+            title=f'Payment confirmed: {inv.invoice_number}',
+            message=f'Payment for invoice {inv.invoice_number} was manually confirmed. Reference: {bank_ref}.',
+            priority='normal',
+            alert_key='payment_manual_confirmed',
+        )
+    else:
+        notify_roles(
+            FINANCE_PAYMENT_ROLES,
+            title=f'Payment reconciliation failed: {inv.invoice_number}',
+            message=f'Payment for invoice {inv.invoice_number} was manually marked unpaid and needs action.',
+            notification_type='finance',
+            priority='urgent',
+            source_module='finance',
+            object_id=inv.pk,
+            action_url=_invoice_action_url(inv),
+            metadata={'alert_key': 'payment_manual_failed', 'invoice_number': inv.invoice_number},
+            email_required=True,
+        )
+        alert_integration_manager(
+            title=f'Manual payment failure: {inv.invoice_number}',
+            message=f'Payment reconciliation for invoice {inv.invoice_number} was marked unpaid.',
+            metadata={'alert_key': 'manual_payment_failed', 'invoice_id': str(inv.pk), 'bank_reference': bank_ref},
+            sms_required=True,
+        )
 
     ip = request.META.get('REMOTE_ADDR', '')
     log_audit_action(
@@ -987,11 +1151,19 @@ def invoice_send_payment_advice_view(request, pk):
     inv.payment_advice_sent = True
     inv.payment_advice_sent_at = timezone.now()
     inv.save()
+    notification = _notify_invoice_supplier(
+        inv,
+        title=f'Payment advice: {inv.invoice_number}',
+        message=f'Payment advice for invoice {inv.invoice_number} has been issued. Amount: {inv.amount} {getattr(inv, "currency", "ZMW")}.',
+        priority='normal',
+        alert_key='payment_advice_sent',
+    )
 
     return Response({
         'message': 'Payment advice sent to supplier',
         'supplier': inv.supplier.name,
         'amount': float(inv.amount),
+        'email_sent': notification.email_status == 'sent' if notification else False,
     })
 
 
@@ -1084,6 +1256,18 @@ def payment_process_view(request, pk):
         pmt.status = 'sent'
         pmt.processed_at = timezone.now()
         pmt.save(update_fields=['iso20022_file_ref', 'pgp_encrypted_file_ref', 'sftp_outbox_ref', 'status', 'processed_at'])
+        notify_roles(
+            FINANCE_PAYMENT_ROLES,
+            title=f'Payment file sent: {inv.invoice_number}',
+            message=f'ISO 20022 payment file for invoice {inv.invoice_number} was generated and sent for bank processing.',
+            notification_type='finance',
+            priority='normal',
+            source_module='finance',
+            object_id=inv.pk,
+            action_url=_invoice_action_url(inv),
+            metadata={'alert_key': 'payment_sent_iso20022', 'payment_id': str(pmt.pk)},
+            email_required=True,
+        )
 
         return Response({
             'message': 'ISO 20022 payment file generated and sent for bank processing',
@@ -1097,6 +1281,18 @@ def payment_process_view(request, pk):
     pmt.status = 'sent'
     pmt.processed_at = timezone.now()
     pmt.save(update_fields=['status', 'processed_at'])
+    notify_roles(
+        FINANCE_PAYMENT_ROLES,
+        title=f'Payment sent: {inv.invoice_number}',
+        message=f'Payment for invoice {inv.invoice_number} was sent for bank processing.',
+        notification_type='finance',
+        priority='normal',
+        source_module='finance',
+        object_id=inv.pk,
+        action_url=_invoice_action_url(inv),
+        metadata={'alert_key': 'payment_sent', 'payment_id': str(pmt.pk)},
+        email_required=True,
+    )
 
     return Response({'message': 'Payment sent for bank processing', 'status': pmt.status})
 

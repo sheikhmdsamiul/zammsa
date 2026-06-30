@@ -23,6 +23,21 @@ const SOL_STEPS = [
 
 type TemplateType = 'itb' | 'rfp' | 'rfq';
 
+const METHOD_OPTIONS: Record<TemplateType, { value: string; label: string }[]> = {
+  itb: [
+    { value: 'open_tender', label: 'Open National Bidding' },
+    { value: 'international', label: 'International Competitive Bidding' },
+    { value: 'limited', label: 'Limited Bidding' },
+  ],
+  rfp: [
+    { value: 'proposal', label: 'Request for Proposals' },
+  ],
+  rfq: [
+    { value: 'simplified', label: 'Simplified Bidding' },
+    { value: 'direct', label: 'Direct Procurement' },
+  ],
+};
+
 interface MandatoryCriterion {
   id: string;
   name: string;
@@ -98,6 +113,7 @@ const SolicitationCreate: React.FC = () => {
   const [createdId, setCreatedId] = useState('');
 
   const [template, setTemplate] = useState<TemplateType | null>(null);
+  const [solicitationMethod, setSolicitationMethod] = useState<string>('open_tender');
   const [submissionFormat, setSubmissionFormat] = useState<'single' | 'two'>('single');
   const [requisition, setRequisition] = useState('');
   const [title, setTitle] = useState('');
@@ -224,12 +240,10 @@ const SolicitationCreate: React.FC = () => {
       return;
     }
 
-    const solType = template === 'itb' ? 'rfb' : template === 'rfp' ? 'rfp' : 'rfq';
-
     const payload: Record<string, any> = {
       title,
       description,
-      type: solType,
+      type: solicitationMethod,
       requisition,
       estimated_value: estimatedValue,
       currency,
@@ -541,8 +555,14 @@ const SolicitationCreate: React.FC = () => {
                         if (rr.bidSecurityRate) setBidSecurityRate(rr.bidSecurityRate);
                         if (rr.prebidConferenceDate) setPreBidDate(rr.prebidConferenceDate);
                         const method = (r as any).recommended_method || (r as any).procurement_method || '';
-                        if (method.includes('open') || method.includes('limited')) setTemplate('itb');
-                        else if (method.includes('direct') || method.includes('simplified')) setTemplate('rfq');
+                        const templateKey: TemplateType | null = ['open_tender', 'international', 'limited'].includes(method) ? 'itb' : method === 'proposal' ? 'rfp' : ['simplified', 'direct'].includes(method) ? 'rfq' : null;
+                        if (templateKey) {
+                          setTemplate(templateKey);
+                          setSolicitationMethod(method);
+                          if (templateKey === 'itb') { setSubmissionFormat('single'); setEvaluationMethod('lowest_price'); }
+                          if (templateKey === 'rfp') { setSubmissionFormat('two'); setEvaluationMethod('qcbs'); }
+                          if (templateKey === 'rfq') { setEvaluationMethod('lcs'); }
+                        }
                       }
                     }
                   }}
@@ -594,7 +614,7 @@ const SolicitationCreate: React.FC = () => {
                 <label key={opt.key} className={`flex items-start gap-4 p-5 rounded-2xl cursor-pointer border-2 transition-all ${
                   template === opt.key ? 'border-zammsa-green bg-zammsa-green/5' : 'border-gray-100 bg-gray-50 hover:border-gray-200'
                 }`}>
-                  <input type="radio" name="template" checked={template === opt.key} onChange={() => { setTemplate(opt.key); if (opt.key === 'itb') { setSubmissionFormat('single'); setEvaluationMethod('lowest_price'); } if (opt.key === 'rfp') { setSubmissionFormat('two'); setEvaluationMethod('qcbs'); } if (opt.key === 'rfq') { setEvaluationMethod('lcs'); } }} className="mt-1 text-zammsa-green focus:ring-zammsa-green" />
+                  <input type="radio" name="template" checked={template === opt.key} onChange={() => { setTemplate(opt.key); const methods = METHOD_OPTIONS[opt.key]; setSolicitationMethod(methods[0].value); if (opt.key === 'itb') { setSubmissionFormat('single'); setEvaluationMethod('lowest_price'); } if (opt.key === 'rfp') { setSubmissionFormat('two'); setEvaluationMethod('qcbs'); } if (opt.key === 'rfq') { setEvaluationMethod('lcs'); } }} className="mt-1 text-zammsa-green focus:ring-zammsa-green" />
                   <div className="flex-1">
                     <p className="text-sm font-bold text-gray-900">{opt.label}</p>
                     <p className="text-xs text-gray-500 mt-0.5">{opt.desc}</p>
@@ -604,6 +624,22 @@ const SolicitationCreate: React.FC = () => {
                 </label>
               ))}
             </div>
+
+            {template && METHOD_OPTIONS[template].length > 1 && (
+              <div className="mt-6 p-4 bg-gray-50 rounded-2xl">
+                <p className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-3">Procurement Method *</p>
+                <div className="flex flex-wrap gap-2">
+                  {METHOD_OPTIONS[template].map(m => (
+                    <label key={m.value} className={`flex items-center gap-2 px-4 py-2.5 rounded-xl cursor-pointer border-2 transition-all ${
+                      solicitationMethod === m.value ? 'border-zammsa-green bg-white' : 'border-gray-200 bg-white/50 hover:border-gray-300'
+                    }`}>
+                      <input type="radio" name="procMethod" checked={solicitationMethod === m.value} onChange={() => setSolicitationMethod(m.value)} className="text-zammsa-green focus:ring-zammsa-green" />
+                      <span className="text-sm font-bold text-gray-700">{m.label}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+            )}
 
             <div className="mt-8 pt-6 border-t border-gray-100">
               <p className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-4">Submission Format</p>
@@ -1014,7 +1050,7 @@ const SolicitationCreate: React.FC = () => {
               <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-3">Mandatory Clauses & Templates (auto-included — or upload custom)</p>
               <div className="space-y-2">
                 {[
-                  template === 'itb' ? 'Invitation to Bid (ITB) Standard Document' : template === 'rfp' ? 'Request for Proposals (RFP) Standard Document' : 'Request for Quotations (RFQ) Standard Document',
+                  `${template === 'itb' ? 'Invitation to Bid' : template === 'rfp' ? 'Request for Proposals' : 'Request for Quotations'} (${template?.toUpperCase()}) Standard Document`,
                   'General Conditions of Contract (ZPPA v2024)',
                   'Standard Bid Forms (ZPPA-approved)',
                   'Conflict of Interest Declaration Form',
@@ -1215,7 +1251,7 @@ const SolicitationCreate: React.FC = () => {
             <h2 className="text-sm font-bold text-emerald-900 mb-3">Complete Validation Summary</h2>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
               {[
-                `Template: ${template === 'itb' ? 'ITB (Goods, Single Envelope)' : template === 'rfp' ? 'RFP (Consulting, Two Envelope)' : 'RFQ (Quotations)'}`,
+                `Method: ${METHOD_OPTIONS[template!]?.find(m => m.value === solicitationMethod)?.label || solicitationMethod} (${template!.toUpperCase()} template)`,
                 `Title and description provided`,
                 `CPP: ${(selectedReq as any)?.cpp_data?.cpp_number || '---'} ${(selectedReq as any)?.cpp_data?.is_baseline_locked ? '(Baseline Locked)' : '(Baseline Not Locked)'}`,
                 `Issue date: ${fmtDate(issueDate)}`,
@@ -1245,7 +1281,7 @@ const SolicitationCreate: React.FC = () => {
               {[
                 ['Reference', `SOL-${new Date().getFullYear()}-${department?.slice(0, 3).toUpperCase() || 'XXX'}-XX`],
                 ['Title', title],
-                ['Type', template === 'itb' ? 'ITB (Goods)' : template === 'rfp' ? 'RFP (Consulting)' : 'RFQ (Quotations)'],
+                ['Type', METHOD_OPTIONS[template!]?.find(m => m.value === solicitationMethod)?.label || solicitationMethod],
                 ['Value', `K ${estimatedValue.toLocaleString()}`],
                 ['Closing', `${fmtDate(closingDate)} ${closingHour}:${closingMinute} CAT`],
                 ['Opening', `${fmtDate(openingDate)} ${openingHour}:${openingMinute} CAT`],

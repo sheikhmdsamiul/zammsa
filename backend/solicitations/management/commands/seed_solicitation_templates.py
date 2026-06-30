@@ -433,6 +433,20 @@ TEMPLATES = [
         ],
     },
     {
+        'template_name': 'Invitation to Bid (ITB) Standard Document',
+        'method': 'open_tender',
+        'document_type': 'bidding_document',
+        'template_content': ITB_CONTENT,
+        'is_zppa_template': True,
+        'version': '2.0',
+        'mandatory_clauses': [
+            {'clause_id': 'itb-001', 'clause_text': 'All bidders must comply with the Public Procurement Act No. 27 of 2020 and ZPPA Regulations of 2022.', 'is_locked': True},
+            {'clause_id': 'itb-002', 'clause_text': 'Bidders must provide valid tax clearance, NAPSA, and NHIMA compliance certificates.', 'is_locked': True},
+            {'clause_id': 'itb-003', 'clause_text': 'ZAMMSA reserves the right to inspect bidder facilities and verify information provided.', 'is_locked': False},
+            {'clause_id': 'itb-004', 'clause_text': 'Any form of collusion, corruption, or fraudulent practice shall result in immediate disqualification.', 'is_locked': True},
+        ],
+    },
+    {
         'template_name': 'Request for Proposals (RFP) Standard Document',
         'method': 'rfp',
         'document_type': 'bidding_document',
@@ -534,6 +548,7 @@ class Command(BaseCommand):
         for data in TEMPLATES:
             _, was_created = SolicitationTemplate.objects.update_or_create(
                 template_name__iexact=data['template_name'],
+                method=data.get('method', ''),
                 defaults=data,
             )
             if was_created:

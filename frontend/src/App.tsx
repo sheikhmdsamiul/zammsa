@@ -19,6 +19,7 @@ const Login = React.lazy(() => import('./components/auth/Login'));
 const ForgotPassword = React.lazy(() => import('./components/auth/ForgotPassword'));
 const ResetPassword = React.lazy(() => import('./components/auth/ResetPassword'));
 const ChangePassword = React.lazy(() => import('./components/auth/ChangePassword'));
+const NotificationsInbox = React.lazy(() => import('./components/common/NotificationsInbox'));
 
 const Home = React.lazy(() => import('./components/public/Home'));
 const TendersList = React.lazy(() => import('./components/public/TendersList'));
@@ -154,6 +155,7 @@ const CommodityManagement = React.lazy(() => import('./components/admin/Commodit
 const BudgetAllocationManagement = React.lazy(() => import('./components/admin/BudgetAllocationManagement'));
 const AdminReports = React.lazy(() => import('./components/admin/Reports'));
 const BackupManagement = React.lazy(() => import('./components/admin/BackupManagement'));
+const TemplateManagement = React.lazy(() => import('./components/admin/TemplateManagement'));
 
 const SupplierRelationsLayout = React.lazy(() => import('./components/layout/SupplierRelationsLayout'));
 const SupplierRelationsDashboard = React.lazy(() => import('./components/supplier-relations/SupplierRelationsDashboard'));
@@ -214,6 +216,7 @@ function App() {
                 >
                   <Route index element={<Navigate to="dashboard" replace />} />
                   <Route path="dashboard" element={<DashboardRouter />} />
+                  <Route path="notifications" element={<NotificationsInbox />} />
                   <Route path="requisitions" element={
                     <ProtectedRoute roles={[ROLES.USER_DEPT_STAFF, ROLES.DEPARTMENT_HEAD, ROLES.PROCUREMENT_OFFICER, ROLES.FINANCE_OFFICER, ROLES.DIRECTOR_GENERAL]}>
                       <RequisitionsList />
@@ -581,6 +584,7 @@ function App() {
                 >
                   <Route index element={<Navigate to="dashboard" replace />} />
                   <Route path="dashboard" element={<VendorDashboard />} />
+                  <Route path="notifications" element={<NotificationsInbox />} />
                   <Route path="open-tenders" element={<OpenTenders />} />
                   <Route path="open-tenders/:id/bid" element={<BidSubmission />} />
                   <Route path="open-tenders/:id" element={<VendorTenderDetail />} />
@@ -626,6 +630,8 @@ function App() {
                   <Route path="budget-allocations" element={<BudgetAllocationManagement />} />
                   <Route path="reports" element={<AdminReports />} />
                   <Route path="backups" element={<BackupManagement />} />
+                  <Route path="templates" element={<TemplateManagement />} />
+                  <Route path="notifications" element={<NotificationsInbox />} />
                 </Route>
 
                 <Route
@@ -637,6 +643,7 @@ function App() {
                   }
                 >
                   <Route index element={<SupplierRelationsDashboard />} />
+                  <Route path="notifications" element={<NotificationsInbox />} />
                   <Route path="vendor-applications" element={<VendorApplications />} />
                   <Route path="vendors" element={<VendorManagement />} />
                   <Route path="reports" element={<AdminReports />} />

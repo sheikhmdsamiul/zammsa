@@ -162,13 +162,29 @@ class EvaluationCriterion(models.Model):
         return f'{self.criterion_name} ({self.criterion_type})'
 
 
+ADDENDUM_STATUS_CHOICES = [
+    ('draft', 'Draft'),
+    ('pending_approval', 'Pending Approval'),
+    ('approved', 'Approved'),
+    ('rejected', 'Rejected'),
+]
+
+
 class SolicitationAddendum(models.Model):
     addendum_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     solicitation = models.ForeignKey(Solicitation, on_delete=models.CASCADE, related_name='addenda')
     addendum_number = models.IntegerField()
     description = models.TextField()
     reason = models.TextField(blank=True)
+    original_text = models.TextField(blank=True, default='',
+        help_text='The original text being amended (section reference)')
+    revised_text = models.TextField(blank=True, default='',
+        help_text='The revised/replacement text')
     extended_closing_date = models.DateTimeField(null=True, blank=True)
+    addendum_status = models.CharField(max_length=30, choices=ADDENDUM_STATUS_CHOICES, default='pending_approval')
+    approved_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='approved_addenda')
+    approved_at = models.DateTimeField(null=True, blank=True)
+    rejection_reason = models.TextField(blank=True, default='')
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:

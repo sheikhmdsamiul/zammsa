@@ -3,10 +3,8 @@ import logging
 from datetime import timedelta
 from django.db.models import Q, Max
 from django.utils import timezone
-from django.core.mail import send_mail
 
 logger = logging.getLogger(__name__)
-from django.conf import settings
 from rest_framework import generics, filters, status
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
@@ -17,6 +15,9 @@ from rest_framework.exceptions import PermissionDenied
 from django_filters.rest_framework import DjangoFilterBackend
 import django_filters
 
+from accounts.audit import log_audit_action
+from accounts.models import User
+from system_config.notifications import send_external_bulk_email
 from .models import SolicitationTemplate, Solicitation, EvaluationCriterion, SolicitationAddendum, ClarificationRequest, SolicitationDocument
 from .serializers import (
     SolicitationTemplateSerializer, SolicitationSerializer, SolicitationListSerializer,
@@ -76,6 +77,52 @@ def _validate_clarification_cutoff(sol):
             f'Clarification cutoff must be at least 5 working days before closing. '
             f'Currently {remaining} day(s) before closing.'
         )
+    return None
+
+
+def _update_cpp_milestone_actual(sol, keywords, actual_dt=None):
+    """Record actual solicitation dates against the approved CPP baseline."""
+    cpp = getattr(sol, 'cpp', None)
+    if not cpp:
+        return None
+    actual_dt = actual_dt or timezone.now()
+    actual_date = actual_dt.date() if hasattr(actual_dt, 'date') else actual_dt
+    query = Q()
+    for keyword in keywords:
+        query |= Q(milestone_name__icontains=keyword)
+    milestone = cpp.procurement_milestones.filter(query).order_by('sequence_number').first()
+    if milestone and not milestone.actual_date:
+        milestone.actual_date = actual_date
+        milestone.save(update_fields=['actual_date'])
+    return milestone
+
+
+def _validate_solicitation_ready(sol):
+    """SRS Step 6 validation for solicitation approval/publication readiness."""
+    period_error = _validate_bidding_period(sol)
+    if period_error:
+        return period_error
+    cutoff_error = _validate_clarification_cutoff(sol)
+    if cutoff_error:
+        return cutoff_error
+    if sol.opening_date and sol.opening_date < sol.closing_date:
+        return 'Bid opening date must be on or after the closing date.'
+    if sol.evaluation_method in ('qcbs', 'qbs'):
+        if sol.minimum_technical_threshold is None:
+            return 'Minimum technical threshold is required for QCBS/QBS solicitations.'
+        if sol.minimum_technical_threshold < 0 or sol.minimum_technical_threshold > 100:
+            return 'Minimum technical threshold must be between 0 and 100.'
+        if sol.evaluation_method == 'qcbs' and sol.financial_weight is None:
+            return 'Financial weight is required for QCBS solicitations.'
+        if sol.financial_weight is not None and (sol.financial_weight < 0 or sol.financial_weight > 100):
+            return 'Financial weight must be between 0 and 100.'
+
+    technical_criteria = sol.evaluation_criteria.filter(criterion_type='technical')
+    if sol.evaluation_method in ('qcbs', 'qbs') and not technical_criteria.exists():
+        return 'At least one technical evaluation criterion is required for QCBS/QBS solicitations.'
+    criteria_sum = sum(float(c.weight) for c in technical_criteria)
+    if technical_criteria.exists() and round(criteria_sum, 2) != 100.0:
+        return f'Technical evaluation criteria weights must sum to 100% (currently {criteria_sum}%).'
     return None
 
 PROCUREMENT_STAFF_ROLES = ('procurement_officer', 'procurement_manager', 'director_procurement', 'system_admin')
@@ -188,7 +235,8 @@ class SolicitationListView(BaseView, generics.ListCreateAPIView):
                     'Please submit the CPP for approval to lock the milestone baseline schedule.'
                 )
         
-        serializer.save(created_by=self.request.user)
+        sol = serializer.save(created_by=self.request.user)
+        _update_cpp_milestone_actual(sol, ['solicitation document ready', 'requisition to solicitation'])
 
 
 class SolicitationDetailView(generics.RetrieveUpdateDestroyAPIView):
@@ -210,21 +258,9 @@ def solicitation_submit_view(request, pk):
     if sol.status != 'draft':
         return Response({'error': 'Only draft solicitations can be submitted'}, status=400)
 
-    # BR-SOL-01: Validate minimum bidding period
-    period_error = _validate_bidding_period(sol)
-    if period_error:
-        return Response({'error': period_error}, status=400)
-
-    # Validate clarification cutoff is ≥ 5 working days before closing
-    cutoff_error = _validate_clarification_cutoff(sol)
-    if cutoff_error:
-        return Response({'error': cutoff_error}, status=400)
-
-    criteria_sum = sum(float(c.weight) for c in sol.evaluation_criteria.all())
-    if sol.evaluation_criteria.exists() and criteria_sum != 100.0:
-        return Response({
-            'error': f'Evaluation criteria weights must sum to 100% (currently {criteria_sum}%)'
-        }, status=400)
+    readiness_error = _validate_solicitation_ready(sol)
+    if readiness_error:
+        return Response({'error': readiness_error}, status=400)
 
     user_role = _normalize_role(request.user.role)
     if user_role not in PROCUREMENT_STAFF_ROLES:
@@ -232,6 +268,10 @@ def solicitation_submit_view(request, pk):
 
     sol.status = 'pending_approval'
     sol.save()
+    log_audit_action(
+        user=request.user, action='SOL_SUBMIT', module='solicitations',
+        record_id=str(sol.solicitation_id), ip_address=request.META.get('REMOTE_ADDR', ''),
+    )
     return Response({'message': 'Solicitation sent for approval', 'status': sol.status})
 
 
@@ -249,16 +289,9 @@ def solicitation_approve_view(request, pk):
         logger.warning('Solicitation not in pending_approval state: pk=%s, status=%s', pk, sol.status)
         return Response({'error': 'Only pending approval solicitations can be approved'}, status=400)
 
-    # BR-SOL-01: Validate minimum bidding period
-    period_error = _validate_bidding_period(sol)
-    if period_error:
-        return Response({'error': period_error}, status=400)
-
-    criteria_sum = sum(float(c.weight) for c in sol.evaluation_criteria.all())
-    if sol.evaluation_criteria.exists() and criteria_sum != 100.0:
-        return Response({
-            'error': f'Evaluation criteria weights must sum to 100% (currently {criteria_sum}%)'
-        }, status=400)
+    readiness_error = _validate_solicitation_ready(sol)
+    if readiness_error:
+        return Response({'error': readiness_error}, status=400)
 
     user_role = _normalize_role(request.user.role)
     if user_role not in SOLICITATION_APPROVER_ROLES:
@@ -269,6 +302,15 @@ def solicitation_approve_view(request, pk):
     sol.status = 'approved'
     sol.approved_by = request.user
     sol.save()
+    _update_cpp_milestone_actual(sol, ['solicitation document ready'])
+
+    from .pdf_generator import save_solicitation_pdf
+    save_solicitation_pdf(sol)
+
+    log_audit_action(
+        user=request.user, action='SOL_APPROVE', module='solicitations',
+        record_id=str(sol.solicitation_id), ip_address=request.META.get('REMOTE_ADDR', ''),
+    )
     return Response({'message': 'Solicitation approved', 'status': sol.status})
 
 
@@ -296,6 +338,12 @@ def solicitation_reject_view(request, pk):
     sol.rejection_reason = reason
     sol.rejected_at = timezone.now()
     sol.save()
+    log_audit_action(
+        user=request.user, action='SOL_REJECT', module='solicitations',
+        record_id=str(sol.solicitation_id), old_value={'status': 'pending_approval'},
+        new_value={'status': 'draft', 'reason': reason},
+        ip_address=request.META.get('REMOTE_ADDR', ''),
+    )
     return Response({'message': 'Solicitation returned to draft', 'status': sol.status, 'rejection_reason': reason})
 
 
@@ -320,14 +368,9 @@ def solicitation_publish_view(request, pk):
     # BR-SOL-01: Validate minimum bidding period on publish
     if not sol.issue_date:
         sol.issue_date = timezone.now().date()
-    period_error = _validate_bidding_period(sol)
-    if period_error:
-        return Response({'error': period_error}, status=400)
-
-    # Validate clarification cutoff if set
-    cutoff_error = _validate_clarification_cutoff(sol)
-    if cutoff_error:
-        return Response({'error': cutoff_error}, status=400)
+    readiness_error = _validate_solicitation_ready(sol)
+    if readiness_error:
+        return Response({'error': readiness_error}, status=400)
 
     # BR-CPP-01: No solicitation can be published without an approved CPP
     if sol.requisition:
@@ -384,12 +427,29 @@ def solicitation_publish_view(request, pk):
     # Email notification to registered suppliers
     if 'email_suppliers' in targets:
         try:
-            _notify_suppliers_of_publication(sol)
-            proofs['email_suppliers'] = {'timestamp': timezone.now().isoformat()}
-        except Exception:
-            pass  # Don't fail publication if email fails
+            email_result = _notify_suppliers_of_publication(sol)
+            proofs['email_suppliers'] = {
+                'timestamp': timezone.now().isoformat(),
+                'delivered': email_result['sent'],
+                'failed': email_result['failed'],
+                'recipients': email_result['recipients'],
+            }
+        except Exception as exc:
+            proofs['email_suppliers'] = {
+                'timestamp': timezone.now().isoformat(),
+                'delivered': 0,
+                'failed': 0,
+                'error': str(exc),
+            }
 
     sol.save()
+    _update_cpp_milestone_actual(sol, ['solicitation published', 'publication', 'solicitation issued'], sol.published_at)
+
+    log_audit_action(
+        user=request.user, action='SOL_PUBLISH', module='solicitations',
+        record_id=str(sol.solicitation_id), new_value={'targets': targets, 'published_at': sol.published_at.isoformat()},
+        ip_address=request.META.get('REMOTE_ADDR', ''),
+    )
 
     return Response({
         'message': 'Solicitation published',
@@ -409,14 +469,17 @@ def _publish_to_egp_portal(sol):
 
 def _notify_addendum_issued(sol, addendum):
     """Send addendum notifications to suppliers who downloaded/submitted bids."""
-    from django.core.mail import send_mail
     from bids.models import BidSubmission
-    bid_contacts = BidSubmission.objects.filter(
+    bids = BidSubmission.objects.filter(
         solicitation=sol, status__in=['draft', 'submitted']
-    ).select_related('supplier').values_list('supplier__email', flat=True)
-    recipient_emails = [e for e in bid_contacts if e]
-    if not recipient_emails:
-        return
+    ).select_related('supplier')
+    recipients = [
+        {'name': bid.supplier.full_name, 'email': bid.supplier.email}
+        for bid in bids
+        if bid.supplier and bid.supplier.email
+    ]
+    if not recipients:
+        return {'total': 0, 'sent': 0, 'failed': 0, 'recipients': []}
     subject = f'Addendum No. {addendum.addendum_number}: {sol.sol_number} - {sol.title}'
     body = (
         f'An addendum has been issued for solicitation {sol.sol_number}.\n\n'
@@ -428,24 +491,15 @@ def _notify_addendum_issued(sol, addendum):
         f'Please log in to the portal to view the full addendum and acknowledge before submitting.\n\n'
         f'This is an automated notification from the ZAMMSA Procurement System.'
     )
-    send_mail(
-        subject, body,
-        getattr(settings, 'DEFAULT_FROM_EMAIL', 'noreply@zammsa.gov.zm'),
-        recipient_emails,
-        fail_silently=False,
-    )
+    return send_external_bulk_email(subject, body, recipients)
 
 
 def _notify_suppliers_of_publication(sol):
     """Send email notifications to registered suppliers."""
-    from suppliers.models import Supplier
-    suppliers = Supplier.objects.filter(status='active')
-    if not suppliers.exists():
-        return
-
-    recipient_emails = list(suppliers.values_list('email', flat=True))
-    if not recipient_emails:
-        return
+    supplier_users = User.objects.filter(role='supplier_user', is_active=True).exclude(email='')
+    recipients = [{'name': user.full_name, 'email': user.email} for user in supplier_users]
+    if not recipients:
+        return {'total': 0, 'sent': 0, 'failed': 0, 'recipients': []}
 
     subject = f'New Solicitation Published: {sol.sol_number} - {sol.title}'
     body = (
@@ -458,13 +512,7 @@ def _notify_suppliers_of_publication(sol):
         f'This is an automated notification from the ZAMMSA Procurement System.'
     )
 
-    send_mail(
-        subject,
-        body,
-        getattr(settings, 'DEFAULT_FROM_EMAIL', 'noreply@zammsa.gov.zm'),
-        recipient_emails,
-        fail_silently=False,
-    )
+    return send_external_bulk_email(subject, body, recipients)
 
 
 @api_view(['POST'])
@@ -477,6 +525,11 @@ def solicitation_close_view(request, pk):
 
     sol.status = 'closed'
     sol.save()
+    _update_cpp_milestone_actual(sol, ['bid closing'])
+    log_audit_action(
+        user=request.user, action='SOL_CLOSE', module='solicitations',
+        record_id=str(sol.solicitation_id), ip_address=request.META.get('REMOTE_ADDR', ''),
+    )
     return Response({'message': 'Solicitation closed', 'status': sol.status})
 
 
@@ -490,7 +543,10 @@ def solicitation_add_addendum_view(request, pk):
 
     description = request.data.get('description')
     reason = request.data.get('reason', '')
+    original_text = request.data.get('original_text', '')
+    revised_text = request.data.get('revised_text', '')
     extend_days = request.data.get('extend_closing_days', None)
+    status_override = request.data.get('addendum_status', 'pending_approval')
 
     if not description:
         return Response({'error': 'Description is required'}, status=400)
@@ -510,6 +566,9 @@ def solicitation_add_addendum_view(request, pk):
         addendum_number=last_num + 1,
         description=description,
         reason=reason,
+        original_text=original_text,
+        revised_text=revised_text,
+        addendum_status=status_override,
     )
 
     if extend_days:
@@ -518,12 +577,118 @@ def solicitation_add_addendum_view(request, pk):
         sol.save()
         addendum.save()
 
-    _notify_addendum_issued(sol, addendum)
+    from .pdf_generator import generate_addendum_pdf
+    pdf_doc = generate_addendum_pdf(sol, addendum, original_text, revised_text)
+
+    log_audit_action(
+        user=request.user, action='SOL_ADDENDUM_CREATE', module='solicitations',
+        record_id=str(sol.solicitation_id),
+        new_value={'addendum_number': addendum.addendum_number, 'description': description, 'status': addendum.addendum_status},
+        ip_address=request.META.get('REMOTE_ADDR', ''),
+    )
+
+    response_data = {
+        'message': f'Addendum {addendum.addendum_number} created',
+        'addendum': SolicitationAddendumSerializer(addendum).data,
+    }
+    if pdf_doc:
+        from .serializers import SolicitationDocumentSerializer
+        response_data['document'] = SolicitationDocumentSerializer(pdf_doc, context={'request': request}).data
+
+    return Response(response_data)
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def solicitation_addendum_submit_view(request, pk, addendum_pk):
+    try:
+        sol = Solicitation.objects.get(pk=pk)
+        addendum = SolicitationAddendum.objects.get(pk=addendum_pk, solicitation=sol)
+    except (Solicitation.DoesNotExist, SolicitationAddendum.DoesNotExist):
+        return Response({'error': 'Solicitation or addendum not found'}, status=404)
+
+    if addendum.addendum_status != 'draft':
+        return Response({'error': 'Only draft addenda can be submitted for approval'}, status=400)
+
+    addendum.addendum_status = 'pending_approval'
+    addendum.save()
+
+    log_audit_action(
+        user=request.user, action='SOL_ADDENDUM_SUBMIT', module='solicitations',
+        record_id=str(addendum.addendum_id),
+        new_value={'addendum_number': addendum.addendum_number, 'status': 'pending_approval'},
+        ip_address=request.META.get('REMOTE_ADDR', ''),
+    )
+
+    return Response({'message': 'Addendum submitted for approval', 'addendum': SolicitationAddendumSerializer(addendum).data})
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def solicitation_addendum_approve_view(request, pk, addendum_pk):
+    try:
+        sol = Solicitation.objects.get(pk=pk)
+        addendum = SolicitationAddendum.objects.get(pk=addendum_pk, solicitation=sol)
+    except (Solicitation.DoesNotExist, SolicitationAddendum.DoesNotExist):
+        return Response({'error': 'Solicitation or addendum not found'}, status=404)
+
+    user_role = _normalize_role(request.user.role)
+    if user_role not in SOLICITATION_APPROVER_ROLES:
+        return Response({'error': 'Not authorized to approve addenda'}, status=403)
+
+    if addendum.addendum_status != 'pending_approval':
+        return Response({'error': 'Only pending approval addenda can be approved'}, status=400)
+
+    addendum.addendum_status = 'approved'
+    addendum.approved_by = request.user
+    addendum.approved_at = timezone.now()
+    addendum.save()
+
+    email_result = _notify_addendum_issued(sol, addendum)
+
+    log_audit_action(
+        user=request.user, action='SOL_ADDENDUM_APPROVE', module='solicitations',
+        record_id=str(addendum.addendum_id),
+        new_value={'addendum_number': addendum.addendum_number, 'status': 'approved'},
+        ip_address=request.META.get('REMOTE_ADDR', ''),
+    )
 
     return Response({
-        'message': f'Addendum {addendum.addendum_number} issued',
+        'message': 'Addendum approved and suppliers notified',
         'addendum': SolicitationAddendumSerializer(addendum).data,
+        'email_notifications': email_result,
     })
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def solicitation_addendum_reject_view(request, pk, addendum_pk):
+    try:
+        sol = Solicitation.objects.get(pk=pk)
+        addendum = SolicitationAddendum.objects.get(pk=addendum_pk, solicitation=sol)
+    except (Solicitation.DoesNotExist, SolicitationAddendum.DoesNotExist):
+        return Response({'error': 'Solicitation or addendum not found'}, status=404)
+
+    user_role = _normalize_role(request.user.role)
+    if user_role not in SOLICITATION_APPROVER_ROLES:
+        return Response({'error': 'Not authorized to reject addenda'}, status=403)
+
+    if addendum.addendum_status != 'pending_approval':
+        return Response({'error': 'Only pending approval addenda can be rejected'}, status=400)
+
+    rejection_reason = request.data.get('reason', '')
+    addendum.addendum_status = 'rejected'
+    addendum.rejection_reason = rejection_reason
+    addendum.save()
+
+    log_audit_action(
+        user=request.user, action='SOL_ADDENDUM_REJECT', module='solicitations',
+        record_id=str(addendum.addendum_id),
+        new_value={'addendum_number': addendum.addendum_number, 'status': 'rejected', 'reason': rejection_reason},
+        ip_address=request.META.get('REMOTE_ADDR', ''),
+    )
+
+    return Response({'message': 'Addendum rejected', 'addendum': SolicitationAddendumSerializer(addendum).data})
 
 
 class EvaluationCriterionFilter(django_filters.FilterSet):
@@ -575,6 +740,10 @@ def clarification_answer_view(request, pk):
     cr.answer = answer
     cr.answered_at = timezone.now()
     cr.save()
+    log_audit_action(
+        user=request.user, action='SOL_CLARIFICATION_ANSWER', module='solicitations',
+        record_id=str(cr.clarification_id), ip_address=request.META.get('REMOTE_ADDR', ''),
+    )
     return Response({'message': 'Clarification answered'})
 
 
@@ -802,6 +971,11 @@ def solicitation_document_upload_view(request, solicitation_id):
     )
 
     serializer = SolicitationDocumentSerializer(doc, context={'request': request})
+    log_audit_action(
+        user=request.user, action='SOL_DOCUMENT_UPLOAD', module='solicitations',
+        record_id=str(doc.document_id), new_value={'document_type': doc.document_type, 'file_name': file.name},
+        ip_address=request.META.get('REMOTE_ADDR', ''),
+    )
     return Response(serializer.data, status=status.HTTP_201_CREATED)
 
 
@@ -866,4 +1040,64 @@ def solicitation_document_delete_view(request, solicitation_id, document_id):
     if doc.file:
         doc.file.delete()
     doc.delete()
+    log_audit_action(
+        user=request.user, action='SOL_DOCUMENT_DELETE', module='solicitations',
+        record_id=str(document_id), old_value={'document_type': doc.document_type},
+        ip_address=request.META.get('REMOTE_ADDR', ''),
+    )
     return Response({'message': 'Document deleted'}, status=status.HTTP_200_OK)
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def solicitation_generate_document_view(request, pk):
+    """Generate/regenerate the solicitation bidding document PDF."""
+    try:
+        sol = Solicitation.objects.get(pk=pk)
+    except Solicitation.DoesNotExist:
+        return Response({'error': 'Solicitation not found'}, status=404)
+
+    user_role = _normalize_role(request.user.role)
+    if user_role not in PROCUREMENT_STAFF_ROLES:
+        return Response({'error': 'Not authorized'}, status=403)
+
+    from .pdf_generator import save_solicitation_pdf
+    is_draft = sol.status in ('draft', 'pending_approval')
+    doc = save_solicitation_pdf(sol)
+
+    if not doc:
+        return Response({'error': 'Failed to generate document. No matching template found.'}, status=400)
+
+    from .serializers import SolicitationDocumentSerializer
+    log_audit_action(
+        user=request.user, action='SOL_DOCUMENT_GENERATE', module='solicitations',
+        record_id=str(pk), ip_address=request.META.get('REMOTE_ADDR', ''),
+    )
+    return Response({
+        'message': 'Solicitation document generated',
+        'document': SolicitationDocumentSerializer(doc, context={'request': request}).data,
+        'document_hash': sol.publication_proofs.get('document_hash', ''),
+    })
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def solicitation_download_document_view(request, pk):
+    """Download the latest bidding document PDF for a solicitation."""
+    try:
+        sol = Solicitation.objects.get(pk=pk)
+    except Solicitation.DoesNotExist:
+        return Response({'error': 'Solicitation not found'}, status=404)
+
+    doc = SolicitationDocument.objects.filter(
+        solicitation=sol,
+        document_type='bidding_document',
+    ).order_by('-document_id').first()
+
+    if not doc or not doc.file:
+        return Response({'error': 'No generated document found. Generate one first.'}, status=404)
+
+    from django.http import FileResponse
+    response = FileResponse(doc.file.open('rb'), content_type='application/pdf')
+    response['Content-Disposition'] = f'attachment; filename="{doc.file.name.split("/")[-1]}"'
+    return response

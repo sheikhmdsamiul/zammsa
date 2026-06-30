@@ -5,6 +5,7 @@ import Sidebar, { NavItem } from './Sidebar';
 import {
   ChartBarIcon, ClipboardListIcon, OfficeBuildingIcon, TrendingUpIcon,
 } from '@heroicons/react/outline';
+import NotificationBell from '../common/NotificationBell';
 
 const iconClass = 'h-5 w-5';
 
@@ -79,6 +80,7 @@ const SupplierRelationsLayout: React.FC = () => {
           </div>
 
           <div className="flex items-center gap-4">
+             <NotificationBell />
              <div className="flex items-center gap-3">
                <div className="text-right hidden sm:block">
                   <p className="text-sm font-bold text-gray-900 leading-none">{user?.full_name}</p>

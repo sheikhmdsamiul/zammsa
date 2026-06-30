@@ -59,6 +59,24 @@ function getMethodFromValue(value: number): string {
   return 'direct';
 }
 
+function getAPPErrorMessage(err: any, fallback: string): string {
+  const data = err?.response?.data;
+  const raw = typeof data === 'string'
+    ? data
+    : data?.error || data?.detail || data?.message || data?.non_field_errors?.[0] || '';
+  const text = String(raw || '');
+
+  if (
+    text.includes('fiscal_year, department') ||
+    text.includes('fiscal year and department') ||
+    text.includes('must make a unique set')
+  ) {
+    return 'An Annual Procurement Plan already exists for the selected fiscal year and department.';
+  }
+
+  return text || fallback;
+}
+
 const APPCreate: React.FC = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
@@ -151,9 +169,8 @@ const APPCreate: React.FC = () => {
   const budgetOk = remainingBudget >= 0;
 
   const selFY = fiscalYears.find((fy) => fy.id === form.fiscal_year_id);
-  const planRef = form.department_id
-    ? `APP-${(selFY?.name || 'XXXX').replace(/\s*\/\s*/g, '-').replace(/\s+/g, '')}-${departments.find((d) => d.dept_id === form.department_id)?.dept_code || 'XXX'}-001`
-    : 'APP-XXXX-XXX-001';
+  const planFiscalYear = (selFY?.name || 'XXXX').match(/\d{4}/)?.[0] || 'XXXX';
+  const planRef = `APP-${planFiscalYear}-00001`;
 
   function updateItem(index: number, field: string, value: any) {
     const updated = [...items];
@@ -262,7 +279,7 @@ const APPCreate: React.FC = () => {
         navigate(`/procurement-planning/${newId}`);
       }
     } catch (err: any) {
-      toast.error(err.response?.data?.error || 'Failed to save draft');
+      toast.error(getAPPErrorMessage(err, 'Failed to save draft'));
     }
     setSavingDraft(false);
   }
@@ -281,7 +298,7 @@ const APPCreate: React.FC = () => {
           });
           setCreatedAppId(app.app_id);
         } catch (err: any) {
-          toast.error(err.response?.data?.error || 'Failed to create APP');
+          toast.error(getAPPErrorMessage(err, 'Failed to create APP'));
           return;
         }
       } else {
@@ -294,7 +311,7 @@ const APPCreate: React.FC = () => {
             consolidation_notes: form.is_consolidated ? form.consolidation_notes : undefined,
           });
         } catch (err: any) {
-          toast.error(err.response?.data?.error || 'Failed to update APP');
+          toast.error(getAPPErrorMessage(err, 'Failed to update APP'));
           return;
         }
       }

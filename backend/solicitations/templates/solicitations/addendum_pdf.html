@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<style>
+@page { size: A4; margin: 20mm; }
+body { font-family: Georgia, 'Times New Roman', serif; color: #1f2937; line-height: 1.7; font-size: 12pt; }
+h1 { font-size: 20pt; color: #1e3a5f; border-bottom: 2px solid #1e3a5f; padding-bottom: 10px; margin-bottom: 20px; }
+h2 { font-size: 14pt; color: #1e3a5f; margin-top: 24px; margin-bottom: 8px; }
+p { margin-bottom: 12px; text-align: justify; }
+.ref { color: #6b7280; font-size: 11pt; margin-bottom: 4px; }
+hr { border: none; border-top: 1px solid #e5e7eb; margin: 20px 0; }
+table { width: 100%; border-collapse: collapse; margin: 16px 0; }
+th, td { padding: 8px 10px; border: 1px solid #d1d5db; text-align: left; }
+th { background: #f3f4f6; font-weight: 700; }
+.highlight { background: #fef3c7; padding: 16px; border-left: 4px solid #f59e0b; margin: 16px 0; font-family: monospace; }
+.info-box { background: #eff6ff; padding: 16px; border-left: 4px solid #3b82f6; margin: 16px 0; }
+.footer { margin-top: 32px; padding-top: 16px; border-top: 1px solid #e5e7eb; font-size: 9pt; color: #9ca3af; text-align: center; }
+</style>
+</head>
+<body>
+
+<h1>ADDENDUM No. {{ addendum_number }}</h1>
+
+<p class="ref"><strong>Solicitation:</strong> {{ sol_number }}</p>
+<p class="ref"><strong>Title:</strong> {{ title }}</p>
+<p class="ref"><strong>Issue Date:</strong> {{ addendum_issue_date }}</p>
+
+<hr>
+
+<h2>Description of Change</h2>
+<p>{{ addendum_description }}</p>
+
+<h2>Reason for Change</h2>
+<p>{{ addendum_reason }}</p>
+
+{% if addendum_original_text %}
+<h2>Original Text</h2>
+<div class="highlight">{{ addendum_original_text|safe }}</div>
+{% endif %}
+
+{% if addendum_revised_text %}
+<h2>Revised Text</h2>
+<div class="highlight">{{ addendum_revised_text|safe }}</div>
+{% endif %}
+
+<h2>Closing Date</h2>
+<div class="info-box">
+<p><strong>Original Closing Date:</strong> {{ closing_date }}</p>
+<p><strong>Extended Closing Date:</strong> {{ addendum_extended_closing }}</p>
+</div>
+
+<hr>
+
+<p><em>This addendum forms part of the solicitation documents. Bidders must acknowledge receipt of this addendum when submitting their bid. Failure to acknowledge may result in the bid being considered non-responsive.</em></p>
+
+<div class="footer">
+ZAMMSA Procurement System &mdash; Generated Document &mdash; {{ addendum_issue_date }}
+</div>
+
+</body>
+</html>

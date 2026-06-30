@@ -3,10 +3,11 @@ import { Outlet, Link } from 'react-router-dom';
 import { useAuth, useLogout } from '../../hooks/useAuth';
 import Sidebar, { NavItem } from './Sidebar';
 import {
-  ChartBarIcon, UserGroupIcon, LockClosedIcon, ClipboardListIcon,
-  OfficeBuildingIcon, HeartIcon, AdjustmentsIcon, LinkIcon,
-  CogIcon, CalendarIcon, TrendingUpIcon, SaveIcon, CubeIcon, CurrencyDollarIcon,
+  ChartBarIcon, UserGroupIcon,
+  OfficeBuildingIcon, HeartIcon, AdjustmentsIcon,
+  CalendarIcon, TrendingUpIcon,
 } from '@heroicons/react/outline';
+import NotificationBell from '../common/NotificationBell';
 
 const iconClass = 'h-5 w-5';
 
@@ -35,8 +36,10 @@ const navItems: NavItem[] = [
     children: [
       { label: 'System Health', path: '/admin/system-health' },
       { label: 'Settings', path: '/admin/settings' },
+      { label: 'Notifications', path: '/admin/notifications' },
       { label: 'Integrations', path: '/admin/integrations' },
       { label: 'Backups', path: '/admin/backups' },
+      { label: 'Solicitation Templates', path: '/admin/templates' },
     ]
   },
   { label: 'Planning Data', path: '/admin/fiscal-years', icon: <CalendarIcon className={iconClass} />,
@@ -113,6 +116,7 @@ const AdminLayout: React.FC = () => {
           </div>
 
           <div className="flex items-center gap-4">
+             <NotificationBell />
              <div className="flex items-center gap-3">
                <div className="text-right hidden sm:block">
                   <p className="text-sm font-bold text-gray-900 leading-none">{user?.full_name}</p>

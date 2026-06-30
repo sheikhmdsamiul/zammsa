@@ -24,6 +24,7 @@ class APPLineItemSerializer(serializers.ModelSerializer):
 class AnnualProcurementPlanListSerializer(serializers.ModelSerializer):
     fiscal_year_code = serializers.CharField(source='fiscal_year.year_code', read_only=True)
     department_name = serializers.CharField(source='department.dept_name', read_only=True)
+    created_by_name = serializers.CharField(source='created_by.full_name', read_only=True)
     submitted_by_name = serializers.CharField(source='submitted_by.full_name', read_only=True)
     approved_by_name = serializers.CharField(source='approved_by.full_name', read_only=True)
     line_items_count = serializers.SerializerMethodField()
@@ -33,6 +34,7 @@ class AnnualProcurementPlanListSerializer(serializers.ModelSerializer):
         fields = (
             'app_id', 'app_number', 'fiscal_year', 'fiscal_year_code', 'department',
             'department_name', 'status', 'total_estimated_value',
+            'created_by', 'created_by_name',
             'submitted_by_name', 'submitted_at',
             'approved_by_name', 'approved_at',
             'line_items_count', 'created_at', 'updated_at',
@@ -47,6 +49,7 @@ class AnnualProcurementPlanSerializer(serializers.ModelSerializer):
     fiscal_year_code = serializers.CharField(source='fiscal_year.year_code', read_only=True)
     department_name = serializers.CharField(source='department.dept_name', read_only=True)
     department_code = serializers.CharField(source='department.dept_code', read_only=True)
+    created_by_name = serializers.CharField(source='created_by.full_name', read_only=True)
     submitted_by_name = serializers.CharField(source='submitted_by.full_name', read_only=True)
     approved_by_name = serializers.CharField(source='approved_by.full_name', read_only=True)
     rejected_by_name = serializers.CharField(source='rejected_by.full_name', read_only=True)
@@ -54,7 +57,7 @@ class AnnualProcurementPlanSerializer(serializers.ModelSerializer):
     class Meta:
         model = AnnualProcurementPlan
         fields = '__all__'
-        read_only_fields = ('app_id', 'app_number', 'created_at', 'updated_at')
+        read_only_fields = ('app_id', 'app_number', 'created_by', 'created_at', 'updated_at')
 
 
 class CPPRiskSerializer(serializers.ModelSerializer):
@@ -201,5 +204,4 @@ class GeneralProcurementNoticeSerializer(serializers.ModelSerializer):
 
     def get_published_by_name(self, obj):
         return obj.published_by.full_name if obj.published_by else None
-
 

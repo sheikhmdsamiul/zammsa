@@ -7,11 +7,12 @@ import {
   ChartBarIcon, CashIcon, ClipboardListIcon,
   PencilIcon, DocumentTextIcon, DocumentDuplicateIcon,
   DocumentIcon, OfficeBuildingIcon, TrendingUpIcon,
-  UsersIcon, LockOpenIcon, CheckCircleIcon,
+  LockOpenIcon, CheckCircleIcon,
   ClockIcon, ExclamationIcon, StarIcon,
   ShieldCheckIcon, AnnotationIcon, BadgeCheckIcon,
-  CalendarIcon, BellIcon
+  CalendarIcon
 } from '@heroicons/react/outline';
+import NotificationBell from '../common/NotificationBell';
 
 const iconClass = 'h-5 w-5';
 
@@ -364,10 +365,7 @@ const DashboardLayout: React.FC = () => {
           </div>
 
           <div className="flex items-center gap-6">
-            <button className="relative p-2 text-slate-400 hover:text-zammsa-green transition-colors">
-              <BellIcon className="w-5 h-5" />
-              <span className="absolute top-1 right-1 w-2 h-2 bg-rose-500 rounded-full border-2 border-white"></span>
-            </button>
+            <NotificationBell />
             
             <div className="h-6 w-px bg-slate-200" />
             

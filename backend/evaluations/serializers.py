@@ -21,6 +21,9 @@ class EvaluationCommitteeSerializer(serializers.ModelSerializer):
     status = serializers.SerializerMethodField()
     coi_declarations = ConflictOfInterestSerializer(many=True, read_only=True, source='conflict_declarations')
     member_count = serializers.SerializerMethodField()
+    total_members = serializers.SerializerMethodField()
+    quorum_required = serializers.SerializerMethodField()
+    quorum_met = serializers.SerializerMethodField()
     solicitation_number = serializers.CharField(source='solicitation.sol_number', read_only=True, default='')
     solicitation_title = serializers.CharField(source='solicitation.title', read_only=True, default='')
     current_phase = serializers.SerializerMethodField()
@@ -49,6 +52,15 @@ class EvaluationCommitteeSerializer(serializers.ModelSerializer):
         if isinstance(obj.members, list):
             return len(obj.members)
         return 0
+
+    def get_total_members(self, obj):
+        return obj.total_members_count()
+
+    def get_quorum_required(self, obj):
+        return obj.quorum_required()
+
+    def get_quorum_met(self, obj):
+        return obj.quorum_met()
 
     def _check_phase_completion(self, sol):
         from .models import PreliminaryExam, TechnicalScore, FinancialEvaluation, CombinedScore, BidEvaluationReport, PostQualification, EvaluationCommittee
@@ -213,6 +225,10 @@ class BidEvaluationReportSerializer(serializers.ModelSerializer):
 
 
 class PostQualificationSerializer(serializers.ModelSerializer):
+    id = serializers.UUIDField(source='pq_id', read_only=True)
+    bidder_name = serializers.CharField(source='bidder.supplier.full_name', read_only=True)
+    submission_id = serializers.CharField(source='bidder.submission_id', read_only=True)
+
     class Meta:
         model = PostQualification
         fields = '__all__'

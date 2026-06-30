@@ -6,7 +6,6 @@ from django.db import transaction
 from django.db.models import Q, Max as MaxAgg
 from django.utils import timezone
 from django.utils.dateparse import parse_datetime
-from django.core.mail import send_mail
 from django.conf import settings
 from rest_framework import generics, filters, status
 from rest_framework.decorators import api_view, permission_classes
@@ -20,6 +19,7 @@ from cryptography.fernet import Fernet
 from .models import BidSubmission, BidDocument, BidSecurity, BidOpening, BidOpeningDetail, PreBidConference
 from accounts.models import User
 from accounts.audit import log_audit_action
+from system_config.notifications import create_notification
 from .serializers import (
     BidSubmissionSerializer, BidSubmissionListSerializer, BidDocumentSerializer,
     BidSecuritySerializer, BidOpeningSerializer, BidOpeningDetailSerializer,
@@ -144,26 +144,33 @@ def _send_bid_opening_minutes_to_suppliers(sol, minutes_content):
     recipients = []
     bids = BidSubmission.objects.filter(solicitation=sol).select_related('supplier')
     for bid in bids:
-        email = bid.supplier.email
-        name = bid.supplier.full_name
-        if email:
-            recipients.append({'supplier': name, 'email': email})
-            try:
-                send_mail(
-                    subject=f'Bid Opening Minutes — {sol.sol_number}',
-                    message=(
-                        f'Dear {name},\n\n'
-                        f'Please find below the bid opening minutes for solicitation {sol.sol_number} — {sol.title}.\n\n'
-                        f'{minutes_content}\n\n'
-                        f'This is an automated message from the ZAMMSA Procurement System.\n'
-                        f'Contact the procurement office if you have any objections within 3 working days.'
-                    ),
-                    from_email=settings.DEFAULT_FROM_EMAIL,
-                    recipient_list=[email],
-                    fail_silently=True,
-                )
-            except Exception:
-                pass
+        if not bid.supplier:
+            continue
+        message = (
+            f'Dear {bid.supplier.full_name},\n\n'
+            f'Please find below the bid opening minutes for solicitation {sol.sol_number} — {sol.title}.\n\n'
+            f'{minutes_content}\n\n'
+            f'This is an automated message from the ZAMMSA Procurement System.\n'
+            f'Contact the procurement office if you have any objections within 3 working days.'
+        )
+        notification = create_notification(
+            bid.supplier,
+            title=f'Bid Opening Minutes: {sol.sol_number}',
+            message=message,
+            notification_type='supplier',
+            priority='normal',
+            source_module='bids',
+            object_id=bid.pk,
+            action_url=f'/vendor/bids/{bid.pk}',
+            metadata={'solicitation_id': str(sol.pk), 'sol_number': sol.sol_number},
+            email_required=True,
+        )
+        recipients.append({
+            'supplier': bid.supplier.full_name,
+            'email': bid.supplier.email,
+            'sent': notification.email_status == 'sent' if notification else False,
+            'error': notification.email_last_error if notification else '',
+        })
     return recipients
 
 

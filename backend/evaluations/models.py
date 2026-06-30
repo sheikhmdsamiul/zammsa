@@ -33,6 +33,29 @@ class EvaluationCommittee(models.Model):
         verbose_name = 'Evaluation Committee'
         verbose_name_plural = 'Evaluation Committees'
 
+    def total_members_count(self):
+        """Return total number of committee members including chair and secretary."""
+        members_set = set()
+        for m in self.members or []:
+            uid = m.get('user') if isinstance(m, dict) else m
+            if uid:
+                members_set.add(str(uid))
+        if self.chairperson_id:
+            members_set.add(str(self.chairperson_id))
+        if self.secretary_id:
+            members_set.add(str(self.secretary_id))
+        return len(members_set)
+
+    def quorum_required(self):
+        """Return the minimum number of members needed for quorum (ceil(2/3))."""
+        total = self.total_members_count()
+        return (total * 2 + 2) // 3  # ceil(2/3 * total)
+
+    def quorum_met(self):
+        """Check if enough members have signed COI to proceed with evaluation."""
+        signed_coi = self.conflict_declarations.filter(confidentiality_agreed=True).count()
+        return signed_coi >= self.quorum_required()
+
     def __str__(self):
         return f'Committee for {self.solicitation.sol_number}'
 
@@ -214,7 +237,7 @@ class BidEvaluationReport(models.Model):
 
 class PostQualification(models.Model):
     pq_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    ber = models.ForeignKey(BidEvaluationReport, on_delete=models.CASCADE, related_name='post_qualifications')
+    ber = models.ForeignKey(BidEvaluationReport, on_delete=models.CASCADE, related_name='post_qualifications', null=True, blank=True)
     bidder = models.ForeignKey(BidSubmission, on_delete=models.CASCADE)
     verification_items = models.JSONField(default=dict)
     status = models.CharField(max_length=20, choices=PQ_STATUS_CHOICES, default='pending')

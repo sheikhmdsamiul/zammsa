@@ -6,6 +6,23 @@ const api = axios.create({
   headers: { 'Content-Type': 'application/json' },
 });
 
+function friendlyApiMessage(data: any): string | null {
+  const raw = typeof data === 'string'
+    ? data
+    : data?.error || data?.detail || data?.message || data?.non_field_errors?.[0] || '';
+
+  const text = String(raw || '');
+  if (
+    text.includes('fiscal_year, department') ||
+    text.includes('fiscal year and department') ||
+    text.includes('must make a unique set')
+  ) {
+    return 'An Annual Procurement Plan already exists for the selected fiscal year and department.';
+  }
+
+  return text || null;
+}
+
 api.interceptors.request.use((config) => {
   const token = localStorage.getItem('access_token');
   if (token) {
@@ -33,12 +50,9 @@ api.interceptors.response.use(
     let message = 'An unexpected error occurred';
     const data = error.response?.data;
     if (data && typeof data === 'object' && !Array.isArray(data)) {
-      message = data.error || data.detail || data.message || message;
-      if (message === 'An unexpected error occurred' && Array.isArray(data.non_field_errors)) {
-        message = data.non_field_errors[0];
-      }
+      message = friendlyApiMessage(data) || message;
     } else if (typeof data === 'string' && !data.startsWith('<')) {
-      message = data;
+      message = friendlyApiMessage(data) || data;
     }
 
     if (status !== 401) {

@@ -95,6 +95,30 @@ class LoginSerializer(serializers.Serializer):
 
         if not user.check_password(password):
             user.increment_failed_attempts()
+            if user.is_locked():
+                from system_config.notifications import create_notification, notify_role
+                create_notification(
+                    user,
+                    title='Account locked',
+                    message=f'Your account has been locked until {user.locked_until} after repeated failed login attempts.',
+                    notification_type='system',
+                    priority='urgent',
+                    source_module='accounts',
+                    object_id=user.pk,
+                    metadata={'alert_key': 'account_lockout', 'locked_until': user.locked_until.isoformat() if user.locked_until else ''},
+                    email_required=True,
+                )
+                notify_role(
+                    'system_admin',
+                    title=f'User account locked: {user.email}',
+                    message=f'{user.full_name} ({user.email}) was locked after repeated failed login attempts.',
+                    notification_type='system',
+                    priority='high',
+                    source_module='accounts',
+                    object_id=user.pk,
+                    metadata={'alert_key': 'account_lockout_admin', 'user_email': user.email},
+                    email_required=True,
+                )
             raise serializers.ValidationError('Invalid credentials')
 
         data['user'] = user

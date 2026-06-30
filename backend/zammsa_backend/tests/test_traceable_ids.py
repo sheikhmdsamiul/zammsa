@@ -5,7 +5,9 @@ from zammsa_backend.utils import (
     generate_traceable_id,
     is_traceable_id,
     needs_traceable_id_regeneration,
+    normalize_department_code,
     parse_traceable_id,
+    normalize_fiscal_year_code,
 )
 
 
@@ -19,6 +21,13 @@ class TraceableIdUtilsTests(TestCase):
         self.assertEqual(parsed['prefix'], 'REQ')
         self.assertEqual(parsed['fiscal_year'], '2026')
         self.assertEqual(parsed['department'], 'PRC')
+        self.assertEqual(parsed['sequence'], 42)
+
+    def test_parse_valid_app_id_without_department(self):
+        parsed = parse_traceable_id('APP-2026-00042')
+        self.assertEqual(parsed['prefix'], 'APP')
+        self.assertEqual(parsed['fiscal_year'], '2026')
+        self.assertIsNone(parsed['department'])
         self.assertEqual(parsed['sequence'], 42)
 
     def test_is_traceable_id_rejects_legacy_values(self):
@@ -47,6 +56,36 @@ class TraceableIdUtilsTests(TestCase):
         trace_id = generate_traceable_id('REQ', 'prc', StubModel, 'req_number', '2026')
         self.assertTrue(is_traceable_id(trace_id))
         self.assertEqual(trace_id, 'REQ-2026-PRC-00001')
+
+    def test_generate_traceable_id_normalizes_split_fiscal_year(self):
+        class StubManager:
+            def filter(self, **_kwargs):
+                return self
+
+            def values_list(self, *_args, **_kwargs):
+                return []
+
+        class StubModel:
+            objects = StubManager()
+
+        trace_id = generate_traceable_id('APP', 'prc', StubModel, 'app_number', '2026/2027')
+        self.assertEqual(normalize_fiscal_year_code('2026/2027'), '2026')
+        self.assertEqual(trace_id, 'APP-2026-00001')
+
+    def test_generate_traceable_id_normalizes_long_department_code(self):
+        class StubManager:
+            def filter(self, **_kwargs):
+                return self
+
+            def values_list(self, *_args, **_kwargs):
+                return []
+
+        class StubModel:
+            objects = StubManager()
+
+        trace_id = generate_traceable_id('APP', 'PHARMACY', StubModel, 'app_number', '2026')
+        self.assertEqual(normalize_department_code('PHARMACY'), 'PHA')
+        self.assertEqual(trace_id, 'APP-2026-00001')
 
     def test_generate_increments_sequence(self):
         class StubManager:

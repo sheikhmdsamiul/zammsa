@@ -13,6 +13,9 @@ from rest_framework.pagination import PageNumberPagination
 from django_filters.rest_framework import DjangoFilterBackend
 import django_filters
 
+from accounts.models import User
+from system_config.models import Notification
+from system_config.notifications import create_notification, notify_role, notify_roles, send_external_bulk_email
 from .models import AnnualProcurementPlan, APPLineItem, ContractProcurementPlan, ProcurementMilestone, GeneralProcurementNotice, CPPRisk, CPPDocument
 from .serializers import (
     AnnualProcurementPlanSerializer, AnnualProcurementPlanListSerializer,
@@ -66,7 +69,7 @@ ALLOWED_APP_CREATORS = ('user_dept_staff', 'procurement_officer', 'system_admin'
 
 
 class AnnualProcurementPlanListView(BaseView, generics.ListCreateAPIView):
-    queryset = AnnualProcurementPlan.objects.select_related('fiscal_year', 'department', 'submitted_by', 'approved_by').all()
+    queryset = AnnualProcurementPlan.objects.select_related('fiscal_year', 'department', 'created_by', 'submitted_by', 'approved_by').all()
     filterset_class = APPFilter
     ordering = ['-created_at']
     search_fields = ['department__dept_name', 'status']
@@ -81,22 +84,41 @@ class AnnualProcurementPlanListView(BaseView, generics.ListCreateAPIView):
         department = request.data.get('department')
         if fiscal_year and department:
             existing = AnnualProcurementPlan.objects.filter(
-                fiscal_year_id=fiscal_year, department_id=department, status='draft'
+                fiscal_year_id=fiscal_year, department_id=department
             ).first()
             if existing:
+                if existing.status not in ('draft', 'rejected'):
+                    return Response(
+                        {
+                            'error': 'An Annual Procurement Plan already exists for this fiscal year and department.',
+                            'app_id': str(existing.app_id),
+                            'status': existing.status,
+                        },
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
+                if not existing.created_by_id:
+                    existing.created_by = request.user
+                    existing.save(update_fields=['created_by'])
                 serializer = self.get_serializer(existing)
                 return Response(serializer.data)
-        return super().create(request, *args, **kwargs)
+        try:
+            return super().create(request, *args, **kwargs)
+        except Exception as e:
+            logger.error(f"APP creation failed: {e}", exc_info=True)
+            return Response(
+                {'error': f'Failed to create APP: {str(e)}'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
 
     def perform_create(self, serializer):
         if self.request.user.role not in ALLOWED_APP_CREATORS:
             raise PermissionDenied('Only User Department Staff or Department Head can create an APP')
-        serializer.save()
+        serializer.save(created_by=self.request.user)
 
 
 class AnnualProcurementPlanDetailView(generics.RetrieveUpdateDestroyAPIView):
     queryset = AnnualProcurementPlan.objects.select_related(
-        'fiscal_year', 'department', 'submitted_by', 'approved_by', 'rejected_by',
+        'fiscal_year', 'department', 'created_by', 'submitted_by', 'approved_by', 'rejected_by',
     ).prefetch_related('line_items', 'gpns').all()
     serializer_class = AnnualProcurementPlanSerializer
     permission_classes = [IsAuthenticated]
@@ -183,6 +205,55 @@ def _record_app_approval_trail(app, action, user, details=None):
     app.approval_trail = trail
 
 
+def _app_action_url(app):
+    return f'/procurement-planning/{app.app_id}'
+
+
+def _notify_app_next_reviewer(app, actor, old_status, new_status):
+    next_role = APP_CURRENT_STAGE_ROLES.get(new_status)
+    if not next_role:
+        return
+
+    notify_role(
+        next_role,
+        title=f'APP review required: {app.app_number or app.app_id}',
+        message=(
+            f'{actor.full_name} moved {app.department.dept_name} APP '
+            f'from {old_status.replace("_", " ")} to {new_status.replace("_", " ")}.'
+        ),
+        notification_type='approval',
+        priority='high',
+        source_module='procurement_planning',
+        object_id=app.app_id,
+        action_url=_app_action_url(app),
+        metadata={'from_status': old_status, 'to_status': new_status},
+        email_required=True,
+        exclude_user=actor,
+    )
+
+
+def _notify_app_owner(app, title, message, actor=None, priority='normal'):
+    recipients = []
+    for user in (app.created_by, app.submitted_by):
+        if user and user not in recipients:
+            recipients.append(user)
+
+    for recipient in recipients:
+        if actor and recipient.pk == actor.pk:
+            continue
+        create_notification(
+            recipient,
+            title=title,
+            message=message,
+            notification_type='workflow',
+            priority=priority,
+            source_module='procurement_planning',
+            object_id=app.app_id,
+            action_url=_app_action_url(app),
+            email_required=True,
+        )
+
+
 def _check_budget_availability(app):
     warnings = []
     for item in app.line_items.all():
@@ -206,7 +277,7 @@ def _check_budget_availability(app):
     return warnings
 
 
-def _recommend_method(estimated_value):
+def _recommend_method(estimated_value, commodity_type=''):
     try:
         from system_config.models import ThresholdRule
         rules = ThresholdRule.objects.filter(
@@ -218,6 +289,14 @@ def _recommend_method(estimated_value):
                     return rule.default_method or 'open_tender', rule.rule_name
         return 'open_tender', 'Default to open tender for high-value procurement'
     except Exception:
+        is_consulting = str(commodity_type or '').lower() in ('consulting', 'consulting services', 'tor', 'terms of reference', 'sow')
+        if is_consulting:
+            if estimated_value > 600000:
+                return 'proposal', f'Consulting service value exceeds ZMW 600,000. Request for Proposals required.'
+            elif estimated_value > 20000:
+                return 'simplified', 'Consulting service value within simplified selection range.'
+            else:
+                return 'direct', 'Low-value consulting. Direct procurement permitted.'
         if estimated_value > 1000000:
             return 'open_tender', 'Value exceeds threshold. Open tendering required.'
         elif estimated_value > 20000:
@@ -483,6 +562,7 @@ def app_submit_view(request, pk):
     app.submitted_by = user
     app.submitted_at = timezone.now()
     app.save()
+    _notify_app_next_reviewer(app, user, old_status, new_status)
 
     return Response({
         'message': f'APP submitted from "{old_status}" to "{new_status}"',
@@ -532,6 +612,7 @@ def app_approve_view(request, pk):
     app.approved_by = user
     app.approved_at = timezone.now()
     app.save()
+    _notify_app_next_reviewer(app, user, old_status, new_status)
 
     if new_status == 'approved':
         _auto_generate_gpn(app, user)
@@ -541,6 +622,17 @@ def app_approve_view(request, pk):
         app.zppa_submitted_at = None
         app.zppa_submission_ref = ''
         app.zppa_deadline_alerted = False
+        app.save(update_fields=[
+            'zppa_deadline', 'zppa_submitted', 'zppa_submitted_at',
+            'zppa_submission_ref', 'zppa_deadline_alerted',
+        ])
+        _notify_app_owner(
+            app,
+            title=f'APP approved: {app.app_number or app.app_id}',
+            message=f'{app.department.dept_name} APP for {app.fiscal_year.year_code} has been approved.',
+            actor=user,
+            priority='high',
+        )
 
     return Response({
         'message': f'APP approved from "{old_status}" to "{new_status}"',
@@ -575,6 +667,13 @@ def app_reject_view(request, pk):
     app.rejected_by = user
     app.rejected_at = timezone.now()
     app.save()
+    _notify_app_owner(
+        app,
+        title=f'APP rejected: {app.app_number or app.app_id}',
+        message=f'{user.full_name} rejected the APP. Reason: {reason}',
+        actor=user,
+        priority='high',
+    )
 
     return Response({
         'message': 'APP rejected',
@@ -608,6 +707,13 @@ def app_return_view(request, pk):
     app.status = 'draft'
     app.rejection_reason = reason
     app.save()
+    _notify_app_owner(
+        app,
+        title=f'APP returned for revision: {app.app_number or app.app_id}',
+        message=f'{user.full_name} returned the APP for revision. Reason: {reason}',
+        actor=user,
+        priority='normal',
+    )
 
     return Response({
         'message': 'APP returned to draft for revision',
@@ -999,7 +1105,6 @@ class ContractProcurementPlanListView(BaseView, generics.ListCreateAPIView):
         if not milestones:
             from datetime import timedelta
             start_date = timezone.now().date()
-            # Get procurement type from requisition line items (default to 'goods')
             procurement_type = 'goods'
             if requisition and requisition.line_items.exists():
                 procurement_type = requisition.line_items.first().procurement_type
@@ -1025,35 +1130,99 @@ class ContractProcurementPlanListView(BaseView, generics.ListCreateAPIView):
                 risk_owner=r.get('risk_owner', ''),
             )
 
-        # Create baseline snapshot and lock schedule when CPP is open-method.
-        if cpp.method in ContractProcurementPlan.OPEN_METHODS:
-            baseline_milestones = []
-            for milestone in cpp.procurement_milestones.all().order_by('sequence_number', 'planned_date'):
-                baseline_milestones.append({
-                    'milestone_name': milestone.milestone_name,
-                    'sequence_number': milestone.sequence_number,
-                    'planned_date': milestone.planned_date.isoformat() if milestone.planned_date else None,
-                })
+        return cpp
 
-            cpp.status = 'approved'
-            cpp.approved_by = self.request.user
-            cpp.approved_at = timezone.now()
-            cpp.is_baseline_locked = True
-            cpp.baseline_locked_at = timezone.now()
-            cpp.baseline_locked_by = self.request.user
-            cpp.previous_baseline = {'milestones': baseline_milestones}
-            cpp.save(update_fields=[
-                'status', 'approved_by', 'approved_at',
-                'is_baseline_locked', 'baseline_locked_at', 'baseline_locked_by',
-                'previous_baseline',
-            ])
-        
-        _record_cpp_approval_trail(cpp, 'created', self.request.user, {
-            'method': cpp.method,
-            'recommended_method': cpp.recommended_method,
-            'status': cpp.status,
-            'zpc_approval_required': cpp.zpc_approval_required,
-        })
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def app_quarterly_update_view(request, pk):
+    try:
+        app = AnnualProcurementPlan.objects.get(pk=pk)
+    except AnnualProcurementPlan.DoesNotExist:
+        return Response({'error': 'APP not found'}, status=status.HTTP_404_NOT_FOUND)
+
+    if request.user.role not in ('procurement_officer', 'procurement_manager', 'director_procurement', 'system_admin'):
+        return Response({'error': 'Only procurement team can create quarterly updates'}, status=status.HTTP_403_FORBIDDEN)
+
+    if app.status not in ('approved', 'published'):
+        return Response({'error': 'Quarterly updates can only be created from approved or published APPs'}, status=status.HTTP_400_BAD_REQUEST)
+
+    justification = request.data.get('change_justification', '').strip()
+    if not justification:
+        return Response({'error': 'A change justification is required for quarterly updates'}, status=status.HTTP_400_BAD_REQUEST)
+
+    items_data = request.data.get('items', [])
+    if not items_data or not isinstance(items_data, list):
+        return Response({'error': 'Provide "items" as a list of line item objects with the updated values'}, status=status.HTTP_400_BAD_REQUEST)
+
+    original = app.amends if app.amends else app
+    latest_version = AnnualProcurementPlan.objects.filter(amends=original).count() + 1
+    previous_total = original.total_estimated_value
+
+    amended = AnnualProcurementPlan.objects.create(
+        fiscal_year=original.fiscal_year,
+        department=original.department,
+        status='draft',
+        created_by=request.user,
+        version=latest_version + 1,
+        amends=original,
+        change_justification=justification,
+        previous_total_value=previous_total,
+        submitted_by=request.user,
+        submitted_at=timezone.now(),
+    )
+
+    created = []
+    for item_data in items_data:
+        line_item = APPLineItem.objects.create(
+            app=amended,
+            description=item_data.get('description', '').strip(),
+            procurement_type=item_data.get('procurement_type', 'goods'),
+            estimated_value=item_data.get('estimated_value', 0),
+            planned_issue_date=item_data.get('planned_issue_date') or None,
+            planned_award_date=item_data.get('planned_award_date') or None,
+            funding_source_id=item_data.get('funding_source') or None,
+            commodity_id=item_data.get('commodity') or None,
+            is_citizen_reserved=item_data.get('is_citizen_reserved', True),
+        )
+        method, _ = _recommend_method(float(line_item.estimated_value))
+        line_item.recommended_method = method
+        line_item.save(update_fields=['recommended_method'])
+        created.append(line_item)
+
+    new_total = amended.line_items.aggregate(total=Sum('estimated_value'))['total'] or 0
+    amended.total_estimated_value = new_total
+
+    aggregate_change = sum(
+        abs(float(item.estimated_value) - float(
+            APPLineItem.objects.filter(app=original, description=item.description).first().estimated_value
+            if APPLineItem.objects.filter(app=original, description=item.description).first() else 0
+        ))
+        for item in created
+    )
+    change_pct = (aggregate_change / float(previous_total) * 100) if previous_total > 0 else 0
+
+    if change_pct <= 20:
+        amended.status = 'procurement_review'
+        amended.save()
+        return Response({
+            'message': f'Quarterly update created with {change_pct:.1f}% aggregate change (within 20% threshold). '
+                       f'Automatically advanced to procurement review.',
+            'version': amended.version,
+            'app_id': amended.app_id,
+            'aggregate_change_pct': round(change_pct, 2),
+            'automatic_approval': True,
+        }, status=status.HTTP_201_CREATED)
+
+    amended.save()
+    return Response({
+        'message': f'Quarterly update created with {change_pct:.1f}% aggregate change (exceeds 20% threshold). '
+                   f'Full re-approval workflow required.',
+        'version': amended.version,
+        'app_id': amended.app_id,
+        'aggregate_change_pct': round(change_pct, 2),
+        'automatic_approval': False,
+    }, status=status.HTTP_201_CREATED)
 
 
 class ContractProcurementPlanDetailView(generics.RetrieveUpdateDestroyAPIView):
@@ -1825,6 +1994,26 @@ def cpp_variance_alerts_view(request):
                     at_risk = True
         
         if late_milestones:
+            object_id = str(cpp.cpp_id)
+            if not Notification.objects.filter(
+                notification_type='deadline',
+                source_module='procurement_planning',
+                object_id=object_id,
+                metadata__alert_key='cpp_variance',
+            ).exists():
+                worst = max(item['variance'] for item in late_milestones)
+                notify_roles(
+                    ['procurement_officer', 'procurement_manager'],
+                    title=f'CPP milestone variance: {cpp.cpp_number}',
+                    message=f'{cpp.cpp_number} has {len(late_milestones)} delayed milestone(s); worst variance is {worst} day(s).',
+                    notification_type='deadline',
+                    priority='high' if worst > 14 else 'normal',
+                    source_module='procurement_planning',
+                    object_id=object_id,
+                    action_url=f'/procurement-planning/cpp/{cpp.cpp_id}',
+                    metadata={'alert_key': 'cpp_variance', 'late_milestones': late_milestones},
+                    email_required=True,
+                )
             alerts.append({
                 'cpp_id': str(cpp.cpp_id),
                 'cpp_number': cpp.cpp_number,
@@ -1892,10 +2081,32 @@ def gpn_publish_view(request, pk):
 
     # Track email notifications if applicable
     if 'registered_supplier_email' in targets:
+        supplier_users = User.objects.filter(role='supplier_user', is_active=True).exclude(email='')
+        recipients = [
+            {'name': user.full_name, 'email': user.email}
+            for user in supplier_users
+        ]
+        email_result = send_external_bulk_email(
+            subject=f'General Procurement Notice Published: {gpn.content.get("gpn_reference", gpn.gpn_id)}',
+            message=(
+                f'A General Procurement Notice has been published by ZAMMSA.\n\n'
+                f'Department: {gpn.content.get("department", "")}\n'
+                f'Fiscal Year: {gpn.content.get("fiscal_year", "")}\n'
+                f'Total Estimated Value: {gpn.content.get("total_estimated_value", "")}\n\n'
+                f'Please log in to the supplier portal for upcoming opportunities.'
+            ),
+            recipients=recipients,
+        )
         gpn.email_notification_sent = True
-        gpn.email_notification_count = request.data.get('email_count', 0)
-        gpn.email_notification_failed = request.data.get('email_failed', 0)
+        gpn.email_notification_count = email_result['sent']
+        gpn.email_notification_failed = email_result['failed']
         gpn.email_notification_sent_at = now
+        proofs['registered_supplier_email'] = {
+            **proofs.get('registered_supplier_email', {}),
+            'delivered': email_result['sent'],
+            'failed': email_result['failed'],
+            'recipients': email_result['recipients'],
+        }
 
     # Track gazette if applicable
     if 'govt_gazette' in targets:
@@ -1920,6 +2131,7 @@ def gpn_publish_view(request, pk):
         'publication_targets': targets,
         'publication_proofs': proofs,
         'published_at': gpn.published_at.isoformat(),
+        'email_notifications': proofs.get('registered_supplier_email'),
     })
 
 
@@ -2118,6 +2330,32 @@ def app_zppa_deadline_alerts_view(request):
             'days_remaining': days_remaining,
             'total_estimated_value': float(app.total_estimated_value),
         }
+
+    for app in list(approaching) + list(overdue):
+        if app.zppa_deadline_alerted:
+            continue
+        overdue_alert = app.zppa_deadline and app.zppa_deadline < now
+        priority = 'urgent' if overdue_alert else 'high'
+        title = f'ZPPA submission {"overdue" if overdue_alert else "deadline approaching"}: {app.app_number or app.app_id}'
+        message = (
+            f'{app.department.dept_name} APP for {app.fiscal_year.year_code} '
+            f'{"is overdue for" if overdue_alert else "is approaching"} ZPPA submission deadline {app.zppa_deadline}.'
+        )
+        notify_roles(
+            ['procurement_officer', 'director_procurement', 'zppa_reporting_officer'],
+            title=title,
+            message=message,
+            notification_type='deadline',
+            priority=priority,
+            source_module='procurement_planning',
+            object_id=app.app_id,
+            action_url=_app_action_url(app),
+            metadata={'alert_key': 'zppa_deadline', 'zppa_deadline': app.zppa_deadline.isoformat()},
+            email_required=True,
+        )
+        _notify_app_owner(app, title, message, priority=priority)
+        app.zppa_deadline_alerted = True
+        app.save(update_fields=['zppa_deadline_alerted'])
 
     return Response({
         'approaching': [serialize_app(a) for a in approaching],

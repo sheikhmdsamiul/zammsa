@@ -193,7 +193,18 @@ def recommend_method_view(request):
     except Exception:
         pass
 
-    if estimated_value > 1000000:
+    is_consulting = str(commodity_type or '').lower() in ('consulting', 'consulting services', 'tor', 'terms of reference', 'sow')
+    if is_consulting:
+        if estimated_value > 600000:
+            method = 'proposal'
+            rationale = f'Consulting service value ZMW {estimated_value:,.2f} exceeds ZMW 600,000. Request for Proposals (QCBS) is required.'
+        elif estimated_value > 20000:
+            method = 'simplified'
+            rationale = f'Consulting service value ZMW {estimated_value:,.2f} is between ZMW 20,001 and ZMW 600,000. Simplified selection is applicable.'
+        else:
+            method = 'direct'
+            rationale = f'Consulting service value ZMW {estimated_value:,.2f} is ZMW 20,000 or less. Direct procurement is permitted.'
+    elif estimated_value > 1000000:
         method = 'open_tender'
         rationale = 'Value exceeds ZMW 1,000,000. Open tendering is required by regulation.'
     elif estimated_value > 20000:

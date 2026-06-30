@@ -15,7 +15,9 @@ import django_filters
 import pdfkit
 from accounts.permissions import CanManageEvaluationCommittees
 from accounts.models import User
+from system_config.notifications import notify_role, notify_users
 
+from .crypto_sign import sign_ber_payload, verify_signature
 from .models import EvaluationCommittee, ConflictOfInterest, PreliminaryExam, TechnicalScore, FinancialEvaluation, CombinedScore, BidEvaluationReport, PostQualification
 from .serializers import (
     EvaluationCommitteeSerializer, ConflictOfInterestSerializer, PreliminaryExamSerializer, TechnicalScoreSerializer,
@@ -54,14 +56,37 @@ def _require_coi_clearance(solicitation):
     for committee in committees:
         expected_ids = _committee_membership_ids(committee)
         declarations = ConflictOfInterest.objects.filter(committee=committee)
-        declared_ids = {str(uid) for uid in declarations.values_list('member_id', flat=True)}
+        recused_ids = {str(uid) for uid in declarations.filter(recused=True).values_list('member_id', flat=True)}
+        expected_ids -= recused_ids
+        cleared = declarations.filter(
+            has_conflict=False,
+            recused=False,
+            confidentiality_agreed=True,
+        )
+        declared_ids = {str(uid) for uid in cleared.values_list('member_id', flat=True)}
         missing = expected_ids - declared_ids
         if missing:
             return Response({
-                'error': 'All evaluation committee members must submit conflict declarations before evaluation can proceed.',
+                'error': 'All active evaluation committee members must submit no-conflict/confidentiality declarations before evaluation can proceed.',
                 'missing_member_ids': sorted(missing),
             }, status=400)
     return None
+
+
+def _bid_failed_preliminary(bid):
+    return PreliminaryExam.objects.filter(bid=bid, is_compliant=False).exists()
+
+
+def _technical_score_for_bid(bid):
+    criteria = EvaluationCriterion.objects.filter(solicitation=bid.solicitation, criterion_type='technical')
+    total_tech_weight = criteria.aggregate(s=Sum('weight'))['s'] or Decimal('100')
+    total_weighted = Decimal('0')
+    for criterion in criteria:
+        avg = TechnicalScore.objects.filter(bid=bid, criterion=criterion, is_final=True).aggregate(avg=Avg('raw_score'))['avg']
+        if avg is None:
+            return None
+        total_weighted += avg * criterion.weight / Decimal('100')
+    return (total_weighted / total_tech_weight * Decimal('100')) if total_tech_weight > 0 else Decimal('0')
 
 
 class StandardPagination(PageNumberPagination):
@@ -124,12 +149,15 @@ class PreliminaryExamFilter(django_filters.FilterSet):
 
 
 class PostQualificationFilter(django_filters.FilterSet):
-    solicitation = django_filters.UUIDFilter(field_name='ber__solicitation')
+    solicitation = django_filters.UUIDFilter(method='filter_solicitation')
     status = django_filters.CharFilter(field_name='status', lookup_expr='iexact')
 
     class Meta:
         model = PostQualification
         fields = ['solicitation', 'status', 'bidder']
+
+    def filter_solicitation(self, queryset, name, value):
+        return queryset.filter(Q(ber__solicitation=value) | Q(bidder__solicitation=value))
 
 
 class EvaluationCommitteeListView(BaseView, generics.ListCreateAPIView):
@@ -161,6 +189,31 @@ class EvaluationCommitteeListView(BaseView, generics.ListCreateAPIView):
 
         return qs.filter(committee_id__in=my_committee_ids)
 
+    def perform_create(self, serializer):
+        committee = serializer.save()
+        user_ids = _committee_membership_ids(committee)
+        users = User.objects.filter(id__in=user_ids, is_active=True)
+        notify_users(
+            users,
+            title=f'Evaluation committee assignment: {committee.solicitation.sol_number}',
+            message=(
+                f'You have been assigned to the evaluation committee for '
+                f'{committee.solicitation.sol_number} — {committee.solicitation.title}. '
+                f'Please review the assignment and complete your conflict declaration.'
+            ),
+            notification_type='approval',
+            priority='high',
+            source_module='evaluations',
+            object_id=committee.pk,
+            action_url='/evaluations',
+            metadata={
+                'committee_id': str(committee.pk),
+                'solicitation_id': str(committee.solicitation_id),
+                'sol_number': committee.solicitation.sol_number,
+            },
+            email_required=True,
+        )
+
 
 class EvaluationCommitteeDetailView(generics.RetrieveUpdateDestroyAPIView):
     queryset = EvaluationCommittee.objects.all()
@@ -185,6 +238,12 @@ class PreliminaryExamListView(BaseView, generics.ListCreateAPIView):
             except BidSubmission.DoesNotExist:
                 pass
         return super().create(request, *args, **kwargs)
+
+    def perform_create(self, serializer):
+        exam = serializer.save()
+        if not exam.is_compliant and exam.bid.status != 'non_responsive':
+            exam.bid.status = 'non_responsive'
+            exam.bid.save(update_fields=['status'])
 
 
 class PreliminaryExamDetailView(generics.RetrieveUpdateDestroyAPIView):
@@ -440,13 +499,22 @@ def technical_score_submit_view(request):
 
     if TechnicalScore.objects.filter(bid=bid, evaluator=request.user, criterion=criterion).exists():
         return Response({'error': 'You have already scored this criterion for this bid'}, status=400)
+    if criterion.solicitation_id != bid.solicitation_id:
+        return Response({'error': 'Criterion does not belong to this bid solicitation'}, status=400)
+    if criterion.criterion_type != 'technical':
+        return Response({'error': 'Only technical criteria can be scored in technical evaluation'}, status=400)
+    if _bid_failed_preliminary(bid):
+        return Response({'error': 'This bid failed preliminary examination and cannot proceed to technical scoring'}, status=400)
+    raw_score_decimal = Decimal(str(raw_score))
+    if raw_score_decimal < 0 or raw_score_decimal > criterion.max_score:
+        return Response({'error': f'Raw score must be between 0 and {criterion.max_score}'}, status=400)
 
-    weighted_score = Decimal(str(raw_score)) * (criterion.weight / Decimal('100'))
+    weighted_score = raw_score_decimal * (criterion.weight / Decimal('100'))
     score = TechnicalScore.objects.create(
         bid=bid,
         evaluator=request.user,
         criterion=criterion,
-        raw_score=raw_score,
+        raw_score=raw_score_decimal,
         weighted_score=weighted_score,
         comment=comment,
     )
@@ -606,7 +674,7 @@ def calculate_qcbs_view(request, solicitation_pk):
     eligible_bids = []
     evaluated_prices = {}
     for bid in bids:
-        tech_scores = TechnicalScore.objects.filter(bid=bid)
+        tech_scores = TechnicalScore.objects.filter(bid=bid, is_final=True)
         if not tech_scores.exists():
             continue
         total_weighted = Decimal('0')
@@ -626,7 +694,10 @@ def calculate_qcbs_view(request, solicitation_pk):
     min_evaluated_price = min(evaluated_prices.values()) if evaluated_prices else Decimal('0')
 
     for bid in eligible_bids:
-        tech_scores = TechnicalScore.objects.filter(bid=bid)
+        opening_detail = BidOpeningDetail.objects.filter(bid=bid).first()
+        if opening_detail and opening_detail.financial_sealed and eval_method != 'qbs':
+            continue
+        tech_scores = TechnicalScore.objects.filter(bid=bid, is_final=True)
 
         total_weighted = Decimal('0')
         details = []
@@ -676,8 +747,10 @@ def calculate_qcbs_view(request, solicitation_pk):
             total_score = Decimal('0')
             
         from suppliers.models import Supplier as SupplierModel
-        sup = SupplierModel.objects.filter(registration_number=bid.supplier.employee_id.replace('SUP-', '', 1)).first()
-        opening_detail = BidOpeningDetail.objects.filter(bid=bid).first()
+        emp_id = getattr(bid.supplier, 'employee_id', '') or ''
+        sup = SupplierModel.objects.filter(registration_number=emp_id.replace('SUP-', '', 1)).first() if emp_id else None
+        ceec_category = str(sup.ceec_category) if sup else 'non_citizen'
+        ceec_priority = {'citizen_owned': 4, 'citizen_empowered': 3, 'citizen_influenced': 2, 'non_citizen': 1}.get(ceec_category, 0)
 
         results.append({
             'bid_id': str(bid.bid_id),
@@ -694,12 +767,14 @@ def calculate_qcbs_view(request, solicitation_pk):
             'financial_evaluation_id': str(fin_eval.evaluation_id) if fin_eval else None,
             'evaluated_price': float(fin_eval.evaluated_price) if fin_eval else None,
             'financial_sealed': opening_detail.financial_sealed if opening_detail else True,
+            'ceec_category': ceec_category,
+            'ceec_priority': ceec_priority,
             'details': details,
         })
 
-    # Rank by total_score descending and persist to database
+    # BR-EVAL-04: Tie-breaking: higher tech score wins; if still tied, higher citizen ownership wins
     if eval_method in ('qcbs', 'qbs'):
-        results.sort(key=lambda x: x.get('total_score', 0), reverse=True)
+        results.sort(key=lambda x: (x.get('total_score', 0), x.get('technical_score', 0), x.get('ceec_priority', 0)), reverse=True)
         for i, bid_data in enumerate(results):
             bid_data['rank'] = i + 1
             CombinedScore.objects.filter(bid_id=bid_data['bid_id']).update(rank=i + 1)
@@ -850,6 +925,20 @@ def financial_evaluation_calculate_view(request, bid_pk):
     err = _require_bid_opening_completed(bid.solicitation)
     if err:
         return err
+    err = _require_coi_clearance(bid.solicitation)
+    if err:
+        return err
+
+    opening_detail = BidOpeningDetail.objects.filter(bid=bid).first()
+    if opening_detail and opening_detail.financial_sealed:
+        return Response({'error': 'Financial envelope must be authorized/opened before financial evaluation.'}, status=400)
+
+    threshold = Decimal(str(bid.solicitation.minimum_technical_threshold or TECHNICAL_THRESHOLD_DEFAULT))
+    technical_score = _technical_score_for_bid(bid)
+    if technical_score is None:
+        return Response({'error': 'Final technical scores are required before financial evaluation.'}, status=400)
+    if technical_score < threshold:
+        return Response({'error': 'Bid did not meet the minimum technical threshold; financial envelope remains sealed.'}, status=400)
 
     original_price = Decimal(str(request.data.get('original_price', bid.bid_price or 0)))
     corrected_price = Decimal(str(request.data.get('corrected_price', original_price)))
@@ -1006,6 +1095,9 @@ def ber_generate_view(request, solicitation_pk):
     err = _require_bid_opening_completed(sol)
     if err:
         return err
+    err = _require_coi_clearance(sol)
+    if err:
+        return err
 
     committees = EvaluationCommittee.objects.filter(solicitation=sol)
     is_chair = any(str(c.chairperson.id) == str(request.user.id) for c in committees)
@@ -1019,6 +1111,10 @@ def ber_generate_view(request, solicitation_pk):
     else:
         if not FinancialEvaluation.objects.filter(bid__solicitation=sol).exists():
             return Response({'error': 'Rankings must be calculated before generating the BER. Compute Rankings from the Score Consolidation page first.'}, status=400)
+
+    winner_bid = BidSubmission.objects.filter(solicitation=sol, status='awarded').first()
+    if not winner_bid:
+        return Response({'error': 'A winning bidder must be selected before generating the BER.'}, status=400)
 
     if BidEvaluationReport.objects.filter(solicitation=sol).exclude(status='rejected').exists():
         return Response({'error': 'A BER already exists for this solicitation'}, status=400)
@@ -1083,6 +1179,23 @@ def ber_generate_view(request, solicitation_pk):
         })
 
     winner = bids.filter(status='awarded').first()
+    if not PostQualification.objects.filter(bidder=winner_bid, status='cleared').exists():
+        PostQualification.objects.get_or_create(
+            ber=None,
+            bidder=winner_bid,
+            defaults={
+                'verification_items': {
+                    'supplier_eligibility': 'pending',
+                    'references': 'pending',
+                    'issuing_authorities': 'pending',
+                    'note': 'SRS post-qualification checklist generated before BER finalization.',
+                },
+            },
+        )
+        return Response({
+            'error': 'Post-qualification must be cleared for the winning bidder before BER generation.',
+            'winner_id': str(winner_bid.pk),
+        }, status=400)
 
     report_content = {
         'solicitation': {
@@ -1108,6 +1221,7 @@ def ber_generate_view(request, solicitation_pk):
         status='draft',
         created_by=request.user,
     )
+    PostQualification.objects.filter(ber__isnull=True, bidder__solicitation=sol).update(ber=ber)
 
     return Response({
         'message': 'BER generated successfully',
@@ -1147,18 +1261,32 @@ def ber_sign_view(request, pk):
     if not is_member:
         return Response({'error': 'Only committee members can sign the BER'}, status=403)
 
+    # BR-EVAL-01: Quorum check — at least 2/3 of members must have completed COI
+    for c in committees:
+        if not c.quorum_met():
+            total = c.total_members_count()
+            required = c.quorum_required()
+            signed_coi = c.conflict_declarations.filter(confidentiality_agreed=True).count()
+            return Response({
+                'error': f'Quorum not met. Need at least {required} of {total} committee members '
+                         f'with signed conflict declarations (currently {signed_coi}).'
+            }, status=400)
+
     with transaction.atomic():
         ber = BidEvaluationReport.objects.select_for_update().get(pk=pk)
         already_signed = any(s['member_id'] == str(request.user.id) for s in ber.signatures)
         if already_signed:
             return Response({'error': 'You have already signed this BER'}, status=400)
 
-        new_sig = {
-            'member_id': str(request.user.id),
-            'member_name': request.user.full_name,
-            'role': member_role,
-            'signed_at': timezone.now().isoformat(),
-        }
+        signed_at = timezone.now()
+        new_sig = sign_ber_payload(
+            member_id=str(request.user.id),
+            member_name=request.user.full_name,
+            role=member_role,
+            ber_id=str(ber.ber_id),
+            solicitation_id=str(ber.solicitation.solicitation_id),
+        )
+        new_sig['signed_at'] = signed_at.isoformat()
         ber.signatures = ber.signatures + [new_sig]
         ber.save(update_fields=['signatures'])
 
@@ -1226,6 +1354,16 @@ def ber_submit_view(request, pk):
     if not is_chair:
         return Response({'error': 'Only the committee chair can submit the BER to ZPC'}, status=403)
 
+    for c in committees:
+        if not c.quorum_met():
+            total = c.total_members_count()
+            required = c.quorum_required()
+            signed_coi = c.conflict_declarations.filter(confidentiality_agreed=True).count()
+            return Response({
+                'error': f'Quorum not met. Need at least {required} of {total} committee members '
+                         f'with signed conflict declarations (currently {signed_coi}).'
+            }, status=400)
+
     if not ber.has_all_signed():
         return Response({'error': 'All committee members must sign before submitting'}, status=400)
 
@@ -1256,6 +1394,22 @@ def ber_approve_view(request, pk):
 
     ber.solicitation.status = 'awarded'
     ber.solicitation.save()
+    notify_role(
+        'procurement_officer',
+        title=f'BER approved: {ber.solicitation.sol_number}',
+        message=f'ZPC approved the BER for {ber.solicitation.sol_number}. Proceed with contract award notice.',
+        notification_type='approval',
+        priority='high',
+        source_module='evaluations',
+        object_id=ber.pk,
+        action_url=f'/evaluations/ber/{ber.pk}',
+        metadata={
+            'alert_key': 'ber_approved_award_ready',
+            'ber_id': str(ber.pk),
+            'solicitation_id': str(ber.solicitation_id),
+        },
+        email_required=True,
+    )
 
     return Response({
         'message': 'BER approved. Solicitation awarded.',

@@ -16,6 +16,7 @@ from .serializers import (
     IntegrationEndpointSerializer, IntegrationLogSerializer,
     SyncStatusSerializer, WebhookDeliverySerializer,
 )
+from system_config.notifications import alert_integration_manager
 
 
 class StandardPagination(PageNumberPagination):
@@ -77,6 +78,7 @@ def call_budget_validation_view(request):
         return Response({'error': 'Endpoint not found or disabled'}, status=404)
 
     start = time.time()
+    last_error = 'No integration attempts were executed'
     for attempt in range(endpoint.retry_count):
         backoff = min(2 ** attempt * 1, 30)
         try:
@@ -100,6 +102,7 @@ def call_budget_validation_view(request):
                 return Response({'message': 'Budget validated', 'response': resp.json()})
             raise Exception(f'ERP returned {resp.status_code}')
         except Exception as e:
+            last_error = str(e)
             time.sleep(backoff)
             continue
 
@@ -110,7 +113,19 @@ def call_budget_validation_view(request):
         request_url=endpoint.endpoint_url,
         response_status=0,
         response_time_ms=elapsed,
-        error_message=str(e),
+        error_message=last_error,
+    )
+    alert_integration_manager(
+        title=f'Integration failure: {endpoint.system_name}',
+        message=f'Budget validation failed after {endpoint.retry_count} retries for {endpoint.system_name}.',
+        metadata={
+            'endpoint_id': str(endpoint.pk),
+            'endpoint_url': endpoint.endpoint_url,
+            'retry_count': endpoint.retry_count,
+            'response_time_ms': elapsed,
+            'error': last_error,
+        },
+        sms_required=True,
     )
     return Response({'error': 'Budget validation failed after all retries'}, status=502)
 

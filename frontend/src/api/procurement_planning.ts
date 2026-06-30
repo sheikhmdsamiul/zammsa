@@ -56,6 +56,9 @@ export const procurementPlanningApi = {
   submitToZPPA: (id: string, submissionRef: string) =>
     api.post<{ message: string; zppa_submitted_at: string; submission_ref: string }>(`/procurement-planning/annual-plans/${id}/zppa-submit/`, { submission_ref: submissionRef }).then(r => r.data),
 
+  createQuarterlyUpdate: (id: string, data: { change_justification: string; items: any[] }) =>
+    api.post<{ message: string; version: number; app_id: string; aggregate_change_pct: number; automatic_approval: boolean }>(`/procurement-planning/annual-plans/${id}/quarterly-update/`, data).then(r => r.data),
+
   getZPPADeadlineAlerts: () =>
     api.get<{ approaching: any[]; overdue: any[]; total_alerts: number }>('/procurement-planning/annual-plans/zppa-deadline-alerts/').then(r => r.data),
 

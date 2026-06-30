@@ -6,7 +6,8 @@ from django.utils import timezone
 
 logger = logging.getLogger(__name__)
 
-# Prefix registry: [Prefix]-[Fiscal Year]-[Department]-[Sequential Number]
+# Prefix registry. Most IDs use [Prefix]-[Fiscal Year]-[Department]-[Sequential Number].
+# APP IDs intentionally omit the department segment.
 ID_PREFIXES = {
     'APP': 'Annual Procurement Plan',
     'REQ': 'Requisition',
@@ -26,7 +27,7 @@ ID_PREFIXES = {
 }
 
 TRACEABLE_ID_PATTERN = re.compile(
-    r'^(?P<prefix>[A-Z]{2,4})-(?P<fiscal_year>\d{4})-(?P<department>[A-Z0-9]{2,3})-(?P<sequence>\d{4,5})$'
+    r'^(?P<prefix>[A-Z]{2,4})-(?P<fiscal_year>\d{4})(?:-(?P<department>[A-Z0-9]{2,3}))?-(?P<sequence>\d{4,5})$'
 )
 
 DEFAULT_DEPARTMENT_CODE = 'PRC'
@@ -34,7 +35,16 @@ SEQUENTIAL_WIDTH = 5
 
 
 def normalize_department_code(department_code):
-    return str(department_code).strip().upper() if department_code else DEFAULT_DEPARTMENT_CODE
+    code = re.sub(r'[^A-Z0-9]', '', str(department_code or '').strip().upper())
+    return code[:3] or DEFAULT_DEPARTMENT_CODE
+
+
+def normalize_fiscal_year_code(fiscal_year):
+    fiscal_year = str(fiscal_year or timezone.now().year).strip()
+    match = re.search(r'\d{4}', fiscal_year)
+    if match:
+        return match.group(0)
+    return fiscal_year[:4].upper()
 
 
 def get_current_fiscal_year_code():
@@ -43,7 +53,7 @@ def get_current_fiscal_year_code():
 
         fy = FiscalYear.objects.filter(is_current=True).first()
         if fy:
-            return fy.year_code
+            return normalize_fiscal_year_code(fy.year_code)
     except Exception as exc:
         logger.warning('Failed to fetch current fiscal year from DB: %s', exc)
     return str(timezone.now().year)
@@ -146,25 +156,26 @@ def _scan_max_sequence(model_class, field_name, prefix_str):
     return max_seq
 
 
-def _allocate_sequence(prefix, fiscal_year, department_code, model_class, field_name):
+def _allocate_sequence(prefix, fiscal_year, department_code, model_class, field_name, include_department=True):
     from master_data.models import IdSequence
 
     dept_code = normalize_department_code(department_code)
     prefix = prefix.upper()
-    fiscal_year = str(fiscal_year)
-    prefix_str = f'{prefix}-{fiscal_year}-{dept_code}-'
+    fiscal_year = normalize_fiscal_year_code(fiscal_year)
+    sequence_dept_code = dept_code if include_department else prefix[:3]
+    prefix_str = f'{prefix}-{fiscal_year}-{dept_code}-' if include_department else f'{prefix}-{fiscal_year}-'
 
     with transaction.atomic():
         IdSequence.objects.get_or_create(
             prefix=prefix,
             fiscal_year=fiscal_year,
-            department_code=dept_code,
+            department_code=sequence_dept_code,
             defaults={'last_sequence': 0},
         )
         seq_obj = IdSequence.objects.select_for_update().get(
             prefix=prefix,
             fiscal_year=fiscal_year,
-            department_code=dept_code,
+            department_code=sequence_dept_code,
         )
         if seq_obj.last_sequence == 0:
             scanned = _scan_max_sequence(model_class, field_name, prefix_str)
@@ -197,10 +208,13 @@ def generate_traceable_id(
     if not fiscal_year:
         fiscal_year = get_current_fiscal_year_code()
     else:
-        fiscal_year = str(fiscal_year)
+        fiscal_year = normalize_fiscal_year_code(fiscal_year)
 
     dept_code = normalize_department_code(department_code)
     prefix = prefix.upper()
 
-    next_seq = _allocate_sequence(prefix, fiscal_year, dept_code, model_class, field_name)
+    include_department = prefix != 'APP'
+    next_seq = _allocate_sequence(prefix, fiscal_year, dept_code, model_class, field_name, include_department)
+    if not include_department:
+        return f'{prefix}-{fiscal_year}-{next_seq:0{seq_width}d}'
     return f'{prefix}-{fiscal_year}-{dept_code}-{next_seq:0{seq_width}d}'

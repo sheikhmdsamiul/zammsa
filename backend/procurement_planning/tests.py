@@ -4,11 +4,51 @@ from rest_framework.test import APIClient
 from django.utils import timezone
 from datetime import date, timedelta
 from accounts.models import User
-from master_data.models import Department
+from master_data.models import Department, FiscalYear
 from requisitions.models import Requisition
-from .models import ContractProcurementPlan
+from .models import AnnualProcurementPlan, ContractProcurementPlan
 from .views import _validate_milestone_minimum_periods
 from decimal import Decimal
+
+
+class AnnualProcurementPlanTraceIdTests(TestCase):
+    def test_create_app_with_split_fiscal_year_generates_four_digit_trace_id(self):
+        fiscal_year = FiscalYear.objects.create(
+            year_code='2026/2027',
+            start_date=date(2026, 1, 1),
+            end_date=date(2027, 12, 31),
+        )
+        department = Department.objects.create(
+            dept_code='PRC',
+            dept_name='Procurement Department',
+            level='national',
+        )
+
+        app = AnnualProcurementPlan.objects.create(
+            fiscal_year=fiscal_year,
+            department=department,
+        )
+
+        self.assertEqual(app.app_number, 'APP-2026-00001')
+
+    def test_create_app_with_long_department_code_generates_three_character_trace_id(self):
+        fiscal_year = FiscalYear.objects.create(
+            year_code='2026',
+            start_date=date(2026, 1, 1),
+            end_date=date(2026, 12, 31),
+        )
+        department = Department.objects.create(
+            dept_code='PHARMACY',
+            dept_name='Pharmacy Department',
+            level='national',
+        )
+
+        app = AnnualProcurementPlan.objects.create(
+            fiscal_year=fiscal_year,
+            department=department,
+        )
+
+        self.assertEqual(app.app_number, 'APP-2026-00001')
 
 
 class CPPDateValidationTests(TestCase):
@@ -150,4 +190,3 @@ class CPPBaselineLockingTests(TestCase):
         }, format='json')
         self.cpp.refresh_from_db()
         self.assertNotEqual(response.status_code, 200)
-

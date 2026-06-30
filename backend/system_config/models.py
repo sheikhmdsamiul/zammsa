@@ -1,6 +1,8 @@
 import uuid
+from django.conf import settings
 from django.db import models
 from django.core.exceptions import ValidationError
+from django.utils import timezone
 
 
 class SystemSetting(models.Model):
@@ -38,6 +40,79 @@ class NotificationTemplate(models.Model):
 
     def __str__(self):
         return self.template_key
+
+
+class Notification(models.Model):
+    TYPE_CHOICES = [
+        ('workflow', 'Workflow'),
+        ('approval', 'Approval'),
+        ('deadline', 'Deadline'),
+        ('compliance', 'Compliance'),
+        ('system', 'System'),
+        ('supplier', 'Supplier'),
+        ('finance', 'Finance'),
+    ]
+
+    PRIORITY_CHOICES = [
+        ('low', 'Low'),
+        ('normal', 'Normal'),
+        ('high', 'High'),
+        ('urgent', 'Urgent'),
+    ]
+
+    DELIVERY_STATUS_CHOICES = [
+        ('not_required', 'Not Required'),
+        ('pending', 'Pending'),
+        ('sent', 'Sent'),
+        ('failed', 'Failed'),
+        ('skipped', 'Skipped'),
+    ]
+
+    notification_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    recipient = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='notifications')
+    title = models.CharField(max_length=255)
+    message = models.TextField()
+    notification_type = models.CharField(max_length=50, choices=TYPE_CHOICES, default='system')
+    priority = models.CharField(max_length=20, choices=PRIORITY_CHOICES, default='normal')
+    source_module = models.CharField(max_length=100, blank=True, default='')
+    object_id = models.CharField(max_length=100, blank=True, default='')
+    action_url = models.CharField(max_length=500, blank=True, default='')
+    metadata = models.JSONField(default=dict, blank=True)
+    delivery_channels = models.JSONField(default=list, blank=True)
+    email_required = models.BooleanField(default=False)
+    email_status = models.CharField(max_length=20, choices=DELIVERY_STATUS_CHOICES, default='not_required')
+    email_attempts = models.PositiveSmallIntegerField(default=0)
+    email_sent_at = models.DateTimeField(null=True, blank=True)
+    email_last_error = models.TextField(blank=True, default='')
+    sms_required = models.BooleanField(default=False)
+    sms_status = models.CharField(max_length=20, choices=DELIVERY_STATUS_CHOICES, default='not_required')
+    sms_attempts = models.PositiveSmallIntegerField(default=0)
+    sms_sent_at = models.DateTimeField(null=True, blank=True)
+    sms_last_error = models.TextField(blank=True, default='')
+    read_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'config_notification'
+        verbose_name = 'Notification'
+        verbose_name_plural = 'Notifications'
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['recipient', 'read_at', '-created_at']),
+            models.Index(fields=['notification_type', '-created_at']),
+        ]
+
+    @property
+    def is_read(self):
+        return self.read_at is not None
+
+    def mark_read(self):
+        if not self.read_at:
+            self.read_at = timezone.now()
+            self.save(update_fields=['read_at'])
+
+    def __str__(self):
+        return f'{self.title} -> {self.recipient}'
 
 
 class ThresholdRule(models.Model):

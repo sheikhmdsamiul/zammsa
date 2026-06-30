@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { procurementPlanningApi, budgetApi } from '../../api/procurement_planning';
-import { AnnualProcurementPlan, BudgetSummary } from '../../types';
+import { AnnualProcurementPlan, BudgetSummary, APPLineItem } from '../../types';
 import { StatusBadge } from '../common/StatusBadge';
 import { LoadingSpinner } from '../common/LoadingSpinner';
 import { PageHeader } from '../common/PageHeader';
@@ -49,6 +49,9 @@ export default function APPDetail() {
   const [consolidateTarget, setConsolidateTarget] = useState('');
   const [showZPPAModal, setShowZPPAModal] = useState(false);
   const [zppaRef, setZppaRef] = useState('');
+  const [showQuarterlyModal, setShowQuarterlyModal] = useState(false);
+  const [quarterlyJustification, setQuarterlyJustification] = useState('');
+  const [quarterlyItems, setQuarterlyItems] = useState<any[]>([]);
   
   const [selectedTargets, setSelectedTargets] = useState(['zammsa_website', 'zppa_egp', 'supplier_notifications']);
   const [gpnContent, setGpnContent] = useState({
@@ -132,6 +135,7 @@ export default function APPDetail() {
   const canConsolidate = status === 'procurement_review' && role === 'procurement_officer';
   const canPublish = status === 'approved' && role === 'procurement_officer';
   const canSubmitToZPPA = status === 'published' && role === 'zppa_reporting_officer';
+  const canQuarterlyUpdate = ['approved', 'published'].includes(status) && ['procurement_officer', 'procurement_manager', 'director_procurement', 'system_admin'].includes(role);
 
   const estimatedValue = Number(app.total_estimated_value || 0);
 
@@ -202,10 +206,14 @@ export default function APPDetail() {
                    <div className="p-2 bg-slate-50 rounded-lg shrink-0"><UserCircleIcon className="w-5 h-5 text-slate-400"/></div>
                    <div><p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Created By</p><p className="text-sm font-semibold text-slate-900">{app.created_by_name || 'System'}</p></div>
                 </div>
-                <div className="flex items-start gap-3">
-                   <div className="p-2 bg-slate-50 rounded-lg shrink-0"><ShieldCheckIcon className="w-5 h-5 text-slate-400"/></div>
-                   <div><p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Structure</p><p className="text-sm font-semibold text-slate-900">{app.is_consolidated ? 'Master Consolidated APP' : 'Stand-alone Dept APP'}</p></div>
-                </div>
+                 <div className="flex items-start gap-3">
+                    <div className="p-2 bg-slate-50 rounded-lg shrink-0"><ShieldCheckIcon className="w-5 h-5 text-slate-400"/></div>
+                    <div><p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Structure</p><p className="text-sm font-semibold text-slate-900">{app.is_consolidated ? 'Master Consolidated APP' : 'Stand-alone Dept APP'}</p></div>
+                 </div>
+                 <div className="flex items-start gap-3">
+                    <div className="p-2 bg-slate-50 rounded-lg shrink-0"><DatabaseIcon className="w-5 h-5 text-slate-400"/></div>
+                    <div><p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Version</p><p className="text-sm font-semibold text-slate-900">v{app.version || 1}{app.amends ? ` (amends ${app.amends_app_number || app.amends?.slice(0, 8)})` : ''}</p></div>
+                 </div>
                 <div className="flex items-start gap-3">
                    <div className="p-2 bg-slate-50 rounded-lg shrink-0"><ClockIcon className="w-5 h-5 text-slate-400"/></div>
                    <div><p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Creation Date</p><p className="text-sm font-semibold text-slate-900">{new Date(app.created_at).toLocaleDateString('en-GB')}</p></div>
@@ -301,25 +309,28 @@ export default function APPDetail() {
            </div>
 
            {/* Actions Area */}
-           { (canSubmit || canApprove || canRejectReturn || canCompliance || canConsolidate || canPublish || canSubmitToZPPA) && (
-              <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-6">
-                 <h2 className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-4">Operations</h2>
-                 <div className="space-y-3">
-                    {canSubmit && (
-                       <button onClick={() => doAction('submit')} disabled={actionLoading !== ''} className="w-full py-2.5 bg-zammsa-green text-white rounded-lg text-xs font-bold uppercase tracking-wider shadow-sm hover:bg-zammsa-green-dark transition-all disabled:opacity-50">Submit Plan</button>
-                    )}
-                    {canApprove && (
-                       <button onClick={() => doAction('approve')} disabled={actionLoading !== ''} className="w-full py-2.5 bg-zammsa-green text-white rounded-lg text-xs font-bold uppercase tracking-wider shadow-sm hover:bg-zammsa-green-dark transition-all disabled:opacity-50">Approve Plan</button>
-                    )}
-                    {canCompliance && (
-                       <button onClick={() => setShowComplianceModal(true)} className="w-full py-2.5 bg-white border border-slate-200 text-slate-600 rounded-lg text-xs font-bold uppercase tracking-wider hover:bg-slate-50 transition-all">Verify Compliance</button>
-                    )}
-                    {canConsolidate && (
-                       <button onClick={() => setShowConsolidateModal(true)} className="w-full py-2.5 bg-white border border-slate-200 text-slate-600 rounded-lg text-xs font-bold uppercase tracking-wider hover:bg-slate-50 transition-all">Consolidate</button>
-                    )}
-                    {canPublish && (
-                       <button onClick={() => doAction('publish')} disabled={actionLoading !== ''} className="w-full py-2.5 bg-zammsa-green text-white rounded-lg text-xs font-bold uppercase tracking-wider shadow-sm hover:bg-zammsa-green-dark transition-all">Publish GPN</button>
-                    )}
+            { (canSubmit || canApprove || canRejectReturn || canCompliance || canConsolidate || canPublish || canSubmitToZPPA || canQuarterlyUpdate) && (
+               <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-6">
+                  <h2 className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-4">Operations</h2>
+                  <div className="space-y-3">
+                     {canSubmit && (
+                        <button onClick={() => doAction('submit')} disabled={actionLoading !== ''} className="w-full py-2.5 bg-zammsa-green text-white rounded-lg text-xs font-bold uppercase tracking-wider shadow-sm hover:bg-zammsa-green-dark transition-all disabled:opacity-50">Submit Plan</button>
+                     )}
+                     {canApprove && (
+                        <button onClick={() => doAction('approve')} disabled={actionLoading !== ''} className="w-full py-2.5 bg-zammsa-green text-white rounded-lg text-xs font-bold uppercase tracking-wider shadow-sm hover:bg-zammsa-green-dark transition-all disabled:opacity-50">Approve Plan</button>
+                     )}
+                     {canCompliance && (
+                        <button onClick={() => setShowComplianceModal(true)} className="w-full py-2.5 bg-white border border-slate-200 text-slate-600 rounded-lg text-xs font-bold uppercase tracking-wider hover:bg-slate-50 transition-all">Verify Compliance</button>
+                     )}
+                     {canConsolidate && (
+                        <button onClick={() => setShowConsolidateModal(true)} className="w-full py-2.5 bg-white border border-slate-200 text-slate-600 rounded-lg text-xs font-bold uppercase tracking-wider hover:bg-slate-50 transition-all">Consolidate</button>
+                     )}
+                     {canQuarterlyUpdate && (
+                        <button onClick={() => setShowQuarterlyModal(true)} className="w-full py-2.5 bg-amber-500 text-white rounded-lg text-xs font-bold uppercase tracking-wider shadow-sm hover:bg-amber-600 transition-all">Quarterly Update</button>
+                     )}
+                     {canPublish && (
+                        <button onClick={() => doAction('publish')} disabled={actionLoading !== ''} className="w-full py-2.5 bg-zammsa-green text-white rounded-lg text-xs font-bold uppercase tracking-wider shadow-sm hover:bg-zammsa-green-dark transition-all">Publish GPN</button>
+                     )}
                     {canSubmitToZPPA && (
                        <button onClick={() => setShowZPPAModal(true)} className="w-full py-2.5 bg-indigo-600 text-white rounded-lg text-xs font-bold uppercase tracking-wider shadow-sm hover:bg-indigo-700 transition-all">Registry Submit</button>
                     )}
@@ -385,7 +396,98 @@ export default function APPDetail() {
                <button onClick={() => doAction('compliance', { compliance_status: 'compliant', notes: reason })} disabled={actionLoading !== ''} className="py-2.5 bg-emerald-500 text-white rounded-lg text-xs font-bold uppercase hover:bg-emerald-600 transition-all">Compliant</button>
                <button onClick={() => doAction('compliance', { compliance_status: 'non_compliant', notes: reason })} disabled={actionLoading !== '' || !reason} className="py-2.5 bg-rose-500 text-white rounded-lg text-xs font-bold uppercase hover:bg-rose-600 transition-all">Non-Compliant</button>
             </div>
-            <button onClick={() => setShowComplianceModal(false)} className="w-full mt-3 py-2 text-xs font-bold text-slate-400 uppercase hover:text-slate-600">Cancel</button>
+              <button onClick={() => setShowComplianceModal(false)} className="w-full mt-3 py-2 text-xs font-bold text-slate-400 uppercase hover:text-slate-600">Cancel</button>
+           </div>
+         </div>
+       )}
+
+      {/* Quarterly Update Modal */}
+      {showQuarterlyModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-6">
+          <div className="bg-white rounded-2xl shadow-xl max-w-lg w-full p-8">
+            <h3 className="text-xl font-bold text-slate-900">Quarterly APP Update</h3>
+            <p className="text-sm text-slate-500 mt-2">
+              Create a new version of this APP with updated line items. 
+              Changes within 20% of the original total value will auto-advance to procurement review.
+            </p>
+            <div className="space-y-4 mt-6">
+              <div>
+                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1 block">Change Justification *</label>
+                <textarea
+                  value={quarterlyJustification}
+                  onChange={(e) => setQuarterlyJustification(e.target.value)}
+                  rows={3}
+                  placeholder="Explain the reason for this quarterly update..."
+                  className="w-full bg-slate-50 border border-slate-200 rounded-lg p-3 text-sm focus:ring-2 focus:ring-zammsa-green/10 focus:border-zammsa-green outline-none transition-all"
+                />
+              </div>
+              <div>
+                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1 block">
+                  Line Items (updated) — {app.line_items?.length || 0} current items will be copied; modify values below
+                </label>
+                <div className="max-h-60 overflow-y-auto space-y-2 border border-slate-200 rounded-lg p-3">
+                  {(app.line_items || []).map((item: any, i: number) => (
+                    <div key={item.line_item_id || i} className="flex gap-2 items-center">
+                      <input
+                        data-qty-desc
+                        type="text"
+                        defaultValue={item.description}
+                        className="flex-1 bg-slate-50 border border-slate-200 rounded px-2 py-1 text-xs font-medium outline-none focus:ring-1 focus:ring-zammsa-green"
+                      />
+                      <input
+                        data-qty-val
+                        type="number"
+                        defaultValue={item.estimated_value}
+                        className="w-28 bg-slate-50 border border-slate-200 rounded px-2 py-1 text-xs font-medium text-right outline-none focus:ring-1 focus:ring-zammsa-green"
+                      />
+                    </div>
+                  ))}
+                  {(!app.line_items || app.line_items.length === 0) && (
+                    <p className="text-xs text-slate-400 italic text-center py-4">No existing line items. Add items after creation.</p>
+                  )}
+                </div>
+              </div>
+            </div>
+            <div className="flex gap-3 mt-6">
+              <button
+                onClick={() => { setShowQuarterlyModal(false); setQuarterlyJustification(''); setQuarterlyItems([]); }}
+                className="flex-1 py-2.5 text-xs font-bold text-slate-500 bg-slate-100 rounded-lg hover:bg-slate-200 transition-all uppercase"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={async () => {
+                  const items = (app.line_items || []).map((item: any, i: number) => {
+                    const descInput = document.querySelectorAll<HTMLInputElement>('[data-qty-desc]')[i];
+                    const valInput = document.querySelectorAll<HTMLInputElement>('[data-qty-val]')[i];
+                    return {
+                      description: descInput?.value || item.description,
+                      estimated_value: parseFloat(valInput?.value || item.estimated_value) || 0,
+                      procurement_type: item.procurement_type || 'goods',
+                      funding_source: item.funding_source,
+                      commodity: item.commodity,
+                      is_citizen_reserved: item.is_citizen_reserved,
+                    };
+                  });
+                  try {
+                    const res = await procurementPlanningApi.createQuarterlyUpdate(id!, {
+                      change_justification: quarterlyJustification,
+                      items,
+                    });
+                    toast.success(res.message || 'Quarterly update created');
+                    setShowQuarterlyModal(false);
+                    setQuarterlyJustification('');
+                    loadData();
+                  } catch (err: any) {
+                    toast.error(err.response?.data?.error || 'Failed to create quarterly update');
+                  }
+                }}
+                disabled={!quarterlyJustification}
+                className="flex-1 py-2.5 text-xs font-bold text-white bg-amber-500 rounded-lg hover:bg-amber-600 transition-all uppercase disabled:opacity-50"
+              >
+                Create Update
+              </button>
+            </div>
           </div>
         </div>
       )}

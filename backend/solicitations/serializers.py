@@ -1,4 +1,5 @@
 from datetime import datetime
+from django.db.models import Q
 from django.utils import timezone
 from rest_framework import serializers
 from .models import SolicitationTemplate, Solicitation, EvaluationCriterion, SolicitationAddendum, ClarificationRequest, SolicitationDocument
@@ -56,7 +57,7 @@ class SolicitationAddendumSerializer(serializers.ModelSerializer):
     class Meta:
         model = SolicitationAddendum
         fields = '__all__'
-        read_only_fields = ('addendum_id', 'addendum_number', 'created_at')
+        read_only_fields = ('addendum_id', 'addendum_number', 'created_at', 'addendum_status', 'approved_by', 'approved_at', 'rejection_reason')
 
 
 class ClarificationRequestSerializer(serializers.ModelSerializer):
@@ -138,6 +139,7 @@ class SolicitationSerializer(serializers.ModelSerializer):
     id = serializers.UUIDField(source='solicitation_id', read_only=True)
     type = serializers.CharField(source='method', required=False)
     procurement_method = serializers.CharField(source='method', required=False)
+    description = serializers.CharField(required=False, allow_blank=True)
     estimated_value = serializers.SerializerMethodField()
     issue_date = serializers.SerializerMethodField()
     department = serializers.SerializerMethodField()
@@ -328,10 +330,10 @@ class SolicitationSerializer(serializers.ModelSerializer):
         return data
 
     def validate_method(self, value):
-        requisition = self.initial_data.get('requisition')
-        if requisition:
-            from procurement_planning.models import ContractProcurementPlan
-            approved_cpp = requisition.cpp.filter(status='approved').first()
+        requisition_id = self.initial_data.get('requisition')
+        if requisition_id:
+            requisition = Requisition.objects.filter(pk=requisition_id).first()
+            approved_cpp = requisition.cpp.filter(status='approved').first() if requisition else None
             if approved_cpp and approved_cpp.method and approved_cpp.method != value:
                 raise serializers.ValidationError(
                     f'Method "{value}" does not match the approved CPP method "{approved_cpp.method}". '
@@ -379,6 +381,21 @@ class SolicitationSerializer(serializers.ModelSerializer):
                 validated_data['method'] = approved_cpp.method
             if not validated_data.get('estimated_value') and approved_cpp.estimated_value:
                 validated_data['estimated_value'] = approved_cpp.estimated_value
+            if not validated_data.get('department') and requisition.department_id:
+                validated_data['department'] = requisition.department
+            if not validated_data.get('opening_date') and validated_data.get('closing_date'):
+                validated_data['opening_date'] = validated_data['closing_date']
+            if not validated_data.get('description'):
+                item_lines = [
+                    f'- {item.description}: {item.quantity} {item.unit_of_measure.uom_name if item.unit_of_measure else ""}'.strip()
+                    for item in requisition.items.all()
+                ]
+                validated_data['description'] = (
+                    f'{requisition.description}\n\n'
+                    f'Delivery location: {requisition.delivery_location or "To be specified"}\n'
+                    f'Required date: {requisition.required_date}\n'
+                    f'Requisition items:\n' + '\n'.join(item_lines)
+                )
 
         # Fallback: auto-recommend method based on estimated value (no CPP available)
         if not validated_data.get('method'):
@@ -429,15 +446,33 @@ class SolicitationSerializer(serializers.ModelSerializer):
                 order_index=len(technical_criteria) + i,
             )
 
+        METHOD_TEMPLATE_MAP = {
+            'open_tender': 'itb',
+            'international': 'itb',
+            'limited': 'itb',
+            'simplified': 'rfq',
+            'direct': 'rfq',
+            'proposal': 'rfp',
+        }
+        lookup_method = METHOD_TEMPLATE_MAP.get(instance.method, instance.method)
         template = SolicitationTemplate.objects.filter(
-            method__iexact=instance.method,
+            Q(method__iexact=lookup_method) | Q(method__iexact=instance.method),
             is_active=True,
         ).first()
         if template:
+            from solicitations.pdf_generator import save_solicitation_pdf
+            generated = save_solicitation_pdf(instance)
+            if not generated:
+                SolicitationDocument.objects.create(
+                    solicitation=instance,
+                    document_type=template.document_type or 'bidding_document',
+                    file_path=template.template_name,
+                )
+        else:
             SolicitationDocument.objects.create(
                 solicitation=instance,
-                document_type=template.document_type,
-                file_path=template.template_content,
+                document_type='bidding_document',
+                file_path=f"No template found for method: {instance.method}",
             )
 
         additional_documents = self.initial_data.get('additional_documents', [])

@@ -19,6 +19,7 @@ from .serializers import (
     RequisitionTrackingSerializer,
 )
 from finance.models import BudgetAllocation
+from system_config.notifications import create_notification, notify_role
 
 
 class StandardPagination(PageNumberPagination):
@@ -140,6 +141,54 @@ def _check_budget_and_encumber(req):
     return warnings
 
 
+REQUISITION_NEXT_REVIEWER_ROLE = {
+    'pending_dept_head': 'department_head',
+    'pending_finance': 'finance_officer',
+    'pending_dg': 'director_general',
+    'pending_zpc': 'zpc_member',
+}
+
+
+def _notify_requisition_next_reviewer(req, actor=None):
+    role = REQUISITION_NEXT_REVIEWER_ROLE.get(req.status)
+    if not role:
+        return []
+
+    return notify_role(
+        role,
+        title=f'Requisition {req.req_number} requires review',
+        message=f'{req.req_number} is awaiting your approval for {req.description}. Estimated value: K{req.estimated_total}.',
+        notification_type='approval',
+        priority='high' if req.status == 'pending_zpc' else 'normal',
+        source_module='requisitions',
+        object_id=req.pk,
+        action_url=f'/requisitions/{req.pk}',
+        metadata={
+            'req_number': req.req_number,
+            'status': req.status,
+            'estimated_total': str(req.estimated_total),
+            'actor_id': str(actor.pk) if actor else '',
+        },
+        email_required=True,
+        exclude_user=actor,
+    )
+
+
+def _notify_requisition_requester(req, title, message, priority='normal'):
+    return create_notification(
+        req.requester,
+        title=title,
+        message=message,
+        notification_type='workflow',
+        priority=priority,
+        source_module='requisitions',
+        object_id=req.pk,
+        action_url=f'/requisitions/{req.pk}',
+        metadata={'req_number': req.req_number, 'status': req.status},
+        email_required=True,
+    )
+
+
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def requisition_submit_view(request, pk):
@@ -152,6 +201,14 @@ def requisition_submit_view(request, pk):
         return Response({'error': 'Only draft requisitions can be submitted'}, status=400)
     if req.requester_id != request.user.id:
         return Response({'error': 'Only the requester can submit this requisition'}, status=403)
+
+    # BR-REQ-04: Requisition expires after 90 days without action
+    if req.is_expired:
+        return Response({
+            'error': f'This requisition has expired after {req.days_since_creation} days. '
+                     f'Please create a new requisition.',
+            'days_since_creation': req.days_since_creation,
+        }, status=400)
 
     # Validate every line item has an attachment
     items = req.items.all()
@@ -199,6 +256,7 @@ def requisition_submit_view(request, pk):
         approved_at=timezone.now(),
         comments='Submitted by requester',
     )
+    _notify_requisition_next_reviewer(req, request.user)
 
     return Response({
         'message': 'Requisition submitted and sent for Department Head approval',
@@ -260,6 +318,8 @@ def _advance_requisition(req, user, decision, comments):
         return None, f'Requisition is not at the {flow["from"]} stage. Current status: {req.status}'
     if req.requester_id == user.id:
         return None, 'Self-approval is not allowed'
+    if req.is_expired:
+        return None, f'This requisition has expired after {req.days_since_creation} days. Please create a new requisition.'
 
     if decision == 'rejected':
         req.status = 'rejected'
@@ -289,7 +349,21 @@ def _advance_requisition(req, user, decision, comments):
     )
 
     if req.status in ('rejected', 'draft'):
+        _notify_requisition_requester(
+            req,
+            title=f'Requisition {req.req_number} {req.status}',
+            message=f'{req.req_number} was {req.status}. {comments or "Please review the requisition details."}',
+            priority='high',
+        )
         return req.status, f'Requisition {req.status}'
+    if req.status == 'approved':
+        _notify_requisition_requester(
+            req,
+            title=f'Requisition {req.req_number} approved',
+            message=f'{req.req_number} has completed approval and is ready for procurement planning.',
+        )
+    else:
+        _notify_requisition_next_reviewer(req, user)
     return req.status, f'Requisition approved, moved to {req.status}'
 
 

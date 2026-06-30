@@ -67,7 +67,7 @@ const BERWorkflow: React.FC = () => {
     enabled: !!solId && !currentBer && !!isChair,
   });
 
-  const evalMethod = solicitation?.evaluation_method || (solicitation?.type === 'rfp' ? 'qcbs' : 'lowest_price');
+  const evalMethod = solicitation?.evaluation_method || (solicitation?.type === 'proposal' ? 'qcbs' : 'lowest_price');
   const isCombinedMethod = evalMethod === 'qcbs' || evalMethod === 'qbs';
 
   const { data: qcbsData } = useQuery({

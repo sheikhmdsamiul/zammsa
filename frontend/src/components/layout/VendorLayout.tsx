@@ -1,11 +1,12 @@
 import React, { useState } from 'react';
-import { Outlet, useLocation } from 'react-router-dom';
+import { Outlet } from 'react-router-dom';
 import { useAuth, useLogout } from '../../hooks/useAuth';
 import Sidebar, { NavItem } from './Sidebar';
 import {
   ChartBarIcon, ClipboardListIcon, DocumentTextIcon,
   DuplicateIcon, CashIcon, UserIcon,
 } from '@heroicons/react/outline';
+import NotificationBell from '../common/NotificationBell';
 
 const iconClass = 'h-5 w-5';
 
@@ -83,12 +84,7 @@ const VendorLayout: React.FC = () => {
 
           <div className="flex items-center gap-4">
             {getStatusBadge()}
-            <button className="relative p-2 text-gray-400 hover:text-zammsa-green hover:bg-zammsa-green/5 rounded-xl transition-all">
-              <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
-              </svg>
-              <span className="absolute top-1.5 right-1.5 w-4 h-4 bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center border-2 border-white">2</span>
-            </button>
+            <NotificationBell />
             <div className="h-8 w-px bg-gray-200 mx-2" />
             <div className="flex items-center gap-3">
                <div className="text-right hidden sm:block">

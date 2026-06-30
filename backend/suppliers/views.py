@@ -27,6 +27,8 @@ from .serializers import (
 )
 from django.utils.crypto import get_random_string
 from accounts.models import User
+from system_config.models import Notification
+from system_config.notifications import create_notification, notify_role, notify_roles, send_external_email
 
 
 class StandardPagination(PageNumberPagination):
@@ -148,6 +150,18 @@ def vendor_application_submit_view(request, pk):
     app.status = 'submitted'
     app.submitted_at = timezone.now()
     app.save()
+    notify_role(
+        'supplier_relationship_manager',
+        title=f'Supplier application submitted: {app.company_name}',
+        message=f'{app.company_name} submitted a supplier registration application for verification.',
+        notification_type='supplier',
+        priority='normal',
+        source_module='suppliers',
+        object_id=app.pk,
+        action_url='/suppliers',
+        metadata={'application_id': str(app.pk), 'company_name': app.company_name},
+        email_required=True,
+    )
     return Response({'message': 'Application submitted for review', 'status': app.status})
 
 
@@ -195,7 +209,19 @@ def vendor_application_review_view(request, pk):
         # Email stub
         email_sent = False
         if supplier_user:
-            email_sent = True
+            notification = create_notification(
+                supplier_user,
+                title='Supplier registration approved',
+                message='Your ZAMMSA supplier registration has been approved. You can now log in and view tenders.',
+                notification_type='supplier',
+                priority='normal',
+                source_module='suppliers',
+                object_id=app.pk,
+                action_url='/vendor/dashboard',
+                metadata={'application_id': str(app.pk), 'supplier_id': str(supplier.supplier_id)},
+                email_required=True,
+            )
+            email_sent = notification.email_status == 'sent' if notification else False
 
         return Response({
             'message': 'Application approved. Supplier registered.',
@@ -208,7 +234,12 @@ def vendor_application_review_view(request, pk):
         app.rejection_reason = rejection_reason
         app.reviewed_by = request.user
         app.save()
-        return Response({'message': 'Application rejected'})
+        result = send_external_email(
+            'Supplier registration rejected',
+            f'Your ZAMMSA supplier registration was rejected.\n\nReason: {rejection_reason or "No reason provided."}\n\nYou may update and resubmit your application.',
+            app.email,
+        )
+        return Response({'message': 'Application rejected', 'email_sent': result['sent']})
 
 
 @api_view(['POST'])
@@ -374,6 +405,24 @@ def performance_evaluate_view(request, supplier_pk):
     supplier.risk_score = risk_score
     supplier.risk_level = risk_level
     supplier.save()
+    if risk_level == 'high':
+        notify_roles(
+            ['procurement_manager', 'contract_manager'],
+            title=f'High supplier risk: {supplier.name}',
+            message=f'{supplier.name} risk score reached {risk_score}. Review active contracts and mitigation actions.',
+            notification_type='supplier',
+            priority='high',
+            source_module='suppliers',
+            object_id=supplier.pk,
+            action_url=f'/suppliers/{supplier.pk}',
+            metadata={
+                'supplier_id': str(supplier.pk),
+                'risk_score': str(risk_score),
+                'risk_level': risk_level,
+                'performance_id': str(perf.pk),
+            },
+            email_required=True,
+        )
 
     return Response({
         'message': 'Performance evaluation submitted',
@@ -403,6 +452,26 @@ def performance_reminder_view(request):
         }
         for s in suppliers_due
     ]
+    for supplier in suppliers_due:
+        if Notification.objects.filter(
+            notification_type='supplier',
+            source_module='suppliers',
+            object_id=str(supplier.pk),
+            metadata__alert_key='performance_evaluation_reminder',
+        ).exists():
+            continue
+        notify_role(
+            'contract_manager',
+            title=f'Supplier performance evaluation due: {supplier.name}',
+            message=f'{supplier.name} is due for supplier performance evaluation. Please complete the evaluation form.',
+            notification_type='supplier',
+            priority='normal',
+            source_module='suppliers',
+            object_id=supplier.pk,
+            action_url=f'/suppliers/{supplier.pk}',
+            metadata={'alert_key': 'performance_evaluation_reminder', 'supplier_id': str(supplier.pk)},
+            email_required=True,
+        )
     return Response({
         'count': len(data),
         'suppliers_due_for_evaluation': data,

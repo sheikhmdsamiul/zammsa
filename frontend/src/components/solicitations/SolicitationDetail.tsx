@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { solicitationsApi } from '../../api/solicitations';
+import { solicitationsApi, nonOpenJustificationsApi } from '../../api/solicitations';
 import { StatusBadge } from '../common/StatusBadge';
 import { LoadingSpinner } from '../common/LoadingSpinner';
 import { useAuth } from '../../hooks/useAuth';
@@ -29,10 +29,15 @@ const PUBLISH_TARGETS = [
 ];
 
 const TYPE_LABELS: Record<string, string> = {
-  rfb: 'ITB — Invitation to Bid',
+  open_tender: 'Open National Bidding',
+  international: 'International Competitive Bidding',
+  limited: 'Limited Bidding',
+  simplified: 'Simplified Bidding',
+  direct: 'Direct Procurement',
+  proposal: 'Request for Proposals',
+  itb: 'ITB — Invitation to Bid',
   rfp: 'RFP — Request for Proposals',
   rfq: 'RFQ — Request for Quotations',
-  rfi: 'RFI — Request for Information',
 };
 
 function fmtDate(d: string | undefined): string {
@@ -81,6 +86,13 @@ const SolicitationDetail: React.FC = () => {
   const [showPublishModal, setShowPublishModal] = useState(false);
   const [selectedTargets, setSelectedTargets] = useState<string[]>(['zammsa_website']);
   const [showClarifyForm, setShowClarifyForm] = useState(false);
+  const [documentDownloading, setDocumentDownloading] = useState(false);
+  const [rejectAddendumPk, setRejectAddendumPk] = useState<string | null>(null);
+  const [rejectAddendumReason, setRejectAddendumReason] = useState('');
+  const [showJustificationForm, setShowJustificationForm] = useState(false);
+  const [justifMethod, setJustifMethod] = useState('direct');
+  const [justifReasonCode, setJustifReasonCode] = useState('emergency');
+  const [justifReasonText, setJustifReasonText] = useState('');
 
   const { data: sol, isLoading } = useQuery({
     queryKey: ['solicitation', id],
@@ -126,17 +138,76 @@ const SolicitationDetail: React.FC = () => {
     onError: (err: any) => toast.error(err.response?.data?.error || 'Addendum failed'),
   });
 
+  const submitAddendumMutation = useMutation({
+    mutationFn: (addendumPk: string) => solicitationsApi.submitAddendum(id!, addendumPk),
+    onSuccess: (res) => { invalidate(); toast.success(res.message || 'Addendum submitted for approval'); },
+    onError: (err: any) => toast.error(err.response?.data?.error || 'Failed to submit addendum'),
+  });
+
+  const approveAddendumMutation = useMutation({
+    mutationFn: (addendumPk: string) => solicitationsApi.approveAddendum(id!, addendumPk),
+    onSuccess: (res) => { invalidate(); toast.success(res.message || 'Addendum approved'); },
+    onError: (err: any) => toast.error(err.response?.data?.error || 'Failed to approve addendum'),
+  });
+
+  const rejectAddendumMutation = useMutation({
+    mutationFn: ({ addendumPk, reason }: { addendumPk: string; reason: string }) => solicitationsApi.rejectAddendum(id!, addendumPk, reason),
+    onSuccess: (res) => { invalidate(); toast.success(res.message || 'Addendum rejected'); },
+    onError: (err: any) => toast.error(err.response?.data?.error || 'Failed to reject addendum'),
+  });
+
+  const createJustificationMutation = useMutation({
+    mutationFn: (data: Record<string, any>) => nonOpenJustificationsApi.create(data),
+    onSuccess: (res) => {
+      invalidate();
+      setShowJustificationForm(false);
+      setJustifMethod('direct');
+      setJustifReasonCode('emergency');
+      setJustifReasonText('');
+      toast.success('Non-open justification created');
+    },
+    onError: (err: any) => toast.error(err.response?.data?.error || 'Failed to create justification'),
+  });
+
   const clarificationMutation = useMutation({
     mutationFn: (q: string) => solicitationsApi.submitClarification(id!, { question: q }),
     onSuccess: () => { setComment(''); setShowClarifyForm(false); invalidate(); toast.success('Question submitted'); },
     onError: (err: any) => toast.error(err.response?.data?.error || 'Question failed'),
   });
 
+  const generateDocumentMutation = useMutation({
+    mutationFn: () => solicitationsApi.generateDocument(id!),
+    onSuccess: () => { invalidate(); toast.success('Bidding document generated'); },
+    onError: (err: any) => toast.error(err.response?.data?.error || 'Failed to generate document'),
+  });
+
+  const handleDownloadDocument = async () => {
+    setDocumentDownloading(true);
+    try {
+      const blob = await solicitationsApi.downloadDocument(id!);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${sol?.sol_number || 'solicitation'}_bidding_document.pdf`;
+      a.click();
+      URL.revokeObjectURL(url);
+      toast.success('Document downloaded');
+    } catch (err: any) {
+      toast.error(err.response?.data?.error || 'Failed to download document');
+    } finally {
+      setDocumentDownloading(false);
+    }
+  };
+
   if (isLoading) return <LoadingSpinner className="py-12" />;
   if (!sol) return <p className="text-center text-gray-500 py-12">Solicitation not found</p>;
 
   const role = user?.role || '';
   const status = sol.status || '';
+
+  const biddingDocument = sol?.documents?.find((d: any) => d.document_type === 'bidding_document');
+  const canGenerateDocument = !['closed', 'awarded'].includes(status) && ['procurement_officer', 'procurement_manager'].includes(role);
+  const canDownloadDocument = !!biddingDocument;
   const isRejectedDraft = status === 'draft' && !!sol.rejection_reason;
   const canEdit = status === 'draft' && role !== 'procurement_manager';
 
@@ -150,8 +221,9 @@ const SolicitationDetail: React.FC = () => {
   const canClose = status === 'published' && ['procurement_manager', 'procurement_officer'].includes(role);
   const canOpen = status === 'closed' && ['procurement_manager', 'procurement_officer'].includes(role);
   const canAddAddendum = ['published', 'pending_approval', 'approved'].includes(status) && ['procurement_manager', 'procurement_officer'].includes(role);
+  const canJustifyNonOpen = status === 'draft' && ['procurement_officer', 'procurement_manager'].includes(role) && !['open_tender', 'restricted', 'simplified'].includes(sol.procurement_method || '');
 
-  const showActions = canSubmit || canApprove || canReject || canPublish || canClose || canOpen || canAddAddendum;
+  const showActions = canSubmit || canApprove || canReject || canPublish || canClose || canOpen || canAddAddendum || canGenerateDocument || canDownloadDocument;
 
   const currentWorkflowIdx = WORKFLOW_STEPS.findIndex(s => s.statuses.includes(status));
 
@@ -228,6 +300,21 @@ const SolicitationDetail: React.FC = () => {
             {canAddAddendum && !showAddendumForm && (
               <button onClick={() => setShowAddendumForm(true)} className="inline-flex items-center gap-1.5 px-4 py-2.5 text-sm font-bold text-amber-700 bg-white border border-amber-300 rounded-xl hover:bg-amber-50 transition-colors">
                 <InformationCircleIcon className="w-4 h-4" /> Issue Addendum
+              </button>
+            )}
+            {canJustifyNonOpen && !showJustificationForm && (
+              <button onClick={() => setShowJustificationForm(true)} className="inline-flex items-center gap-1.5 px-4 py-2.5 text-sm font-bold text-orange-700 bg-white border border-orange-300 rounded-xl hover:bg-orange-50 transition-colors">
+                <ExclamationCircleIcon className="w-4 h-4" /> Non-Open Justification
+              </button>
+            )}
+            {canGenerateDocument && (
+              <button onClick={() => generateDocumentMutation.mutate()} disabled={generateDocumentMutation.isPending} className="inline-flex items-center gap-1.5 px-4 py-2.5 text-sm font-bold text-indigo-700 bg-white border border-indigo-300 rounded-xl hover:bg-indigo-50 transition-colors disabled:opacity-50">
+                <DocumentTextIcon className="w-4 h-4" /> {generateDocumentMutation.isPending ? 'Generating...' : 'Generate Document'}
+              </button>
+            )}
+            {canDownloadDocument && (
+              <button onClick={handleDownloadDocument} disabled={documentDownloading} className="inline-flex items-center gap-1.5 px-4 py-2.5 text-sm font-bold text-emerald-700 bg-white border border-emerald-300 rounded-xl hover:bg-emerald-50 transition-colors disabled:opacity-50">
+                <DownloadIcon className="w-4 h-4" /> {documentDownloading ? 'Downloading...' : 'Download Document'}
               </button>
             )}
           </div>
@@ -720,15 +807,58 @@ const SolicitationDetail: React.FC = () => {
               <div className="space-y-3">
                 {sol.addenda.map((a: any) => (
                   <div key={a.id || a.addendum_id} className="p-4 bg-gray-50 rounded-2xl border border-gray-100">
-                    <div className="flex items-center gap-2 mb-1">
-                      <InformationCircleIcon className="w-4 h-4 text-amber-500" />
-                      <p className="text-sm font-bold text-gray-900">Addendum #{a.number || a.addendum_number}</p>
+                    <div className="flex items-start justify-between">
+                      <div className="flex items-center gap-2 mb-1">
+                        <InformationCircleIcon className="w-4 h-4 text-amber-500" />
+                        <p className="text-sm font-bold text-gray-900">Addendum #{a.number || a.addendum_number}</p>
+                      </div>
+                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                        a.addendum_status === 'approved' ? 'bg-green-100 text-green-700' :
+                        a.addendum_status === 'pending_approval' ? 'bg-yellow-100 text-yellow-700' :
+                        a.addendum_status === 'rejected' ? 'bg-red-100 text-red-700' :
+                        'bg-gray-100 text-gray-700'
+                      }`}>
+                        {(a.addendum_status || 'draft').replace(/_/g, ' ')}
+                      </span>
                     </div>
                     <p className="text-sm text-gray-600">{a.description}</p>
+                    {a.reason && <p className="text-xs text-gray-500 mt-1">Reason: {a.reason}</p>}
                     {a.extended_closing_date && (
                       <p className="text-xs font-bold text-amber-600 mt-1">Extended to {fmtDateTime(a.extended_closing_date)}</p>
                     )}
                     <p className="text-xs text-gray-400 mt-1">{fmtDate(a.created_at || a.issued_at)}</p>
+                    {a.approved_by && (
+                      <p className="text-xs text-green-600 mt-0.5">Approved by {getUserName(a.approved_by)}{a.approved_at ? ` on ${fmtDate(a.approved_at)}` : ''}</p>
+                    )}
+                    {a.rejection_reason && (
+                      <p className="text-xs text-red-500 mt-0.5">Rejected: {a.rejection_reason}</p>
+                    )}
+                    {a.addendum_status === 'draft' && ['procurement_officer', 'procurement_manager'].includes(role) && (
+                      <button
+                        onClick={() => submitAddendumMutation.mutate(a.id)}
+                        disabled={submitAddendumMutation.isPending}
+                        className="mt-2 inline-flex items-center gap-1 px-3 py-1.5 text-xs font-bold text-amber-700 bg-amber-50 border border-amber-200 rounded-lg hover:bg-amber-100 transition-colors disabled:opacity-50"
+                      >
+                        Submit for Approval
+                      </button>
+                    )}
+                    {a.addendum_status === 'pending_approval' && ['procurement_manager', 'director_procurement'].includes(role) && (
+                      <div className="flex gap-2 mt-2">
+                        <button
+                          onClick={() => approveAddendumMutation.mutate(a.id)}
+                          disabled={approveAddendumMutation.isPending}
+                          className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-bold text-green-700 bg-green-50 border border-green-200 rounded-lg hover:bg-green-100 transition-colors disabled:opacity-50"
+                        >
+                          Approve
+                        </button>
+                        <button
+                          onClick={() => { setRejectAddendumPk(a.id); setRejectAddendumReason(''); }}
+                          className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-bold text-red-700 bg-red-50 border border-red-200 rounded-lg hover:bg-red-100 transition-colors"
+                        >
+                          Reject
+                        </button>
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>
@@ -806,6 +936,90 @@ const SolicitationDetail: React.FC = () => {
               </button>
               <button onClick={() => publishMutation.mutate()} disabled={selectedTargets.length === 0 || publishMutation.isPending} className="px-4 py-2.5 text-sm font-bold text-white bg-teal-600 rounded-xl hover:bg-teal-700 transition-colors disabled:opacity-50">
                 {publishMutation.isPending ? 'Publishing...' : 'Publish'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Non-Open Justification Form */}
+      {showJustificationForm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30">
+          <div className="bg-white rounded-3xl shadow-xl max-w-md w-full p-6 border border-gray-200">
+            <h3 className="text-lg font-black text-gray-900">Non-Open Procurement Justification</h3>
+            <p className="text-sm text-gray-500 mt-1">
+              This solicitation uses a non-open method. A ZPC-approved justification is required before publishing.
+            </p>
+            <div className="space-y-3 mt-4">
+              <div>
+                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1 block ml-1">Procurement Method *</label>
+                <select value={justifMethod} onChange={(e) => setJustifMethod(e.target.value)} className="w-full bg-white border border-gray-200 rounded-xl px-4 py-3 text-sm font-semibold text-gray-700 outline-none focus:ring-2 focus:ring-zammsa-green/20">
+                  <option value="direct">Direct Procurement</option>
+                  <option value="limited">Limited Bidding</option>
+                  <option value="proposal">Request for Proposals</option>
+                  <option value="competitive_dialogue">Competitive Dialogue</option>
+                </select>
+              </div>
+              <div>
+                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1 block ml-1">Reason Code *</label>
+                <select value={justifReasonCode} onChange={(e) => setJustifReasonCode(e.target.value)} className="w-full bg-white border border-gray-200 rounded-xl px-4 py-3 text-sm font-semibold text-gray-700 outline-none focus:ring-2 focus:ring-zammsa-green/20">
+                  <option value="emergency">Emergency Procurement</option>
+                  <option value="proprietary">Proprietary Rights</option>
+                  <option value="sole_supplier">Sole Supplier</option>
+                  <option value="continuity">Continuity of Supply</option>
+                  <option value="below_threshold">Below Threshold Limit</option>
+                </select>
+              </div>
+              <div>
+                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1 block ml-1">Justification Text *</label>
+                <textarea rows={4} value={justifReasonText} onChange={(e) => setJustifReasonText(e.target.value)} placeholder="Provide detailed justification for using a non-open procurement method..." className="w-full bg-white border border-gray-200 rounded-xl px-4 py-3 text-sm font-semibold text-gray-700 outline-none focus:ring-2 focus:ring-zammsa-green/20" />
+              </div>
+            </div>
+            <div className="flex justify-end gap-3 mt-4">
+              <button onClick={() => { setShowJustificationForm(false); setJustifMethod('direct'); setJustifReasonCode('emergency'); setJustifReasonText(''); }} className="px-4 py-2.5 text-sm font-bold text-gray-600 bg-white border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors">
+                Cancel
+              </button>
+              <button
+                onClick={() => createJustificationMutation.mutate({ solicitation: id, method: justifMethod, reason_code: justifReasonCode, reason_text: justifReasonText })}
+                disabled={!justifReasonText || createJustificationMutation.isPending}
+                className="px-4 py-2.5 text-sm font-bold text-white bg-orange-600 rounded-xl hover:bg-orange-700 transition-colors disabled:opacity-50"
+              >
+                {createJustificationMutation.isPending ? 'Creating...' : 'Create Justification'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Reject Addendum Modal */}
+      {rejectAddendumPk && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30">
+          <div className="bg-white rounded-3xl shadow-xl max-w-md w-full p-6 border border-gray-200">
+            <h3 className="text-lg font-black text-gray-900">Reject Addendum</h3>
+            <p className="text-sm text-gray-500 mt-1">Provide a reason for rejecting this addendum</p>
+            <textarea
+              value={rejectAddendumReason}
+              onChange={(e) => setRejectAddendumReason(e.target.value)}
+              rows={3}
+              placeholder="Enter rejection reason..."
+              className="w-full mt-3 bg-white border border-gray-200 rounded-xl px-4 py-3 text-sm font-semibold text-gray-700 outline-none focus:ring-2 focus:ring-rose-500/20"
+            />
+            <div className="flex justify-end gap-3 mt-4">
+              <button onClick={() => { setRejectAddendumPk(null); setRejectAddendumReason(''); }} className="px-4 py-2.5 text-sm font-bold text-gray-600 bg-white border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors">
+                Cancel
+              </button>
+              <button
+                onClick={() => {
+                  if (rejectAddendumPk) {
+                    rejectAddendumMutation.mutate({ addendumPk: rejectAddendumPk, reason: rejectAddendumReason || 'No reason provided' });
+                    setRejectAddendumPk(null);
+                    setRejectAddendumReason('');
+                  }
+                }}
+                disabled={rejectAddendumMutation.isPending}
+                className="px-4 py-2.5 text-sm font-bold text-white bg-rose-600 rounded-xl hover:bg-rose-700 transition-colors disabled:opacity-50"
+              >
+                {rejectAddendumMutation.isPending ? 'Processing...' : 'Reject'}
               </button>
             </div>
           </div>

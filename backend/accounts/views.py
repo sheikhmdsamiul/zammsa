@@ -20,6 +20,7 @@ from .serializers import (
 )
 from .permissions import IsSystemAdmin, IsAdminOrReadOnly
 from .utils.helpers import generate_mfa_secret, get_mfa_provisioning_uri, generate_qr_code_base64, verify_mfa_code
+from system_config.notifications import create_notification, send_external_email
 
 
 class StandardPagination(PageNumberPagination):
@@ -63,6 +64,21 @@ def login_view(request):
             user=user,
             code=code,
             expires_at=timezone.now() + timezone.timedelta(minutes=5),
+        )
+        send_external_email(
+            'Your ZAMMSA MFA code',
+            f'Your ZAMMSA MFA code is {code}. It expires in 5 minutes.',
+            user.email,
+        )
+        create_notification(
+            user,
+            title='MFA code sent',
+            message='A multi-factor authentication code was sent to your email.',
+            notification_type='system',
+            priority='normal',
+            source_module='accounts',
+            object_id=user.pk,
+            metadata={'alert_key': 'mfa_code_sent'},
         )
         return Response({
             'requires_mfa': True,
@@ -128,6 +144,17 @@ def change_password_view(request):
     user.save()
 
     PasswordHistory.objects.create(user=user, password_hash=user.password)
+    create_notification(
+        user,
+        title='Password changed',
+        message='Your ZAMMSA account password was changed successfully.',
+        notification_type='system',
+        priority='normal',
+        source_module='accounts',
+        object_id=user.pk,
+        metadata={'alert_key': 'password_changed'},
+        email_required=True,
+    )
 
     return Response({'message': 'Password changed successfully'})
 
@@ -145,6 +172,21 @@ def forgot_password_view(request):
         user=user,
         code=reset_code,
         expires_at=timezone.now() + timezone.timedelta(minutes=15),
+    )
+    send_external_email(
+        'Your ZAMMSA password reset code',
+        f'Your ZAMMSA password reset code is {reset_code}. It expires in 15 minutes.',
+        user.email,
+    )
+    create_notification(
+        user,
+        title='Password reset code sent',
+        message='A password reset code was sent to your email.',
+        notification_type='system',
+        priority='normal',
+        source_module='accounts',
+        object_id=user.pk,
+        metadata={'alert_key': 'password_reset_code_sent'},
     )
 
     return Response({'message': 'Password reset code sent to your email'})
@@ -173,6 +215,17 @@ def reset_password_view(request):
     mfa_code.is_used = True
     mfa_code.save(update_fields=['is_used'])
     PasswordHistory.objects.create(user=user, password_hash=user.password)
+    create_notification(
+        user,
+        title='Password reset completed',
+        message='Your ZAMMSA account password was reset successfully.',
+        notification_type='system',
+        priority='high',
+        source_module='accounts',
+        object_id=user.pk,
+        metadata={'alert_key': 'password_reset_completed'},
+        email_required=True,
+    )
 
     return Response({'message': 'Password reset successfully'})
 

@@ -7,12 +7,12 @@ import { LoadingSpinner } from '../common/LoadingSpinner';
 import { PageHeader } from '../common/PageHeader';
 import { StatCard } from '../common/StatCard';
 import { useAuth } from '../../hooks/useAuth';
-import { 
-  PencilIcon, CheckIcon, XIcon, ArrowLeftIcon, 
-  DocumentTextIcon, ClipboardListIcon, CashIcon, 
+import {
+  PencilIcon, CheckIcon, XIcon, ArrowLeftIcon,
+  DocumentTextIcon, ClipboardListIcon, CashIcon,
   ClockIcon, LocationMarkerIcon, UserCircleIcon,
   ShieldCheckIcon, LightningBoltIcon, OfficeBuildingIcon,
-  CalendarIcon
+  CalendarIcon, ExclamationCircleIcon
 } from '@heroicons/react/outline';
 import toast from 'react-hot-toast';
 
@@ -117,6 +117,19 @@ export default function RequisitionDetail() {
         }
       />
 
+      {req.is_expired && (
+        <div className="mb-6 p-4 bg-rose-50 border border-rose-200 rounded-2xl flex items-start gap-3">
+          <ExclamationCircleIcon className="w-5 h-5 text-rose-500 shrink-0 mt-0.5" />
+          <div>
+            <p className="text-sm font-bold text-rose-800">Requisition Expired</p>
+            <p className="text-sm text-rose-700">
+              This requisition has been open for {req.days_since_creation} days without being fully approved.
+              The 90-day validity period has lapsed. Please create a new requisition.
+            </p>
+          </div>
+        </div>
+      )}
+
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
         <div className="lg:col-span-3 space-y-8">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -166,10 +179,18 @@ export default function RequisitionDetail() {
                    <div className="w-10 h-10 rounded-xl bg-gray-50 flex items-center justify-center shrink-0"><ClipboardListIcon className="w-5 h-5 text-gray-400"/></div>
                    <div><p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Procurement Method</p><p className="text-sm font-bold text-gray-900 capitalize">{req.procurement_method || 'Standard'}</p></div>
                 </div>
-                <div className="flex items-start gap-4">
-                   <div className="w-10 h-10 rounded-xl bg-gray-50 flex items-center justify-center shrink-0"><DocumentTextIcon className="w-5 h-5 text-gray-400"/></div>
-                   <div><p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">APP Reference</p><p className="text-sm font-bold text-gray-900">{req.app_line_item_ref || 'N/A'}</p></div>
-                </div>
+                 <div className="flex items-start gap-4">
+                    <div className="w-10 h-10 rounded-xl bg-gray-50 flex items-center justify-center shrink-0"><DocumentTextIcon className="w-5 h-5 text-gray-400"/></div>
+                    <div><p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">APP Reference</p><p className="text-sm font-bold text-gray-900">{req.app_line_item_ref || 'N/A'}</p></div>
+                 </div>
+                 <div className="flex items-start gap-4">
+                    <div className="w-10 h-10 rounded-xl bg-gray-50 flex items-center justify-center shrink-0"><CalendarIcon className="w-5 h-5 text-gray-400"/></div>
+                    <div><p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Created</p><p className="text-sm font-bold text-gray-900">{req.created_at ? new Date(req.created_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : '---'}</p></div>
+                 </div>
+                 <div className="flex items-start gap-4">
+                    <div className="w-10 h-10 rounded-xl bg-gray-50 flex items-center justify-center shrink-0"><ClockIcon className="w-5 h-5 text-gray-400"/></div>
+                    <div><p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Submitted</p><p className="text-sm font-bold text-gray-900">{req.submitted_at ? new Date(req.submitted_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : 'Not yet submitted'}</p></div>
+                 </div>
              </div>
 
              {req.description && (

@@ -1,10 +1,9 @@
 from celery import shared_task
 from django.utils import timezone
-from django.core.mail import send_mail
-from django.conf import settings
 from datetime import timedelta
 
 from .models import Contract
+from system_config.notifications import notify_roles
 
 
 @shared_task
@@ -31,13 +30,22 @@ def check_retention_expiry_alerts():
             f"Days Remaining: {days_left}\n\n"
             f"Action Required: Review and prepare for secure deletion or extend retention per ZPPA guidelines."
         )
-        recipient = getattr(settings, 'RETENTION_ALERT_RECIPIENT', 'records.manager@zammsa.gov.zm')
-        send_mail(
-            subject=subject,
+        notify_roles(
+            ['system_admin', 'zppa_reporting_officer'],
+            title=subject,
             message=message,
-            from_email=settings.DEFAULT_FROM_EMAIL,
-            recipient_list=[recipient],
-            fail_silently=False,
+            notification_type='compliance',
+            priority='high',
+            source_module='contracts',
+            object_id=contract.pk,
+            action_url=f'/contracts/{contract.pk}',
+            metadata={
+                'alert_key': 'contract_retention_expiry',
+                'contract_number': contract.contract_number,
+                'retention_expiry': contract.retention_expiry.isoformat(),
+                'days_left': days_left,
+            },
+            email_required=True,
         )
 
     return f"Checked {contracts.count()} contracts nearing retention expiry"

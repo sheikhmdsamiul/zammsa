@@ -12,6 +12,7 @@ urlpatterns = [
     path('annual-plans/<uuid:pk>/return/', views.app_return_view, name='app-return'),
     path('annual-plans/<uuid:pk>/publish/', views.app_publish_view, name='app-publish'),
     path('annual-plans/<uuid:pk>/compliance/', views.app_compliance_check_view, name='app-compliance'),
+    path('annual-plans/<uuid:pk>/quarterly-update/', views.app_quarterly_update_view, name='app-quarterly-update'),
     path('annual-plans/<uuid:pk>/consolidate/', views.app_consolidate_view, name='app-consolidate'),
     path('annual-plans/<uuid:pk>/approval-trail/', views.app_approval_trail_view, name='app-approval-trail'),
     path('annual-plans/<uuid:pk>/generate-gpn/', views.gpn_generate_view, name='app-generate-gpn'),

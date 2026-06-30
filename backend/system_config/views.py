@@ -1,14 +1,16 @@
 from django.db.models import Q
-from rest_framework import generics, filters
+from django.utils import timezone
+from rest_framework import generics, filters, status
+from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.pagination import PageNumberPagination
 from django_filters.rest_framework import DjangoFilterBackend
 import django_filters
 
-from .models import SystemSetting, NotificationTemplate, ThresholdRule, PreferenceRule, WorkflowStage, ScheduledTask, IntegrationEndpoint
+from .models import SystemSetting, NotificationTemplate, Notification, ThresholdRule, PreferenceRule, WorkflowStage, ScheduledTask, IntegrationEndpoint
 from .serializers import (
-    SystemSettingSerializer, NotificationTemplateSerializer, ThresholdRuleSerializer,
+    SystemSettingSerializer, NotificationTemplateSerializer, NotificationSerializer, ThresholdRuleSerializer,
     PreferenceRuleSerializer, WorkflowStageSerializer, ScheduledTaskSerializer, IntegrationEndpointSerializer,
 )
 
@@ -104,6 +106,64 @@ class NotificationTemplateDetailView(generics.RetrieveUpdateDestroyAPIView):
     queryset = NotificationTemplate.objects.all()
     serializer_class = NotificationTemplateSerializer
     permission_classes = [IsAuthenticated]
+
+
+class NotificationListView(BaseModelViewSet, generics.ListAPIView):
+    serializer_class = NotificationSerializer
+    filterset_fields = ['notification_type', 'priority']
+    search_fields = ['title', 'message', 'source_module']
+    ordering = ['-created_at']
+
+    def get_queryset(self):
+        queryset = Notification.objects.filter(recipient=self.request.user)
+        read_param = self.request.query_params.get('read')
+        if read_param == 'true':
+            queryset = queryset.filter(read_at__isnull=False)
+        elif read_param == 'false':
+            queryset = queryset.filter(read_at__isnull=True)
+        return queryset
+
+    def list(self, request, *args, **kwargs):
+        response = super().list(request, *args, **kwargs)
+        unread_count = Notification.objects.filter(recipient=request.user, read_at__isnull=True).count()
+        if isinstance(response.data, dict):
+            response.data['unread_count'] = unread_count
+        return response
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def notification_summary(request):
+    base = Notification.objects.filter(recipient=request.user)
+    return Response({
+        'unread_count': base.filter(read_at__isnull=True).count(),
+        'total_count': base.count(),
+        'urgent_count': base.filter(priority='urgent', read_at__isnull=True).count(),
+        'failed_delivery_count': base.filter(Q(email_status='failed') | Q(sms_status='failed')).count(),
+        'pending_delivery_count': base.filter(Q(email_status='pending') | Q(sms_status='pending')).count(),
+    })
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def notification_mark_read(request, pk):
+    try:
+        notification = Notification.objects.get(pk=pk, recipient=request.user)
+    except Notification.DoesNotExist:
+        return Response({'error': 'Notification not found'}, status=status.HTTP_404_NOT_FOUND)
+
+    notification.mark_read()
+    return Response(NotificationSerializer(notification).data)
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def notification_mark_all_read(request):
+    updated = Notification.objects.filter(
+        recipient=request.user,
+        read_at__isnull=True,
+    ).update(read_at=timezone.now())
+    return Response({'message': 'Notifications marked as read', 'updated': updated})
 
 
 class ThresholdRuleListView(BaseModelViewSet, generics.ListCreateAPIView):

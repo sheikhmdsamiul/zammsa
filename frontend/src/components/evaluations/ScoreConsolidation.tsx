@@ -54,7 +54,7 @@ const ScoreConsolidation: React.FC = () => {
   });
 
   const solicitationAwarded = solicitation?.status === 'awarded';
-  const isCombinedMethod = solicitation?.evaluation_method === 'qcbs' || solicitation?.evaluation_method === 'qbs' || (!solicitation?.evaluation_method && solicitation?.type === 'rfp');
+  const isCombinedMethod = solicitation?.evaluation_method === 'qcbs' || solicitation?.evaluation_method === 'qbs' || (!solicitation?.evaluation_method && solicitation?.type === 'proposal');
   const computeLabel = isCombinedMethod ? 'Calculate Combined Scores' : 'Persist Rankings';
   const methodTitle = isCombinedMethod ? 'Combined Scores' : 'Evaluated Rankings';
 

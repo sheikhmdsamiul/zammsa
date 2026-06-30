@@ -7,7 +7,7 @@ import { StatusBadge } from '../common/StatusBadge';
 import { LoadingSpinner } from '../common/LoadingSpinner';
 import { useAuth } from '../../hooks/useAuth';
 import { ROLES } from '../../config/rbac';
-import { ExclamationIcon, CheckCircleIcon } from '@heroicons/react/outline';
+import { ExclamationIcon, CheckCircleIcon, XCircleIcon } from '@heroicons/react/outline';
 import { EVALUATION_PHASES, EvaluationPhaseStepper, EvaluationPhaseId } from './EvaluationPhaseStepper';
 
 const EvaluationDetail: React.FC = () => {
@@ -462,6 +462,19 @@ const EvaluationDetail: React.FC = () => {
             <dl className="space-y-3 text-sm">
               <div><dt className="text-gray-500">Formed Date</dt><dd className="font-medium">{committee.formed_date ? new Date(committee.formed_date).toLocaleDateString() : '-'}</dd></div>
               <div><dt className="text-gray-500">Total Members</dt><dd className="font-medium">{memberList.length}</dd></div>
+              <div><dt className="text-gray-500">Quorum Required</dt><dd className="font-medium">{committee.quorum_required ?? '-'}</dd></div>
+              <div>
+                <dt className="text-gray-500">Quorum Status</dt>
+                <dd className="font-medium">
+                  {committee.quorum_met === true ? (
+                    <span className="text-emerald-600 flex items-center gap-1"><CheckCircleIcon className="w-4 h-4" /> Met</span>
+                  ) : committee.quorum_met === false ? (
+                    <span className="text-rose-600 flex items-center gap-1"><XCircleIcon className="w-4 h-4" /> Not Met</span>
+                  ) : (
+                    '---'
+                  )}
+                </dd>
+              </div>
               <div><dt className="text-gray-500">Declarations</dt><dd className="font-medium">{coiState?.declarations?.length || 0}</dd></div>
               <div><dt className="text-gray-500">Recused</dt><dd className="font-medium">{coiState?.recused_members?.length || 0}</dd></div>
             </dl>

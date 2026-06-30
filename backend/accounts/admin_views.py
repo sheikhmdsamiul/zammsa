@@ -6,6 +6,7 @@ from rest_framework.response import Response
 from rest_framework import status, generics
 from .models import User, AuditLog, Role, RolePermission, Permission
 from .serializers import UserSerializer, UserCreateSerializer, UserUpdateSerializer, AuditLogSerializer
+from system_config.notifications import create_notification, send_external_email
 
 
 @api_view(['GET'])
@@ -114,7 +115,22 @@ def admin_reset_password(request, pk):
         user.must_change_password = True
         user.temp_password = temp
         user.save()
-        return Response({'message': 'Password reset email sent'})
+        result = send_external_email(
+            'Your ZAMMSA temporary password',
+            f'Your ZAMMSA password has been reset by an administrator.\n\nTemporary password: {temp}\n\nYou must change it after login.',
+            user.email,
+        )
+        create_notification(
+            user,
+            title='Password reset by administrator',
+            message='Your password was reset by an administrator. Check your email for the temporary password.',
+            notification_type='system',
+            priority='high',
+            source_module='accounts',
+            object_id=user.pk,
+            metadata={'alert_key': 'admin_password_reset'},
+        )
+        return Response({'message': 'Password reset email sent', 'email_sent': result['sent']})
     except User.DoesNotExist:
         return Response({'error': 'User not found'}, status=404)
 

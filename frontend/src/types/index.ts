@@ -89,6 +89,8 @@ export interface Requisition {
   recommended_method?: string;
   procurement_type?: string;
   commodity_category?: string;
+  is_expired?: boolean;
+  days_since_creation?: number;
 }
 
 export interface RequisitionItem {
@@ -160,7 +162,7 @@ export interface Solicitation {
   solicitation_id?: string;
   title: string;
   description: string;
-  type: 'rfq' | 'rfb' | 'rfp' | 'rfi';
+  type: 'open_tender' | 'international' | 'limited' | 'simplified' | 'direct' | 'proposal';
   requisition: string;
   cpp?: string;
   cpp_number?: string;
@@ -301,6 +303,9 @@ export interface EvaluationCommittee {
   formed_at?: string;
   status: string;
   member_count?: number;
+  total_members?: number;
+  quorum_required?: number;
+  quorum_met?: boolean;
   coi_declarations?: ConflictOfInterest[];
   current_phase?: { id: string; label: string };
   phase_progress?: { completed: number; total: number; percent: number };
@@ -417,6 +422,10 @@ export interface BERSignature {
   member_name: string;
   role: string;
   signed_at: string;
+  signature?: string;
+  algorithm?: string;
+  key_fingerprint?: string;
+  public_key_pem?: string;
 }
 
 export interface BERSignatureStatus {
@@ -1064,6 +1073,33 @@ export interface VendorNotification {
   type: string;
 }
 
+export interface UserNotification {
+  id: string;
+  notification_id?: string;
+  title: string;
+  message: string;
+  notification_type: string;
+  priority: 'low' | 'normal' | 'high' | 'urgent';
+  source_module?: string;
+  object_id?: string;
+  action_url?: string;
+  metadata?: Record<string, any>;
+  delivery_channels?: string[];
+  email_required?: boolean;
+  email_status?: 'not_required' | 'pending' | 'sent' | 'failed' | 'skipped';
+  email_attempts?: number;
+  email_sent_at?: string | null;
+  email_last_error?: string;
+  sms_required?: boolean;
+  sms_status?: 'not_required' | 'pending' | 'sent' | 'failed' | 'skipped';
+  sms_attempts?: number;
+  sms_sent_at?: string | null;
+  sms_last_error?: string;
+  read: boolean;
+  read_at?: string | null;
+  created_at: string;
+}
+
 export interface ProcurementDashboardData {
   key_metrics: { label: string; value: number; change: number }[];
   solicitations_by_status: { status: string; count: number }[];
@@ -1423,6 +1459,7 @@ export interface AnnualProcurementPlan {
   department_code?: string;
   status: string;
   total_estimated_value: number;
+  created_by?: string;
   submitted_by?: string;
   submitted_by_name?: string;
   submitted_at?: string;
@@ -1447,6 +1484,12 @@ export interface AnnualProcurementPlan {
   gpn_published_at?: string;
   gpn_publication_targets?: string[];
   gpn_publication_proofs?: Record<string, any>;
+  // FR-PLAN-06 quarterly update fields
+  version?: number;
+  amends?: string;
+  amends_app_number?: string;
+  change_justification?: string;
+  previous_total_value?: number;
   // ZPPA submission tracking
   zppa_deadline?: string;
   zppa_submitted?: boolean;

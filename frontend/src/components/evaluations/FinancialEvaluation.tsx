@@ -69,7 +69,7 @@ const FinancialEvaluation: React.FC = () => {
 
   const passedBids = passedBidsData?.bids || [];
   const solicitationAwarded = solicitation?.status === 'awarded';
-  const isCombinedMethod = solicitation?.evaluation_method === 'qcbs' || solicitation?.evaluation_method === 'qbs' || (!solicitation?.evaluation_method && solicitation?.type === 'rfp');
+  const isCombinedMethod = solicitation?.evaluation_method === 'qcbs' || solicitation?.evaluation_method === 'qbs' || (!solicitation?.evaluation_method && solicitation?.type === 'proposal');
   const computeLabel = isCombinedMethod ? 'Compute Combined Scores' : 'Persist Rankings';
   const methodLabel = isCombinedMethod ? 'Combined Scores' : 'Evaluated Rankings';
   const awardedWinner = passedBidsData?.winner_name || winner;

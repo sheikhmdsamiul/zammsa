@@ -108,9 +108,8 @@ const SolicitationEdit: React.FC = () => {
       financial_weight: sol?.financial_weight,
     };
 
-    // Preserve other read-only fields the serializer needs
-    payload.type = sol?.type || sol?.procurement_method;
-    payload.procurement_method = sol?.procurement_method;
+    payload.type = form.method || sol?.type || sol?.procurement_method;
+    payload.procurement_method = form.method || sol?.procurement_method;
 
     mutation.mutate(payload);
   };
@@ -164,6 +163,17 @@ const SolicitationEdit: React.FC = () => {
             <div>
               <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5 block ml-1">Estimated Value *</label>
               <input type="number" value={form.estimated_value} onChange={(e) => update('estimated_value', e.target.value)} className="w-full bg-white border border-gray-200 rounded-2xl px-5 py-4 text-sm font-bold text-gray-700 outline-none focus:ring-4 focus:ring-zammsa-green/5" />
+            </div>
+            <div>
+              <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5 block ml-1">Procurement Method</label>
+              <select value={form.method || sol?.type || sol?.procurement_method || ''} onChange={(e) => update('method', e.target.value)} className="w-full bg-white border border-gray-200 rounded-2xl px-5 py-4 text-sm font-bold text-gray-700 outline-none focus:ring-4 focus:ring-zammsa-green/5">
+                <option value="open_tender">Open National Bidding</option>
+                <option value="international">International Competitive Bidding</option>
+                <option value="limited">Limited Bidding</option>
+                <option value="simplified">Simplified Bidding</option>
+                <option value="direct">Direct Procurement</option>
+                <option value="proposal">Request for Proposals</option>
+              </select>
             </div>
           </div>
         </div>

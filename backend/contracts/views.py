@@ -20,11 +20,44 @@ from .serializers import (
 from django.utils import timezone
 from datetime import timedelta
 from accounts.audit import log_audit_action
+from system_config.notifications import create_notification, notify_role, notify_roles
 
 CONTRACT_GENERATION_ROLES = ('procurement_officer', 'system_admin')
 CONTRACT_MANAGER_ROLES = ('contract_manager', 'procurement_manager', 'director_procurement', 'system_admin')
 STANDSTILL_MANAGE_ROLES = CONTRACT_GENERATION_ROLES + ('contract_manager', 'procurement_manager')
 SUPPLIER_CONTRACT_ROLES = ('supplier_user',)
+
+
+def _contract_supplier_user(contract):
+    winning_bid = getattr(contract, 'winning_bid', None)
+    return getattr(winning_bid, 'supplier', None)
+
+
+def _contract_action_url(contract):
+    return f'/contracts/{contract.contract_id}'
+
+
+def _notify_contract_supplier(contract, *, title, message, priority='normal', alert_key='contract_supplier'):
+    supplier_user = _contract_supplier_user(contract)
+    if not supplier_user:
+        return None
+    return create_notification(
+        supplier_user,
+        title=title,
+        message=message,
+        notification_type='contract',
+        priority=priority,
+        source_module='contracts',
+        object_id=contract.pk,
+        action_url=f'/vendor/contracts/{contract.contract_id}',
+        metadata={
+            'alert_key': alert_key,
+            'contract_id': str(contract.pk),
+            'contract_number': contract.contract_number,
+            'status': contract.status,
+        },
+        email_required=True,
+    )
 
 
 def _update_activation_milestones_status(contract):
@@ -374,6 +407,16 @@ def contract_publish_award_view(request, pk):
         user=request.user, action='CONTRACT_PUBLISH_AWARD', module='contracts',
         record_id=str(contract.contract_id), ip_address=ip,
     )
+    _notify_contract_supplier(
+        contract,
+        title=f'Award notice published: {contract.contract_number}',
+        message=(
+            f'You have been issued an award notice for contract {contract.contract_number}. '
+            f'The standstill period ends on {contract.waiting_period_end}.'
+        ),
+        priority='high',
+        alert_key='award_notice_published',
+    )
 
     return Response({
         'message': 'Award notice published. Waiting period started.',
@@ -479,6 +522,18 @@ def contract_supplier_sign_view(request, pk):
     contract.signed_vendor_date = timezone.now().date()
     contract.status = 'pending_acceptance'
     contract.save()
+    notify_role(
+        'director_general',
+        title=f'Contract countersignature required: {contract.contract_number}',
+        message=f'Supplier has signed contract {contract.contract_number}. Director General countersignature is required.',
+        notification_type='contract',
+        priority='high',
+        source_module='contracts',
+        object_id=contract.pk,
+        action_url=_contract_action_url(contract),
+        metadata={'alert_key': 'contract_supplier_signed', 'contract_number': contract.contract_number},
+        email_required=True,
+    )
 
     return Response({'message': 'Contract signed by supplier', 'status': contract.status})
 
@@ -525,6 +580,22 @@ def contract_countersign_view(request, pk):
     contract.save()
 
     _update_activation_milestones_status(contract)
+    if contract.status == 'active':
+        _notify_contract_supplier(
+            contract,
+            title=f'Contract activated: {contract.contract_number}',
+            message=f'Contract {contract.contract_number} has been countersigned and is now active.',
+            priority='high',
+            alert_key='contract_activated',
+        )
+    elif contract.performance_security_required:
+        _notify_contract_supplier(
+            contract,
+            title=f'Performance security required: {contract.contract_number}',
+            message=f'Contract {contract.contract_number} was countersigned. Please upload the required performance security.',
+            priority='high',
+            alert_key='performance_security_required',
+        )
 
     ip = request.META.get('REMOTE_ADDR', '')
     log_audit_action(
@@ -596,6 +667,18 @@ def contract_upload_security_view(request, pk):
 
     contract.performance_security_uploaded = True
     contract.save()
+    notify_roles(
+        ['contract_manager', 'procurement_manager'],
+        title=f'Performance security uploaded: {contract.contract_number}',
+        message=f'The supplier uploaded performance security for contract {contract.contract_number}. Validation is required.',
+        notification_type='contract',
+        priority='high',
+        source_module='contracts',
+        object_id=contract.pk,
+        action_url=_contract_action_url(contract),
+        metadata={'alert_key': 'performance_security_uploaded', 'security_id': str(security.pk)},
+        email_required=True,
+    )
 
     return Response({
         'message': 'Security uploaded, pending validation',
@@ -633,10 +716,24 @@ def contract_validate_security_view(request, pk, security_pk):
         po_result = _generate_po_for_contract(contract)
         
         contract.save()
+        _notify_contract_supplier(
+            contract,
+            title=f'Contract activated: {contract.contract_number}',
+            message=f'Performance security was validated and contract {contract.contract_number} is now active.',
+            priority='high',
+            alert_key='contract_activated_security_validated',
+        )
         return Response({'message': 'Security validated. Contract activated.', 'status': contract.status})
     else:
         security.status = 'rejected'
         security.save()
+        _notify_contract_supplier(
+            contract,
+            title=f'Performance security rejected: {contract.contract_number}',
+            message=f'Performance security for contract {contract.contract_number} was rejected. Please review and resubmit.',
+            priority='high',
+            alert_key='performance_security_rejected',
+        )
         return Response({'message': 'Security rejected'}, status=400)
 
 

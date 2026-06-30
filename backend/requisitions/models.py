@@ -16,6 +16,7 @@ REQ_STATUS_CHOICES = [
     ('approved', 'Approved for Procurement'),
     ('rejected', 'Rejected'),
     ('amended', 'Amended'),
+    ('cancelled', 'Cancelled'),
 ]
 
 DECISION_CHOICES = [
@@ -62,6 +63,20 @@ class Requisition(models.Model):
     current_approver = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='pending_approvals')
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+
+    @property
+    def days_since_creation(self):
+        """Return days since this requisition was created."""
+        from datetime import date
+        if not self.created_at:
+            return 0
+        delta = date.today() - self.created_at.date()
+        return delta.days
+
+    @property
+    def is_expired(self):
+        """BR-REQ-04: Requisition expires after 90 days without action."""
+        return self.days_since_creation > 90 and self.status in ('draft', 'pending_dept_head', 'pending_finance', 'pending_dg', 'pending_zpc')
 
     class Meta:
         db_table = 'req_requisition'

@@ -29,13 +29,26 @@ def etl_data_warehouse():
 @shared_task
 def generate_monthly_report():
     from reporting.models import ReportDefinition, ReportGeneration
+    from system_config.notifications import notify_role
 
     reports = ReportDefinition.objects.filter(schedule__icontains='monthly')
     count = 0
     for report in reports:
-        ReportGeneration.objects.create(
+        generation = ReportGeneration.objects.create(
             report=report,
             status='generated',
+        )
+        notify_role(
+            'zppa_reporting_officer',
+            title=f'Monthly report generated: {report.report_name}',
+            message=f'{report.report_name} was generated and is ready for ZPPA reporting review.',
+            notification_type='compliance',
+            priority='normal',
+            source_module='reporting',
+            object_id=generation.pk,
+            action_url='/reports',
+            metadata={'report_id': str(report.pk), 'generation_id': str(generation.pk)},
+            email_required=True,
         )
         count += 1
     return f'{count} monthly reports generated'
@@ -44,6 +57,7 @@ def generate_monthly_report():
 @shared_task
 def check_retention_expiry():
     from reporting.models import ArchivedProcurementFile
+    from system_config.notifications import notify_role
 
     cutoff = timezone.now().date() + timedelta(days=90)
     expiring = ArchivedProcurementFile.objects.filter(
@@ -51,6 +65,23 @@ def check_retention_expiry():
         legal_hold=False
     )
     count = expiring.count()
+    for archive in expiring[:100]:
+        notify_role(
+            'system_admin',
+            title=f'Archive retention expiry pending: {archive.procurement_id}',
+            message=f'Archive {archive.procurement_id} is due for retention expiry on {archive.retention_expiry}. Review legal hold requirements.',
+            notification_type='compliance',
+            priority='high',
+            source_module='reporting',
+            object_id=archive.pk,
+            action_url='/reports',
+            metadata={
+                'procurement_id': archive.procurement_id,
+                'retention_expiry': archive.retention_expiry.isoformat(),
+                'days_to_expiry': archive.days_to_expiry,
+            },
+            email_required=True,
+        )
     return f'{count} files expiring within 90 days'
 
 

@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
-import { useQuery, useMutation } from '@tanstack/react-query';
-import { evaluationsApi } from '../../api/evaluations';
+import { useQuery } from '@tanstack/react-query';
 import { DataTable } from '../common/DataTable';
 import { StatusBadge } from '../common/StatusBadge';
 import { PageHeader } from '../common/PageHeader';
@@ -8,23 +7,21 @@ import { StatCard } from '../common/StatCard';
 import { SearchBar } from '../common/SearchBar';
 import { Pagination } from '../common/Pagination';
 import { LoadingSpinner } from '../common/LoadingSpinner';
-import toast from 'react-hot-toast';
 import {
   CheckCircleIcon, XCircleIcon, ClipboardListIcon, UserGroupIcon,
 } from '@heroicons/react/outline';
 import api from '../../api/client';
 
-type PQStatus = 'pending' | 'in_progress' | 'completed' | 'failed';
+type PQStatus = 'pending' | 'cleared' | 'failed';
 
-interface PostQualification {
+interface PostQualificationRecord {
   id: string;
-  bid: string;
+  bidder: string;
   bidder_name: string;
-  ber: string;
+  ber?: string | null;
   status: PQStatus;
-  findings: Record<string, any>;
-  recommendation: string;
-  submitted_at: string;
+  verification_items: Record<string, any>;
+  verified_at?: string | null;
 }
 
 const PostQualification: React.FC = () => {
@@ -39,10 +36,10 @@ const PostQualification: React.FC = () => {
 
   const pqs = data?.results || [];
 
-  const pending = pqs.filter((p: PostQualification) => p.status === 'pending').length;
-  const inProgress = pqs.filter((p: PostQualification) => p.status === 'in_progress').length;
-  const completed = pqs.filter((p: PostQualification) => p.status === 'completed').length;
-  const failed = pqs.filter((p: PostQualification) => p.status === 'failed').length;
+  const pending = pqs.filter((p: PostQualificationRecord) => p.status === 'pending').length;
+  const preBer = pqs.filter((p: PostQualificationRecord) => !p.ber).length;
+  const cleared = pqs.filter((p: PostQualificationRecord) => p.status === 'cleared').length;
+  const failed = pqs.filter((p: PostQualificationRecord) => p.status === 'failed').length;
 
   const columns = [
     { key: 'id', label: 'ID', render: (_: any, row: any) => (
@@ -51,10 +48,10 @@ const PostQualification: React.FC = () => {
     { key: 'bidder_name', label: 'Bidder' },
     { key: 'ber', label: 'BER', render: (v: string) => v ? v.slice(0, 8) : '-' },
     { key: 'status', label: 'Status', render: (v: string) => <StatusBadge status={v || 'pending'} /> },
-    { key: 'recommendation', label: 'Recommendation', render: (v: string) => (
-      <span className="text-sm max-w-[200px] block truncate">{v || '-'}</span>
+    { key: 'verification_items', label: 'Checks', render: (v: Record<string, any>) => (
+      <span className="text-sm max-w-[200px] block truncate">{v ? Object.keys(v).length : 0} item(s)</span>
     )},
-    { key: 'submitted_at', label: 'Submitted', render: (v: string) => v ? new Date(v).toLocaleDateString() : '-' },
+    { key: 'verified_at', label: 'Verified', render: (v: string) => v ? new Date(v).toLocaleDateString() : '-' },
   ];
 
   return (
@@ -66,8 +63,8 @@ const PostQualification: React.FC = () => {
 
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <StatCard label="Pending" value={pending} icon={<ClipboardListIcon className="w-6 h-6" />} color="orange" />
-        <StatCard label="In Progress" value={inProgress} icon={<UserGroupIcon className="w-6 h-6" />} color="blue" />
-        <StatCard label="Completed" value={completed} icon={<CheckCircleIcon className="w-6 h-6" />} color="green" />
+        <StatCard label="Pre-BER" value={preBer} icon={<UserGroupIcon className="w-6 h-6" />} color="blue" />
+        <StatCard label="Cleared" value={cleared} icon={<CheckCircleIcon className="w-6 h-6" />} color="green" />
         <StatCard label="Failed" value={failed} icon={<XCircleIcon className="w-6 h-6" />} color="red" />
       </div>
 
@@ -82,7 +79,7 @@ const PostQualification: React.FC = () => {
           <div className="py-12 text-center text-gray-400">
             <ClipboardListIcon className="w-12 h-12 mx-auto mb-2" />
             <p className="font-medium">No post-qualification records</p>
-            <p className="text-sm mt-1">Post-qualification checks appear after BER generation</p>
+            <p className="text-sm mt-1">Post-qualification checks appear after winner selection and before BER generation</p>
           </div>
         )}
         {data && (

@@ -38,10 +38,12 @@ const SolicitationsList: React.FC = () => {
   };
 
   const typeColors: Record<string, string> = { 
-    rfq: 'bg-blue-50 text-blue-600', 
-    rfb: 'bg-emerald-50 text-emerald-600', 
-    rfp: 'bg-purple-50 text-purple-600', 
-    rfi: 'bg-amber-50 text-amber-600' 
+    open_tender: 'bg-emerald-50 text-emerald-600',
+    international: 'bg-purple-50 text-purple-600',
+    limited: 'bg-amber-50 text-amber-600',
+    simplified: 'bg-blue-50 text-blue-600',
+    direct: 'bg-rose-50 text-rose-600',
+    proposal: 'bg-indigo-50 text-indigo-600',
   };
   
   const canCreateSolicitation = user?.role !== 'procurement_manager';
@@ -88,7 +90,7 @@ const SolicitationsList: React.FC = () => {
     <div className="space-y-8">
       <PageHeader
         title="Solicitations"
-        description="Manage RFQs, RFBs, RFPs and RFIs"
+        description="Manage Invitations to Bid, Requests for Proposals, and Quotations"
         actions={
           <div className="flex items-center gap-3">
             <button 
