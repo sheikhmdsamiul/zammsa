@@ -91,6 +91,16 @@ const METHOD_OPTIONS: MethodOption[] = [
   { value: 'international', label: 'International Tender', minPeriod: 45, zpcRequired: true },
 ];
 
+const ZPC_GROUNDS = [
+  'Sole Source / Proprietary Item',
+  'Emergency Procurement',
+  'Additional Supplies from Original Supplier',
+  'Standardization Requirements',
+  'National Security',
+  'Artistic / Cultural Specificity',
+  'Research / Experimental Purpose',
+];
+
 const CPPEdit: React.FC = () => {
   const navigate = useNavigate();
   const { id = '' } = useParams<{ id: string }>();
@@ -104,6 +114,8 @@ const CPPEdit: React.FC = () => {
   const [recommendedMethod, setRecommendedMethod] = useState<ProcurementMethod | ''>('');
   const [methodOverride, setMethodOverride] = useState(false);
   const [overrideReason, setOverrideReason] = useState('');
+  const [zpcGrounds, setZpcGrounds] = useState('');
+  const [zpcJustification, setZpcJustification] = useState('');
   const [milestones, setMilestones] = useState<ProcurementMilestone[]>([]);
   const [newMilestone, setNewMilestone] = useState({ name: '', date: '' });
   const [resourceRequirements, setResourceRequirements] = useState<ResourceRequirements>({
@@ -169,6 +181,8 @@ const CPPEdit: React.FC = () => {
         setMethodOverride(Boolean(res.method_override));
         setNewMethodOverride(res.method_override ? (res.method || '') : '');
         setOverrideReason(res.override_reason || '');
+        setZpcGrounds(res.zpc_grounds || '');
+        setZpcJustification(res.zpc_justification || '');
         setMilestones((res.milestones || []).map((m, idx) => ({
           milestone_id: m.milestone_id || crypto.randomUUID(),
           cpp: m.cpp || '',
@@ -302,6 +316,13 @@ const CPPEdit: React.FC = () => {
     if (!selectedRequisition) { toast.error('Select a requisition first'); return; }
     if (!recommendedMethod) { toast.error('Procurement method must be determined'); return; }
     if (milestones.length === 0) { toast.error('Add at least one milestone'); return; }
+    const selectedMethod = methodOverride ? (newMethodOverride as ProcurementMethod) : recommendedMethod;
+    const selectedMethodOption = METHOD_OPTIONS.find(m => m.value === selectedMethod);
+    if (selectedMethodOption?.zpcRequired) {
+      if (!zpcGrounds) { toast.error('Select non-open method grounds'); return; }
+      if (!zpcJustification.trim()) { toast.error('Enter the non-open method justification'); return; }
+      if (cppDocs.length === 0) { toast.error('Attach at least one supporting evidence document for the non-open method'); return; }
+    }
     
     setLoading(true);
     try {
@@ -311,7 +332,9 @@ const CPPEdit: React.FC = () => {
         recommended_method: recommendedMethod || undefined,
         method_override: methodOverride,
         override_reason: methodOverride ? overrideReason : '',
-        zpc_approval_required: METHOD_OPTIONS.find(m => m.value === (methodOverride ? newMethodOverride : recommendedMethod))?.zpcRequired || false,
+        zpc_approval_required: selectedMethodOption?.zpcRequired || false,
+        zpc_grounds: selectedMethodOption?.zpcRequired ? zpcGrounds : '',
+        zpc_justification: selectedMethodOption?.zpcRequired ? zpcJustification : '',
         estimated_value: requisitions.find(r => r.requisition_id === selectedRequisition)?.estimated_total || 0,
         overall_risk_level: calculateOverallRiskLevel(),
         resource_requirements: resourceRequirements,

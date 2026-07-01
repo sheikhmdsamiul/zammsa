@@ -1,12 +1,13 @@
 from django.test import TestCase
 from django.urls import reverse
+from django.core.files.base import ContentFile
 from rest_framework.test import APIClient
 from django.utils import timezone
 from datetime import date, timedelta
 from accounts.models import User
 from master_data.models import Department, FiscalYear
 from requisitions.models import Requisition
-from .models import AnnualProcurementPlan, ContractProcurementPlan
+from .models import AnnualProcurementPlan, ContractProcurementPlan, CPPDocument
 from .views import _validate_milestone_minimum_periods
 from decimal import Decimal
 
@@ -190,3 +191,42 @@ class CPPBaselineLockingTests(TestCase):
         }, format='json')
         self.cpp.refresh_from_db()
         self.assertNotEqual(response.status_code, 200)
+
+    def test_zpc_approval_accepts_modal_justification_payload(self):
+        """ZPC approval should validate the grounds/justification sent with the approval request."""
+        self.cpp.method = 'direct'
+        self.cpp.status = 'pending_zpc'
+        self.cpp.zpc_approval_required = True
+        self.cpp.save(update_fields=['method', 'status', 'zpc_approval_required'])
+        self._setup_cpp_for_submit()
+        doc = CPPDocument.objects.create(
+            cpp=self.cpp,
+            document_type='strategy',
+            description='Supporting evidence for non-open method',
+            uploaded_by=self.user,
+        )
+        doc.document.save('supporting-evidence.pdf', ContentFile(b'PDF evidence'), save=True)
+
+        zpc_user = User.objects.create_user(
+            email='zpc@example.com',
+            password='testpass123',
+            full_name='ZPC Member',
+            employee_id='ZPC001',
+            role='zpc_member',
+        )
+        self.client.force_authenticate(user=zpc_user)
+        url = reverse('cpp-approve', kwargs={'pk': self.cpp.cpp_id})
+        response = self.client.post(url, {
+            'zpc_grounds': 'Emergency procurement',
+            'zpc_justification': 'Critical medicine stockout risk requires direct procurement.',
+            'zpc_resolution_ref': 'ZPC/RES/2026/042',
+        }, format='json')
+
+        self.assertEqual(response.status_code, 200, f'Approval failed: {response.data}')
+        self.cpp.refresh_from_db()
+        self.assertEqual(self.cpp.status, 'approved')
+        self.assertEqual(self.cpp.zpc_grounds, 'Emergency procurement')
+        self.assertEqual(self.cpp.zpc_justification, 'Critical medicine stockout risk requires direct procurement.')
+        self.assertEqual(self.cpp.zpc_resolution_ref, 'ZPC/RES/2026/042')
+        self.assertEqual(self.cpp.zpc_approved_by, zpc_user)
+        self.assertIsNotNone(self.cpp.zpc_approved_at)

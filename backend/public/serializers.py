@@ -101,9 +101,9 @@ class TenderPublicSerializer(serializers.ModelSerializer):
 
     def get_type(self, obj):
         method_lower = (obj.method or '').lower()
-        if 'rfq' in method_lower:
+        if 'rfq' in method_lower or 'simplified' in method_lower or 'direct' in method_lower:
             return 'rfq'
-        if 'rfp' in method_lower:
+        if 'rfp' in method_lower or 'proposal' in method_lower:
             return 'rfp'
         if 'rfi' in method_lower:
             return 'rfi'
@@ -167,9 +167,9 @@ class TenderPublicListSerializer(serializers.ModelSerializer):
 
     def get_type(self, obj):
         method_lower = (obj.method or '').lower()
-        if 'rfq' in method_lower:
+        if 'rfq' in method_lower or 'simplified' in method_lower or 'direct' in method_lower:
             return 'rfq'
-        if 'rfp' in method_lower:
+        if 'rfp' in method_lower or 'proposal' in method_lower:
             return 'rfp'
         if 'rfi' in method_lower:
             return 'rfi'

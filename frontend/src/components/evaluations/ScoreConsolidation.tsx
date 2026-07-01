@@ -800,9 +800,19 @@ const ScoreConsolidation: React.FC = () => {
                   <tr>
                     <th className="px-4 py-2 text-left font-medium text-gray-500">Rank</th>
                     <th className="px-4 py-2 text-left font-medium text-gray-500">Bidder</th>
-                    <th className="px-4 py-2 text-right font-medium text-gray-500">Tech ({qcbsMutation.data.tech_weight}%)</th>
-                    <th className="px-4 py-2 text-right font-medium text-gray-500">Fin ({qcbsMutation.data.fin_weight}%)</th>
-                    <th className="px-4 py-2 text-center font-medium text-gray-500">Total</th>
+                    {isCombinedMethod ? (
+                      <>
+                        <th className="px-4 py-2 text-right font-medium text-gray-500">Tech ({qcbsMutation.data.tech_weight}%)</th>
+                        <th className="px-4 py-2 text-right font-medium text-gray-500">Fin ({qcbsMutation.data.fin_weight}%)</th>
+                        <th className="px-4 py-2 text-center font-medium text-gray-500">Total</th>
+                      </>
+                    ) : (
+                      <>
+                        <th className="px-4 py-2 text-right font-medium text-gray-500">Tech Score</th>
+                        <th className="px-4 py-2 text-right font-medium text-gray-500">Original Price (ZMW)</th>
+                        <th className="px-4 py-2 text-center font-medium text-gray-500">Evaluated Price (ZMW)</th>
+                      </>
+                    )}
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
@@ -813,9 +823,21 @@ const ScoreConsolidation: React.FC = () => {
                         {r.bidder_name}
                         {i === 0 && <StarIcon className="w-4 h-4 text-yellow-500 inline ml-1" />}
                       </td>
-                      <td className="px-4 py-2 text-right font-mono">{r.technical_score.toFixed(2)}</td>
-                      <td className="px-4 py-2 text-right font-mono">{r.financial_score.toFixed(2)}</td>
-                      <td className="px-4 py-2 text-center font-mono font-bold text-emerald-600">{r.total_score.toFixed(2)}</td>
+                      {isCombinedMethod ? (
+                        <>
+                          <td className="px-4 py-2 text-right font-mono">{r.technical_score.toFixed(2)}</td>
+                          <td className="px-4 py-2 text-right font-mono">{r.financial_score.toFixed(2)}</td>
+                          <td className="px-4 py-2 text-center font-mono font-bold text-emerald-600">{r.total_score.toFixed(2)}</td>
+                        </>
+                      ) : (
+                        <>
+                          <td className="px-4 py-2 text-right font-mono">{r.technical_score.toFixed(2)}</td>
+                          <td className="px-4 py-2 text-right font-mono">{Number(r.original_price ?? 0).toLocaleString()}</td>
+                          <td className="px-4 py-2 text-center font-mono font-bold text-emerald-600">
+                            {r.evaluated_price != null ? Number(r.evaluated_price).toLocaleString() : 'N/A'}
+                          </td>
+                        </>
+                      )}
                     </tr>
                   ))}
                 </tbody>

@@ -59,12 +59,18 @@ class RequisitionListSerializer(serializers.ModelSerializer):
         model = Requisition
         fields = ('id', 'requisition_id', 'req_number', 'title', 'department', 'department_name', 'requester_name', 'estimated_total', 'required_date', 'status', 'current_approver', 'submitted_at', 'approved_at', 'created_at', 'days_at_current_stage', 'app_line_item', 'cpp_number', 'cpp_data', 'recommended_method', 'procurement_type', 'commodity_category')
 
+    def _get_ready_cpp(self, obj):
+        return obj.cpp.filter(
+            status='approved',
+            is_baseline_locked=True,
+        ).order_by('-approved_at', '-updated_at', '-created_at').first()
+
     def get_cpp_number(self, obj):
-        cpp = obj.cpp.filter(status='approved').first()
+        cpp = self._get_ready_cpp(obj)
         return cpp.cpp_number if cpp else None
 
     def get_cpp_data(self, obj):
-        cpp = obj.cpp.filter(status='approved').first()
+        cpp = self._get_ready_cpp(obj)
         if not cpp:
             return None
         milestones_data = []
@@ -90,15 +96,25 @@ class RequisitionListSerializer(serializers.ModelSerializer):
                 for doc in cpp.documents.all()
             ]
         return {
+            'cpp_id': str(cpp.cpp_id),
             'cpp_number': cpp.cpp_number,
+            'status': cpp.status,
             'is_baseline_locked': cpp.is_baseline_locked,
+            'method': cpp.method,
+            'estimated_value': float(cpp.estimated_value) if cpp.estimated_value else None,
+            'procurement_strategy': cpp.procurement_strategy,
             'milestones': milestones_data,
             'resource_requirements': cpp.resource_requirements or {},
             'documents': documents_data,
+            'department': {
+                'dept_id': str(obj.department.dept_id),
+                'dept_name': obj.department.dept_name,
+                'dept_code': obj.department.dept_code,
+            } if obj.department else None,
         }
 
     def get_recommended_method(self, obj):
-        cpp = obj.cpp.filter(status='approved').first()
+        cpp = self._get_ready_cpp(obj)
         return cpp.recommended_method or cpp.method if cpp else None
 
     def get_procurement_type(self, obj):

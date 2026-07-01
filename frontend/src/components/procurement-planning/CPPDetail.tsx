@@ -48,8 +48,8 @@ const WORKFLOW_STAGES = [
   { key: 'draft', label: 'Drafting' },
   { key: 'pending_zpc', label: 'ZPC Review' },
   { key: 'approved', label: 'Approved' },
-  { key: 'active', label: 'In Force' },
-  { key: 'completed', label: 'Closed' },
+  { key: 'active', label: 'Procurement In Progress' },
+  { key: 'completed', label: 'Completed' },
 ];
 
 const RISK_COLORS: Record<string, string> = {

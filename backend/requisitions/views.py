@@ -52,7 +52,7 @@ class RequisitionFilter(django_filters.FilterSet):
 
     def filter_has_approved_cpp(self, queryset, name, value):
         if value:
-            return queryset.filter(cpp__status='approved').distinct()
+            return queryset.filter(cpp__status='approved', cpp__is_baseline_locked=True).distinct()
         return queryset
 
 

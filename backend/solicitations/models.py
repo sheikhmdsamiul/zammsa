@@ -31,25 +31,61 @@ DOCUMENT_TYPE_CHOICES = [
     ('other', 'Other'),
 ]
 
+TEMPLATE_TYPE_CHOICES = [
+    ('itb', 'Invitation to Bid (ITB)'),
+    ('rfp', 'Request for Proposal (RFP)'),
+    ('rfq', 'Request for Quotation (RFQ)'),
+]
+
+PROCUREMENT_TYPE_CHOICES = [
+    ('goods', 'Goods'),
+    ('works', 'Works'),
+    ('consulting', 'Consulting Services'),
+    ('non_consulting', 'Non-Consulting Services'),
+]
+
 
 class SolicitationTemplate(models.Model):
     template_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     template_name = models.CharField(max_length=255)
-    method = models.CharField(max_length=50)
-    document_type = models.CharField(max_length=50)
+    
+    # SRS FR-SOL-01: ZPPA-approved templates for ITB, RFP, RFQ
+    template_type = models.CharField(max_length=10, choices=TEMPLATE_TYPE_CHOICES, default='itb')
+    procurement_type = models.CharField(max_length=20, choices=PROCUREMENT_TYPE_CHOICES, default='goods')
+    method = models.CharField(max_length=50, blank=True, help_text='Specific procurement method (e.g. open_tender)')
+    
+    document_type = models.CharField(max_length=50, default='bidding_document')
     template_content = models.TextField()
-    mandatory_clauses = models.JSONField(default=list, blank=True)  # [{clause_id, clause_text, is_locked}]
-    is_zppa_template = models.BooleanField(default=False)
+    
+    # SRS FR-SOL-02: Mandatory clauses SHALL be read-only and cannot be modified
+    mandatory_clauses = models.JSONField(default=list, blank=True, 
+        help_text='[{"clause_id": "GC.1", "clause_text": "...", "is_locked": true}] (FR-SOL-02)')
+    is_zppa_template = models.BooleanField(default=True,
+        help_text='Indicates if this is a standard ZPPA-approved template')
+    
     version = models.CharField(max_length=20, default='1.0')
     is_active = models.BooleanField(default=True)
+    
+    template_description = models.TextField(blank=True, default='')
+    applicable_value_range = models.JSONField(default=dict, blank=True, 
+        help_text='Min/max value range where this template applies: {"min": 0, "max": 1000000}')
+    requires_cpp = models.BooleanField(default=True,
+        help_text='Whether this template requires an approved CPP')
+    auto_populate_fields = models.JSONField(default=list, blank=True,
+        help_text='List of fields to auto-populate from CPP: ["method", "estimated_value", "procurement_strategy"]')
+    
+    # Fix for makemigrations error: use default=timezone.now instead of auto_now_add
+    created_at = models.DateTimeField(default=timezone.now)
+    updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
         db_table = 'sol_template'
         verbose_name = 'Solicitation Template'
         verbose_name_plural = 'Solicitation Templates'
+        ordering = ['template_name', 'version']
 
     def __str__(self):
-        return f'{self.template_name} v{self.version}'
+        return f'{self.template_name} v{self.version} ({self.get_template_type_display()})'
 
 
 class Solicitation(models.Model):

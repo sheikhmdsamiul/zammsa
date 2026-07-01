@@ -107,8 +107,13 @@ export interface RequisitionItem {
 }
 
 export interface CPPData {
+  cpp_id?: string;
   cpp_number?: string;
+  status?: string;
   is_baseline_locked?: boolean;
+  method?: string;
+  estimated_value?: number;
+  procurement_strategy?: string;
   milestones?: {
     milestone_name: string;
     planned_date: string;
@@ -116,6 +121,11 @@ export interface CPPData {
   }[];
   resource_requirements?: ResourceRequirements;
   documents?: CPPDocument[];
+  department?: {
+    dept_id: string;
+    dept_name: string;
+    dept_code: string;
+  };
 }
 
 export interface Attachment {
@@ -1215,6 +1225,8 @@ export interface QCBSResult {
   financial_score: number;
   total_score: number;
   rank?: number;
+  original_price?: number;
+  evaluated_price?: number;
 }
 
 export interface QCBSResponse {

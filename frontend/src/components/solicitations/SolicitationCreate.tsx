@@ -168,9 +168,40 @@ const SolicitationCreate: React.FC = () => {
 
   const selectedReq = useMemo(() => requisitions.find((r: any) => (r.id || r.requisition_id) === requisition), [requisitions, requisition]);
 
+  // Auto-populate fields from CPP when requisition is selected (SRS FR-SOL-01)
+  React.useEffect(() => {
+    if (selectedReq?.cpp_data) {
+      const cpp = selectedReq.cpp_data;
+      if (cpp.method && !solicitationMethod) setSolicitationMethod(cpp.method);
+      if (cpp.estimated_value && estimatedValue === 0) setEstimatedValue(Number(cpp.estimated_value));
+      if (cpp.procurement_strategy && !description) setDescription(cpp.procurement_strategy);
+      if (cpp.department?.dept_name && !department) setDepartment(cpp.department.dept_name);
+      if (cpp.method) {
+        // Auto-set template based on CPP method (SRS FR-METHOD-01)
+        const templateKey: TemplateType | null = ['open_tender', 'international', 'limited'].includes(cpp.method) ? 'itb' : cpp.method === 'proposal' ? 'rfp' : ['simplified', 'direct'].includes(cpp.method) ? 'rfq' : null;
+        if (templateKey && !template) {
+          setTemplate(templateKey);
+          if (templateKey === 'itb') { setSubmissionFormat('single'); setEvaluationMethod('lowest_price'); }
+          if (templateKey === 'rfp') { setSubmissionFormat('two'); setEvaluationMethod('qcbs'); }
+          if (templateKey === 'rfq') { setEvaluationMethod('lcs'); }
+        }
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedReq]);
+
   const solicitationPeriodDays = useMemo(() => daysBetween(issueDate, closingDate), [issueDate, closingDate]);
   const totalWeight = useMemo(() => technicalCriteria.reduce((sum, c) => sum + c.weight, 0), [technicalCriteria]);
   const weightValid = totalWeight === 100;
+
+  const recommendedTemplate = useMemo<TemplateType>(() => {
+    const method = selectedReq?.cpp_data?.method || (selectedReq as any)?.recommended_method || selectedReq?.procurement_method;
+    if (!method) return 'itb';
+    if (['open_tender', 'international', 'limited'].includes(method)) return 'itb';
+    if (method === 'proposal') return 'rfp';
+    if (['simplified', 'direct'].includes(method)) return 'rfq';
+    return 'itb';
+  }, [selectedReq]);
 
   const clarificationCutoff = useMemo(() => {
     if (!closingDate) return '';
@@ -235,8 +266,9 @@ const SolicitationCreate: React.FC = () => {
     if (technicalCriteria.length === 0) { toast.error('At least one technical criterion is required'); return; }
     if (technicalCriteria.some(c => !c.name.trim())) { toast.error('All technical criteria must have a name'); return; }
     if (!confirmed) { toast.error('Please confirm the submission declaration'); return; }
+    // SRS BR-CPP-01: No solicitation can be created without an approved CPP with locked baseline
     if (selectedReq?.cpp_data?.is_baseline_locked === false) {
-      toast.error('CPP baseline must be locked before creating a solicitation. Submit the CPP for approval first.');
+      toast.error('CPP baseline must be locked before creating a solicitation. Per ZAMMSA procurement rules (BR-CPP-01), no solicitation can be created without an approved CPP with a locked baseline. Please ensure the CPP is approved and the baseline is locked before creating a solicitation.');
       return;
     }
 
@@ -396,7 +428,15 @@ const SolicitationCreate: React.FC = () => {
             <h1 className="text-lg font-bold text-gray-900">Create Solicitation</h1>
           </div>
           <span className="text-xs font-bold text-gray-400 uppercase tracking-widest">
-            CPP: {(selectedReq as any)?.cpp_number || '---'} | REQ: {selectedReq?.req_number || '---'} | K{selectedReq?.estimated_total?.toLocaleString() || '---'}
+            CPP: {(selectedReq as any)?.cpp_data?.cpp_number || '---'} |
+            Status: {(selectedReq as any)?.cpp_data?.is_baseline_locked ? (
+              <span className="text-emerald-600">Baseline Locked</span>
+            ) : (
+              <span className="text-amber-600">Baseline Not Locked</span>
+            )} |
+            Method: {(selectedReq as any)?.cpp_data?.method || '---'} |
+            REQ: {selectedReq?.req_number || '---'} |
+            Value: K{selectedReq?.estimated_total?.toLocaleString() || '---'}
           </span>
         </div>
 
@@ -523,7 +563,10 @@ const SolicitationCreate: React.FC = () => {
               <div className="p-6 text-center">
                 <InformationCircleIcon className="w-8 h-8 text-amber-400 mx-auto mb-2" />
                 <p className="text-sm font-bold text-amber-700">No approved requisitions with CPP found</p>
-                <p className="text-xs text-gray-400 mt-1">Create and approve a requisition with a Contract Procurement Plan first.</p>
+                <p className="text-xs text-gray-400 mt-1">
+                  Per ZAMMSA procurement rules (BR-CPP-01), solicitations can only be created from requisitions with an approved CPP with locked baseline.
+                  Create and approve a requisition with a Contract Procurement Plan first.
+                </p>
               </div>
             ) : (
               <div>
@@ -534,9 +577,7 @@ const SolicitationCreate: React.FC = () => {
                     const r = requisitions.find((rq: any) => (rq.id || rq.requisition_id) === e.target.value);
                     if (r) {
                       setTitle(r.title || r.description || '');
-                      setDescription(r.description || '');
-                      setDepartment(r.department || r.department_name || '');
-                      setEstimatedValue(Number(r.estimated_total) || 0);
+                      // Auto-population is now handled by useEffect hook based on CPP data (SRS FR-SOL-01)
                       const cppData = (r as any).cpp_data;
                       if (cppData) {
                         const milestones: any[] = cppData.milestones || [];
@@ -554,15 +595,6 @@ const SolicitationCreate: React.FC = () => {
                         if (rr.bidSecurityType) setBidSecurityType(rr.bidSecurityType);
                         if (rr.bidSecurityRate) setBidSecurityRate(rr.bidSecurityRate);
                         if (rr.prebidConferenceDate) setPreBidDate(rr.prebidConferenceDate);
-                        const method = (r as any).recommended_method || (r as any).procurement_method || '';
-                        const templateKey: TemplateType | null = ['open_tender', 'international', 'limited'].includes(method) ? 'itb' : method === 'proposal' ? 'rfp' : ['simplified', 'direct'].includes(method) ? 'rfq' : null;
-                        if (templateKey) {
-                          setTemplate(templateKey);
-                          setSolicitationMethod(method);
-                          if (templateKey === 'itb') { setSubmissionFormat('single'); setEvaluationMethod('lowest_price'); }
-                          if (templateKey === 'rfp') { setSubmissionFormat('two'); setEvaluationMethod('qcbs'); }
-                          if (templateKey === 'rfq') { setEvaluationMethod('lcs'); }
-                        }
                       }
                     }
                   }}
@@ -571,7 +603,7 @@ const SolicitationCreate: React.FC = () => {
                   <option value="">-- Select Requisition with Approved CPP --</option>
                   {requisitions.map((r: any) => (
                     <option key={r.id || r.requisition_id} value={r.id || r.requisition_id}>
-                      {r.req_number} - {r.title || r.description} ({r.department_name})
+                      {r.cpp_number || r.cpp_data?.cpp_number || 'CPP ---'} | {r.req_number} - {r.title || r.description} ({r.department_name})
                     </option>
                   ))}
                 </select>
@@ -582,11 +614,15 @@ const SolicitationCreate: React.FC = () => {
               <div className="mt-4 p-4 bg-rose-50 border border-rose-200 rounded-2xl flex items-start gap-3">
                 <ExclamationIcon className="w-5 h-5 text-rose-500 shrink-0 mt-0.5" />
                 <div>
-                  <p className="text-sm font-bold text-rose-800">CPP Baseline Not Locked</p>
+                  <p className="text-sm font-bold text-rose-800">CPP Baseline Not Locked - Cannot Create Solicitation</p>
                   <p className="text-xs text-rose-700 mt-1">
+                    Per ZAMMSA procurement rules (BR-CPP-01), no solicitation can be created without an approved CPP with a locked baseline.
                     The CPP for this requisition ({selectedReq.cpp_data.cpp_number || '---'}) has not been locked.
-                    You must submit the CPP for approval to lock the baseline before creating a solicitation.
                   </p>
+                  <div className="mt-2 text-xs text-rose-600">
+                    <span className="font-bold">Current CPP Status:</span> {selectedReq.cpp_data.status || 'Unknown'} |
+                    <span className="font-bold"> Required Action:</span> Submit CPP for approval and lock baseline
+                  </div>
                 </div>
               </div>
             )}
@@ -607,9 +643,9 @@ const SolicitationCreate: React.FC = () => {
             <h2 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-6">Select Solicitation Template *</h2>
             <div className="space-y-3">
               {([
-                { key: 'itb' as TemplateType, label: 'ITB — Invitation to Bid', desc: 'For: Goods and Works', sub: 'Method: Open / Simplified / Limited Bidding', recommended: true },
-                { key: 'rfp' as TemplateType, label: 'RFP — Request for Proposals', desc: 'For: Consulting Services (QCBS, QBS, LCS)', sub: 'Requires: Technical + Financial envelopes', recommended: false },
-                { key: 'rfq' as TemplateType, label: 'RFQ — Request for Quotations', desc: 'For: Simplified / small value procurements', sub: '', recommended: false },
+                { key: 'itb' as TemplateType, label: 'ITB — Invitation to Bid', desc: 'For: Goods and Works', sub: 'Method: Open / Simplified / Limited Bidding', recommended: recommendedTemplate === 'itb' },
+                { key: 'rfp' as TemplateType, label: 'RFP — Request for Proposals', desc: 'For: Consulting Services (QCBS, QBS, LCS)', sub: 'Requires: Technical + Financial envelopes', recommended: recommendedTemplate === 'rfp' },
+                { key: 'rfq' as TemplateType, label: 'RFQ — Request for Quotations', desc: 'For: Simplified / small value procurements', sub: '', recommended: recommendedTemplate === 'rfq' },
               ]).map(opt => (
                 <label key={opt.key} className={`flex items-start gap-4 p-5 rounded-2xl cursor-pointer border-2 transition-all ${
                   template === opt.key ? 'border-zammsa-green bg-zammsa-green/5' : 'border-gray-100 bg-gray-50 hover:border-gray-200'

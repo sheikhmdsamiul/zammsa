@@ -254,6 +254,8 @@ const CPPCreate: React.FC = () => {
   });
   const [procurementStrategy, setProcurementStrategy] = useState('');
   const [isMultiYear, setIsMultiYear] = useState(false);
+  const [zpcGrounds, setZpcGrounds] = useState('');
+  const [zpcJustification, setZpcJustification] = useState('');
   const [cppNumber] = useState(() => `CPP-${new Date().getFullYear()}-${String(Math.floor(Math.random() * 999)).padStart(3, '0')}`);
   const [cppDocs, setCppDocs] = useState<{ file: File; documentType: string; description: string }[]>([]);
   const [uploadingDocs, setUploadingDocs] = useState(false);
@@ -456,6 +458,11 @@ const CPPCreate: React.FC = () => {
     if (risks.length === 0) { toast.error('Add at least one risk with mitigation strategy'); return; }
     if (risks.some(r => !r.mitigation_strategy)) { toast.error('All risks must have a mitigation strategy'); return; }
     if (resourceRequirements.evaluationCommitteeSize < 3) { toast.error('Evaluation committee must have at least 3 members'); return; }
+    if (finalMethodOption?.zpcRequired) {
+      if (!zpcGrounds) { toast.error('Select non-open method grounds'); return; }
+      if (!zpcJustification.trim()) { toast.error('Enter the non-open method justification'); return; }
+      if (cppDocs.length === 0) { toast.error('Attach at least one supporting evidence document for the non-open method'); return; }
+    }
 
     if (milestoneErrors.length > 0) {
       toast.error(milestoneErrors[0]);
@@ -471,6 +478,8 @@ const CPPCreate: React.FC = () => {
         method_override: methodOverride,
         override_reason: methodOverride ? overrideReason : undefined,
         zpc_approval_required: finalMethodOption?.zpcRequired || false,
+        zpc_grounds: finalMethodOption?.zpcRequired ? zpcGrounds : '',
+        zpc_justification: finalMethodOption?.zpcRequired ? zpcJustification : '',
         estimated_value: selectedReq?.estimated_total || 0,
         overall_risk_level: calculateOverallRiskLevel() as any,
         resource_requirements: resourceRequirements as any,
@@ -900,6 +909,47 @@ const CPPCreate: React.FC = () => {
                 <div className="flex items-center gap-2 p-3 bg-amber-50 rounded-xl text-amber-700">
                   <InformationCircleIcon className="w-4 h-4 shrink-0" />
                   <p className="text-xs font-bold">This will be routed to the Director of Procurement (R-09) for approval before you can proceed.</p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {finalMethodOption?.zpcRequired && (
+            <div className="bg-white rounded-3xl border border-amber-200 shadow-sm p-8">
+              <h2 className="text-[10px] font-black text-amber-600 uppercase tracking-[0.2em] mb-6">Non-Open Method Justification *</h2>
+              <div className="space-y-6">
+                <div>
+                  <label className="text-[10px] font-black text-gray-400 uppercase ml-1 mb-2 block">Grounds *</label>
+                  <select
+                    value={zpcGrounds}
+                    onChange={(e) => setZpcGrounds(e.target.value)}
+                    className="w-full bg-white border border-gray-100 rounded-2xl px-5 py-4 text-sm font-bold text-gray-700 outline-none focus:ring-4 focus:ring-amber-500/5 transition-all"
+                  >
+                    <option value="">-- Select Grounds --</option>
+                    <option value="Sole Source / Proprietary Item">Sole Source / Proprietary Item</option>
+                    <option value="Emergency Procurement">Emergency Procurement</option>
+                    <option value="Additional Supplies from Original Supplier">Additional Supplies from Original Supplier</option>
+                    <option value="Standardization Requirements">Standardization Requirements</option>
+                    <option value="National Security">National Security</option>
+                    <option value="Artistic / Cultural Specificity">Artistic / Cultural Specificity</option>
+                    <option value="Research / Experimental Purpose">Research / Experimental Purpose</option>
+                  </select>
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-[10px] font-black text-gray-400 uppercase ml-1">Procurement Officer Justification *</label>
+                  <textarea
+                    value={zpcJustification}
+                    onChange={(e) => setZpcJustification(e.target.value)}
+                    placeholder="Explain why this non-open method is appropriate and cite the supporting evidence..."
+                    rows={4}
+                    className="w-full bg-white border border-gray-100 rounded-2xl px-5 py-4 text-sm font-bold text-gray-700 outline-none focus:ring-4 focus:ring-amber-500/5 transition-all"
+                  />
+                </div>
+
+                <div className="flex items-center gap-2 p-3 bg-amber-50 rounded-xl text-amber-700">
+                  <InformationCircleIcon className="w-4 h-4 shrink-0" />
+                  <p className="text-xs font-bold">Attach at least one supporting evidence document in Step 4 before submitting this CPP to ZPC.</p>
                 </div>
               </div>
             </div>
@@ -1576,6 +1626,11 @@ const CPPCreate: React.FC = () => {
               <p className="text-sm font-bold text-emerald-600 flex items-center gap-2"><CheckCircleIcon className="w-4 h-4" /> {milestones.length} milestones set — all dates validated</p>
               <p className="text-sm font-bold text-emerald-600 flex items-center gap-2"><CheckCircleIcon className="w-4 h-4" /> {resourceRequirements.evaluationCommitteeSize} EC members required, {resourceRequirements.requiredExpertise.length} expertise areas specified</p>
               <p className="text-sm font-bold text-emerald-600 flex items-center gap-2"><CheckCircleIcon className="w-4 h-4" /> {risks.length} risks identified with mitigations</p>
+              {finalMethodOption?.zpcRequired && (
+                <p className={`text-sm font-bold flex items-center gap-2 ${zpcGrounds && zpcJustification.trim() && cppDocs.length > 0 ? 'text-emerald-600' : 'text-amber-600'}`}>
+                  <CheckCircleIcon className="w-4 h-4" /> Non-open justification: {zpcGrounds || 'grounds missing'}, {zpcJustification.trim() ? 'justification entered' : 'justification missing'}, {cppDocs.length} evidence document(s)
+                </p>
+              )}
               {!finalMethodOption?.zpcRequired && (
                 <p className="text-sm font-bold text-emerald-600 flex items-center gap-2"><CheckCircleIcon className="w-4 h-4" /> No ZPC approval needed (open method, no override)</p>
               )}

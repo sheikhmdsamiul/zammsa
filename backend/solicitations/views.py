@@ -23,6 +23,7 @@ from .serializers import (
     SolicitationTemplateSerializer, SolicitationSerializer, SolicitationListSerializer,
     EvaluationCriterionSerializer, SolicitationAddendumSerializer,
     ClarificationRequestSerializer, SolicitationDocumentSerializer,
+    get_solicitation_ready_cpp,
 )
 
 # BR-SOL-01: Minimum solicitation-to-closing periods by procurement method
@@ -191,21 +192,166 @@ class BaseView:
     permission_classes = [IsAuthenticated]
 
 
+class IsSystemAdmin(IsAuthenticated):
+    """Only system_admin role can write; any authenticated user can read."""
+    def has_permission(self, request, view):
+        if not super().has_permission(request, view):
+            return False
+        if request.method in ('GET', 'HEAD', 'OPTIONS'):
+            return True  # all authenticated users can read templates
+        return _normalize_role(request.user.role) == 'system_admin'
+
+
 class SolicitationTemplateListView(BaseView, generics.ListCreateAPIView):
+    """FR-SOL-01 / AUD-SOL-04: List & create ZPPA-approved solicitation templates.
+
+    - Any authenticated user can GET (needed for the solicitation creation flow).
+    - Only system_admin can POST, PUT, PATCH, DELETE.
+    """
     queryset = SolicitationTemplate.objects.all()
     serializer_class = SolicitationTemplateSerializer
-    search_fields = ['template_name']
-    ordering = ['template_name']
+    permission_classes = [IsSystemAdmin]
+    search_fields = ['template_name', 'template_description', 'version']
+    ordering_fields = ['template_name', 'version', 'created_at', 'updated_at']
+    ordering = ['template_name', 'version']
+
+    def get_queryset(self):
+        qs = super().get_queryset()
+        p = self.request.query_params
+
+        template_type = p.get('template_type')
+        if template_type:
+            qs = qs.filter(template_type=template_type)
+
+        procurement_type = p.get('procurement_type')
+        if procurement_type:
+            qs = qs.filter(procurement_type=procurement_type)
+
+        is_active = p.get('is_active')
+        if is_active is not None:
+            qs = qs.filter(is_active=is_active.lower() == 'true')
+
+        is_zppa = p.get('is_zppa_template')
+        if is_zppa is not None:
+            qs = qs.filter(is_zppa_template=is_zppa.lower() == 'true')
+
+        return qs
+
+    def perform_create(self, serializer):
+        """AUD-SOL-04: Log template creation."""
+        instance = serializer.save()
+        log_audit_action(
+            user=self.request.user,
+            action='TEMPLATE_CREATE',
+            module='solicitations',
+            record_id=str(instance.template_id),
+            new_value={
+                'template_name': instance.template_name,
+                'template_type': instance.template_type,
+                'version': instance.version,
+            },
+            ip_address=self.request.META.get('REMOTE_ADDR', ''),
+        )
 
 
 class SolicitationTemplateDetailView(generics.RetrieveUpdateDestroyAPIView):
+    """FR-SOL-01 / AUD-SOL-04: Retrieve, update or deactivate a template.
+
+    - Any authenticated user can GET.
+    - Only system_admin can PUT, PATCH, DELETE.
+    """
     queryset = SolicitationTemplate.objects.all()
     serializer_class = SolicitationTemplateSerializer
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsSystemAdmin]
+
+    def perform_update(self, serializer):
+        """AUD-SOL-04: Log template update."""
+        old = {
+            'template_name': self.get_object().template_name,
+            'version': self.get_object().version,
+            'is_active': self.get_object().is_active,
+        }
+        instance = serializer.save()
+        log_audit_action(
+            user=self.request.user,
+            action='TEMPLATE_UPDATE',
+            module='solicitations',
+            record_id=str(instance.template_id),
+            old_value=old,
+            new_value={
+                'template_name': instance.template_name,
+                'version': instance.version,
+                'is_active': instance.is_active,
+            },
+            ip_address=self.request.META.get('REMOTE_ADDR', ''),
+        )
+
+    def perform_destroy(self, instance):
+        """AUD-SOL-04: Log template deletion."""
+        log_audit_action(
+            user=self.request.user,
+            action='TEMPLATE_DELETE',
+            module='solicitations',
+            record_id=str(instance.template_id),
+            old_value={
+                'template_name': instance.template_name,
+                'version': instance.version,
+                'is_zppa_template': instance.is_zppa_template,
+            },
+            ip_address=self.request.META.get('REMOTE_ADDR', ''),
+        )
+        instance.delete()
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def template_clone_view(request, pk):
+    """Clone a solicitation template into a new draft version (AUD-SOL-04)."""
+    if _normalize_role(request.user.role) != 'system_admin':
+        return Response({'error': 'Only system administrators can clone templates.'}, status=403)
+    try:
+        original = SolicitationTemplate.objects.get(pk=pk)
+    except SolicitationTemplate.DoesNotExist:
+        return Response({'error': 'Template not found'}, status=404)
+
+    import uuid as _uuid
+    clone = SolicitationTemplate.objects.create(
+        template_name=f'{original.template_name} (Copy)',
+        template_description=original.template_description,
+        template_type=original.template_type,
+        procurement_type=original.procurement_type,
+        method=original.method,
+        document_type=original.document_type,
+        template_content=original.template_content,
+        mandatory_clauses=original.mandatory_clauses,
+        is_zppa_template=False,  # Clones are not ZPPA-approved by default
+        is_active=False,          # Start inactive until admin activates
+        requires_cpp=original.requires_cpp,
+        applicable_value_range=original.applicable_value_range,
+        auto_populate_fields=original.auto_populate_fields,
+        version=original.version + '-draft',
+    )
+    log_audit_action(
+        user=request.user,
+        action='TEMPLATE_CLONE',
+        module='solicitations',
+        record_id=str(clone.template_id),
+        new_value={
+            'cloned_from': str(original.template_id),
+            'original_name': original.template_name,
+            'new_name': clone.template_name,
+        },
+        ip_address=request.META.get('REMOTE_ADDR', ''),
+    )
+    return Response({
+        'message': f'Template cloned as "{clone.template_name}"',
+        'template': SolicitationTemplateSerializer(clone).data,
+    }, status=201)
 
 
 class SolicitationListView(BaseView, generics.ListCreateAPIView):
     queryset = Solicitation.objects.select_related('requisition').prefetch_related('evaluation_criteria', 'addenda', 'documents').all()
+
     filterset_class = SolicitationFilter
     search_fields = ['title', 'sol_number']
     ordering_fields = ['created_at', 'closing_date', 'status']
@@ -219,24 +365,21 @@ class SolicitationListView(BaseView, generics.ListCreateAPIView):
     def perform_create(self, serializer):
         if _normalize_role(self.request.user.role) not in PROCUREMENT_STAFF_ROLES:
             raise PermissionDenied('Only authorized procurement staff can create solicitations.')
-        
+
         # BR-CPP-01: No solicitation can be created without an approved CPP with locked baseline
         requisition = serializer.validated_data.get('requisition')
         if requisition:
-            approved_cpp = requisition.cpp.filter(status='approved').first()
+            approved_cpp = get_solicitation_ready_cpp(requisition)
             if not approved_cpp:
                 raise PermissionDenied(
                     f'Cannot create solicitation for requisition {requisition.req_number}. '
-                    'An approved Contract Procurement Plan (CPP) is required first.'
+                    'An approved Contract Procurement Plan (CPP) with a locked baseline is required first. '
+                    'Please ensure the CPP is approved and the baseline is locked before creating a solicitation.'
                 )
-            if not approved_cpp.is_baseline_locked:
-                raise PermissionDenied(
-                    f'Cannot create solicitation until CPP {approved_cpp.cpp_number} baseline is locked. '
-                    'Please submit the CPP for approval to lock the milestone baseline schedule.'
-                )
-        
+
         sol = serializer.save(created_by=self.request.user)
-        _update_cpp_milestone_actual(sol, ['solicitation document ready', 'requisition to solicitation'])
+        # Update CPP milestone with actual solicitation creation date (SRS FR-PLAN-08)
+        _update_cpp_milestone_actual(sol, ['solicitation document ready', 'requisition to solicitation', 'solicitation creation'])
 
 
 class SolicitationDetailView(generics.RetrieveUpdateDestroyAPIView):
@@ -374,11 +517,11 @@ def solicitation_publish_view(request, pk):
 
     # BR-CPP-01: No solicitation can be published without an approved CPP
     if sol.requisition:
-        has_approved_cpp = sol.requisition.cpp.filter(status='approved').exists()
+        has_approved_cpp = get_solicitation_ready_cpp(sol.requisition) is not None
         if not has_approved_cpp:
             return Response({
                 'error': 'Cannot publish solicitation — the linked requisition has no approved CPP. '
-                         'An approved Contract Procurement Plan (CPP) is required before publication.'
+                         'An approved Contract Procurement Plan (CPP) with a locked baseline is required before publication.'
             }, status=status.HTTP_400_BAD_REQUEST)
 
     targets = request.data.get('targets', ['zammsa_website'])

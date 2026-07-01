@@ -7,17 +7,84 @@ from master_data.models import Department
 from requisitions.models import Requisition
 
 
+def get_solicitation_ready_cpp(requisition):
+    """
+    Get an approved CPP with locked baseline for solicitation creation.
+    Per SRS BR-CPP-01: No solicitation can be created without an approved CPP with locked baseline.
+    """
+    if not requisition:
+        return None
+    return requisition.cpp.filter(
+        status='approved',
+        is_baseline_locked=True,
+    ).order_by('-approved_at', '-updated_at', '-created_at').first()
+
+
 class SolicitationTemplateSerializer(serializers.ModelSerializer):
+    # Human-readable display labels
+    template_type_display = serializers.CharField(
+        source='get_template_type_display', read_only=True
+    )
+    procurement_type_display = serializers.CharField(
+        source='get_procurement_type_display', read_only=True
+    )
+
     class Meta:
         model = SolicitationTemplate
-        fields = '__all__'
+        fields = (
+            # Identity
+            'template_id', 'template_name', 'template_description',
+            # Classification (FR-SOL-01)
+            'template_type', 'template_type_display',
+            'procurement_type', 'procurement_type_display',
+            'method',
+            # Content
+            'document_type', 'template_content',
+            # Clause management (FR-SOL-02)
+            'mandatory_clauses',
+            # Flags
+            'is_zppa_template', 'is_active', 'requires_cpp',
+            # Governance
+            'applicable_value_range', 'auto_populate_fields',
+            # Versioning
+            'version',
+            # Audit (AUD-SOL-04)
+            'created_at', 'updated_at',
+        )
+        read_only_fields = ('template_id', 'created_at', 'updated_at')
 
     def validate_mandatory_clauses(self, value):
+        """FR-SOL-02: Each clause must have clause_id, clause_text, and is_locked."""
         if not isinstance(value, list):
             raise serializers.ValidationError('mandatory_clauses must be a list')
         for clause in value:
-            if not isinstance(clause, dict) or 'clause_id' not in clause or 'clause_text' not in clause:
-                raise serializers.ValidationError('Each clause must have clause_id and clause_text')
+            if not isinstance(clause, dict):
+                raise serializers.ValidationError('Each clause must be a JSON object')
+            if 'clause_id' not in clause or 'clause_text' not in clause:
+                raise serializers.ValidationError(
+                    'Each clause must have clause_id and clause_text'
+                )
+            if 'is_locked' not in clause:
+                clause['is_locked'] = True  # default to locked for safety
+        return value
+
+    def validate_applicable_value_range(self, value):
+        """Enforce {"min": int, "max": int} shape."""
+        if not value:
+            return value
+        if not isinstance(value, dict):
+            raise serializers.ValidationError(
+                'applicable_value_range must be a JSON object with "min" and "max" keys'
+            )
+        for key in ('min', 'max'):
+            if key in value and not isinstance(value[key], (int, float)):
+                raise serializers.ValidationError(
+                    f'applicable_value_range["{key}"] must be a number'
+                )
+        if 'min' in value and 'max' in value and value['min'] > value['max']:
+            raise serializers.ValidationError(
+                'applicable_value_range "min" must not exceed "max"'
+            )
         return value
 
 
@@ -333,7 +400,7 @@ class SolicitationSerializer(serializers.ModelSerializer):
         requisition_id = self.initial_data.get('requisition')
         if requisition_id:
             requisition = Requisition.objects.filter(pk=requisition_id).first()
-            approved_cpp = requisition.cpp.filter(status='approved').first() if requisition else None
+            approved_cpp = get_solicitation_ready_cpp(requisition)
             if approved_cpp and approved_cpp.method and approved_cpp.method != value:
                 raise serializers.ValidationError(
                     f'Method "{value}" does not match the approved CPP method "{approved_cpp.method}". '
@@ -370,32 +437,52 @@ class SolicitationSerializer(serializers.ModelSerializer):
         if channels:
             validated_data['publication_targets'] = channels
 
-        # Auto-set method from approved CPP if not explicitly provided
+        # SRS FR-SOL-01: Auto-populate from approved CPP with locked baseline
         requisition = validated_data.get('requisition')
         approved_cpp = None
         if requisition:
-            approved_cpp = requisition.cpp.filter(status='approved').first()
+            approved_cpp = get_solicitation_ready_cpp(requisition)
+            if not approved_cpp:
+                raise serializers.ValidationError({
+                    'requisition': 'Cannot create solicitation. An approved Contract Procurement Plan (CPP) with a locked baseline is required first. '
+                                   'Please ensure the CPP is approved and the baseline is locked.'
+                })
+
         if approved_cpp:
             validated_data['cpp'] = approved_cpp
+            # Auto-set method from CPP (SRS FR-METHOD-01)
             if not validated_data.get('method'):
                 validated_data['method'] = approved_cpp.method
+            # Auto-set estimated value from CPP
             if not validated_data.get('estimated_value') and approved_cpp.estimated_value:
                 validated_data['estimated_value'] = approved_cpp.estimated_value
+            # Auto-set department from requisition/CPP
             if not validated_data.get('department') and requisition.department_id:
                 validated_data['department'] = requisition.department
+            # Default opening date to closing date if not set
             if not validated_data.get('opening_date') and validated_data.get('closing_date'):
                 validated_data['opening_date'] = validated_data['closing_date']
+            # Auto-generate description from requisition and CPP data (SRS FR-SOL-01)
             if not validated_data.get('description'):
                 item_lines = [
                     f'- {item.description}: {item.quantity} {item.unit_of_measure.uom_name if item.unit_of_measure else ""}'.strip()
                     for item in requisition.items.all()
                 ]
+                cpp_strategy = approved_cpp.procurement_strategy or 'Standard procurement strategy'
                 validated_data['description'] = (
                     f'{requisition.description}\n\n'
+                    f'Procurement Strategy: {cpp_strategy}\n'
                     f'Delivery location: {requisition.delivery_location or "To be specified"}\n'
                     f'Required date: {requisition.required_date}\n'
+                    f'CPP Reference: {approved_cpp.cpp_number}\n'
                     f'Requisition items:\n' + '\n'.join(item_lines)
                 )
+            # Set default evaluation method based on CPP if not specified
+            if not validated_data.get('evaluation_method'):
+                if approved_cpp.method in ('open_tender', 'international'):
+                    validated_data['evaluation_method'] = 'lowest_price'
+                else:
+                    validated_data['evaluation_method'] = 'lowest_price'
 
         # Fallback: auto-recommend method based on estimated value (no CPP available)
         if not validated_data.get('method'):

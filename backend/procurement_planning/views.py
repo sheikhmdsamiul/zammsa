@@ -191,6 +191,8 @@ CPP_CURRENT_STAGE_ROLES = {
     'pending_zpc': 'zpc_member',
 }
 
+NON_OPEN_CPP_METHODS = ('limited', 'simplified', 'direct')
+
 
 def _record_app_approval_trail(app, action, user, details=None):
     trail = list(app.approval_trail or [])
@@ -1349,7 +1351,19 @@ def cpp_submit_view(request, pk):
     if not cpp.method:
         errors.append('Procurement method must be set')
 
-    # If non-open method, flag for ZPC review (justification is provided by ZPC during approval)
+    # SRS 7.7.1 step 10: the Procurement Officer completes the non-open
+    # justification and attaches evidence before routing to ZPC.
+    if cpp.method in NON_OPEN_CPP_METHODS:
+        if not cpp.zpc_grounds.strip():
+            errors.append('Non-open method grounds are required before ZPC submission')
+        if not cpp.zpc_justification.strip():
+            errors.append('Non-open method justification is required before ZPC submission')
+        if not cpp.documents.exists():
+            errors.append('At least one supporting evidence document is required for non-open method justification')
+
+    if cpp.method_override and not cpp.override_approved_at:
+        errors.append('Method override must be approved by the Director of Procurement before submission')
+
 
     # BR-CPP-10: At least one risk with mitigation strategy
     if cpp.risks.count() == 0:
@@ -1493,17 +1507,34 @@ def cpp_approve_view(request, pk):
 
     new_status = CPP_APPROVE_TRANSITIONS[cpp.status]
 
-    # If approving from pending_zpc, record ZPC approval details
+    # If approving from pending_zpc, record ZPC approval details.
     if cpp.status == 'pending_zpc' and new_status == 'approved':
-        zpc_grounds = request.data.get('zpc_grounds', '')
-        zpc_justification = request.data.get('zpc_justification', '')
-        zpc_resolution_ref = request.data.get('zpc_resolution_ref', '')
+        zpc_grounds = request.data.get('zpc_grounds', '').strip()
+        zpc_justification = request.data.get('zpc_justification', '').strip()
+        zpc_resolution_ref = request.data.get('zpc_resolution_ref', '').strip()
+
         if zpc_grounds:
             cpp.zpc_grounds = zpc_grounds
         if zpc_justification:
             cpp.zpc_justification = zpc_justification
         if zpc_resolution_ref:
             cpp.zpc_resolution_ref = zpc_resolution_ref
+
+        if cpp.method in NON_OPEN_CPP_METHODS:
+            missing = []
+            if not cpp.zpc_grounds.strip():
+                missing.append('non-open method grounds')
+            if not cpp.zpc_justification.strip():
+                missing.append('non-open method justification')
+            if not cpp.documents.exists():
+                missing.append('supporting evidence document')
+            if missing:
+                return Response(
+                    {'error': f'Cannot approve CPP. Missing: {", ".join(missing)}.'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+        cpp.zpc_approved_by = user
+        cpp.zpc_approved_at = timezone.now()
 
     # Record approval trail
     _record_cpp_approval_trail(cpp, 'approved', user, {'new_status': new_status})

@@ -4,8 +4,9 @@ from . import views
 urlpatterns = [
     path('templates/', views.SolicitationTemplateListView.as_view(), name='sol-template-list'),
     path('templates/preview/', views.template_preview_view, name='sol-template-preview'),
-
     path('templates/<uuid:pk>/', views.SolicitationTemplateDetailView.as_view(), name='sol-template-detail'),
+    path('templates/<uuid:pk>/clone/', views.template_clone_view, name='sol-template-clone'),
+
     path('', views.SolicitationListView.as_view(), name='solicitation-list'),
     path('<uuid:pk>/', views.SolicitationDetailView.as_view(), name='solicitation-detail'),
     path('<uuid:pk>/submit/', views.solicitation_submit_view, name='solicitation-submit'),

@@ -170,6 +170,8 @@ class ContractProcurementPlanListSerializer(serializers.ModelSerializer):
     created_by_name = serializers.CharField(source='created_by.full_name', read_only=True)
     milestones_count = serializers.SerializerMethodField()
     method_display = serializers.SerializerMethodField()
+    procurement_strategy = serializers.CharField(read_only=True)
+    resource_requirements = serializers.JSONField(read_only=True)
 
     class Meta:
         model = ContractProcurementPlan
@@ -179,7 +181,7 @@ class ContractProcurementPlanListSerializer(serializers.ModelSerializer):
             'recommended_method', 'method_override', 'zpc_approval_required',
             'status', 'overall_risk_level', 'estimated_value',
             'is_baseline_locked', 'created_by_name', 'created_at',
-            'approved_at', 'milestones_count',
+            'approved_at', 'milestones_count', 'procurement_strategy', 'resource_requirements',
         )
 
     def get_milestones_count(self, obj):

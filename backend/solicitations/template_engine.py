@@ -37,6 +37,11 @@ PLACEHOLDER_MAP = {
     'clarification_cutoff': 'clarification_cutoff',
     'req_number': 'requisition_number',
     'cpp_number': 'cpp_number',
+    'cpp_method': 'cpp_method_display',
+    'cpp_procurement_strategy': 'cpp_procurement_strategy',
+    'cpp_estimated_value': 'cpp_estimated_value',
+    'cpp_baseline_locked': 'cpp_baseline_locked',
+    'cpp_baseline_locked_date': 'cpp_baseline_locked_date',
     'organization_name': 'organization_name',
     'organization_logo_url': 'organization_logo_url',
     'items_table': 'items_table',
@@ -85,7 +90,22 @@ def build_template_context(solicitation):
     ctx['clarification_cutoff'] = _fmt_datetime(solicitation.clarification_cutoff)
 
     ctx['requisition_number'] = solicitation.requisition.req_number if solicitation.requisition else ''
-    ctx['cpp_number'] = solicitation.cpp.cpp_number if solicitation.cpp else ''
+    
+    # SRS FR-SOL-01: Enhanced CPP data integration
+    if solicitation.cpp:
+        ctx['cpp_number'] = solicitation.cpp.cpp_number or ''
+        ctx['cpp_method_display'] = _get_cpp_method_display(solicitation.cpp.method)
+        ctx['cpp_procurement_strategy'] = solicitation.cpp.procurement_strategy or 'Standard procurement strategy'
+        ctx['cpp_estimated_value'] = f"{solicitation.cpp.estimated_value:,.2f} ZMW" if solicitation.cpp.estimated_value else ''
+        ctx['cpp_baseline_locked'] = 'Yes (Locked)' if solicitation.cpp.is_baseline_locked else 'No (Unlocked)'
+        ctx['cpp_baseline_locked_date'] = _fmt_date(solicitation.cpp.baseline_locked_at) if solicitation.cpp.baseline_locked_at else ''
+    else:
+        ctx['cpp_number'] = ''
+        ctx['cpp_method_display'] = ''
+        ctx['cpp_procurement_strategy'] = ''
+        ctx['cpp_estimated_value'] = ''
+        ctx['cpp_baseline_locked'] = ''
+        ctx['cpp_baseline_locked_date'] = ''
 
     from django.conf import settings
     ctx['organization_name'] = 'Zambia Medicines and Medical Supplies Agency (ZAMMSA)'
@@ -164,6 +184,20 @@ def _get_evaluation_method_display(sol):
         'fbs': 'Fixed Budget Selection (FBS)',
     }
     return mapping.get(method, method)
+
+
+def _get_cpp_method_display(method):
+    """Get display name for CPP procurement method (SRS FR-METHOD-01)."""
+    if not method:
+        return ''
+    mapping = {
+        'open_tender': 'Open National Bidding (ONB)',
+        'international': 'Open International Bidding (OIB)',
+        'limited': 'Limited Bidding (LB)',
+        'simplified': 'Simplified Bidding (SB)',
+        'direct': 'Direct Procurement (DP)',
+    }
+    return mapping.get(method, method.replace('_', ' ').title())
 
 
 def _build_items_table(sol):

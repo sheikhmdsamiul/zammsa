@@ -81,6 +81,9 @@ export const solicitationsApi = {
 
     delete: (id: string) =>
       api.delete(`/solicitations/templates/${id}/`).then((r) => r.data),
+
+    clone: (id: string) =>
+      api.post<any>(`/solicitations/templates/${id}/clone/`).then((r) => r.data),
   },
 
   documents: {
