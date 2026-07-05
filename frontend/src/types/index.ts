@@ -118,6 +118,7 @@ export interface CPPData {
     milestone_name: string;
     planned_date: string;
     sequence_number: number;
+    time?: string;
   }[];
   resource_requirements?: ResourceRequirements;
   documents?: CPPDocument[];
@@ -1709,6 +1710,8 @@ export interface ResourceRequirements {
   bidSecurityRate: number;
   minimumTechnicalThreshold: number;
   citizenPreference: boolean;
+  closingTime?: string;
+  openingTime?: string;
 }
 
 export interface ProcurementMilestone {

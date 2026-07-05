@@ -385,9 +385,54 @@ DEFAULT_MILESTONE_NAMES = [
 ]
 
 
+# Days from CPP approval to solicitation publication (SRS §5.9.2)
+PUBLICATION_OFFSET_DAYS = {
+    'open_tender': 3,
+    'international': 10,
+    'limited': 3,
+    'simplified': 2,
+    'direct': 2,
+}
+
+
+def _milestone_publication_date(milestones):
+    """Return the solicitation publication/issue planned date from milestones."""
+    pub_date = None
+    for m in milestones:
+        name_lower = (m.get('milestone_name') or '').lower()
+        if (
+            'solicitation published' in name_lower
+            or 'solicitation issued' in name_lower
+            or 'publication (solicitation issued)' in name_lower
+        ):
+            pub_date = m.get('planned_date')
+    return pub_date
+
+
+def _milestone_closing_date(milestones):
+    """Return bid closing planned date from milestones."""
+    closing_date = None
+    for m in milestones:
+        name_lower = (m.get('milestone_name') or '').lower()
+        if 'bid closing' in name_lower or 'closing date' in name_lower:
+            closing_date = m.get('planned_date')
+    return closing_date
+
+
+def _milestone_opening_date(milestones):
+    """Return bid opening planned date from milestones."""
+    opening_date = None
+    for m in milestones:
+        name_lower = (m.get('milestone_name') or '').lower()
+        if 'bid opening' in name_lower or 'public bid opening' in name_lower:
+            opening_date = m.get('planned_date')
+            break
+    return opening_date
+
+
 def _default_cpp_milestone_template(method, procurement_type='goods'):
     """Generate milestone template by procurement method and type.
-    
+
     procuremt_type: 'goods', 'works', 'services', 'consulting'
     method: 'open_tender', 'international', 'limited', 'simplified', 'direct'
     """
@@ -418,7 +463,7 @@ def _default_cpp_milestone_template(method, procurement_type='goods'):
         closing_to_evaluation = 7
         evaluation_to_award = 3
         award_to_signing = 10
-    
+
     # All templates now produce 22 milestones (seq 1-22) as per the Phase Guide.
     # Seq 1-14: Pre-contract / procurement phase
     # Seq 15-22: Post-award / contract execution phase
@@ -476,6 +521,51 @@ def _default_cpp_milestone_template(method, procurement_type='goods'):
         ]
 
 
+def _compute_cpp_milestone_planned_dates(method, procurement_type, start_date):
+    """Compute planned dates anchored to publication and minimum solicitation period.
+
+    Per SRS §5.9.2:
+    - Closing = publication + Y calendar days (method-based minimum)
+    - Opening = same day as closing
+    - Downstream milestones offset from closing
+    """
+    from datetime import timedelta
+
+    template = _default_cpp_milestone_template(method, procurement_type)
+    publication_offset = PUBLICATION_OFFSET_DAYS.get(method, 3)
+    min_days = MIN_SOLICITATION_PERIODS.get(method, 21)
+
+    published_date = start_date + timedelta(days=publication_offset)
+    closing_date = published_date + timedelta(days=min_days) if min_days > 0 else published_date
+    opening_date = closing_date
+
+    closing_offset = publication_offset + min_days
+
+    planned_dates = []
+    for name, offset_days in template:
+        name_lower = name.lower()
+        if name == 'CPP Approved':
+            planned = start_date
+        elif 'document ready' in name_lower:
+            planned = start_date + timedelta(days=max(1, publication_offset - 1))
+        elif 'solicitation published' in name_lower or 'solicitation issued' in name_lower:
+            planned = published_date
+        elif 'bid closing' in name_lower or 'closing date' in name_lower:
+            planned = closing_date
+        elif 'bid opening' in name_lower or 'public bid opening' in name_lower:
+            planned = opening_date
+        elif 'clarification' in name_lower:
+            # Approximate: 5 calendar days before closing (validation uses working days at solicitation)
+            planned = closing_date - timedelta(days=5)
+        elif offset_days > closing_offset:
+            planned = closing_date + timedelta(days=offset_days - closing_offset)
+        else:
+            planned = start_date + timedelta(days=offset_days)
+        planned_dates.append((name, planned))
+
+    return planned_dates
+
+
 def _validate_milestone_minimum_periods(milestones, method):
     """BR-CPP-08: Validate closing date meets minimum period for the method."""
     from datetime import date
@@ -484,15 +574,8 @@ def _validate_milestone_minimum_periods(milestones, method):
         return []
 
     errors = []
-    pub_date = None
-    closing_date = None
-
-    for m in milestones:
-        name_lower = (m.get('milestone_name') or '').lower()
-        if 'publication' in name_lower or 'solicitation issued' in name_lower or 'solicitation' in name_lower:
-            pub_date = m.get('planned_date')
-        if 'closing' in name_lower or 'bid deadline' in name_lower:
-            closing_date = m.get('planned_date')
+    pub_date = _milestone_publication_date(milestones)
+    closing_date = _milestone_closing_date(milestones)
 
     if pub_date and closing_date:
         try:
@@ -501,19 +584,14 @@ def _validate_milestone_minimum_periods(milestones, method):
             gap = (closing - pub).days
             if gap < min_days:
                 errors.append(
-                    f'Closing date must be at least {min_days} days after publication date '
+                    f'Closing date must be at least {min_days} calendar days after publication date '
                     f'for method "{method}". Current gap: {gap} days.'
                 )
         except (ValueError, TypeError):
             errors.append('Invalid date format in milestones. Use YYYY-MM-DD.')
 
     # BR-CPP-09: Validate bid opening is on or after closing
-    opening_date = None
-    for m in milestones:
-        name_lower = (m.get('milestone_name') or '').lower()
-        if 'bid opening' in name_lower or 'opening' in name_lower:
-            opening_date = m.get('planned_date')
-            break
+    opening_date = _milestone_opening_date(milestones)
     if opening_date and closing_date:
         try:
             opening = date.fromisoformat(opening_date) if isinstance(opening_date, str) else opening_date
@@ -1105,18 +1183,17 @@ class ContractProcurementPlanListView(BaseView, generics.ListCreateAPIView):
                 actual_date=m.get('actual_date') or None,
             )
         if not milestones:
-            from datetime import timedelta
             start_date = timezone.now().date()
             procurement_type = 'goods'
             if requisition and requisition.line_items.exists():
                 procurement_type = requisition.line_items.first().procurement_type
-            template = _default_cpp_milestone_template(cpp.method, procurement_type)
-            for idx, (name, offset_days) in enumerate(template, start=1):
+            planned_dates = _compute_cpp_milestone_planned_dates(cpp.method, procurement_type, start_date)
+            for idx, (name, planned_date) in enumerate(planned_dates, start=1):
                 ProcurementMilestone.objects.create(
                     cpp=cpp,
                     milestone_name=name,
                     sequence_number=idx,
-                    planned_date=start_date + timedelta(days=offset_days),
+                    planned_date=planned_date,
                     actual_date=None,
                 )
 

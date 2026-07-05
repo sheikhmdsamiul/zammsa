@@ -73,16 +73,22 @@ class RequisitionListSerializer(serializers.ModelSerializer):
         cpp = self._get_ready_cpp(obj)
         if not cpp:
             return None
+        rr = cpp.resource_requirements or {}
         milestones_data = []
         if cpp.procurement_milestones.exists():
-            milestones_data = [
-                {
+            for m in cpp.procurement_milestones.all().order_by('sequence_number'):
+                name_lower = m.milestone_name.lower()
+                time_val = None
+                if 'closing' in name_lower or 'bid closing' in name_lower:
+                    time_val = getattr(m, 'time', None) or rr.get('closingTime')
+                elif 'opening' in name_lower or 'bid opening' in name_lower:
+                    time_val = getattr(m, 'time', None) or rr.get('openingTime', '14:30 CAT')
+                milestones_data.append({
                     'milestone_name': m.milestone_name,
                     'planned_date': m.planned_date.isoformat() if m.planned_date else None,
                     'sequence_number': m.sequence_number,
-                }
-                for m in cpp.procurement_milestones.all().order_by('sequence_number')
-            ]
+                    'time': time_val,
+                })
         documents_data = []
         if cpp.documents.exists():
             documents_data = [

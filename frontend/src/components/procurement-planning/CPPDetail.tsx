@@ -423,9 +423,11 @@ export default function CPPDetail() {
                          <tr key={i} className="hover:bg-gray-50/50 transition-colors">
                             <td className="px-8 py-5">
                                <p className="text-sm font-bold text-gray-800">{m.milestone_name || m.activity || m.milestone_type}</p>
+                               {m.sequence_number === 1 && <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded mt-1 inline-block">Baseline</span>}
                             </td>
-                            <td className="px-8 py-5 text-center text-sm font-medium text-gray-500">
-                               {m.planned_date ? new Date(m.planned_date).toLocaleDateString('en-GB') : '-'}
+                            <td className="px-8 py-5 text-center">
+                               <p className="text-sm font-medium text-gray-500">{m.planned_date ? new Date(m.planned_date).toLocaleDateString('en-GB') : '-'}</p>
+                               {m.time && <p className="text-[10px] font-bold text-gray-400 mt-0.5">{m.time}</p>}
                             </td>
                             <td className="px-8 py-5 text-center text-sm font-medium text-emerald-600">
                                {m.actual_date ? new Date(m.actual_date).toLocaleDateString('en-GB') : <span className="text-gray-300">Pending</span>}

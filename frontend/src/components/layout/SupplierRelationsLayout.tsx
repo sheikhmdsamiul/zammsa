@@ -56,7 +56,7 @@ const SupplierRelationsLayout: React.FC = () => {
   );
 
   return (
-    <div className="min-h-screen flex bg-gray-50">
+    <div className="h-screen overflow-hidden flex bg-gray-50">
       <Sidebar 
         navItems={navItems}
         isOpen={sidebarOpen}

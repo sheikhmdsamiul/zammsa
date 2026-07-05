@@ -11,6 +11,12 @@ import {
   LightningBoltIcon, PlusIcon, TrashIcon, InformationCircleIcon, LockClosedIcon, XCircleIcon,
   UploadIcon, PaperClipIcon, DownloadIcon,
 } from '@heroicons/react/outline';
+import {
+  buildCppMilestoneDates,
+  validateCppMilestoneDates,
+  recalculateDependentMilestones,
+  type MilestoneTemplate,
+} from '../../utils/cppMilestoneDates';
 
 interface RequisitionOption {
   requisition_id: string;
@@ -24,6 +30,7 @@ interface RequisitionOption {
   date_required?: string;
   delivery_location?: string;
   encumbrance_ref?: string;
+  procurement_type?: string;
   items?: { description: string; estimated_total_cost: number; item_code?: string; attachment_url?: string }[];
   specifications?: { filename: string }[];
 }
@@ -69,15 +76,6 @@ interface NewRiskState {
   owner: string;
 }
 
-interface MilestoneTemplate {
-  name: string;
-  locked: boolean;
-  autoCalculated: boolean;
-  offsetDays?: number;
-  time?: string;
-  note?: string;
-}
-
 const CPPSteps = [
   { id: 'source', label: 'Source & Overview', subtitle: 'Step 1' },
   { id: 'method', label: 'Method', subtitle: 'Step 2' },
@@ -88,9 +86,9 @@ const CPPSteps = [
 
 const METHOD_OPTIONS: MethodOption[] = [
   { value: 'open_tender', label: 'Open National Bidding', shortLabel: 'ONB', minPeriod: 21, zpcRequired: false, isOpen: true, thresholdRange: 'K1,000,001 – K5,000,000', citizenPreference: true, reservationScheme: true },
-  { value: 'international', label: 'Open International Bidding', shortLabel: 'OIB', minPeriod: 45, zpcRequired: true, isOpen: true, thresholdRange: '> K5,000,000', citizenPreference: false, reservationScheme: false },
+  { value: 'international', label: 'Open International Bidding', shortLabel: 'OIB', minPeriod: 30, zpcRequired: true, isOpen: true, thresholdRange: '> K5,000,000', citizenPreference: false, reservationScheme: false },
   { value: 'limited', label: 'Limited Bidding', shortLabel: 'LB', minPeriod: 14, zpcRequired: true, isOpen: false, thresholdRange: 'Special circumstances', citizenPreference: false, reservationScheme: false },
-  { value: 'simplified', label: 'Simplified Bidding', shortLabel: 'SB', minPeriod: 7, zpcRequired: true, isOpen: false, thresholdRange: 'K20,001 – K1,000,000', citizenPreference: true, reservationScheme: true },
+  { value: 'simplified', label: 'Simplified Bidding', shortLabel: 'SB', minPeriod: 14, zpcRequired: true, isOpen: false, thresholdRange: 'K20,001 – K1,000,000', citizenPreference: true, reservationScheme: true },
   { value: 'direct', label: 'Direct Procurement', shortLabel: 'DP', minPeriod: 0, zpcRequired: true, isOpen: false, thresholdRange: '< K20,000', citizenPreference: false, reservationScheme: false },
 ];
 
@@ -115,89 +113,90 @@ const EXPERTISE_OPTIONS = [
 const MILESTONE_TEMPLATES: Record<string, MilestoneTemplate[]> = {
   open_tender: [
     { name: 'CPP Approved', locked: true, autoCalculated: true, note: 'today — auto' },
-    { name: 'Solicitation Document Ready', locked: false, autoCalculated: false, offsetDays: 3 },
-    { name: 'Solicitation Published', locked: false, autoCalculated: false, offsetDays: 4 },
-    { name: 'Pre-bid Conference (optional)', locked: false, autoCalculated: false, offsetDays: 13 },
+    { name: 'Solicitation Document Ready', locked: false, autoCalculated: false },
+    { name: 'Solicitation Published', locked: false, autoCalculated: false },
+    { name: 'Pre-bid Conference Held', locked: false, autoCalculated: false, daysFromPublished: 10 },
     { name: 'Clarification Cutoff', locked: true, autoCalculated: true, note: 'auto: closing minus 5 working days' },
-    { name: 'Bid Closing Date / Time', locked: false, autoCalculated: false, offsetDays: 25, time: '14:00 CAT' },
-    { name: 'Public Bid Opening', locked: false, autoCalculated: false, offsetDays: 25, time: '14:30 CAT', note: 'same day or after closing' },
-    { name: 'Preliminary Examination Complete', locked: false, autoCalculated: false, offsetDays: 27 },
-    { name: 'Technical Evaluation Complete', locked: false, autoCalculated: false, offsetDays: 34 },
-    { name: 'Financial Evaluation Complete', locked: false, autoCalculated: false, offsetDays: 36 },
-    { name: 'BER Generated and Signed', locked: false, autoCalculated: false, offsetDays: 39 },
-    { name: 'BER Approved by ZPC', locked: false, autoCalculated: false, offsetDays: 44 },
-    { name: 'Contract Award Notice Published', locked: false, autoCalculated: false, offsetDays: 46 },
+    { name: 'Bid Closing Date / Time', locked: false, autoCalculated: false, time: '14:00 CAT' },
+    { name: 'Public Bid Opening', locked: false, autoCalculated: false, time: '14:30 CAT', note: 'same day or after closing' },
+    { name: 'Technical Evaluation Complete', locked: false, autoCalculated: false, daysAfterClosing: 21 },
+    { name: 'Financial Evaluation Complete', locked: false, autoCalculated: false, daysAfterClosing: 23 },
+    { name: 'BER Approved by ZPC', locked: false, autoCalculated: false, daysAfterClosing: 30 },
+    { name: 'Contract Award Notice Published', locked: false, autoCalculated: false, daysAfterClosing: 31 },
     { name: 'Standstill Period Ends', locked: true, autoCalculated: true, note: 'auto: award + 10 working days' },
-    { name: 'Contract Signed (Both Parties)', locked: false, autoCalculated: false, offsetDays: 62 },
-    { name: 'Contract Active', locked: false, autoCalculated: false, offsetDays: 66 },
-    { name: 'Delivery', locked: true, autoCalculated: true, note: 'from requisition — required date' },
+    { name: 'Contract Signed', locked: false, autoCalculated: false, daysAfterClosing: 43 },
+    { name: 'Delivery / Completion', locked: true, autoCalculated: true, note: 'from requisition — required date' },
+    { name: 'Contract Closure', locked: false, autoCalculated: false, daysAfterClosing: 74 },
   ],
   limited: [
     { name: 'CPP Approved', locked: true, autoCalculated: true, note: 'today — auto' },
-    { name: 'Solicitation Document Ready', locked: false, autoCalculated: false, offsetDays: 2 },
-    { name: 'Solicitation Published', locked: false, autoCalculated: false, offsetDays: 3 },
-    { name: 'Bid Closing Date / Time', locked: false, autoCalculated: false, offsetDays: 17, time: '14:00 CAT' },
-    { name: 'Public Bid Opening', locked: false, autoCalculated: false, offsetDays: 17, time: '14:30 CAT' },
-    { name: 'Evaluation Complete', locked: false, autoCalculated: false, offsetDays: 24 },
-    { name: 'BER Generated and Signed', locked: false, autoCalculated: false, offsetDays: 27 },
-    { name: 'ZPC Approval', locked: false, autoCalculated: false, offsetDays: 34 },
-    { name: 'Contract Award Notice Published', locked: false, autoCalculated: false, offsetDays: 36 },
+    { name: 'Solicitation Document Ready', locked: false, autoCalculated: false },
+    { name: 'Solicitation Published', locked: false, autoCalculated: false },
+    { name: 'Pre-bid Conference Held', locked: false, autoCalculated: false, daysFromPublished: 7 },
+    { name: 'Clarification Cutoff', locked: true, autoCalculated: true, note: 'auto: closing minus 5 working days' },
+    { name: 'Bid Closing Date / Time', locked: false, autoCalculated: false, time: '14:00 CAT' },
+    { name: 'Public Bid Opening', locked: false, autoCalculated: false, time: '14:30 CAT' },
+    { name: 'Technical Evaluation Complete', locked: false, autoCalculated: false, daysAfterClosing: 15 },
+    { name: 'Financial Evaluation Complete', locked: false, autoCalculated: false, daysAfterClosing: 17 },
+    { name: 'BER Approved by ZPC', locked: false, autoCalculated: false, daysAfterClosing: 22 },
+    { name: 'Contract Award Notice Published', locked: false, autoCalculated: false, daysAfterClosing: 24 },
     { name: 'Standstill Period Ends', locked: true, autoCalculated: true, note: 'auto: award + 10 working days' },
-    { name: 'Contract Signed', locked: false, autoCalculated: false, offsetDays: 50 },
-    { name: 'Delivery', locked: true, autoCalculated: true, note: 'from requisition — required date' },
+    { name: 'Contract Signed', locked: false, autoCalculated: false, daysAfterClosing: 38 },
+    { name: 'Delivery / Completion', locked: true, autoCalculated: true, note: 'from requisition — required date' },
+    { name: 'Contract Closure', locked: false, autoCalculated: false, daysAfterClosing: 67 },
   ],
   simplified: [
     { name: 'CPP Approved', locked: true, autoCalculated: true, note: 'today — auto' },
-    { name: 'Solicitation Issued', locked: false, autoCalculated: false, offsetDays: 2 },
-    { name: 'Bid Closing', locked: false, autoCalculated: false, offsetDays: 9, time: '14:00 CAT' },
-    { name: 'Bid Opening', locked: false, autoCalculated: false, offsetDays: 9, time: '14:30 CAT' },
-    { name: 'Evaluation Complete', locked: false, autoCalculated: false, offsetDays: 14 },
-    { name: 'BER Generated', locked: false, autoCalculated: false, offsetDays: 16 },
-    { name: 'ZPC Approval', locked: false, autoCalculated: false, offsetDays: 23 },
-    { name: 'Award Notice', locked: false, autoCalculated: false, offsetDays: 25 },
-    { name: 'Standstill Ends', locked: true, autoCalculated: true },
-    { name: 'Contract Signed', locked: false, autoCalculated: false, offsetDays: 35 },
-    { name: 'Delivery', locked: true, autoCalculated: true },
+    { name: 'Solicitation Document Ready', locked: false, autoCalculated: false },
+    { name: 'Solicitation Published', locked: false, autoCalculated: false },
+    { name: 'Pre-bid Conference Held', locked: false, autoCalculated: false, daysFromPublished: 7 },
+    { name: 'Clarification Cutoff', locked: true, autoCalculated: true, note: 'auto: closing minus 5 working days' },
+    { name: 'Bid Closing Date / Time', locked: false, autoCalculated: false, time: '14:00 CAT' },
+    { name: 'Public Bid Opening', locked: false, autoCalculated: false, time: '14:30 CAT' },
+    { name: 'Technical Evaluation Complete', locked: false, autoCalculated: false, daysAfterClosing: 11 },
+    { name: 'Financial Evaluation Complete', locked: false, autoCalculated: false, daysAfterClosing: 13 },
+    { name: 'BER Approved by ZPC', locked: false, autoCalculated: false, daysAfterClosing: 18 },
+    { name: 'Contract Award Notice Published', locked: false, autoCalculated: false, daysAfterClosing: 20 },
+    { name: 'Standstill Period Ends', locked: true, autoCalculated: true, note: 'auto: award + 10 working days' },
+    { name: 'Contract Signed', locked: false, autoCalculated: false, daysAfterClosing: 30 },
+    { name: 'Delivery / Completion', locked: true, autoCalculated: true, note: 'from requisition — required date' },
+    { name: 'Contract Closure', locked: false, autoCalculated: false, daysAfterClosing: 59 },
   ],
   direct: [
     { name: 'CPP Approved', locked: true, autoCalculated: true, note: 'today — auto' },
-    { name: 'Direct Negotiation Started', locked: false, autoCalculated: false, offsetDays: 2 },
-    { name: 'Price Agreement', locked: false, autoCalculated: false, offsetDays: 10 },
-    { name: 'ZPC Approval', locked: false, autoCalculated: false, offsetDays: 17 },
-    { name: 'Contract Signed', locked: false, autoCalculated: false, offsetDays: 24 },
-    { name: 'Delivery', locked: true, autoCalculated: true },
+    { name: 'Solicitation Document Ready', locked: false, autoCalculated: false },
+    { name: 'Solicitation Published', locked: false, autoCalculated: false },
+    { name: 'Pre-bid Conference Held', locked: false, autoCalculated: false, daysFromPublished: 5 },
+    { name: 'Clarification Cutoff', locked: true, autoCalculated: true, note: 'auto: closing minus 5 working days' },
+    { name: 'Bid Closing Date / Time', locked: false, autoCalculated: false, time: '14:00 CAT' },
+    { name: 'Public Bid Opening', locked: false, autoCalculated: false, time: '14:30 CAT' },
+    { name: 'Technical Evaluation Complete', locked: false, autoCalculated: false, daysAfterClosing: 11 },
+    { name: 'Financial Evaluation Complete', locked: false, autoCalculated: false, daysAfterClosing: 13 },
+    { name: 'BER Approved by ZPC', locked: false, autoCalculated: false, daysAfterClosing: 18 },
+    { name: 'Contract Award Notice Published', locked: false, autoCalculated: false, daysAfterClosing: 20 },
+    { name: 'Standstill Period Ends', locked: true, autoCalculated: true, note: 'auto: award + 10 working days' },
+    { name: 'Contract Signed', locked: false, autoCalculated: false, daysAfterClosing: 30 },
+    { name: 'Delivery / Completion', locked: true, autoCalculated: true, note: 'from requisition — required date' },
+    { name: 'Contract Closure', locked: false, autoCalculated: false, daysAfterClosing: 59 },
   ],
   international: [
     { name: 'CPP Approved', locked: true, autoCalculated: true, note: 'today — auto' },
-    { name: 'Solicitation Document Ready', locked: false, autoCalculated: false, offsetDays: 7 },
-    { name: 'Solicitation Published', locked: false, autoCalculated: false, offsetDays: 10 },
-    { name: 'Pre-bid Conference', locked: false, autoCalculated: false, offsetDays: 25 },
-    { name: 'Clarification Cutoff', locked: true, autoCalculated: true },
-    { name: 'Bid Closing', locked: false, autoCalculated: false, offsetDays: 55, time: '14:00 CAT' },
-    { name: 'Bid Opening', locked: false, autoCalculated: false, offsetDays: 55, time: '14:30 CAT' },
-    { name: 'Evaluation Complete', locked: false, autoCalculated: false, offsetDays: 70 },
-    { name: 'BER Generated', locked: false, autoCalculated: false, offsetDays: 75 },
-    { name: 'ZPC Approval', locked: false, autoCalculated: false, offsetDays: 85 },
-    { name: 'Award Notice', locked: false, autoCalculated: false, offsetDays: 88 },
-    { name: 'Standstill Ends', locked: true, autoCalculated: true },
-    { name: 'Contract Signed', locked: false, autoCalculated: false, offsetDays: 105 },
-    { name: 'Delivery', locked: true, autoCalculated: true },
+    { name: 'Solicitation Document Ready', locked: false, autoCalculated: false },
+    { name: 'Solicitation Published', locked: false, autoCalculated: false },
+    { name: 'Pre-bid Conference Held', locked: false, autoCalculated: false, daysFromPublished: 15 },
+    { name: 'Clarification Cutoff', locked: true, autoCalculated: true, note: 'auto: closing minus 5 working days' },
+    { name: 'Bid Closing Date / Time', locked: false, autoCalculated: false, time: '14:00 CAT' },
+    { name: 'Public Bid Opening', locked: false, autoCalculated: false, time: '14:30 CAT' },
+    { name: 'Technical Evaluation Complete', locked: false, autoCalculated: false, daysAfterClosing: 21 },
+    { name: 'Financial Evaluation Complete', locked: false, autoCalculated: false, daysAfterClosing: 23 },
+    { name: 'BER Approved by ZPC', locked: false, autoCalculated: false, daysAfterClosing: 30 },
+    { name: 'Contract Award Notice Published', locked: false, autoCalculated: false, daysAfterClosing: 33 },
+    { name: 'Standstill Period Ends', locked: true, autoCalculated: true, note: 'auto: award + 10 working days' },
+    { name: 'Contract Signed', locked: false, autoCalculated: false, daysAfterClosing: 50 },
+    { name: 'Delivery / Completion', locked: true, autoCalculated: true, note: 'from requisition — required date' },
+    { name: 'Contract Closure', locked: false, autoCalculated: false, daysAfterClosing: 81 },
   ],
 };
-
-function addWorkingDays(date: Date, days: number): Date {
-  const result = new Date(date);
-  let added = 0;
-  while (added < days) {
-    result.setDate(result.getDate() + 1);
-    if (result.getDay() !== 0 && result.getDay() !== 6) added++;
-  }
-  return result;
-}
-
-function formatDate(date: Date): string {
-  return date.toISOString().split('T')[0];
-}
 
 function formatDateDisplay(dateStr: string): string {
   if (!dateStr) return '---';
@@ -316,73 +315,11 @@ const CPPCreate: React.FC = () => {
   const generateMilestones = useCallback(() => {
     if (!finalMethod) return;
     const template = MILESTONE_TEMPLATES[finalMethod] || MILESTONE_TEMPLATES.open_tender;
-    const today = new Date();
-    const deliveryDate = selectedReq?.date_required ? new Date(selectedReq.date_required) : addWorkingDays(today, 75);
-    const generated: ProcurementMilestone[] = [];
-
-    template.forEach((t, idx) => {
-      let plannedDate: string;
-      let constraintNote = '';
-      let validationBadges: string[] = [];
-
-      if (t.locked && t.note?.includes('today')) {
-        plannedDate = formatDate(today);
-      } else if (t.locked && t.note?.includes('requisition')) {
-        plannedDate = formatDate(deliveryDate);
-      } else if (t.autoCalculated && t.note?.includes('closing')) {
-        const closingMilestone = generated.find(m => m.milestone_name.includes('Bid Closing'));
-        if (closingMilestone) {
-          plannedDate = formatDate(addWorkingDays(new Date(closingMilestone.planned_date), -5));
-        } else {
-          plannedDate = formatDate(addWorkingDays(today, (t.offsetDays || 20)));
-        }
-      } else if (t.autoCalculated && t.note?.includes('standstill')) {
-        const awardMilestone = generated.find(m => m.milestone_name.includes('Award Notice') || m.milestone_name.includes('Award'));
-        if (awardMilestone) {
-          plannedDate = formatDate(addWorkingDays(new Date(awardMilestone.planned_date), 10));
-        } else {
-          plannedDate = formatDate(addWorkingDays(today, (t.offsetDays || 40)));
-        }
-      } else if (t.offsetDays !== undefined) {
-        plannedDate = formatDate(addWorkingDays(today, t.offsetDays));
-      } else {
-        plannedDate = formatDate(addWorkingDays(today, idx * 3));
-      }
-
-      // Constraint notes
-      if (t.name.includes('Solicitation Published') || t.name.includes('Solicitation Issued')) {
-        constraintNote = 'must be ≥ today';
-      } else if (t.name.includes('Bid Closing')) {
-        constraintNote = `min ${finalMethodOption?.minPeriod || 21} days from publication`;
-      } else if (t.name.includes('Bid Opening') || t.name.includes('Opening')) {
-        constraintNote = 'same day or after closing';
-      }
-
-      // Validation badge markers
-      if (t.name.includes('Solicitation Published') || t.name.includes('Solicitation Issued')) {
-        validationBadges.push('days_to_closing');
-      }
-      if (t.name.includes('Delivery')) {
-        validationBadges.push('achievable');
-      }
-
-      generated.push({
-        milestone_id: crypto.randomUUID(),
-        cpp: '',
-        milestone_name: t.name,
-        sequence_number: idx + 1,
-        planned_date: plannedDate,
-        actual_date: null,
-        variance_days: null,
-        variance_flag: t.locked ? 'green' : undefined,
-        is_system_updated: t.autoCalculated,
-        time: t.time,
-        note: t.note,
-        constraintNote,
-        validationBadges,
-      });
+    const deliveryDate = selectedReq?.date_required ? new Date(selectedReq.date_required) : undefined;
+    const generated = buildCppMilestoneDates(finalMethod, template, {
+      deliveryDate,
+      minPeriod: finalMethodOption?.minPeriod,
     });
-
     setMilestones(generated);
   }, [finalMethod, selectedReq, finalMethodOption]);
 
@@ -401,7 +338,16 @@ const CPPCreate: React.FC = () => {
   }, [finalMethod, milestones.length, generateMilestones]);
 
   const updateMilestoneDate = (i: number, value: string) => {
-    setMilestones(prev => prev.map((m, idx) => idx === i ? { ...m, planned_date: value } : m));
+    setMilestones(prev => {
+      const updated = prev.map((m, idx) => idx === i ? { ...m, planned_date: value } : m);
+      return recalculateDependentMilestones(updated);
+    });
+  };
+
+  const updateMilestoneTime = (i: number, time: string) => {
+    setMilestones(prev =>
+      prev.map((m, idx) => idx === i ? { ...m, time } : m),
+    );
   };
 
   const toggleExpertise = (key: string) => {
@@ -471,6 +417,14 @@ const CPPCreate: React.FC = () => {
 
     setLoading(true);
     try {
+      const closingMs = milestones.find((m) =>
+        m.milestone_name.toLowerCase().includes('bid closing')
+        || m.milestone_name.toLowerCase().includes('closing date'),
+      );
+      const openingMs = milestones.find((m) =>
+        m.milestone_name.toLowerCase().includes('bid opening')
+        || m.milestone_name.toLowerCase().includes('public bid opening'),
+      );
       const cppData: Partial<ContractProcurementPlan> = {
         requisition: selectedRequisition,
         method: finalMethod,
@@ -482,7 +436,11 @@ const CPPCreate: React.FC = () => {
         zpc_justification: finalMethodOption?.zpcRequired ? zpcJustification : '',
         estimated_value: selectedReq?.estimated_total || 0,
         overall_risk_level: calculateOverallRiskLevel() as any,
-        resource_requirements: resourceRequirements as any,
+        resource_requirements: {
+          ...resourceRequirements,
+          closingTime: closingMs?.time || '14:00 CAT',
+          openingTime: openingMs?.time || '14:30 CAT',
+        } as any,
         milestones,
         risks,
         status: submitAndApprove && finalMethodOption?.isOpen ? 'approved' : 'draft',
@@ -541,33 +499,14 @@ const CPPCreate: React.FC = () => {
   const prevStep = () => setCurrentStep(prev => Math.max(prev - 1, 0));
 
   const milestoneErrors = useMemo(() => {
-    if (!finalMethodOption || milestones.length === 0) return [];
-    const errors: string[] = [];
-    const methodOpt = finalMethodOption;
-
-    const pubIdx = milestones.findIndex(m => m.milestone_name.includes('Published') || m.milestone_name.includes('Issued'));
-    const closingIdx = milestones.findIndex(m => m.milestone_name.includes('Bid Closing') || m.milestone_name.includes('Closing'));
-
-    if (pubIdx >= 0 && closingIdx >= 0) {
-      const pubDate = new Date(milestones[pubIdx].planned_date);
-      const closingDate = new Date(milestones[closingIdx].planned_date);
-      const daysDiff = Math.ceil((closingDate.getTime() - pubDate.getTime()) / (1000 * 60 * 60 * 24));
-      if (daysDiff < methodOpt.minPeriod) {
-        errors.push(`Solicitation period (${daysDiff} days) is less than minimum (${methodOpt.minPeriod} days for ${methodOpt.shortLabel})`);
-      }
-    }
-
-    const openingIdx = milestones.findIndex(m => m.milestone_name.includes('Opening'));
-    if (openingIdx >= 0 && closingIdx >= 0) {
-      const openDate = new Date(milestones[openingIdx].planned_date);
-      const closeDate = new Date(milestones[closingIdx].planned_date);
-      if (openDate < closeDate) {
-        errors.push('Bid opening must be on or after closing date');
-      }
-    }
-
-    return errors;
-  }, [milestones, finalMethodOption]);
+    if (!finalMethod || milestones.length === 0) return [];
+    return validateCppMilestoneDates(
+      milestones,
+      finalMethod,
+      finalMethodOption?.minPeriod,
+      { requisitionDeliveryDate: selectedReq?.date_required }
+    );
+  }, [milestones, finalMethod, finalMethodOption, selectedReq]);
 
   return (
     <div className="pb-12 max-w-7xl mx-auto">
@@ -668,7 +607,7 @@ const CPPCreate: React.FC = () => {
                   </div>
                   <div className="space-y-1">
                     <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Type</p>
-                    <p className="text-sm font-bold text-gray-900">Goods</p>
+                    <p className="text-sm font-bold text-gray-900 uppercase">{selectedReq.procurement_type || 'Goods'}</p>
                   </div>
                   <div className="space-y-1">
                     <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Department</p>
@@ -983,9 +922,15 @@ const CPPCreate: React.FC = () => {
                   Milestone Schedule
                 </h2>
               </div>
-              <div className="flex items-center gap-4">
+              <div className="flex items-center gap-3">
                 <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">
-                  Method: {finalMethodOption?.label || '---'} | Required Delivery: {selectedReq?.date_required ? formatDateDisplay(selectedReq.date_required) : (milestones.length > 0 ? formatDateDisplay(milestones[milestones.length - 1]?.planned_date || '') : '---')}
+                  Method: {finalMethodOption?.shortLabel || '---'} |
+                  Min Solicitation: {finalMethodOption?.minPeriod || 21}d |
+                  Delivery: {selectedReq?.date_required ? formatDateDisplay(selectedReq.date_required) : (milestones.length > 0 ? formatDateDisplay(milestones[milestones.length - 1]?.planned_date || '') : 'auto')}
+                </span>
+                <span className="text-[10px] font-bold text-gray-300">|</span>
+                <span className="text-[10px] font-bold text-gray-400">
+                  {milestones.filter(m => !m.is_system_updated).length} editable
                 </span>
                 <button
                   onClick={generateMilestones}
@@ -1012,6 +957,7 @@ const CPPCreate: React.FC = () => {
                     // Compute dynamic validation data
                     let daysToClosing = '';
                     let isAchievable = false;
+                    let deliveryError = '';
                     let openingDateError = '';
                     if (m.validationBadges?.includes('days_to_closing')) {
                       const closingMs = milestones.find(x => x.milestone_name.includes('Bid Closing') || x.milestone_name.includes('Closing'));
@@ -1023,7 +969,13 @@ const CPPCreate: React.FC = () => {
                       }
                     }
                     if (m.validationBadges?.includes('achievable') && selectedReq?.date_required) {
-                      isAchievable = true;
+                      const plannedDelivery = new Date(m.planned_date);
+                      const requiredDelivery = new Date(selectedReq.date_required);
+                      if (plannedDelivery <= requiredDelivery) {
+                        isAchievable = true;
+                      } else {
+                        deliveryError = `Exceeds required date (${formatDateDisplay(selectedReq.date_required)})`;
+                      }
                     }
                     if ((m.milestone_name.includes('Bid Opening') || m.milestone_name.includes('Opening')) && m.planned_date) {
                       const closingMs = milestones.find(x => x.milestone_name.includes('Bid Closing') || x.milestone_name.includes('Closing'));
@@ -1052,7 +1004,7 @@ const CPPCreate: React.FC = () => {
                           </div>
                           {m.constraintNote && (
                             <p className="text-[11px] font-semibold text-gray-400 mt-1 flex items-center gap-1">
-                              <ArrowLeftIcon className="w-3 h-3" /> {m.constraintNote}
+                              <InformationCircleIcon className="w-3 h-3" /> {m.constraintNote}
                             </p>
                           )}
                           {m.note && (
@@ -1068,6 +1020,9 @@ const CPPCreate: React.FC = () => {
                                 <div className="flex items-center gap-2">
                                   <LockClosedIcon className="w-4 h-4 text-gray-500" />
                                   <span className="text-sm font-bold text-gray-700">{formatDateDisplay(m.planned_date)}</span>
+                                  {m.time && (
+                                    <span className="text-xs font-bold text-gray-500 whitespace-nowrap">{m.time}</span>
+                                  )}
                                 </div>
                               ) : (
                                 <div className="flex items-center gap-2">
@@ -1078,10 +1033,21 @@ const CPPCreate: React.FC = () => {
                                     onChange={(e) => updateMilestoneDate(i, e.target.value)}
                                     className="bg-white border border-gray-200 rounded-xl px-3.5 py-2 text-sm font-semibold text-gray-800 outline-none focus:ring-2 focus:ring-zammsa-green/30 focus:border-zammsa-green transition-shadow"
                                   />
+                                  {m.time && (
+                                    <div className="flex items-center gap-1">
+                                      <input
+                                        type="time"
+                                        value={m.time.replace(/\s*CAT/i, '')}
+                                        onChange={(e) => {
+                                          const val = e.target.value;
+                                          if (val) updateMilestoneTime(i, `${val} CAT`);
+                                        }}
+                                        className="bg-white border border-gray-200 rounded-xl px-2 py-2 text-sm font-semibold text-gray-800 outline-none focus:ring-2 focus:ring-zammsa-green/30 focus:border-zammsa-green transition-shadow w-32"
+                                      />
+                                      <span className="text-[10px] font-black text-gray-400 uppercase">CAT</span>
+                                    </div>
+                                  )}
                                 </div>
-                              )}
-                              {m.time && (
-                                <span className="text-xs font-bold text-gray-500 whitespace-nowrap">{m.time}</span>
                               )}
                             </div>
                             {m.is_system_updated && m.note && (
@@ -1098,6 +1064,12 @@ const CPPCreate: React.FC = () => {
                               <div className="mt-0.5 flex items-center gap-1">
                                 <CheckCircleIcon className="w-3 h-3 text-emerald-500" />
                                 <span className="text-[11px] font-black text-emerald-600">Achievable</span>
+                              </div>
+                            )}
+                            {deliveryError && (
+                              <div className="mt-0.5 flex items-center gap-1">
+                                <XCircleIcon className="w-3 h-3 text-red-500" />
+                                <span className="text-[11px] font-black text-red-600">{deliveryError}</span>
                               </div>
                             )}
                             {openingDateError && (

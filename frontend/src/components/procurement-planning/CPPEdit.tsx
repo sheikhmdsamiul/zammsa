@@ -85,10 +85,10 @@ const CPPSteps = [
 
 const METHOD_OPTIONS: MethodOption[] = [
   { value: 'direct', label: 'Direct Procurement', minPeriod: 0, zpcRequired: true },
-  { value: 'simplified', label: 'Simplified Bidding', minPeriod: 7, zpcRequired: true },
+  { value: 'simplified', label: 'Simplified Bidding', minPeriod: 14, zpcRequired: true },
   { value: 'limited', label: 'Limited Bidding', minPeriod: 14, zpcRequired: true },
-  { value: 'open_tender', label: 'Open Tender', minPeriod: 30, zpcRequired: false },
-  { value: 'international', label: 'International Tender', minPeriod: 45, zpcRequired: true },
+  { value: 'open_tender', label: 'Open Tender', minPeriod: 21, zpcRequired: false },
+  { value: 'international', label: 'International Tender', minPeriod: 30, zpcRequired: true },
 ];
 
 const ZPC_GROUNDS = [
@@ -183,15 +183,26 @@ const CPPEdit: React.FC = () => {
         setOverrideReason(res.override_reason || '');
         setZpcGrounds(res.zpc_grounds || '');
         setZpcJustification(res.zpc_justification || '');
-        setMilestones((res.milestones || []).map((m, idx) => ({
-          milestone_id: m.milestone_id || crypto.randomUUID(),
-          cpp: m.cpp || '',
-          milestone_name: m.milestone_name || '',
-          sequence_number: m.sequence_number || idx + 1,
-          planned_date: m.planned_date || '',
-          actual_date: m.actual_date || null,
-          variance_days: m.variance_days ?? null,
-        })));
+        const resourceReqs = (res.resource_requirements || {}) as Record<string, any>;
+        setMilestones((res.milestones || []).map((m, idx) => {
+          const name = (m.milestone_name || '').toLowerCase();
+          let time = m.time || undefined;
+          if (!time && (name.includes('closing') || name.includes('bid closing'))) {
+            time = resourceReqs.closingTime || '14:00 CAT';
+          } else if (!time && (name.includes('opening') || name.includes('bid opening'))) {
+            time = resourceReqs.openingTime || '14:30 CAT';
+          }
+          return {
+            milestone_id: m.milestone_id || crypto.randomUUID(),
+            cpp: m.cpp || '',
+            milestone_name: m.milestone_name || '',
+            sequence_number: m.sequence_number || idx + 1,
+            planned_date: m.planned_date || '',
+            actual_date: m.actual_date || null,
+            variance_days: m.variance_days ?? null,
+            time,
+          };
+        }));
         setRisks((res.risks || []).map(r => ({
           risk_id: r.risk_id || crypto.randomUUID(),
           cpp: r.cpp || '',
@@ -337,7 +348,11 @@ const CPPEdit: React.FC = () => {
         zpc_justification: selectedMethodOption?.zpcRequired ? zpcJustification : '',
         estimated_value: requisitions.find(r => r.requisition_id === selectedRequisition)?.estimated_total || 0,
         overall_risk_level: calculateOverallRiskLevel(),
-        resource_requirements: resourceRequirements,
+        resource_requirements: {
+          ...resourceRequirements,
+          closingTime: milestones.find(m => /closing/i.test(m.milestone_name))?.time || '14:00 CAT',
+          openingTime: milestones.find(m => /opening/i.test(m.milestone_name))?.time || '14:30 CAT',
+        },
         milestones: milestones.map(m => ({
           milestone_id: m.milestone_id,
           cpp: '',

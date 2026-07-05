@@ -8,7 +8,7 @@ from accounts.models import User
 from master_data.models import Department, FiscalYear
 from requisitions.models import Requisition
 from .models import AnnualProcurementPlan, ContractProcurementPlan, CPPDocument
-from .views import _validate_milestone_minimum_periods
+from .views import _validate_milestone_minimum_periods, _compute_cpp_milestone_planned_dates
 from decimal import Decimal
 
 
@@ -94,6 +94,30 @@ class CPPDateValidationTests(TestCase):
         milestones = [
             {'milestone_name': 'Bid Closing', 'planned_date': '2026-06-25'},
             {'milestone_name': 'Bid Opening', 'planned_date': '2026-06-26'},
+        ]
+        errors = _validate_milestone_minimum_periods(milestones, 'open_tender')
+        self.assertEqual(errors, [])
+
+    def test_compute_milestone_dates_open_tender(self):
+        start = date(2026, 6, 1)
+        planned = dict(_compute_cpp_milestone_planned_dates('open_tender', 'goods', start))
+        self.assertEqual(planned['Solicitation Published'], date(2026, 6, 4))
+        self.assertEqual(planned['Bid Closing Date'], date(2026, 6, 25))
+        self.assertEqual(planned['Public Bid Opening'], date(2026, 6, 25))
+        self.assertEqual((planned['Bid Closing Date'] - planned['Solicitation Published']).days, 21)
+
+    def test_compute_milestone_dates_simplified(self):
+        start = date(2026, 6, 1)
+        planned = dict(_compute_cpp_milestone_planned_dates('simplified', 'goods', start))
+        self.assertEqual(planned['Solicitation Published'], date(2026, 6, 3))
+        self.assertEqual(planned['Bid Closing Date'], date(2026, 6, 17))
+        self.assertEqual((planned['Bid Closing Date'] - planned['Solicitation Published']).days, 14)
+
+    def test_publication_date_not_confused_with_document_ready(self):
+        milestones = [
+            {'milestone_name': 'Solicitation Document Ready', 'planned_date': '2026-06-02'},
+            {'milestone_name': 'Solicitation Published', 'planned_date': '2026-06-03'},
+            {'milestone_name': 'Bid Closing Date', 'planned_date': '2026-06-24'},
         ]
         errors = _validate_milestone_minimum_periods(milestones, 'open_tender')
         self.assertEqual(errors, [])

@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { solicitationsApi } from '../../api/solicitations';
@@ -8,7 +8,7 @@ import {
   CheckCircleIcon, XCircleIcon, PlusIcon, TrashIcon,
   InformationCircleIcon, ShieldCheckIcon, LockClosedIcon,
   ClockIcon, ExclamationIcon, ChevronLeftIcon, ChevronRightIcon, EyeIcon,
-  XIcon, DownloadIcon, PaperClipIcon,
+  XIcon, DownloadIcon, PaperClipIcon, CalendarIcon,
 } from '@heroicons/react/outline';
 import DepartmentSelect from '../common/DepartmentSelect';
 
@@ -81,6 +81,32 @@ function fmtDate(d: string): string {
   if (!d) return '';
   const date = new Date(d);
   return date.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+}
+
+function parseMilestoneTime(time?: string): { hour: string; minute: string } {
+  if (!time) return { hour: '14', minute: '00' };
+  const match = time.match(/(\d{1,2}):(\d{2})/);
+  if (match) return { hour: match[1].padStart(2, '0'), minute: match[2] };
+  return { hour: '14', minute: '00' };
+}
+
+function findCppMilestone(milestones: any[], type: 'published' | 'closing' | 'opening' | 'prebid') {
+  return milestones.find((m: any) => {
+    const name = (m.milestone_name || '').toLowerCase();
+    if (type === 'published') {
+      return name.includes('solicitation published') || name.includes('solicitation issued');
+    }
+    if (type === 'closing') {
+      return name.includes('bid closing') || name.includes('closing date');
+    }
+    if (type === 'opening') {
+      return name.includes('bid opening') || name.includes('public bid opening');
+    }
+    if (type === 'prebid') {
+      return name.includes('pre-bid') || name.includes('prebid') || name.includes('prebid conference');
+    }
+    return false;
+  });
 }
 
 function daysBetween(a: string, b: string): number {
@@ -172,22 +198,65 @@ const SolicitationCreate: React.FC = () => {
   React.useEffect(() => {
     if (selectedReq?.cpp_data) {
       const cpp = selectedReq.cpp_data;
-      if (cpp.method && !solicitationMethod) setSolicitationMethod(cpp.method);
-      if (cpp.estimated_value && estimatedValue === 0) setEstimatedValue(Number(cpp.estimated_value));
-      if (cpp.procurement_strategy && !description) setDescription(cpp.procurement_strategy);
-      if (cpp.department?.dept_name && !department) setDepartment(cpp.department.dept_name);
+      
+      // Override/populate fields from CPP unconditionally
       if (cpp.method) {
+        setSolicitationMethod(cpp.method);
+        
         // Auto-set template based on CPP method (SRS FR-METHOD-01)
         const templateKey: TemplateType | null = ['open_tender', 'international', 'limited'].includes(cpp.method) ? 'itb' : cpp.method === 'proposal' ? 'rfp' : ['simplified', 'direct'].includes(cpp.method) ? 'rfq' : null;
-        if (templateKey && !template) {
+        if (templateKey) {
           setTemplate(templateKey);
           if (templateKey === 'itb') { setSubmissionFormat('single'); setEvaluationMethod('lowest_price'); }
           if (templateKey === 'rfp') { setSubmissionFormat('two'); setEvaluationMethod('qcbs'); }
           if (templateKey === 'rfq') { setEvaluationMethod('lcs'); }
         }
       }
+      
+      if (cpp.estimated_value) setEstimatedValue(Number(cpp.estimated_value));
+      if (cpp.procurement_strategy) setDescription(cpp.procurement_strategy);
+      if (cpp.department?.dept_name) setDepartment(cpp.department.dept_name);
+
+      const milestones: any[] = cpp.milestones || [];
+      const rr: any = cpp.resource_requirements || {};
+      const pubMs = findCppMilestone(milestones, 'published');
+      const closeMs = findCppMilestone(milestones, 'closing');
+      const openMs = findCppMilestone(milestones, 'opening');
+      const prebidMs = milestones.find((m: any) => {
+        const name = (m.milestone_name || '').toLowerCase();
+        return name.includes('pre-bid') || name.includes('prebid');
+      });
+
+      if (pubMs?.planned_date) setIssueDate(pubMs.planned_date);
+      if (closeMs?.planned_date) {
+        setClosingDate(closeMs.planned_date);
+        const closeTime = parseMilestoneTime(closeMs.time || rr.closingTime);
+        setClosingHour(closeTime.hour);
+        setClosingMinute(closeTime.minute);
+      }
+      if (openMs?.planned_date) {
+        setOpeningDate(openMs.planned_date);
+        const openTime = parseMilestoneTime(openMs.time || rr.openingTime || '14:30 CAT');
+        setOpeningHour(openTime.hour);
+        setOpeningMinute(openTime.minute);
+      } else if (closeMs?.planned_date) {
+        setOpeningDate(closeMs.planned_date);
+        const openTime = parseMilestoneTime(rr.openingTime || '14:30 CAT');
+        setOpeningHour(openTime.hour);
+        setOpeningMinute(openTime.minute);
+      }
+      if (rr.submissionFormat) setSubmissionFormat(rr.submissionFormat);
+      if (rr.bidValidityDays) setBidValidity(rr.bidValidityDays);
+      if (rr.minimumTechnicalThreshold) setMinTechThreshold(rr.minimumTechnicalThreshold);
+      if (rr.citizenPreference !== undefined) setCitizenPreference(Boolean(rr.citizenPreference));
+      if (rr.bidSecurityType) setBidSecurityType(rr.bidSecurityType);
+      if (rr.bidSecurityRate) setBidSecurityRate(rr.bidSecurityRate);
+      if (prebidMs?.planned_date) {
+        setPreBidDate(prebidMs.planned_date);
+      } else if (rr.prebidConferenceDate) {
+        setPreBidDate(rr.prebidConferenceDate);
+      }
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedReq]);
 
   const solicitationPeriodDays = useMemo(() => daysBetween(issueDate, closingDate), [issueDate, closingDate]);
@@ -202,6 +271,15 @@ const SolicitationCreate: React.FC = () => {
     if (['simplified', 'direct'].includes(method)) return 'rfq';
     return 'itb';
   }, [selectedReq]);
+
+  const cppMilestones: any[] = useMemo(() => {
+    return (selectedReq as any)?.cpp_data?.milestones || [];
+  }, [selectedReq]);
+
+  const cppMilestoneName = useCallback((type: 'published' | 'closing' | 'opening' | 'prebid'): string => {
+    const m = findCppMilestone(cppMilestones, type);
+    return m?.milestone_name || '';
+  }, [cppMilestones]);
 
   const clarificationCutoff = useMemo(() => {
     if (!closingDate) return '';
@@ -577,25 +655,7 @@ const SolicitationCreate: React.FC = () => {
                     const r = requisitions.find((rq: any) => (rq.id || rq.requisition_id) === e.target.value);
                     if (r) {
                       setTitle(r.title || r.description || '');
-                      // Auto-population is now handled by useEffect hook based on CPP data (SRS FR-SOL-01)
-                      const cppData = (r as any).cpp_data;
-                      if (cppData) {
-                        const milestones: any[] = cppData.milestones || [];
-                        const rr: any = cppData.resource_requirements || {};
-                        const pubMs = milestones.find((m: any) => (m.milestone_name || '').toLowerCase().includes('published') || (m.milestone_name || '').toLowerCase().includes('issued'));
-                        if (pubMs?.planned_date) setIssueDate(pubMs.planned_date);
-                        const closeMs = milestones.find((m: any) => (m.milestone_name || '').toLowerCase().includes('bid closing') || (m.milestone_name || '').toLowerCase().includes('closing'));
-                        if (closeMs?.planned_date) setClosingDate(closeMs.planned_date);
-                        const openMs = milestones.find((m: any) => (m.milestone_name || '').toLowerCase().includes('bid opening') || (m.milestone_name || '').toLowerCase().includes('opening'));
-                        if (openMs?.planned_date) setOpeningDate(openMs.planned_date);
-                        if (rr.submissionFormat) setSubmissionFormat(rr.submissionFormat);
-                        if (rr.bidValidityDays) setBidValidity(rr.bidValidityDays);
-                        if (rr.minimumTechnicalThreshold) setMinTechThreshold(rr.minimumTechnicalThreshold);
-                        if (rr.citizenPreference !== undefined) setCitizenPreference(Boolean(rr.citizenPreference));
-                        if (rr.bidSecurityType) setBidSecurityType(rr.bidSecurityType);
-                        if (rr.bidSecurityRate) setBidSecurityRate(rr.bidSecurityRate);
-                        if (rr.prebidConferenceDate) setPreBidDate(rr.prebidConferenceDate);
-                      }
+                      // Milestone dates are auto-populated via useEffect when selectedReq changes
                     }
                   }}
                   className="w-full bg-white border border-gray-200 rounded-2xl px-5 py-4 text-sm font-bold text-gray-700 outline-none focus:ring-4 focus:ring-zammsa-green/5"
@@ -751,7 +811,14 @@ const SolicitationCreate: React.FC = () => {
               <div>
                 <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5 block ml-1">Issue / Publication Date *</label>
                 <input type="date" value={issueDate} onChange={(e) => setIssueDate(e.target.value)} className="w-full bg-white border border-gray-200 rounded-2xl px-5 py-4 text-sm font-bold text-gray-700 outline-none focus:ring-4 focus:ring-zammsa-green/5" />
-                <p className="text-[11px] text-gray-400 mt-1 ml-1">from CPP milestone — editable</p>
+                {cppMilestoneName('published') && (
+                  <p className="text-[11px] text-gray-400 mt-1 ml-1 flex items-center gap-1">
+                    <CheckCircleIcon className="w-3 h-3 text-emerald-500" /> from CPP: <span className="font-semibold text-gray-500">{cppMilestoneName('published')}</span> — editable
+                  </p>
+                )}
+                {!cppMilestoneName('published') && (
+                  <p className="text-[11px] text-gray-400 mt-1 ml-1">manually set — no CPP milestone for publication found</p>
+                )}
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -768,11 +835,16 @@ const SolicitationCreate: React.FC = () => {
                     </select>
                     <span className="self-center text-[10px] font-black text-gray-400 uppercase">CAT</span>
                   </div>
-                  {issueDate && closingDate && solicitationPeriodDays >= 21 && (
-                    <p className="text-[11px] font-bold text-emerald-600 mt-1 ml-1 flex items-center gap-1"><CheckCircleIcon className="w-3.5 h-3.5" /> {solicitationPeriodDays} days from issue — meets ONB minimum</p>
+                  {cppMilestoneName('closing') && (
+                    <p className="text-[11px] text-gray-400 mt-1 ml-1 flex items-center gap-1">
+                      <CalendarIcon className="w-3 h-3 text-indigo-400" /> from CPP: <span className="font-semibold text-gray-500">{cppMilestoneName('closing')}</span> — editable
+                    </p>
                   )}
-                  {issueDate && closingDate && solicitationPeriodDays < 21 && (
-                    <p className="text-[11px] font-bold text-rose-600 mt-1 ml-1 flex items-center gap-1"><ExclamationIcon className="w-3.5 h-3.5" /> Only {solicitationPeriodDays} days — minimum is 21 days</p>
+                  {issueDate && closingDate && (
+                    <p className={`text-[11px] font-bold mt-0.5 ml-1 flex items-center gap-1 ${solicitationPeriodDays >= 21 ? 'text-emerald-600' : 'text-rose-600'}`}>
+                      {solicitationPeriodDays >= 21 ? <CheckCircleIcon className="w-3.5 h-3.5" /> : <ExclamationIcon className="w-3.5 h-3.5" />}
+                      {solicitationPeriodDays} days from issue — {solicitationPeriodDays >= 21 ? 'meets' : 'below'} {(selectedReq as any)?.cpp_data?.method === 'international' ? 30 : 21} day minimum
+                    </p>
                   )}
                 </div>
 
@@ -789,11 +861,16 @@ const SolicitationCreate: React.FC = () => {
                     </select>
                     <span className="self-center text-[10px] font-black text-gray-400 uppercase">CAT</span>
                   </div>
+                  {cppMilestoneName('opening') && (
+                    <p className="text-[11px] text-gray-400 mt-1 ml-1 flex items-center gap-1">
+                      <CalendarIcon className="w-3 h-3 text-indigo-400" /> from CPP: <span className="font-semibold text-gray-500">{cppMilestoneName('opening')}</span> — editable
+                    </p>
+                  )}
                   {closingDate && openingDate && new Date(openingDate) >= new Date(closingDate) && (
-                    <p className="text-[11px] font-bold text-emerald-600 mt-1 ml-1 flex items-center gap-1"><CheckCircleIcon className="w-3.5 h-3.5" /> After closing time</p>
+                    <p className="text-[11px] font-bold text-emerald-600 mt-0.5 ml-1 flex items-center gap-1"><CheckCircleIcon className="w-3.5 h-3.5" /> After closing time — compliant (SRS §8.7.1 Step 6)</p>
                   )}
                   {closingDate && openingDate && new Date(openingDate) < new Date(closingDate) && (
-                    <p className="text-[11px] font-bold text-rose-600 mt-1 ml-1 flex items-center gap-1"><ExclamationIcon className="w-3.5 h-3.5" /> Opening must be after closing</p>
+                    <p className="text-[11px] font-bold text-rose-600 mt-0.5 ml-1 flex items-center gap-1"><ExclamationIcon className="w-3.5 h-3.5" /> Opening must be after closing (SRS §8.7.1 Step 6)</p>
                   )}
                 </div>
               </div>
@@ -817,12 +894,58 @@ const SolicitationCreate: React.FC = () => {
                 <div>
                   <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5 block ml-1">Pre-bid Conference Date</label>
                   <input type="date" value={preBidDate} onChange={(e) => setPreBidDate(e.target.value)} className="w-full bg-white border border-gray-200 rounded-2xl px-5 py-4 text-sm font-bold text-gray-700 outline-none focus:ring-4 focus:ring-zammsa-green/5" />
+                  {cppMilestoneName('prebid') && (
+                    <p className="text-[11px] text-gray-400 mt-1 ml-1 flex items-center gap-1">
+                      <CalendarIcon className="w-3 h-3 text-indigo-400" /> from CPP: <span className="font-semibold text-gray-500">{cppMilestoneName('prebid')}</span> — editable
+                    </p>
+                  )}
                 </div>
                 <div>
                   <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5 block ml-1">Venue / Link</label>
                   <input type="text" value={preBidVenue} onChange={(e) => setPreBidVenue(e.target.value)} placeholder="e.g. Boardroom, City" className="w-full bg-white border border-gray-200 rounded-2xl px-5 py-4 text-sm font-bold text-gray-700 outline-none focus:ring-4 focus:ring-zammsa-green/5" />
                 </div>
               </div>
+              {/* CPP Milestones Summary */}
+              {cppMilestones.length > 0 && (
+                <div className="mt-6 p-4 bg-gray-50 border border-gray-200 rounded-2xl">
+                  <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-3 flex items-center gap-1">
+                    <CalendarIcon className="w-3 h-3" /> CPP Milestone Timeline (for reference)
+                  </p>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-xs">
+                      <thead>
+                        <tr className="border-b border-gray-200">
+                          <th className="text-left font-bold text-gray-400 uppercase tracking-wider pb-2 pr-4">#</th>
+                          <th className="text-left font-bold text-gray-400 uppercase tracking-wider pb-2 pr-4">Milestone</th>
+                          <th className="text-left font-bold text-gray-400 uppercase tracking-wider pb-2">Date</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-100">
+                        {cppMilestones.slice(0, 10).map((m: any, i: number) => (
+                          <tr key={i} className="hover:bg-white/50 transition-colors">
+                            <td className="py-1.5 pr-4 text-gray-400 font-mono font-bold">{m.sequence_number}</td>
+                            <td className="py-1.5 pr-4">
+                              <span className={`font-semibold ${findCppMilestone(cppMilestones, 'published') === m || findCppMilestone(cppMilestones, 'closing') === m || findCppMilestone(cppMilestones, 'opening') === m ? 'text-indigo-700' : 'text-gray-600'}`}>
+                                {m.milestone_name}
+                              </span>
+                              {findCppMilestone(cppMilestones, 'published') === m && <span className="text-[9px] font-bold text-indigo-500 ml-2 uppercase">→ Issue Date</span>}
+                              {findCppMilestone(cppMilestones, 'closing') === m && <span className="text-[9px] font-bold text-indigo-500 ml-2 uppercase">→ Closing</span>}
+                              {findCppMilestone(cppMilestones, 'opening') === m && <span className="text-[9px] font-bold text-indigo-500 ml-2 uppercase">→ Opening</span>}
+                            </td>
+                            <td className="py-1.5 font-mono font-bold text-gray-700">
+                              {m.planned_date ? fmtDate(m.planned_date) : '---'}
+                              {m.time && <span className="text-gray-400 ml-1">{m.time}</span>}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                    {cppMilestones.length > 10 && (
+                      <p className="text-[10px] text-gray-400 mt-2">...and {cppMilestones.length - 10} more milestones (see CPP for full schedule)</p>
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
           </div>
 

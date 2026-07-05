@@ -341,7 +341,7 @@ const DashboardLayout: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen flex bg-slate-50 font-sans">
+    <div className="h-screen overflow-hidden flex bg-slate-50 font-sans">
       <Sidebar 
         navItems={navItems}
         isOpen={sidebarOpen}
