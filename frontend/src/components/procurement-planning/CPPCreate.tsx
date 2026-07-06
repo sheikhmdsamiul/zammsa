@@ -9,7 +9,7 @@ import {
   ArrowLeftIcon, CheckCircleIcon, ExclamationIcon, DocumentTextIcon,
   CalendarIcon, UserCircleIcon, ClipboardListIcon, ShieldCheckIcon,
   LightningBoltIcon, PlusIcon, TrashIcon, InformationCircleIcon, LockClosedIcon, XCircleIcon,
-  UploadIcon, PaperClipIcon, DownloadIcon,
+  UploadIcon, PaperClipIcon, DownloadIcon, ChevronDownIcon, ChevronRightIcon,
 } from '@heroicons/react/outline';
 import {
   buildCppMilestoneDates,
@@ -31,6 +31,8 @@ interface RequisitionOption {
   delivery_location?: string;
   encumbrance_ref?: string;
   procurement_type?: string;
+  approved_at?: string;
+  gpn_published?: boolean;
   items?: { description: string; estimated_total_cost: number; item_code?: string; attachment_url?: string }[];
   specifications?: { filename: string }[];
 }
@@ -204,6 +206,45 @@ function formatDateDisplay(dateStr: string): string {
   return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
 }
 
+const SRS_PHASES = [
+  {
+    id: 'preparation',
+    label: 'Phase 1: Requisition to Solicitation',
+    description: 'Preparation &amp; Publication',
+    color: 'bg-blue-500',
+    lightBg: 'bg-blue-50',
+    milestoneMatch: (name: string) =>
+      ['CPP Approved', 'Solicitation Document Ready', 'Solicitation Published'].includes(name),
+  },
+  {
+    id: 'bidding',
+    label: 'Phase 2: Solicitation to Closing',
+    description: 'Bidding &amp; Opening',
+    color: 'bg-amber-500',
+    lightBg: 'bg-amber-50',
+    milestoneMatch: (name: string) =>
+      ['Pre-bid Conference Held', 'Clarification Cutoff', 'Bid Closing Date / Time', 'Public Bid Opening'].includes(name),
+  },
+  {
+    id: 'evaluation',
+    label: 'Phase 3: Closing to Evaluation',
+    description: 'Evaluation &amp; Approval',
+    color: 'bg-purple-500',
+    lightBg: 'bg-purple-50',
+    milestoneMatch: (name: string) =>
+      ['Technical Evaluation Complete', 'Financial Evaluation Complete', 'BER Approved by ZPC'].includes(name),
+  },
+  {
+    id: 'award',
+    label: 'Phase 4: Evaluation to Award',
+    description: 'Award &amp; Contract Execution',
+    color: 'bg-emerald-500',
+    lightBg: 'bg-emerald-50',
+    milestoneMatch: (name: string) =>
+      ['Contract Award Notice Published', 'Standstill Period Ends', 'Contract Signed', 'Delivery / Completion', 'Contract Closure'].includes(name),
+  },
+];
+
 function getRiskLabel(level: string): string {
   switch (level) {
     case 'high': return 'HIGH';
@@ -225,6 +266,9 @@ const CPPCreate: React.FC = () => {
   const [newMethodOverride, setNewMethodOverride] = useState<ProcurementMethod | ''>('');
   const [overrideReason, setOverrideReason] = useState('');
   const [milestones, setMilestones] = useState<ProcurementMilestone[]>([]);
+  const [expandedPhases, setExpandedPhases] = useState<Record<string, boolean>>(() =>
+    Object.fromEntries(SRS_PHASES.map(p => [p.id, true])),
+  );
   const [resourceRequirements, setResourceRequirements] = useState<ResourceRequirements>({
     evaluationCommitteeSize: 4,
     requiredExpertise: ['procurement'],
@@ -275,6 +319,9 @@ const CPPCreate: React.FC = () => {
         date_required: r.date_required || r.required_date || '',
         delivery_location: r.delivery_location || '',
         encumbrance_ref: r.encumbrance_ref || '',
+        procurement_type: r.procurement_type || '',
+        approved_at: r.approved_at || '',
+        gpn_published: r.gpn_published ?? false,
         items: r.items?.map((item: any) => ({
           description: item.description,
           estimated_total_cost: Number(item.estimated_total_cost) || 0,
@@ -336,6 +383,22 @@ const CPPCreate: React.FC = () => {
       }
     }
   }, [finalMethod, milestones.length, generateMilestones]);
+
+  // Auto-default pre-bid conference date to 3 calendar days before clarification cutoff
+  useEffect(() => {
+    if (resourceRequirements.prebidConferenceRequired && !resourceRequirements.prebidConferenceDate) {
+      const clarificationMs = milestones.find(m =>
+        m.milestone_name.toLowerCase().includes('clarification'),
+      );
+      if (clarificationMs?.planned_date) {
+        try {
+          const d = new Date(clarificationMs.planned_date);
+          d.setDate(d.getDate() - 3);
+          setResourceRequirements(prev => ({ ...prev, prebidConferenceDate: d.toISOString().split('T')[0] }));
+        } catch { /* ignore */ }
+      }
+    }
+  }, [resourceRequirements.prebidConferenceRequired, milestones]);
 
   const updateMilestoneDate = (i: number, value: string) => {
     setMilestones(prev => {
@@ -404,6 +467,10 @@ const CPPCreate: React.FC = () => {
     if (risks.length === 0) { toast.error('Add at least one risk with mitigation strategy'); return; }
     if (risks.some(r => !r.mitigation_strategy)) { toast.error('All risks must have a mitigation strategy'); return; }
     if (resourceRequirements.evaluationCommitteeSize < 3) { toast.error('Evaluation committee must have at least 3 members'); return; }
+    if (selectedReq && !selectedReq.gpn_published) {
+      toast.error('The APP linked to this requisition does not have a published General Procurement Notice (GPN). Publish the GPN first (SRS §5.9.1 Step 12).');
+      return;
+    }
     if (finalMethodOption?.zpcRequired) {
       if (!zpcGrounds) { toast.error('Select non-open method grounds'); return; }
       if (!zpcJustification.trim()) { toast.error('Enter the non-open method justification'); return; }
@@ -507,6 +574,22 @@ const CPPCreate: React.FC = () => {
       { requisitionDeliveryDate: selectedReq?.date_required }
     );
   }, [milestones, finalMethod, finalMethodOption, selectedReq]);
+
+  const prebidValidationWarning = useMemo(() => {
+    if (!resourceRequirements.prebidConferenceRequired || !resourceRequirements.prebidConferenceDate) return null;
+    const clarificationMs = milestones.find(m =>
+      m.milestone_name.toLowerCase().includes('clarification'),
+    );
+    if (!clarificationMs?.planned_date) return null;
+    try {
+      const prebidDate = new Date(resourceRequirements.prebidConferenceDate);
+      const cutoffDate = new Date(clarificationMs.planned_date);
+      if (prebidDate >= cutoffDate) {
+        return `Pre-bid conference date (${formatDateDisplay(resourceRequirements.prebidConferenceDate)}) must be before the clarification cutoff date (${formatDateDisplay(clarificationMs.planned_date)}). Schedule at least 1 day before the cutoff.`;
+      }
+    } catch { /* ignore */ }
+    return null;
+  }, [resourceRequirements.prebidConferenceRequired, resourceRequirements.prebidConferenceDate, milestones]);
 
   return (
     <div className="pb-12 max-w-7xl mx-auto">
@@ -636,6 +719,25 @@ const CPPCreate: React.FC = () => {
                       </p>
                     </div>
                   )}
+                  <div className="space-y-1">
+                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">GPN Status</p>
+                    <p className="text-sm font-bold text-gray-900 flex items-center gap-2">
+                      {selectedReq.gpn_published ? (
+                        <>
+                          <CheckCircleIcon className="w-4 h-4 text-emerald-500" />
+                          <span className="text-emerald-600">Published</span>
+                        </>
+                      ) : (
+                        <>
+                          <XCircleIcon className="w-4 h-4 text-amber-500" />
+                          <span className="text-amber-600">Not Published</span>
+                        </>
+                      )}
+                    </p>
+                    {!selectedReq.gpn_published && (
+                      <p className="text-[10px] font-bold text-amber-500">Publish the APP's GPN before creating a CPP</p>
+                    )}
+                  </div>
                 </div>
 
                 {/* Line Items */}
@@ -910,6 +1012,12 @@ const CPPCreate: React.FC = () => {
                 <br />
                 Minimum solicitation period: {finalMethodOption?.minPeriod || 21} days ({finalMethodOption?.shortLabel || 'ONB'})
               </p>
+              {prebidValidationWarning && (
+                <p className="mt-2 flex items-start gap-2 text-xs font-bold text-red-600">
+                  <XCircleIcon className="w-4 h-4 shrink-0 mt-0.5" />
+                  {prebidValidationWarning}
+                </p>
+              )}
             </div>
           </div>
 
@@ -941,150 +1049,245 @@ const CPPCreate: React.FC = () => {
                 </button>
               </div>
             </div>
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="bg-gray-50 border-b border-gray-200">
-                    <th className="text-left px-6 py-3 text-[10px] font-black text-gray-400 uppercase tracking-widest w-10">#</th>
-                    <th className="text-left px-6 py-3 text-[10px] font-black text-gray-400 uppercase tracking-widest">Milestone</th>
-                    <th className="text-left px-6 py-3 text-[10px] font-black text-gray-400 uppercase tracking-widest w-64">Planned Date</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-100">
-                  {milestones.map((m, i) => {
-                    const isLocked = m.variance_flag === 'green' || m.is_system_updated;
-
-                    // Compute dynamic validation data
-                    let daysToClosing = '';
-                    let isAchievable = false;
-                    let deliveryError = '';
-                    let openingDateError = '';
-                    if (m.validationBadges?.includes('days_to_closing')) {
-                      const closingMs = milestones.find(x => x.milestone_name.includes('Bid Closing') || x.milestone_name.includes('Closing'));
-                      if (closingMs) {
-                        const pubDate = new Date(m.planned_date);
-                        const closeDate = new Date(closingMs.planned_date);
-                        const days = Math.ceil((closeDate.getTime() - pubDate.getTime()) / (1000 * 60 * 60 * 24));
-                        daysToClosing = `${days} days to closing`;
-                      }
-                    }
-                    if (m.validationBadges?.includes('achievable') && selectedReq?.date_required) {
-                      const plannedDelivery = new Date(m.planned_date);
-                      const requiredDelivery = new Date(selectedReq.date_required);
-                      if (plannedDelivery <= requiredDelivery) {
-                        isAchievable = true;
-                      } else {
-                        deliveryError = `Exceeds required date (${formatDateDisplay(selectedReq.date_required)})`;
-                      }
-                    }
-                    if ((m.milestone_name.includes('Bid Opening') || m.milestone_name.includes('Opening')) && m.planned_date) {
-                      const closingMs = milestones.find(x => x.milestone_name.includes('Bid Closing') || x.milestone_name.includes('Closing'));
-                      if (closingMs && closingMs.planned_date) {
-                        const openDate = new Date(m.planned_date);
-                        const closeDate = new Date(closingMs.planned_date);
-                        if (openDate < closeDate) {
-                          openingDateError = 'Opening must be on or after closing';
-                        }
-                      }
-                    }
-
-                    return (
-                      <tr key={m.milestone_id} className={`border-b border-gray-100 transition-colors ${isLocked ? 'bg-gray-50/50' : 'hover:bg-gray-50'}`}>
-                        <td className="px-6 py-4 text-xs font-black text-gray-400 align-top">{m.sequence_number}</td>
-                        <td className="px-6 py-4 align-top">
-                          <div className="flex items-start gap-2">
-                            <span className={`text-sm font-semibold ${isLocked ? 'text-gray-500' : 'text-gray-900'}`}>
-                              {m.milestone_name}
-                            </span>
-                            {isLocked && (
-                              <span className="text-[10px] font-bold text-gray-400 bg-gray-100 border border-gray-200 rounded-md px-2 py-0.5 whitespace-nowrap mt-0.5">
-                                locked
-                              </span>
-                            )}
-                          </div>
-                          {m.constraintNote && (
-                            <p className="text-[11px] font-semibold text-gray-400 mt-1 flex items-center gap-1">
-                              <InformationCircleIcon className="w-3 h-3" /> {m.constraintNote}
-                            </p>
-                          )}
-                          {m.note && (
-                            <p className="text-[11px] text-gray-400 mt-1">
-                              {m.note}
-                            </p>
-                          )}
-                        </td>
-                        <td className="px-6 py-4 align-top">
-                          <div className="flex flex-col gap-1">
-                            <div className="flex items-center gap-2">
-                              {isLocked ? (
-                                <div className="flex items-center gap-2">
-                                  <LockClosedIcon className="w-4 h-4 text-gray-500" />
-                                  <span className="text-sm font-bold text-gray-700">{formatDateDisplay(m.planned_date)}</span>
-                                  {m.time && (
-                                    <span className="text-xs font-bold text-gray-500 whitespace-nowrap">{m.time}</span>
-                                  )}
-                                </div>
-                              ) : (
-                                <div className="flex items-center gap-2">
-                                  <CalendarIcon className="w-4 h-4 text-gray-500" />
-                                  <input
-                                    type="date"
-                                    value={m.planned_date}
-                                    onChange={(e) => updateMilestoneDate(i, e.target.value)}
-                                    className="bg-white border border-gray-200 rounded-xl px-3.5 py-2 text-sm font-semibold text-gray-800 outline-none focus:ring-2 focus:ring-zammsa-green/30 focus:border-zammsa-green transition-shadow"
-                                  />
-                                  {m.time && (
-                                    <div className="flex items-center gap-1">
-                                      <input
-                                        type="time"
-                                        value={m.time.replace(/\s*CAT/i, '')}
-                                        onChange={(e) => {
-                                          const val = e.target.value;
-                                          if (val) updateMilestoneTime(i, `${val} CAT`);
-                                        }}
-                                        className="bg-white border border-gray-200 rounded-xl px-2 py-2 text-sm font-semibold text-gray-800 outline-none focus:ring-2 focus:ring-zammsa-green/30 focus:border-zammsa-green transition-shadow w-32"
-                                      />
-                                      <span className="text-[10px] font-black text-gray-400 uppercase">CAT</span>
-                                    </div>
-                                  )}
-                                </div>
-                              )}
-                            </div>
-                            {m.is_system_updated && m.note && (
-                              <span className="text-[10px] font-bold text-gray-400">(auto-calculated)</span>
-                            )}
-                            {daysToClosing && (
-                              <div className="mt-0.5 flex items-center gap-1">
-                                <CheckCircleIcon className="w-3 h-3 text-emerald-500" />
-                                <span className="text-[11px] font-black text-emerald-600">{daysToClosing}</span>
-                                <CheckCircleIcon className="w-3 h-3 text-emerald-500" />
-                              </div>
-                            )}
-                            {isAchievable && (
-                              <div className="mt-0.5 flex items-center gap-1">
-                                <CheckCircleIcon className="w-3 h-3 text-emerald-500" />
-                                <span className="text-[11px] font-black text-emerald-600">Achievable</span>
-                              </div>
-                            )}
-                            {deliveryError && (
-                              <div className="mt-0.5 flex items-center gap-1">
-                                <XCircleIcon className="w-3 h-3 text-red-500" />
-                                <span className="text-[11px] font-black text-red-600">{deliveryError}</span>
-                              </div>
-                            )}
-                            {openingDateError && (
-                              <div className="mt-0.5 flex items-center gap-1">
-                                <XCircleIcon className="w-3 h-3 text-red-500" />
-                                <span className="text-[11px] font-black text-red-600">{openingDateError}</span>
-                              </div>
-                            )}
-                          </div>
-                        </td>
-                      </tr>
+            <div className="overflow-hidden border border-gray-100 rounded-2xl">
+              {SRS_PHASES.map(phase => {
+                const phaseMilestones = milestones.filter(m => phase.milestoneMatch(m.milestone_name));
+                if (phaseMilestones.length === 0) return null;
+                const isExpanded = expandedPhases[phase.id];
+                const firstMs = phaseMilestones[0];
+                const lastMs = phaseMilestones[phaseMilestones.length - 1];
+                let phaseDuration: number | null = null;
+                if (firstMs?.planned_date && lastMs?.planned_date) {
+                  try {
+                    phaseDuration = Math.round(
+                      (new Date(lastMs.planned_date).getTime() - new Date(firstMs.planned_date).getTime()) / (1000 * 60 * 60 * 24),
                     );
-                  })}
-                </tbody>
-              </table>
+                  } catch { /* ignore */ }
+                }
+                // Phase 1: additional display of requisition → CPP approval duration
+                let reqToCppDays: number | null = null;
+                if (phase.id === 'preparation' && selectedReq?.approved_at && firstMs?.planned_date) {
+                  try {
+                    reqToCppDays = Math.round(
+                      (new Date(firstMs.planned_date).getTime() - new Date(selectedReq.approved_at).getTime()) / (1000 * 60 * 60 * 24),
+                    );
+                  } catch { /* ignore */ }
+                }
+
+                return (
+                  <div key={phase.id} className="border-b border-gray-100 last:border-b-0">
+                    <button
+                      type="button"
+                      onClick={() => setExpandedPhases(prev => ({ ...prev, [phase.id]: !prev[phase.id] }))}
+                      className="w-full flex items-center justify-between px-6 py-3.5 bg-gray-50/80 hover:bg-gray-100 transition-colors group"
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className={`w-2.5 h-2.5 rounded-full ${phase.color} shadow-sm`} />
+                        <span className="text-[10px] font-black text-gray-700 uppercase tracking-[0.15em]">
+                          {phase.label}
+                        </span>
+                        <span className="text-[10px] font-bold text-gray-400">
+                          {phaseMilestones.length} milestone{phaseMilestones.length !== 1 ? 's' : ''}
+                        </span>
+                        {phaseDuration !== null && (
+                          <>
+                            <span className="text-gray-200 text-[10px]">|</span>
+                            <span className="text-[10px] font-bold text-gray-500">{phaseDuration} days</span>
+                          </>
+                        )}
+                        {reqToCppDays !== null && (
+                          <>
+                            <span className="text-gray-200 text-[10px]">|</span>
+                            <span className="text-[10px] font-bold text-indigo-500">Req approved {reqToCppDays} days ago</span>
+                          </>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-[9px] font-bold text-gray-400 group-hover:text-gray-600 transition-colors">
+                          {isExpanded ? 'Collapse' : 'Expand'}
+                        </span>
+                        {isExpanded ? (
+                          <ChevronDownIcon className="w-3.5 h-3.5 text-gray-400 group-hover:text-gray-600 transition-colors" />
+                        ) : (
+                          <ChevronRightIcon className="w-3.5 h-3.5 text-gray-400 group-hover:text-gray-600 transition-colors" />
+                        )}
+                      </div>
+                    </button>
+
+                    {isExpanded && (
+                      <table className="w-full text-sm">
+                        <tbody className="divide-y divide-gray-100">
+                          {phaseMilestones.map((m) => {
+                            const globalIdx = milestones.findIndex(mm => mm.milestone_id === m.milestone_id);
+                            const isLocked = m.variance_flag === 'green' || m.is_system_updated;
+
+                            // Compute dynamic validation data
+                            let daysToClosing = '';
+                            let isAchievable = false;
+                            let deliveryError = '';
+                            let openingDateError = '';
+                            let openingTimeError = '';
+
+                            if (m.validationBadges?.includes('days_to_closing')) {
+                              const closingMs = milestones.find(x => x.milestone_name.includes('Bid Closing') || x.milestone_name.includes('Closing'));
+                              if (closingMs) {
+                                try {
+                                  const pubDate = new Date(m.planned_date);
+                                  const closeDate = new Date(closingMs.planned_date);
+                                  const days = Math.ceil((closeDate.getTime() - pubDate.getTime()) / (1000 * 60 * 60 * 24));
+                                  daysToClosing = `${days} days to closing`;
+                                } catch { /* ignore */ }
+                              }
+                            }
+                            if (m.validationBadges?.includes('achievable') && selectedReq?.date_required) {
+                              try {
+                                const plannedDelivery = new Date(m.planned_date);
+                                const requiredDelivery = new Date(selectedReq.date_required);
+                                if (plannedDelivery <= requiredDelivery) {
+                                  isAchievable = true;
+                                } else {
+                                  deliveryError = `Exceeds required date (${formatDateDisplay(selectedReq.date_required)})`;
+                                }
+                              } catch { /* ignore */ }
+                            }
+                            if ((m.milestone_name.includes('Bid Opening') || m.milestone_name.includes('Opening')) && m.planned_date) {
+                              const closingMs = milestones.find(x => x.milestone_name.includes('Bid Closing') || x.milestone_name.includes('Closing'));
+                              if (closingMs && closingMs.planned_date) {
+                                try {
+                                  const openDate = new Date(m.planned_date);
+                                  const closeDate = new Date(closingMs.planned_date);
+                                  if (openDate < closeDate) {
+                                    openingDateError = 'Opening must be on or after closing';
+                                  } else if (openDate.getTime() === closeDate.getTime() && m.time && closingMs.time) {
+                                    const openTime = m.time.replace(/\s*CAT/i, '').trim();
+                                    const closeTime = closingMs.time.replace(/\s*CAT/i, '').trim();
+                                    if (openTime && closeTime && openTime <= closeTime) {
+                                      openingTimeError = `Bid opening time (${m.time}) must be after closing time (${closingMs.time})`;
+                                    } else if (openTime && closeTime) {
+                                      const [oh, om] = openTime.split(':').map(Number);
+                                      const [ch, cm] = closeTime.split(':').map(Number);
+                                      const openMinutes = oh * 60 + om;
+                                      const closeMinutes = ch * 60 + cm;
+                                      const gapMinutes = openMinutes - closeMinutes;
+                                      if (gapMinutes > 120) {
+                                        openingTimeError = `Bid opening is scheduled ${gapMinutes} minutes after closing. Per ZPPA guidelines, opening should occur immediately after closing (recommended within 30 minutes).`;
+                                      }
+                                    }
+                                  }
+                                  if (openDate.getTime() !== closeDate.getTime() && m.time && closingMs.time) {
+                                    openingTimeError = 'Bid opening should occur on the same day as bid closing per procurement regulations';
+                                  }
+                                } catch { /* ignore */ }
+                              }
+                            }
+
+                            return (
+                              <tr key={m.milestone_id} className={`transition-colors ${isLocked ? 'bg-gray-50/30' : 'hover:bg-gray-50/50'}`}>
+                                <td className="px-6 py-3.5 text-xs font-black text-gray-400 align-top w-10">{m.sequence_number}</td>
+                                <td className="px-6 py-3.5 align-top">
+                                  <div className="flex items-start gap-2">
+                                    <span className={`text-sm font-semibold ${isLocked ? 'text-gray-500' : 'text-gray-900'}`}>
+                                      {m.milestone_name}
+                                    </span>
+                                    {isLocked && (
+                                      <span className="text-[10px] font-bold text-gray-400 bg-gray-100 border border-gray-200 rounded-md px-2 py-0.5 whitespace-nowrap mt-0.5">
+                                        locked
+                                      </span>
+                                    )}
+                                  </div>
+                                  {m.constraintNote && (
+                                    <p className="text-[11px] font-semibold text-gray-400 mt-1 flex items-center gap-1">
+                                      <InformationCircleIcon className="w-3 h-3 shrink-0" /> {m.constraintNote}
+                                    </p>
+                                  )}
+                                  {m.note && (
+                                    <p className="text-[11px] text-gray-400 mt-1">
+                                      {m.note}
+                                    </p>
+                                  )}
+                                </td>
+                                <td className="px-6 py-3.5 align-top">
+                                  <div className="flex flex-col gap-1">
+                                    <div className="flex items-center gap-2">
+                                      {isLocked ? (
+                                        <div className="flex items-center gap-2">
+                                          <LockClosedIcon className="w-4 h-4 text-gray-400" />
+                                          <span className="text-sm font-bold text-gray-700">{formatDateDisplay(m.planned_date)}</span>
+                                          {m.time && (
+                                            <span className="text-xs font-bold text-gray-500 whitespace-nowrap">{m.time}</span>
+                                          )}
+                                        </div>
+                                      ) : (
+                                        <div className="flex items-center gap-2">
+                                          <CalendarIcon className="w-4 h-4 text-gray-400" />
+                                          <input
+                                            type="date"
+                                            value={m.planned_date}
+                                            onChange={(e) => updateMilestoneDate(globalIdx, e.target.value)}
+                                            className="bg-white border border-gray-200 rounded-xl px-3.5 py-2 text-sm font-semibold text-gray-800 outline-none focus:ring-2 focus:ring-zammsa-green/30 focus:border-zammsa-green transition-shadow"
+                                          />
+                                          {m.time && (
+                                            <div className="flex items-center gap-1">
+                                              <input
+                                                type="time"
+                                                value={m.time.replace(/\s*CAT/i, '')}
+                                                onChange={(e) => {
+                                                  const val = e.target.value;
+                                                  if (val) updateMilestoneTime(globalIdx, `${val} CAT`);
+                                                }}
+                                                className="bg-white border border-gray-200 rounded-xl px-2 py-2 text-sm font-semibold text-gray-800 outline-none focus:ring-2 focus:ring-zammsa-green/30 focus:border-zammsa-green transition-shadow w-32"
+                                              />
+                                              <span className="text-[10px] font-black text-gray-400 uppercase">CAT</span>
+                                            </div>
+                                          )}
+                                        </div>
+                                      )}
+                                    </div>
+                                    {m.is_system_updated && m.note && (
+                                      <span className="text-[10px] font-bold text-gray-400">(auto-calculated)</span>
+                                    )}
+                                    {daysToClosing && (
+                                      <div className="mt-0.5 flex items-center gap-1">
+                                        <CheckCircleIcon className="w-3 h-3 text-emerald-500" />
+                                        <span className="text-[11px] font-black text-emerald-600">{daysToClosing}</span>
+                                        <CheckCircleIcon className="w-3 h-3 text-emerald-500" />
+                                      </div>
+                                    )}
+                                    {isAchievable && (
+                                      <div className="mt-0.5 flex items-center gap-1">
+                                        <CheckCircleIcon className="w-3 h-3 text-emerald-500" />
+                                        <span className="text-[11px] font-black text-emerald-600">Achievable</span>
+                                      </div>
+                                    )}
+                                    {deliveryError && (
+                                      <div className="mt-0.5 flex items-center gap-1">
+                                        <XCircleIcon className="w-3 h-3 text-red-500" />
+                                        <span className="text-[11px] font-black text-red-600">{deliveryError}</span>
+                                      </div>
+                                    )}
+                                    {openingDateError && (
+                                      <div className="mt-0.5 flex items-center gap-1">
+                                        <XCircleIcon className="w-3 h-3 text-red-500" />
+                                        <span className="text-[11px] font-black text-red-600">{openingDateError}</span>
+                                      </div>
+                                    )}
+                                    {openingTimeError && (
+                                      <div className="mt-0.5 flex items-center gap-1">
+                                        <XCircleIcon className="w-3 h-3 text-amber-500" />
+                                        <span className="text-[11px] font-black text-amber-600">{openingTimeError}</span>
+                                      </div>
+                                    )}
+                                  </div>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    )}
+                  </div>
+                );
+              })}
             </div>
             {milestones.length === 0 && (
               <div className="p-12 text-center">
@@ -1124,6 +1327,9 @@ const CPPCreate: React.FC = () => {
                       milestoneErrors.map((err, idx) => (
                         <p key={idx} className="text-sm text-red-600 flex items-center gap-2"><XCircleIcon className="w-4 h-4" /> {err}</p>
                       ))
+                    )}
+                    {prebidValidationWarning && (
+                      <p className="text-sm text-red-600 flex items-center gap-2"><XCircleIcon className="w-4 h-4" /> {prebidValidationWarning}</p>
                     )}
                   </div>
                 </div>

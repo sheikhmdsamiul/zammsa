@@ -7,7 +7,7 @@ from rest_framework import generics, filters, status
 logger = logging.getLogger(__name__)
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated, AllowAny
-from rest_framework.exceptions import PermissionDenied
+from rest_framework.exceptions import PermissionDenied, ValidationError
 from rest_framework.response import Response
 from rest_framework.pagination import PageNumberPagination
 from django_filters.rest_framework import DjangoFilterBackend
@@ -1146,6 +1146,17 @@ class ContractProcurementPlanListView(BaseView, generics.ListCreateAPIView):
             raise PermissionDenied(
                 f'CPP can only be created from approved requisitions. Current requisition status: {requisition.status}'
             )
+
+        # SRS PRE-REQ-02: Requisition's APP must have a published GPN before CPP creation
+        if requisition and requisition.app_line_item and requisition.app_line_item.app:
+            app = requisition.app_line_item.app
+            has_published_gpn = app.gpns.filter(publication_status='published').exists()
+            if not has_published_gpn:
+                raise ValidationError(
+                    'CPP cannot be created until a General Procurement Notice (GPN) has been published '
+                    'for the Annual Procurement Plan linked to this requisition. '
+                    'Please publish the GPN first (SRS §5.9.1 Step 12).'
+                )
 
         # Save core CPP first.
         cpp = serializer.save(created_by=self.request.user)

@@ -89,6 +89,7 @@ export interface Requisition {
   recommended_method?: string;
   procurement_type?: string;
   commodity_category?: string;
+  gpn_published?: boolean;
   is_expired?: boolean;
   days_since_creation?: number;
 }
@@ -225,6 +226,7 @@ export interface Solicitation {
   evaluation_method?: 'lowest_price' | 'qcbs' | 'qbs' | 'lcs' | 'fbs';
   financial_weight?: number | null;
   cpp_resource_requirements?: ResourceRequirements | Record<string, any>;
+  cpp_milestones?: ProcurementMilestone[];
   // Additional fields from backend
   non_open_justifications?: NonOpenJustification[];
   created_by_name?: string;

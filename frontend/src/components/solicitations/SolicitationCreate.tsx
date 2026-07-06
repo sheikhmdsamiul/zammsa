@@ -186,6 +186,36 @@ const SolicitationCreate: React.FC = () => {
   const [uploadingFiles, setUploadingFiles] = useState(false);
   const [selectedCppDocIds, setSelectedCppDocIds] = useState<string[]>([]);
 
+  // CPP baseline dates for deviation tracking (Phase 1b)
+  const [cppBaseline, setCppBaseline] = useState<{
+    closingDate: string;
+    closingHour: string;
+    closingMinute: string;
+    openingDate: string;
+    openingHour: string;
+    openingMinute: string;
+    issueDate: string;
+  } | null>(null);
+
+  const baselineDeviationWarning = useMemo(() => {
+    if (!cppBaseline) return null;
+    const warnings: string[] = [];
+    if (issueDate && cppBaseline.issueDate && issueDate !== cppBaseline.issueDate) {
+      warnings.push(`Issue date differs from CPP baseline (${fmtDate(cppBaseline.issueDate)})`);
+    }
+    const currentClosing = `${closingDate}T${closingHour}:${closingMinute}`;
+    const baselineClosing = `${cppBaseline.closingDate}T${cppBaseline.closingHour}:${cppBaseline.closingMinute}`;
+    if (currentClosing !== baselineClosing) {
+      warnings.push(`Bid closing differs from CPP baseline (${fmtDate(cppBaseline.closingDate)} ${cppBaseline.closingHour}:${cppBaseline.closingMinute} CAT)`);
+    }
+    const currentOpening = `${openingDate}T${openingHour}:${openingMinute}`;
+    const baselineOpening = `${cppBaseline.openingDate}T${cppBaseline.openingHour}:${cppBaseline.openingMinute}`;
+    if (currentOpening !== baselineOpening) {
+      warnings.push(`Bid opening differs from CPP baseline (${fmtDate(cppBaseline.openingDate)} ${cppBaseline.openingHour}:${cppBaseline.openingMinute} CAT)`);
+    }
+    return warnings.length > 0 ? warnings : null;
+  }, [cppBaseline, issueDate, closingDate, closingHour, closingMinute, openingDate, openingHour, openingMinute]);
+
   const { data: reqsData, isLoading: reqsLoading, error: reqsError } = useQuery({
     queryKey: ['requisitions', 'approved-cpp'],
     queryFn: () => requisitionsApi.list({ page_size: 200, status: 'approved', has_approved_cpp: true }),
@@ -227,24 +257,50 @@ const SolicitationCreate: React.FC = () => {
         return name.includes('pre-bid') || name.includes('prebid');
       });
 
+      let newIssueDate = pubMs?.planned_date || '';
+      let newClosingDate = closeMs?.planned_date || '';
+      let newClosingHour = '10';
+      let newClosingMinute = '00';
+      let newOpeningDate = openMs?.planned_date || closeMs?.planned_date || '';
+      let newOpeningHour = '10';
+      let newOpeningMinute = '00';
+
       if (pubMs?.planned_date) setIssueDate(pubMs.planned_date);
       if (closeMs?.planned_date) {
         setClosingDate(closeMs.planned_date);
         const closeTime = parseMilestoneTime(closeMs.time || rr.closingTime);
+        newClosingHour = closeTime.hour;
+        newClosingMinute = closeTime.minute;
         setClosingHour(closeTime.hour);
         setClosingMinute(closeTime.minute);
       }
       if (openMs?.planned_date) {
         setOpeningDate(openMs.planned_date);
         const openTime = parseMilestoneTime(openMs.time || rr.openingTime || '14:30 CAT');
+        newOpeningHour = openTime.hour;
+        newOpeningMinute = openTime.minute;
         setOpeningHour(openTime.hour);
         setOpeningMinute(openTime.minute);
       } else if (closeMs?.planned_date) {
         setOpeningDate(closeMs.planned_date);
         const openTime = parseMilestoneTime(rr.openingTime || '14:30 CAT');
+        newOpeningHour = openTime.hour;
+        newOpeningMinute = openTime.minute;
         setOpeningHour(openTime.hour);
         setOpeningMinute(openTime.minute);
       }
+
+      // Store CPP baseline for deviation tracking (Phase 1b)
+      setCppBaseline({
+        issueDate: newIssueDate,
+        closingDate: newClosingDate,
+        closingHour: newClosingHour,
+        closingMinute: newClosingMinute,
+        openingDate: newOpeningDate,
+        openingHour: newOpeningHour,
+        openingMinute: newOpeningMinute,
+      });
+
       if (rr.submissionFormat) setSubmissionFormat(rr.submissionFormat);
       if (rr.bidValidityDays) setBidValidity(rr.bidValidityDays);
       if (rr.minimumTechnicalThreshold) setMinTechThreshold(rr.minimumTechnicalThreshold);
@@ -256,6 +312,8 @@ const SolicitationCreate: React.FC = () => {
       } else if (rr.prebidConferenceDate) {
         setPreBidDate(rr.prebidConferenceDate);
       }
+    } else {
+      setCppBaseline(null);
     }
   }, [selectedReq]);
 
@@ -807,6 +865,22 @@ const SolicitationCreate: React.FC = () => {
 
           <div className="bg-white rounded-3xl border border-gray-200 shadow-sm p-8">
             <h2 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-6">Key Dates</h2>
+
+            {baselineDeviationWarning && (
+              <div className="mb-6 p-4 bg-amber-50 border border-amber-200 rounded-2xl flex items-start gap-3">
+                <ExclamationIcon className="w-5 h-5 text-amber-500 shrink-0 mt-0.5" />
+                <div>
+                  <p className="text-sm font-bold text-amber-800 mb-1">CPP Baseline Deviation</p>
+                  <ul className="list-disc list-inside text-xs text-amber-700 space-y-1">
+                    {baselineDeviationWarning.map((w, i) => (
+                      <li key={i}>{w}</li>
+                    ))}
+                  </ul>
+                  <p className="text-xs text-amber-600 mt-1">Please provide a justification for these changes in the description or note.</p>
+                </div>
+              </div>
+            )}
+
             <div className="space-y-5">
               <div>
                 <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5 block ml-1">Issue / Publication Date *</label>

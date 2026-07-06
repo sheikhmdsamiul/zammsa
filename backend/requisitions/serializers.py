@@ -54,10 +54,11 @@ class RequisitionListSerializer(serializers.ModelSerializer):
     recommended_method = serializers.SerializerMethodField()
     procurement_type = serializers.SerializerMethodField()
     commodity_category = serializers.SerializerMethodField()
+    gpn_published = serializers.SerializerMethodField()
 
     class Meta:
         model = Requisition
-        fields = ('id', 'requisition_id', 'req_number', 'title', 'department', 'department_name', 'requester_name', 'estimated_total', 'required_date', 'status', 'current_approver', 'submitted_at', 'approved_at', 'created_at', 'days_at_current_stage', 'app_line_item', 'cpp_number', 'cpp_data', 'recommended_method', 'procurement_type', 'commodity_category')
+        fields = ('id', 'requisition_id', 'req_number', 'title', 'department', 'department_name', 'requester_name', 'estimated_total', 'required_date', 'status', 'current_approver', 'submitted_at', 'approved_at', 'created_at', 'days_at_current_stage', 'app_line_item', 'cpp_number', 'cpp_data', 'recommended_method', 'procurement_type', 'commodity_category', 'gpn_published')
 
     def _get_ready_cpp(self, obj):
         return obj.cpp.filter(
@@ -132,6 +133,11 @@ class RequisitionListSerializer(serializers.ModelSerializer):
         if obj.app_line_item and obj.app_line_item.commodity:
             return obj.app_line_item.commodity.category
         return None
+
+    def get_gpn_published(self, obj):
+        if obj.app_line_item and obj.app_line_item.app:
+            return obj.app_line_item.app.gpns.filter(publication_status='published').exists()
+        return False
 
 
 class RequisitionSerializer(serializers.ModelSerializer):

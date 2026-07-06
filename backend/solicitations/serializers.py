@@ -5,6 +5,8 @@ from rest_framework import serializers
 from .models import SolicitationTemplate, Solicitation, EvaluationCriterion, SolicitationAddendum, ClarificationRequest, SolicitationDocument
 from master_data.models import Department
 from requisitions.models import Requisition
+from procurement_planning.models import ProcurementMilestone
+from procurement_planning.serializers import ProcurementMilestoneSerializer
 
 
 def get_solicitation_ready_cpp(requisition):
@@ -216,6 +218,7 @@ class SolicitationSerializer(serializers.ModelSerializer):
     requisition = serializers.PrimaryKeyRelatedField(required=True, queryset=Requisition.objects.all())
     cpp = serializers.PrimaryKeyRelatedField(read_only=True)
     cpp_number = serializers.CharField(source='cpp.cpp_number', read_only=True)
+    cpp_milestones = serializers.SerializerMethodField()
     document_sets = SolicitationDocumentSerializer(many=True, source='documents', read_only=True)
     clarification_responses = ClarificationRequestSerializer(many=True, source='clarifications', read_only=True)
     evaluation_criteria = EvaluationCriterionSerializer(many=True, read_only=True)
@@ -277,6 +280,14 @@ class SolicitationSerializer(serializers.ModelSerializer):
 
     def get_total_bids(self, obj):
         return obj.bids.filter(status='submitted').count()
+
+    def get_cpp_milestones(self, obj):
+        if obj.cpp:
+            return ProcurementMilestoneSerializer(
+                obj.cpp.procurement_milestones.all().order_by('sequence_number', 'planned_date'),
+                many=True
+            ).data
+        return []
 
     def get_non_open_justifications(self, obj):
         from method_selection.models import NonOpenJustification

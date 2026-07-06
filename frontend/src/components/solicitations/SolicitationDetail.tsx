@@ -553,6 +553,55 @@ const SolicitationDetail: React.FC = () => {
             </div>
           )}
 
+          {/* CPP Milestones */}
+          {sol.cpp_milestones && sol.cpp_milestones.length > 0 && (
+            <div className="bg-white rounded-3xl border border-gray-200 shadow-sm p-6">
+              <h2 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-4">CPP Milestone Timeline</h2>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-gray-100">
+                      <th className="text-left text-[10px] font-black text-gray-400 uppercase tracking-widest pb-2 pr-2">#</th>
+                      <th className="text-left text-[10px] font-black text-gray-400 uppercase tracking-widest pb-2 pr-4">Milestone</th>
+                      <th className="text-left text-[10px] font-black text-gray-400 uppercase tracking-widest pb-2 pr-4">Planned Date</th>
+                      <th className="text-left text-[10px] font-black text-gray-400 uppercase tracking-widest pb-2 pr-4">Actual Date</th>
+                      <th className="text-left text-[10px] font-black text-gray-400 uppercase tracking-widest pb-2">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {sol.cpp_milestones.map((m, i) => {
+                      const varianceColor =
+                        m.variance_flag === 'green' ? 'text-emerald-600 bg-emerald-50' :
+                        m.variance_flag === 'yellow' ? 'text-amber-600 bg-amber-50' :
+                        m.variance_flag === 'orange' ? 'text-orange-600 bg-orange-50' :
+                        m.variance_flag === 'red' ? 'text-rose-600 bg-rose-50' :
+                        'text-gray-400 bg-gray-50';
+                      const varianceLabel =
+                        m.variance_flag === 'green' ? 'On Time' :
+                        m.variance_flag === 'yellow' ? `${m.variance_days}d Late` :
+                        m.variance_flag === 'orange' ? `${m.variance_days}d Late` :
+                        m.variance_flag === 'red' ? `${m.variance_days}d Late` :
+                        'Pending';
+                      return (
+                        <tr key={m.milestone_id || i} className="border-b border-gray-50 last:border-b-0">
+                          <td className="py-2 pr-2 text-gray-400 font-mono text-xs">{m.sequence_number || i + 1}</td>
+                          <td className="py-2 pr-4 font-medium text-gray-900">{m.milestone_name}</td>
+                          <td className="py-2 pr-4 text-gray-600">{fmtDate(m.planned_date)}</td>
+                          <td className="py-2 pr-4 text-gray-600">{m.actual_date ? fmtDate(m.actual_date) : '---'}</td>
+                          <td className="py-2">
+                            <span className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-bold ${varianceColor}`}>
+                              {varianceLabel}
+                            </span>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
           {/* Bid Security */}
           <div className="bg-white rounded-3xl border border-gray-200 shadow-sm p-6">
             <h2 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-4">Bid Security</h2>
