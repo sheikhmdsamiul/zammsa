@@ -350,7 +350,7 @@ def template_clone_view(request, pk):
 
 
 class SolicitationListView(BaseView, generics.ListCreateAPIView):
-    queryset = Solicitation.objects.select_related('requisition').prefetch_related('evaluation_criteria', 'addenda', 'documents').all()
+    queryset = Solicitation.objects.select_related('requisition', 'cpp').prefetch_related('evaluation_criteria', 'addenda', 'documents', 'cpp__procurement_milestones').all()
 
     filterset_class = SolicitationFilter
     search_fields = ['title', 'sol_number']
@@ -383,7 +383,9 @@ class SolicitationListView(BaseView, generics.ListCreateAPIView):
 
 
 class SolicitationDetailView(generics.RetrieveUpdateDestroyAPIView):
-    queryset = Solicitation.objects.select_related('requisition').prefetch_related('evaluation_criteria', 'addenda', 'documents').all()
+    queryset = Solicitation.objects.select_related('requisition', 'cpp').prefetch_related(
+        'evaluation_criteria', 'addenda', 'documents', 'cpp__procurement_milestones'
+    ).all()
     serializer_class = SolicitationSerializer
     permission_classes = [IsAuthenticated]
 

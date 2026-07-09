@@ -979,47 +979,7 @@ const SolicitationCreate: React.FC = () => {
                   <input type="text" value={preBidVenue} onChange={(e) => setPreBidVenue(e.target.value)} placeholder="e.g. Boardroom, City" className="w-full bg-white border border-gray-200 rounded-2xl px-5 py-4 text-sm font-bold text-gray-700 outline-none focus:ring-4 focus:ring-zammsa-green/5" />
                 </div>
               </div>
-              {/* CPP Milestones Summary */}
-              {cppMilestones.length > 0 && (
-                <div className="mt-6 p-4 bg-gray-50 border border-gray-200 rounded-2xl">
-                  <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-3 flex items-center gap-1">
-                    <CalendarIcon className="w-3 h-3" /> CPP Milestone Timeline (for reference)
-                  </p>
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-xs">
-                      <thead>
-                        <tr className="border-b border-gray-200">
-                          <th className="text-left font-bold text-gray-400 uppercase tracking-wider pb-2 pr-4">#</th>
-                          <th className="text-left font-bold text-gray-400 uppercase tracking-wider pb-2 pr-4">Milestone</th>
-                          <th className="text-left font-bold text-gray-400 uppercase tracking-wider pb-2">Date</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-gray-100">
-                        {cppMilestones.slice(0, 10).map((m: any, i: number) => (
-                          <tr key={i} className="hover:bg-white/50 transition-colors">
-                            <td className="py-1.5 pr-4 text-gray-400 font-mono font-bold">{m.sequence_number}</td>
-                            <td className="py-1.5 pr-4">
-                              <span className={`font-semibold ${findCppMilestone(cppMilestones, 'published') === m || findCppMilestone(cppMilestones, 'closing') === m || findCppMilestone(cppMilestones, 'opening') === m ? 'text-indigo-700' : 'text-gray-600'}`}>
-                                {m.milestone_name}
-                              </span>
-                              {findCppMilestone(cppMilestones, 'published') === m && <span className="text-[9px] font-bold text-indigo-500 ml-2 uppercase">→ Issue Date</span>}
-                              {findCppMilestone(cppMilestones, 'closing') === m && <span className="text-[9px] font-bold text-indigo-500 ml-2 uppercase">→ Closing</span>}
-                              {findCppMilestone(cppMilestones, 'opening') === m && <span className="text-[9px] font-bold text-indigo-500 ml-2 uppercase">→ Opening</span>}
-                            </td>
-                            <td className="py-1.5 font-mono font-bold text-gray-700">
-                              {m.planned_date ? fmtDate(m.planned_date) : '---'}
-                              {m.time && <span className="text-gray-400 ml-1">{m.time}</span>}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                    {cppMilestones.length > 10 && (
-                      <p className="text-[10px] text-gray-400 mt-2">...and {cppMilestones.length - 10} more milestones (see CPP for full schedule)</p>
-                    )}
-                  </div>
-                </div>
-              )}
+
             </div>
           </div>
 

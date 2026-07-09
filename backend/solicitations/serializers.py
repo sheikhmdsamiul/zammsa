@@ -282,12 +282,114 @@ class SolicitationSerializer(serializers.ModelSerializer):
         return obj.bids.filter(status='submitted').count()
 
     def get_cpp_milestones(self, obj):
-        if obj.cpp:
-            return ProcurementMilestoneSerializer(
-                obj.cpp.procurement_milestones.all().order_by('sequence_number', 'planned_date'),
-                many=True
-            ).data
-        return []
+        if not obj.cpp:
+            return []
+
+        milestones = obj.cpp.procurement_milestones.all().order_by('sequence_number', 'planned_date')
+        data = list(ProcurementMilestoneSerializer(milestones, many=True).data)
+
+        # Helper: convert a date/datetime to ISO date string
+        def _iso(val):
+            if val is None:
+                return None
+            if hasattr(val, 'date'):
+                return val.date().isoformat()
+            return str(val)
+
+        # Compute variance_days and variance_flag from planned + actual (mirrors ProcurementMilestone.save)
+        def _variance(planned_iso, actual_iso):
+            if not planned_iso or not actual_iso:
+                return None, ''
+            try:
+                from datetime import date as _date
+                delta = (_date.fromisoformat(actual_iso) - _date.fromisoformat(planned_iso)).days
+                if delta <= 0:
+                    return delta, 'green'
+                elif delta <= 7:
+                    return delta, 'yellow'
+                elif delta <= 14:
+                    return delta, 'orange'
+                else:
+                    return delta, 'red'
+            except Exception:
+                return None, ''
+
+        sol_status = obj.status or ''
+        cpp = obj.cpp
+
+        # Lifecycle map: (keyword_fragments, inferred_actual_date, condition_met)
+        # Ordered earliest-to-latest so the first match wins.
+        lifecycle = [
+            (
+                # CPP approval — uses cpp.approved_at directly
+                ('cpp approved', 'cpp approval', 'contract procurement plan approved',
+                 'cpp baseline locked', 'baseline locked', 'cpp finalised', 'cpp finalized'),
+                _iso(cpp.approved_at),
+                bool(cpp.approved_at),
+            ),
+            (
+                # Solicitation created / document ready
+                ('solicitation creation', 'requisition to solicitation',
+                 'solicitation document ready', 'solicitation document'),
+                _iso(obj.created_at),
+                True,
+            ),
+            (
+                # Solicitation internally approved
+                ('solicitation approved', 'sol approved', 'approval of solicitation'),
+                _iso(obj.updated_at) if sol_status in ('approved', 'published', 'closed', 'awarded') else None,
+                sol_status in ('approved', 'published', 'closed', 'awarded'),
+            ),
+            (
+                # Solicitation published / issued / advertised
+                ('solicitation published', 'solicitation issued', 'solicitation advertised',
+                 'advert published', 'issue date', 'publication', 'tender published',
+                 'tender issued', 'tender advertised'),
+                _iso(obj.published_at) or _iso(obj.issue_date),
+                bool(obj.published_at or obj.issue_date),
+            ),
+            (
+                # Pre-bid conference / site visit
+                ('pre-bid', 'prebid', 'pre bid', 'bidders conference', 'site visit'),
+                _iso(obj.pre_bid_date),
+                bool(obj.pre_bid_date),
+            ),
+            (
+                # Bid closing / submission deadline
+                ('bid closing', 'closing date', 'bid submission', 'submission deadline',
+                 'tender closing', 'close of bidding'),
+                _iso(obj.closing_date),
+                sol_status in ('closed', 'awarded', 'cancelled'),
+            ),
+            (
+                # Bid opening
+                ('bid opening', 'public bid opening', 'opening ceremony',
+                 'tender opening', 'opening of bids'),
+                _iso(obj.opening_date) or _iso(obj.closing_date),
+                sol_status in ('closed', 'awarded') and bool(obj.opening_date or obj.closing_date),
+            ),
+        ]
+
+        for entry in data:
+            name = (entry.get('milestone_name') or '').lower()
+
+            # Infer actual_date if not already in DB
+            if not entry.get('actual_date'):
+                for keywords, inferred_date, condition in lifecycle:
+                    if condition and inferred_date and any(k in name for k in keywords):
+                        entry['actual_date'] = inferred_date
+                        break
+
+            # Compute variance when actual_date is present but variance fields are missing
+            if entry.get('actual_date') and not entry.get('variance_flag'):
+                variance_days, variance_flag = _variance(
+                    entry.get('planned_date'), entry['actual_date']
+                )
+                entry['variance_days'] = variance_days
+                entry['variance_flag'] = variance_flag
+
+        return data
+
 
     def get_non_open_justifications(self, obj):
         from method_selection.models import NonOpenJustification
