@@ -3,6 +3,7 @@ import { Outlet } from 'react-router-dom';
 import { useAuth, useLogout } from '../../hooks/useAuth';
 import { ROLES } from '../../config/rbac';
 import Sidebar, { NavItem } from './Sidebar';
+import useSidebarBadges from '../../hooks/useSidebarBadges';
 import {
   ChartBarIcon, CashIcon, ClipboardListIcon,
   PencilIcon, DocumentTextIcon, DocumentDuplicateIcon,
@@ -25,6 +26,7 @@ const PageLoader = () => (
 /** Maps sub-items to their closest existing route so sidebar navigation never 404s. */
 function useSidebarItems(userRole: string | undefined): NavItem[] {
   const role = userRole === 'zppa_reporter' ? 'zppa_reporting_officer' : userRole;
+  const badges = useSidebarBadges(role);
 
   const items: Record<string, NavItem[]> = {
     [ROLES.PROCUREMENT_OFFICER]: [
@@ -35,14 +37,14 @@ function useSidebarItems(userRole: string | undefined): NavItem[] {
           { label: 'Contract Plans (CPP)', path: '/procurement-planning/cpp' },
         ]
       },
-      { label: 'Requisitions', path: '/requisitions', icon: <PencilIcon className={iconClass} />, badge: 3 },
-      { label: 'Solicitations', path: '/solicitations', icon: <DocumentTextIcon className={iconClass} />, badge: 2,
+      { label: 'Requisitions', path: '/requisitions', icon: <PencilIcon className={iconClass} />, badge: badges.requisitions || undefined },
+      { label: 'Solicitations', path: '/solicitations', icon: <DocumentTextIcon className={iconClass} />, badge: badges.solicitations || undefined,
         children: [
           { label: 'Create New', path: '/solicitations/create' },
           { label: 'All Solicitations', path: '/solicitations' },
         ]
       },
-      { label: 'Bid Management', path: '/bids', icon: <LockOpenIcon className={iconClass} />, badge: 1,
+      { label: 'Bid Management', path: '/bids', icon: <LockOpenIcon className={iconClass} />, badge: badges.bids || undefined,
         children: [
           { label: 'Bid Opening List', path: '/bids/opening' },
           { label: 'Opening Setup', path: '/bids/opening/setup' },
@@ -51,7 +53,7 @@ function useSidebarItems(userRole: string | undefined): NavItem[] {
           { label: 'Late/Rejected Bids', path: '/bids/late-rejected' },
         ]
       },
-      { label: 'Evaluations', path: '/evaluations', icon: <DocumentDuplicateIcon className={iconClass} />, badge: 1,
+      { label: 'Evaluations', path: '/evaluations', icon: <DocumentDuplicateIcon className={iconClass} />, badge: badges.evaluations || undefined,
         children: [
           { label: 'Committee Formation', path: '/evaluations/committee/formation' },
           { label: 'Active Evaluations', path: '/evaluations' },
@@ -73,7 +75,7 @@ function useSidebarItems(userRole: string | undefined): NavItem[] {
     ],
     [ROLES.DIRECTOR_PROCUREMENT]: [
       { label: 'Dashboard', path: '/dashboard', icon: <ChartBarIcon className={iconClass} /> },
-      { label: 'Approvals', path: '/requisitions', icon: <CheckCircleIcon className={iconClass} />, badge: 5 },
+      { label: 'Approvals', path: '/requisitions', icon: <CheckCircleIcon className={iconClass} />, badge: badges.approvals || undefined },
       { label: 'Procurement Planning', path: '/procurement-planning', icon: <ClipboardListIcon className={iconClass} />,
         children: [
           { label: 'Annual Plans (APP)', path: '/procurement-planning' },
@@ -104,24 +106,24 @@ function useSidebarItems(userRole: string | undefined): NavItem[] {
     ],
     [ROLES.EVALUATION_COMMITTEE_MEMBER]: [
       { label: 'Dashboard', path: '/dashboard', icon: <ChartBarIcon className={iconClass} /> },
-      { label: 'My Evaluations', path: '/evaluations', icon: <DocumentDuplicateIcon className={iconClass} />, badge: 2 },
+      { label: 'My Evaluations', path: '/evaluations', icon: <DocumentDuplicateIcon className={iconClass} />, badge: badges.evaluations || undefined },
       { label: 'Declarations', path: '/evaluations', icon: <AnnotationIcon className={iconClass} /> },
       { label: 'Bid Documents', path: '/bids', icon: <DocumentTextIcon className={iconClass} /> },
     ],
     [ROLES.EVALUATION_COMMITTEE_CHAIR]: [
       { label: 'Dashboard', path: '/dashboard', icon: <ChartBarIcon className={iconClass} /> },
-      { label: 'My Evaluations', path: '/evaluations', icon: <DocumentDuplicateIcon className={iconClass} />, badge: 2 },
+      { label: 'My Evaluations', path: '/evaluations', icon: <DocumentDuplicateIcon className={iconClass} />, badge: badges.evaluations || undefined },
       { label: 'Declarations', path: '/evaluations', icon: <AnnotationIcon className={iconClass} /> },
       { label: 'Post-Qualification', path: '/evaluations/post-qualification', icon: <ClipboardListIcon className={iconClass} /> },
       { label: 'Bid Documents', path: '/bids', icon: <DocumentTextIcon className={iconClass} /> },
     ],
     [ROLES.ZPC_MEMBER]: [
       { label: 'Dashboard', path: '/dashboard', icon: <ChartBarIcon className={iconClass} /> },
-      { label: 'ZPC Approvals', path: '/requisitions', icon: <CheckCircleIcon className={iconClass} />, badge: 4,
+      { label: 'ZPC Approvals', path: '/requisitions', icon: <CheckCircleIcon className={iconClass} />, badge: (badges.approvals + badges.cppReviews) || undefined,
         children: [
           { label: 'BERs Pending', path: '/evaluations/zpc-approval' },
           { label: 'APP Reviews', path: '/procurement-planning' },
-          { label: 'CPP Non-Open Method', path: '/procurement-planning/cpp' },
+          { label: 'CPP Non-Open Method', path: '/procurement-planning/cpp', badge: badges.cppReviews || undefined },
           { label: 'Requisitions >K250K', path: '/requisitions' },
           { label: 'Contract Amendments', path: '/contracts' },
         ]
@@ -131,10 +133,10 @@ function useSidebarItems(userRole: string | undefined): NavItem[] {
     ],
     [ROLES.DIRECTOR_GENERAL]: [
       { label: 'Dashboard', path: '/dashboard', icon: <ChartBarIcon className={iconClass} /> },
-      { label: 'My Approvals', path: '/requisitions', icon: <CheckCircleIcon className={iconClass} />, badge: 3,
+      { label: 'My Approvals', path: '/requisitions', icon: <CheckCircleIcon className={iconClass} />, badge: badges.approvals || undefined,
         children: [
           { label: 'Requisitions', path: '/requisitions' },
-          { label: 'Invoice Payments', path: '/finance/invoices' },
+          { label: 'Invoice Payments', path: '/finance/invoices', badge: badges.invoices || undefined },
           { label: 'Contract Signing', path: '/contracts?queue=dg_signature' },
         ]
       },
@@ -151,9 +153,9 @@ function useSidebarItems(userRole: string | undefined): NavItem[] {
     ],
     [ROLES.CONTRACT_MANAGER]: [
       { label: 'Dashboard', path: '/dashboard', icon: <ChartBarIcon className={iconClass} /> },
-      { label: 'My Contracts', path: '/contracts', icon: <DocumentIcon className={iconClass} />, badge: 4 },
+      { label: 'My Contracts', path: '/contracts', icon: <DocumentIcon className={iconClass} />, badge: badges.contracts || undefined },
       { label: 'Signing & Security', path: '/contracts/performance-security', icon: <ShieldCheckIcon className={iconClass} /> },
-      { label: 'Milestones', path: '/contracts/milestones', icon: <ClockIcon className={iconClass} />, badge: 1 },
+      { label: 'Milestones', path: '/contracts/milestones', icon: <ClockIcon className={iconClass} />, badge: badges.milestones || undefined },
       { label: 'Amendments', path: '/contracts/amendments', icon: <PencilIcon className={iconClass} /> },
       { label: 'Liquidated Damages', path: '/contracts/liquidated-damages', icon: <ExclamationIcon className={iconClass} /> },
       { label: 'Invoices & Payments', path: '/finance/invoices', icon: <CashIcon className={iconClass} /> },
@@ -168,7 +170,7 @@ function useSidebarItems(userRole: string | undefined): NavItem[] {
           { label: 'Budgets', path: '/finance/budgets' },
         ]
       },
-      { label: 'Invoices', path: '/finance/invoices', icon: <DocumentTextIcon className={iconClass} />, badge: 2,
+      { label: 'Invoices', path: '/finance/invoices', icon: <DocumentTextIcon className={iconClass} />, badge: badges.invoices || undefined,
         children: [
           { label: 'Invoice Queue', path: '/finance/invoices' },
           { label: '3-Way Matching', path: '/finance/matching' },
@@ -193,7 +195,7 @@ function useSidebarItems(userRole: string | undefined): NavItem[] {
           { label: 'Budgets', path: '/finance/budgets' },
         ]
       },
-      { label: 'Invoices', path: '/finance/invoices', icon: <DocumentTextIcon className={iconClass} />, badge: 2,
+      { label: 'Invoices', path: '/finance/invoices', icon: <DocumentTextIcon className={iconClass} />, badge: badges.invoices || undefined,
         children: [
           { label: 'Invoice Queue', path: '/finance/invoices' },
           { label: '3-Way Matching', path: '/finance/matching' },
@@ -212,7 +214,7 @@ function useSidebarItems(userRole: string | undefined): NavItem[] {
     ],
     [ROLES.DEPARTMENT_HEAD]: [
       { label: 'Dashboard', path: '/dashboard', icon: <ChartBarIcon className={iconClass} /> },
-      { label: 'Requisitions', path: '/requisitions', icon: <PencilIcon className={iconClass} />, badge: 2 },
+      { label: 'Requisitions', path: '/requisitions', icon: <PencilIcon className={iconClass} />, badge: badges.requisitions || undefined },
       { label: 'Procurement Planning', path: '/procurement-planning', icon: <ClipboardListIcon className={iconClass} /> },
     ],
     [ROLES.USER_DEPT_STAFF]: [

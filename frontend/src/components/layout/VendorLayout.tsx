@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Outlet } from 'react-router-dom';
 import { useAuth, useLogout } from '../../hooks/useAuth';
 import Sidebar, { NavItem } from './Sidebar';
+import useSidebarBadges from '../../hooks/useSidebarBadges';
 import {
   ChartBarIcon, ClipboardListIcon, DocumentTextIcon,
   DuplicateIcon, CashIcon, UserIcon,
@@ -16,14 +17,17 @@ const PageLoader = () => (
   </div>
 );
 
-const navItems: NavItem[] = [
-  { label: 'Dashboard', path: '/vendor/dashboard', icon: <ChartBarIcon className={iconClass} /> },
-  { label: 'Open Tenders', path: '/vendor/open-tenders', icon: <ClipboardListIcon className={iconClass} /> },
-  { label: 'My Bids', path: '/vendor/bids', icon: <DocumentTextIcon className={iconClass} />, badge: 2 },
-  { label: 'My Contracts', path: '/vendor/contracts', icon: <DuplicateIcon className={iconClass} />, badge: 1 },
-  { label: 'Invoices & Payments', path: '/vendor/invoices', icon: <CashIcon className={iconClass} />, badge: 3 },
-  { label: 'My Profile', path: '/vendor/profile', icon: <UserIcon className={iconClass} /> },
-];
+function useVendorNavItems(): NavItem[] {
+  const badges = useSidebarBadges('supplier_user');
+  return [
+    { label: 'Dashboard', path: '/vendor/dashboard', icon: <ChartBarIcon className={iconClass} /> },
+    { label: 'Open Tenders', path: '/vendor/open-tenders', icon: <ClipboardListIcon className={iconClass} /> },
+    { label: 'My Bids', path: '/vendor/bids', icon: <DocumentTextIcon className={iconClass} />, badge: badges.myBids || undefined },
+    { label: 'My Contracts', path: '/vendor/contracts', icon: <DuplicateIcon className={iconClass} />, badge: badges.myContracts || undefined },
+    { label: 'Invoices & Payments', path: '/vendor/invoices', icon: <CashIcon className={iconClass} />, badge: badges.vendorInvoices || undefined },
+    { label: 'My Profile', path: '/vendor/profile', icon: <UserIcon className={iconClass} /> },
+  ];
+}
 
 const getStatusBadge = () => {
   return (
@@ -38,6 +42,7 @@ const VendorLayout: React.FC = () => {
   const { user } = useAuth();
   const logout = useLogout();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const navItems = useVendorNavItems();
 
   const sidebarFooter = (
     <div className="flex items-center gap-3 px-2 py-1">

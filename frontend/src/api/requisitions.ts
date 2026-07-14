@@ -52,4 +52,11 @@ export const requisitionsApi = {
       headers: { 'Content-Type': 'multipart/form-data' },
     }).then((r) => r.data);
   },
+
+  dashboard: () =>
+    api.get<{
+      total: number; draft: number; submitted: number;
+      pending_dept_head: number; pending_finance: number; pending_dg: number; pending_zpc: number;
+      approved: number; rejected: number; total_value: number;
+    }>('/requisitions/dashboard/').then((r) => r.data),
 };
