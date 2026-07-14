@@ -26,4 +26,10 @@ export const notificationsApi = {
 
   markAllRead: () =>
     api.post<{ message: string; updated: number }>('/system-config/notifications/mark-all-read/').then((r) => r.data),
+
+  delete: (id: string) =>
+    api.delete(`/system-config/notifications/${id}/delete/`).then((r) => r.data),
+
+  clearAll: () =>
+    api.delete<{ message: string; deleted: number }>('/system-config/notifications/clear-all/').then((r) => r.data),
 };

@@ -166,6 +166,27 @@ def notification_mark_all_read(request):
     return Response({'message': 'Notifications marked as read', 'updated': updated})
 
 
+@api_view(['DELETE'])
+@permission_classes([IsAuthenticated])
+def notification_delete(request, pk):
+    try:
+        notification = Notification.objects.get(pk=pk, recipient=request.user)
+    except Notification.DoesNotExist:
+        return Response({'error': 'Notification not found'}, status=status.HTTP_404_NOT_FOUND)
+    notification.delete()
+    return Response({'message': 'Notification deleted'}, status=status.HTTP_204_NO_CONTENT)
+
+
+@api_view(['DELETE'])
+@permission_classes([IsAuthenticated])
+def notification_clear_all(request):
+    deleted, _ = Notification.objects.filter(
+        recipient=request.user,
+        read_at__isnull=False,
+    ).delete()
+    return Response({'message': 'Read notifications cleared', 'deleted': deleted})
+
+
 class ThresholdRuleListView(BaseModelViewSet, generics.ListCreateAPIView):
     queryset = ThresholdRule.objects.all()
     serializer_class = ThresholdRuleSerializer

@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { requisitionsApi } from '../../api/requisitions';
@@ -52,6 +52,33 @@ const RequisitionCreate: React.FC = () => {
   const fundingSources = fundingSourcesData?.results ?? [];
   const commodities = commoditiesData?.results ?? [];
   const departments = departmentsData?.results ?? [];
+
+  const prevAppLineItem = useRef(form.app_line_item);
+
+  useEffect(() => {
+    if (!form.app_line_item || form.app_line_item === prevAppLineItem.current) return;
+    prevAppLineItem.current = form.app_line_item;
+
+    const li = lineItems.find((item: any) => item.line_item_id === form.app_line_item);
+    if (!li) return;
+
+    setForm((prev) => ({
+      ...prev,
+      description: prev.description || li.description || '',
+      procurement_type: prev.procurement_type === 'goods'
+        ? (li.procurement_type === 'services' ? 'consulting' : (li.procurement_type || prev.procurement_type))
+        : prev.procurement_type,
+      funding_source: prev.funding_source || li.funding_source || '',
+      date_required: prev.date_required || li.planned_award_date || li.planned_issue_date || '',
+    }));
+
+    setItems((prev) => {
+      if (prev.length === 1 && !prev[0].description && prev[0].estimated_unit_cost === 0) {
+        return [{ ...prev[0], description: li.description || '', commodity: li.commodity || '' }];
+      }
+      return prev;
+    });
+  }, [form.app_line_item, lineItems]);
 
   const addItem = () => setItems([...items, { item_code: '', description: '', quantity: 1, unit: 'Box', estimated_unit_cost: 0, commodity: '', zamra_required: true }]);
   const removeItem = (i: number) => setItems(items.filter((_, idx) => idx !== i));

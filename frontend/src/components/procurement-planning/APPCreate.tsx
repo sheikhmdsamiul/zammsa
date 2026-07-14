@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
 import { procurementPlanningApi, masterDataApi, MasterDepartment } from '../../api/procurement_planning';
 import { fetchFiscalYears } from '../../api/admin';
 import { budgetApi } from '../../api/procurement_planning';
@@ -79,11 +79,12 @@ function getAPPErrorMessage(err: any, fallback: string): string {
 
 const APPCreate: React.FC = () => {
   const navigate = useNavigate();
+  const { id: editId } = useParams<{ id: string }>();
   const { user } = useAuth();
   const [step, setStep] = useState(0);
   const [submitting, setSubmitting] = useState(false);
   const [savingDraft, setSavingDraft] = useState(false);
-  const [createdAppId, setCreatedAppId] = useState<string | null>(null);
+  const [createdAppId, setCreatedAppId] = useState<string | null>(editId || null);
   const [departments, setDepartments] = useState<MasterDepartment[]>([]);
   const [fiscalYears, setFiscalYears] = useState<FiscalYear[]>([]);
   const [fundingSources, setFundingSources] = useState<FundingSourceOption[]>([]);
@@ -121,6 +122,7 @@ const APPCreate: React.FC = () => {
 
   const [submissionNotes, setSubmissionNotes] = useState('');
   const [confirmed, setConfirmed] = useState(false);
+  const [loadingExisting, setLoadingExisting] = useState(!!editId);
 
   useEffect(() => {
     Promise.all([
@@ -135,18 +137,55 @@ const APPCreate: React.FC = () => {
         setFundingSources(fsRes.results);
         setCommodities(commRes.results);
         const current = fys.find((fy: FiscalYear) => fy.is_current);
-        if (current) setForm((prev) => ({ ...prev, fiscal_year_id: current.id }));
+        if (current && !editId) setForm((prev) => ({ ...prev, fiscal_year_id: current.id }));
       })
       .catch(() => toast.error('Failed to load master data'))
       .finally(() => setLoadingMeta(false));
   }, []);
 
-  const fetchBudget = useCallback(() => {
+  useEffect(() => {
+    if (!editId) return;
+    const loadExisting = async () => {
+      try {
+        const app = await procurementPlanningApi.get(editId);
+        setForm({
+          fiscal_year_id: app.fiscal_year || '',
+          department_id: app.department || '',
+          compliance_notes: app.compliance_notes || '',
+          is_consolidated: app.is_consolidated || false,
+          consolidated_departments: [],
+          consolidation_notes: app.consolidation_notes || '',
+        });
+        if (app.line_items && app.line_items.length > 0) {
+          setItems(app.line_items.map((item: any) => ({
+            description: item.description || '',
+            procurement_type: item.procurement_type || 'goods',
+            estimated_value: Number(item.estimated_value) || 0,
+            planned_issue_date: item.planned_issue_date || '',
+            planned_award_date: item.planned_award_date || '',
+            funding_source: item.funding_source || '',
+            commodity: item.commodity || '',
+            is_citizen_reserved: item.is_citizen_reserved !== false,
+            recommended_method: item.recommended_method || '',
+          })));
+        }
+      } catch {
+        toast.error('Failed to load APP for editing');
+        navigate('/procurement-planning');
+      } finally {
+        setLoadingExisting(false);
+      }
+    };
+    loadExisting();
+  }, [editId, navigate]);
+
+  useEffect(() => {
+    if (loadingMeta || loadingExisting) return;
     if (!form.department_id || !form.fiscal_year_id) return;
     const dept = departments.find((d) => d.dept_id === form.department_id);
     if (!dept) return;
-    setBudgetOverview((prev) => ({ ...prev, loading: true }));
     const fy = fiscalYears.find((fy) => fy.id === form.fiscal_year_id);
+    setBudgetOverview((prev) => ({ ...prev, loading: true }));
     budgetApi.summary({ entity_code: dept.dept_code, fiscal_year: fy ? fy.name : '' })
       .then((res) => {
         setBudgetOverview({ total_allocated: res.total_allocated, available: res.total_available, loading: false });
@@ -154,15 +193,25 @@ const APPCreate: React.FC = () => {
       .catch(() => {
         setBudgetOverview({ total_allocated: 0, available: 0, loading: false });
       });
-  }, [form.department_id, form.fiscal_year_id, departments, fiscalYears]);
-
-  useEffect(() => { fetchBudget(); }, [fetchBudget]);
+  }, [loadingMeta, loadingExisting, form.department_id, form.fiscal_year_id, departments, fiscalYears]);
 
   useEffect(() => {
-    const handleFocus = () => { fetchBudget(); };
+    const handleFocus = () => {
+      if (!form.department_id || !form.fiscal_year_id) return;
+      const dept = departments.find((d) => d.dept_id === form.department_id);
+      if (!dept) return;
+      const fy = fiscalYears.find((fy) => fy.id === form.fiscal_year_id);
+      budgetApi.summary({ entity_code: dept.dept_code, fiscal_year: fy ? fy.name : '' })
+        .then((res) => {
+          setBudgetOverview({ total_allocated: res.total_allocated, available: res.total_available, loading: false });
+        })
+        .catch(() => {
+          setBudgetOverview({ total_allocated: 0, available: 0, loading: false });
+        });
+    };
     window.addEventListener('focus', handleFocus);
     return () => window.removeEventListener('focus', handleFocus);
-  }, [fetchBudget]);
+  }, [form.department_id, form.fiscal_year_id, departments, fiscalYears]);
 
   const planTotal = items.reduce((s, i) => s + Number(i.estimated_value || 0), 0);
   const remainingBudget = budgetOverview.available - planTotal;
@@ -205,6 +254,16 @@ const APPCreate: React.FC = () => {
 
   function removeItem(index: number) {
     if (items.length > 1) setItems(items.filter((_, i) => i !== index));
+  }
+
+  async function clearExistingLineItems(appId: string) {
+    try {
+      const existing = await procurementPlanningApi.lineItems.list({ app: appId, page_size: 200 });
+      const deletes = (existing.results || []).map((item: any) =>
+        procurementPlanningApi.lineItems.delete(item.line_item_id || item.id)
+      );
+      await Promise.all(deletes);
+    } catch { /* ignore */ }
   }
 
   function validateStep1(): boolean {
@@ -257,6 +316,7 @@ const APPCreate: React.FC = () => {
           is_consolidated: form.is_consolidated,
           consolidation_notes: form.is_consolidated ? form.consolidation_notes : undefined,
         });
+        if (editId) await clearExistingLineItems(createdAppId);
         if (items.some((i) => i.description?.trim())) {
           await procurementPlanningApi.bulkCreateLineItems(createdAppId, items.filter((i) => i.description?.trim()));
         }
@@ -320,6 +380,7 @@ const APPCreate: React.FC = () => {
       if (!validateStep2()) return;
       if (createdAppId && items.some((i) => i.description?.trim())) {
         try {
+          if (editId) await clearExistingLineItems(createdAppId);
           await procurementPlanningApi.bulkCreateLineItems(createdAppId, items.filter((i) => i.description?.trim()));
           setItems(items.map((i) => ({ ...i, description: i.description || '' })));
         } catch (err: any) {
@@ -357,7 +418,7 @@ const APPCreate: React.FC = () => {
     <div className="max-w-5xl mx-auto space-y-6 pb-12">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Create Annual Procurement Plan</h1>
+          <h1 className="text-2xl font-bold text-gray-900">{editId ? 'Edit' : 'Create'} Annual Procurement Plan</h1>
           <p className="text-sm text-gray-500">Fiscal Year {fiscalYears.find((fy) => fy.id === form.fiscal_year_id)?.name || ''}</p>
         </div>
         <div className="flex items-center gap-2 text-sm text-gray-500">
@@ -523,7 +584,16 @@ const APPCreate: React.FC = () => {
             <h2 className="text-base font-semibold text-gray-900 flex items-center gap-2">
               <CurrencyDollarIcon className="w-5 h-5 text-gray-600" /> Budget Overview
               {form.department_id && form.fiscal_year_id && (
-                <button onClick={fetchBudget} disabled={budgetOverview.loading} className="ml-auto text-xs text-blue-600 hover:underline disabled:opacity-50">
+                <button onClick={() => {
+                  if (!form.department_id || !form.fiscal_year_id) return;
+                  const dept = departments.find((d) => d.dept_id === form.department_id);
+                  if (!dept) return;
+                  const fy = fiscalYears.find((f) => f.id === form.fiscal_year_id);
+                  setBudgetOverview((prev) => ({ ...prev, loading: true }));
+                  budgetApi.summary({ entity_code: dept.dept_code, fiscal_year: fy ? fy.name : '' })
+                    .then((res) => setBudgetOverview({ total_allocated: res.total_allocated, available: res.total_available, loading: false }))
+                    .catch(() => setBudgetOverview({ total_allocated: 0, available: 0, loading: false }));
+                }} disabled={budgetOverview.loading} className="ml-auto text-xs text-blue-600 hover:underline disabled:opacity-50">
                   {budgetOverview.loading ? 'Refreshing...' : 'Refresh'}
                 </button>
               )}

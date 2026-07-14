@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, useLocation } from 'react-router-dom';
-import { BellIcon, CheckIcon } from '@heroicons/react/outline';
+import { BellIcon, CheckIcon, XIcon } from '@heroicons/react/outline';
 import { notificationsApi } from '../../api/notifications';
 
 const priorityClasses: Record<string, string> = {
@@ -41,6 +41,16 @@ const NotificationBell: React.FC = () => {
 
   const markAll = useMutation({
     mutationFn: () => notificationsApi.markAllRead(),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['notifications'] }),
+  });
+
+  const deleteNotif = useMutation({
+    mutationFn: (id: string) => notificationsApi.delete(id),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['notifications'] }),
+  });
+
+  const clearAll = useMutation({
+    mutationFn: () => notificationsApi.clearAll(),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['notifications'] }),
   });
 
@@ -87,14 +97,29 @@ const NotificationBell: React.FC = () => {
               <p className="text-sm font-bold text-slate-900">Notifications</p>
               <p className="text-[11px] text-slate-500">{unreadCount} unread</p>
             </div>
-            <button
-              type="button"
-              onClick={() => markAll.mutate()}
-              disabled={!unreadCount || markAll.isPending}
-              className="text-xs font-semibold text-zammsa-green disabled:text-slate-300"
-            >
-              Mark all read
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => markAll.mutate()}
+                disabled={!unreadCount || markAll.isPending}
+                className="text-xs font-semibold text-zammsa-green disabled:text-slate-300"
+              >
+                Mark all read
+              </button>
+              {notifications.some((n) => n.read) && (
+                <>
+                  <span className="text-slate-200">|</span>
+                  <button
+                    type="button"
+                    onClick={() => clearAll.mutate()}
+                    disabled={clearAll.isPending}
+                    className="text-xs font-semibold text-rose-500 hover:text-rose-700 disabled:text-slate-300"
+                  >
+                    Clear read
+                  </button>
+                </>
+              )}
+            </div>
           </div>
 
           <div className="max-h-96 overflow-y-auto">
@@ -138,6 +163,18 @@ const NotificationBell: React.FC = () => {
                         <CheckIcon className="w-4 h-4" />
                       </button>
                     )}
+                    <button
+                      type="button"
+                      onClick={(event) => {
+                        event.preventDefault();
+                        event.stopPropagation();
+                        deleteNotif.mutate(notification.id);
+                      }}
+                      className="p-1 text-slate-300 hover:text-rose-500 rounded"
+                      aria-label="Clear notification"
+                    >
+                      <XIcon className="w-4 h-4" />
+                    </button>
                   </div>
                 </div>
               );

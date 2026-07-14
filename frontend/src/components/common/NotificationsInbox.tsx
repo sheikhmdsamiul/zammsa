@@ -49,11 +49,15 @@ function DeliveryPill({ label, status }: { label: string; status?: string }) {
 function NotificationRow({
   notification,
   onMarkRead,
+  onDelete,
   marking,
+  deleting,
 }: {
   notification: UserNotification;
   onMarkRead: (id: string) => void;
+  onDelete: (id: string) => void;
   marking: boolean;
+  deleting: boolean;
 }) {
   const hasDeliveryIssue = notification.email_status === 'failed' || notification.sms_status === 'failed';
   const content = (
@@ -121,6 +125,14 @@ function NotificationRow({
             Read
           </button>
         )}
+        <button
+          type="button"
+          onClick={() => onDelete(notification.id)}
+          disabled={deleting}
+          className="inline-flex items-center gap-1.5 px-3 py-2 rounded border border-slate-200 bg-white text-xs font-bold text-slate-600 hover:text-rose-500 hover:border-rose-200 disabled:opacity-50"
+        >
+          Clear
+        </button>
       </div>
     </div>
   );
@@ -164,6 +176,16 @@ const NotificationsInbox: React.FC = () => {
     onSuccess: () => qc.invalidateQueries({ queryKey: ['notifications'] }),
   });
 
+  const deleteNotif = useMutation({
+    mutationFn: (id: string) => notificationsApi.delete(id),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['notifications'] }),
+  });
+
+  const clearAll = useMutation({
+    mutationFn: () => notificationsApi.clearAll(),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['notifications'] }),
+  });
+
   const notifications = data?.results || [];
 
   const resetPage = (callback: () => void) => {
@@ -178,15 +200,25 @@ const NotificationsInbox: React.FC = () => {
           <h1 className="text-2xl font-bold text-slate-900">Notifications</h1>
           <p className="mt-1 text-sm text-slate-500">Workflow alerts, reminders, delivery status, and system notices.</p>
         </div>
-        <button
-          type="button"
-          onClick={() => markAll.mutate()}
-          disabled={!summary?.unread_count || markAll.isPending}
-          className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded bg-zammsa-green text-sm font-bold text-white hover:bg-zammsa-green-dark disabled:bg-slate-300"
-        >
-          <CheckCircleIcon className="h-4 w-4" />
-          Mark all read
-        </button>
+        <div className="flex items-center gap-3">
+          <button
+            type="button"
+            onClick={() => markAll.mutate()}
+            disabled={!summary?.unread_count || markAll.isPending}
+            className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded bg-zammsa-green text-sm font-bold text-white hover:bg-zammsa-green-dark disabled:bg-slate-300"
+          >
+            <CheckCircleIcon className="h-4 w-4" />
+            Mark all read
+          </button>
+          <button
+            type="button"
+            onClick={() => clearAll.mutate()}
+            disabled={!summary?.total_count || summary?.unread_count === summary?.total_count || clearAll.isPending}
+            className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded border border-rose-200 bg-white text-sm font-bold text-rose-600 hover:bg-rose-50 disabled:bg-slate-100 disabled:text-slate-300 disabled:border-slate-200"
+          >
+            Clear read
+          </button>
+        </div>
       </div>
 
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
@@ -272,7 +304,9 @@ const NotificationsInbox: React.FC = () => {
                 key={notification.id}
                 notification={notification}
                 onMarkRead={(id) => markRead.mutate(id)}
+                onDelete={(id) => deleteNotif.mutate(id)}
                 marking={markRead.isPending}
+                deleting={deleteNotif.isPending}
               />
             ))}
           </div>

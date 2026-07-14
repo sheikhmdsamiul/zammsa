@@ -154,7 +154,7 @@ export default function APPDetail() {
                <ArrowLeftIcon className="w-5 h-5" />
             </Link>
             {status === 'draft' && (
-               <button className="flex items-center gap-2 px-3 py-2 bg-white border border-slate-200 rounded-lg text-xs font-semibold text-slate-600 hover:text-zammsa-green transition-all shadow-sm">
+               <button onClick={() => navigate(`/procurement-planning/${id}/edit`)} className="flex items-center gap-2 px-3 py-2 bg-white border border-slate-200 rounded-lg text-xs font-semibold text-slate-600 hover:text-zammsa-green transition-all shadow-sm">
                   <PencilIcon className="w-4 h-4" />
                   <span>Edit Plan</span>
                </button>

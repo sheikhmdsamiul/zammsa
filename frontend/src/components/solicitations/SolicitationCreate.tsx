@@ -1533,6 +1533,7 @@ const SolicitationCreate: React.FC = () => {
             </button>
           )}
         </div>
+      </div>
       {/* Template Preview Modal */}
       {previewTemplateName && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-gray-900/90 backdrop-blur-xl p-4 sm:p-10 overflow-y-auto">
@@ -1609,8 +1610,6 @@ const SolicitationCreate: React.FC = () => {
           </div>
         </div>
       )}
-
-      </div>
     </div>
   );
 };

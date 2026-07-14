@@ -130,6 +130,7 @@ const BudgetAllocationList = React.lazy(() => import('./components/procurement-p
 const APPList = React.lazy(() => import('./components/procurement-planning/APPList'));
 const APPCreate = React.lazy(() => import('./components/procurement-planning/APPCreate'));
 const APPDetail = React.lazy(() => import('./components/procurement-planning/APPDetail'));
+const APPEdit = React.lazy(() => import('./components/procurement-planning/APPEdit'));
 const GPNList = React.lazy(() => import('./components/procurement-planning/GPNList'));
 const GPNDetail = React.lazy(() => import('./components/procurement-planning/GPNDetail'));
 const CPPList = React.lazy(() => import('./components/procurement-planning/CPPList'));
@@ -530,6 +531,11 @@ function App() {
                   <Route path="procurement-planning/create" element={
                     <ProtectedRoute roles={[ROLES.USER_DEPT_STAFF, ROLES.SYSTEM_ADMIN]}>
                       <APPCreate />
+                    </ProtectedRoute>
+                  } />
+                  <Route path="procurement-planning/:id/edit" element={
+                    <ProtectedRoute roles={[ROLES.USER_DEPT_STAFF, ROLES.SYSTEM_ADMIN]}>
+                      <APPEdit />
                     </ProtectedRoute>
                   } />
                   <Route path="procurement-planning/:id" element={
