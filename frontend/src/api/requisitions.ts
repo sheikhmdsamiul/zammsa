@@ -53,10 +53,10 @@ export const requisitionsApi = {
     }).then((r) => r.data);
   },
 
-  dashboard: () =>
+  dashboard: (role?: string) =>
     api.get<{
       total: number; draft: number; submitted: number;
       pending_dept_head: number; pending_finance: number; pending_dg: number; pending_zpc: number;
-      approved: number; rejected: number; total_value: number;
-    }>('/requisitions/dashboard/').then((r) => r.data),
+      approved: number; rejected: number; total_value: number; my_pending: number;
+    }>('/requisitions/dashboard/', { params: role ? { role } : undefined }).then((r) => r.data),
 };

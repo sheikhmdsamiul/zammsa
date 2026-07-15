@@ -6,6 +6,7 @@ urlpatterns = [
     path('budget-allocations/<uuid:pk>/', views.BudgetAllocationDetailView.as_view(), name='budget-allocation-detail'),
     path('encumbrances/', views.BudgetEncumbranceListView.as_view(), name='fin-encumbrance-list'),
     path('invoices/', views.InvoiceListView.as_view(), name='invoice-list'),
+    path('invoices/dashboard/', views.invoice_dashboard_view, name='invoice-dashboard'),
     path('invoices/<uuid:pk>/', views.InvoiceDetailView.as_view(), name='invoice-detail'),
     path('invoices/<uuid:pk>/submit/', views.invoice_submit_view, name='invoice-submit'),
     path('invoices/<uuid:pk>/match/', views.invoice_match_view, name='invoice-match'),

@@ -9,6 +9,7 @@ class APPLineItemSerializer(serializers.ModelSerializer):
     procurement_type_display = serializers.CharField(source='get_procurement_type_display', read_only=True)
     app_status = serializers.CharField(source='app.status', read_only=True)
     app_department = serializers.CharField(source='app.department.dept_name', read_only=True)
+    app_department_id = serializers.CharField(source='app.department.dept_id', read_only=True)
     app_fiscal_year = serializers.CharField(source='app.fiscal_year.year_code', read_only=True)
     app_name = serializers.SerializerMethodField()
 

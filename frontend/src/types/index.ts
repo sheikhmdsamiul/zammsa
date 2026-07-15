@@ -921,10 +921,19 @@ export interface TenderPublic {
   award_notice: AwardNotice | null;
   bid_opening_results: BidOpeningResult | null;
   bid_security_rate: number;
-  bid_security_required?: boolean;
-  bid_security_type?: string;
-  submission_format?: 'single' | 'two';
+  bid_security_required: boolean;
+  bid_security_type: string;
+  submission_format: 'single' | 'two';
   bid_validity_days: number;
+  pre_bid_date?: string | null;
+  pre_bid_venue?: string;
+  contact_person?: string;
+  contact_phone?: string;
+  contact_email?: string;
+  minimum_technical_threshold?: number | null;
+  clarification_cutoff?: string | null;
+  citizen_preference?: boolean;
+  delivery_location?: string;
   items: TenderItem[];
   created_at: string;
   evaluation_method?: 'lowest_price' | 'qcbs' | 'qbs' | 'lcs' | 'fbs';
@@ -1531,6 +1540,11 @@ export interface ApprovalTrailEntry {
 export interface APPLineItem {
   line_item_id?: string;
   app?: string;
+  app_name?: string;
+  app_status?: string;
+  app_department?: string;
+  app_department_id?: string;
+  app_fiscal_year?: string;
   description: string;
   procurement_type?: 'goods' | 'works' | 'services';
   procurement_type_display?: string;

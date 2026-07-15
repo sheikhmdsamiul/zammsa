@@ -26,9 +26,13 @@ export default function RequisitionsList() {
   const [sortKey, setSortKey] = useState('-created_at');
   const [deleteModal, setDeleteModal] = useState<{ id: string; title: string } | null>(null);
 
+  const isZPC = user?.role === 'zpc_member';
+  const listParams: Record<string, any> = { page, page_size: pageSize, search, ordering: sortKey };
+  if (isZPC) listParams.status = 'pending_zpc';
+
   const { data, isLoading, isError } = useQuery({
-    queryKey: ['requisitions', page, pageSize, search, sortKey],
-    queryFn: () => requisitionsApi.list({ page, page_size: pageSize, search, ordering: sortKey }),
+    queryKey: ['requisitions', page, pageSize, search, sortKey, isZPC],
+    queryFn: () => requisitionsApi.list(listParams),
   });
 
   React.useEffect(() => { if (isError) toast.error('Failed to load requisitions'); }, [isError]);
@@ -137,8 +141,8 @@ export default function RequisitionsList() {
   return (
     <div className="space-y-8">
       <PageHeader 
-        title="Requisitions"
-        description="Track and manage internal procurement requests and approvals."
+        title={isZPC ? 'Requisitions > K250,000 — Pending ZPC Approval' : 'Requisitions'}
+        description={isZPC ? 'High-value requisitions routed to the ZPC Panel for final approval.' : 'Track and manage internal procurement requests and approvals.'}
         actions={
           <div className="flex items-center gap-3">
             <button 

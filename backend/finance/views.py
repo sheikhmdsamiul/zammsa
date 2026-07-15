@@ -2132,3 +2132,39 @@ def budget_summary_view(request):
         'allocation_count': allocations.count(),
         'fiscal_year': fiscal_year or 'all',
     })
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def invoice_dashboard_view(request):
+    """Return badge counts for invoices sidebar."""
+    pending_approval = Invoice.objects.filter(status='pending_approval').count()
+    submitted = Invoice.objects.filter(status='submitted').count()
+    pending_matching = Invoice.objects.filter(status='pending_matching').count()
+    finance_reviewed = Invoice.objects.filter(status='finance_reviewed').count()
+    paid_count = Invoice.objects.filter(status='paid').count()
+    rejected_count = Invoice.objects.filter(status='rejected').count()
+    total = Invoice.objects.count()
+
+    role = request.query_params.get('role', '').strip().lower()
+    ROLE_INVOICE_STATUS_MAP = {
+        'finance_officer': ('pending_approval', 'submitted', 'pending_matching', 'finance_reviewed'),
+        'budget_controller': ('pending_approval', 'submitted', 'pending_matching', 'finance_reviewed'),
+        'director_general': ('pending_approval',),
+        'contract_manager': ('submitted',),
+    }
+    if role in ROLE_INVOICE_STATUS_MAP:
+        my_pending = Invoice.objects.filter(status__in=ROLE_INVOICE_STATUS_MAP[role]).count()
+    else:
+        my_pending = 0
+
+    return Response({
+        'pending_approval': pending_approval,
+        'submitted': submitted,
+        'pending_matching': pending_matching,
+        'finance_reviewed': finance_reviewed,
+        'paid_count': paid_count,
+        'rejected_count': rejected_count,
+        'total': total,
+        'my_pending': my_pending,
+    })

@@ -62,19 +62,31 @@ const RequisitionCreate: React.FC = () => {
     const li = lineItems.find((item: any) => item.line_item_id === form.app_line_item);
     if (!li) return;
 
+    const rawType = (li.procurement_type as string | undefined) || 'goods';
+    const mappedType: ProcurementType =
+      rawType === 'services' ? 'consulting'
+        : rawType === 'consulting' ? 'consulting'
+        : rawType === 'works' ? 'works'
+        : rawType === 'goods' ? 'goods'
+        : 'goods';
+
     setForm((prev) => ({
       ...prev,
-      description: prev.description || li.description || '',
-      procurement_type: prev.procurement_type === 'goods'
-        ? (li.procurement_type === 'services' ? 'consulting' : (li.procurement_type || prev.procurement_type))
-        : prev.procurement_type,
-      funding_source: prev.funding_source || li.funding_source || '',
-      date_required: prev.date_required || li.planned_award_date || li.planned_issue_date || '',
+      description: li.description || '',
+      procurement_type: mappedType,
+      department: li.app_department_id || prev.department,
+      date_required: li.planned_award_date || li.planned_issue_date || '',
+      funding_source: li.funding_source || '',
     }));
 
     setItems((prev) => {
       if (prev.length === 1 && !prev[0].description && prev[0].estimated_unit_cost === 0) {
-        return [{ ...prev[0], description: li.description || '', commodity: li.commodity || '' }];
+        return [{
+          ...prev[0],
+          description: li.description || '',
+          commodity: li.commodity || '',
+          estimated_unit_cost: Number(li.estimated_value) || 0,
+        }];
       }
       return prev;
     });

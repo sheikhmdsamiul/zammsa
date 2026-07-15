@@ -21,15 +21,9 @@ class PublicDocumentSerializer(serializers.ModelSerializer):
         return obj.file_path or 'Document'
 
     def get_file_url(self, obj):
-        request = self.context.get('request')
         if obj.file:
-            url = obj.file.url
-            if request and not url.startswith('http'):
-                return request.build_absolute_uri(url)
-            return url
+            return obj.file.url
         if obj.file_path:
-            if request:
-                return request.build_absolute_uri(f'/media/solicitation_documents/{obj.file_path}')
             return f'/media/solicitation_documents/{obj.file_path}'
         return None
 
@@ -37,7 +31,7 @@ class PublicDocumentSerializer(serializers.ModelSerializer):
 class PublicEvaluationCriterionSerializer(serializers.ModelSerializer):
     id = serializers.UUIDField(source='criterion_id', read_only=True)
     description = serializers.CharField(source='criterion_name')
-    weight = serializers.DecimalField(max_digits=5, decimal_places=2, source='weight')
+    weight = serializers.DecimalField(max_digits=5, decimal_places=2)
     minimum_pass_score = serializers.DecimalField(max_digits=5, decimal_places=2, source='minimum_threshold')
 
     class Meta:
@@ -91,6 +85,24 @@ class TenderPublicSerializer(serializers.ModelSerializer):
     evaluation_method = serializers.CharField(default=None)
     financial_weight = serializers.IntegerField(default=None)
 
+    bid_security_required = serializers.BooleanField(default=False)
+    bid_security_type = serializers.CharField(default='')
+    submission_format = serializers.CharField(default='single')
+    pre_bid_date = serializers.DateField(required=False, allow_null=True)
+    pre_bid_venue = serializers.CharField(default='')
+    contact_person = serializers.CharField(default='')
+    contact_phone = serializers.CharField(default='')
+    contact_email = serializers.CharField(default='')
+    minimum_technical_threshold = serializers.IntegerField(required=False, allow_null=True)
+    clarification_cutoff = serializers.DateTimeField(required=False, allow_null=True)
+    citizen_preference = serializers.BooleanField(default=True)
+    delivery_location = serializers.SerializerMethodField()
+
+    documents = PublicDocumentSerializer(many=True, read_only=True)
+    evaluation_criteria = PublicEvaluationCriterionSerializer(many=True, read_only=True)
+    addenda = PublicAddendumSerializer(many=True, read_only=True)
+    clarifications = PublicClarificationSerializer(many=True, read_only=True)
+
     class Meta:
         model = Solicitation
         fields = (
@@ -102,7 +114,16 @@ class TenderPublicSerializer(serializers.ModelSerializer):
             'award_notice', 'bid_opening_results', 'bid_security_rate',
             'bid_validity_days', 'created_at', 'items',
             'evaluation_method', 'financial_weight',
+            'bid_security_required', 'bid_security_type', 'submission_format',
+            'pre_bid_date', 'pre_bid_venue', 'contact_person', 'contact_phone',
+            'contact_email', 'minimum_technical_threshold', 'clarification_cutoff',
+            'citizen_preference', 'delivery_location',
         )
+
+    def get_delivery_location(self, obj):
+        if hasattr(obj, 'requisition') and obj.requisition:
+            return obj.requisition.delivery_location or ''
+        return ''
 
     def get_items(self, obj):
         if hasattr(obj, 'requisition') and obj.requisition:

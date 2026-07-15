@@ -126,4 +126,7 @@ export const financeApi = {
     temperature_log_attached?: boolean;
   }) =>
     api.post<any>('/finance/grns/manual/', data).then((r) => r.data),
+
+  dashboard: (role?: string) =>
+    api.get<{ pending_approval: number; submitted: number; pending_matching: number; finance_reviewed: number; paid_count: number; rejected_count: number; total: number; my_pending: number }>('/finance/invoices/dashboard/', { params: role ? { role } : undefined }).then((r) => r.data),
 };

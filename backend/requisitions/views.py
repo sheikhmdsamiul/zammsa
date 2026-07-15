@@ -527,4 +527,19 @@ def requisition_dashboard_view(request):
         'rejected': Requisition.objects.filter(status='rejected').count(),
         'total_value': Requisition.objects.filter(status__in=['approved', 'submitted', 'pending_dept_head', 'pending_finance', 'pending_dg', 'pending_zpc']).aggregate(total=models.Sum('estimated_total'))['total'] or 0,
     }
+
+    role = request.query_params.get('role', '').strip().lower()
+    ROLE_STATUS_MAP = {
+        'department_head': 'pending_dept_head',
+        'finance_officer': 'pending_finance',
+        'budget_controller': 'pending_finance',
+        'director_general': 'pending_dg',
+        'zpc_member': 'pending_zpc',
+        'procurement_officer': 'submitted',
+    }
+    if role in ROLE_STATUS_MAP:
+        stats['my_pending'] = Requisition.objects.filter(status=ROLE_STATUS_MAP[role]).count()
+    else:
+        stats['my_pending'] = 0
+
     return Response(stats)

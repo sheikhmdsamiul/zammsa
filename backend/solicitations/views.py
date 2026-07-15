@@ -429,17 +429,6 @@ def solicitation_submit_view(request, pk):
         action_url=f'/solicitations/{sol.solicitation_id}',
         exclude_user=request.user,
     )
-    notify_role(
-        'director_procurement',
-        title=f'Solicitation {sol.sol_number} requires approval',
-        message=f'{request.user.full_name} submitted "{sol.title}" for your review and approval.',
-        notification_type='approval',
-        priority='normal',
-        source_module='solicitations',
-        object_id=str(sol.solicitation_id),
-        action_url=f'/solicitations/{sol.solicitation_id}',
-        exclude_user=request.user,
-    )
 
     return Response({'message': 'Solicitation sent for approval', 'status': sol.status})
 
@@ -1317,6 +1306,11 @@ def solicitation_download_document_view(request, pk):
         return Response({'error': 'No generated document found. Generate one first.'}, status=404)
 
     from django.http import FileResponse
-    response = FileResponse(doc.file.open('rb'), content_type='application/pdf')
+    import os
+    file_path = doc.file.path if hasattr(doc.file, 'path') else None
+    if not file_path or not os.path.exists(file_path):
+        return Response({'error': 'Document file is missing on the server. Regenerate it.'}, status=404)
+
+    response = FileResponse(open(file_path, 'rb'), content_type='application/pdf')
     response['Content-Disposition'] = f'attachment; filename="{doc.file.name.split("/")[-1]}"'
     return response

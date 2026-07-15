@@ -7,6 +7,9 @@ import { StatusBadge } from '../common/StatusBadge';
 import {
   ClockIcon, DocumentTextIcon, PaperClipIcon,
   CheckCircleIcon, InformationCircleIcon,
+  LocationMarkerIcon, PhoneIcon, MailIcon, ShieldCheckIcon,
+  CalendarIcon, ClipboardListIcon, UserIcon, CurrencyDollarIcon,
+  QuestionMarkCircleIcon, BadgeCheckIcon,
 } from '@heroicons/react/outline';
 
 const TYPE_LABELS: Record<string, string> = {
@@ -14,6 +17,18 @@ const TYPE_LABELS: Record<string, string> = {
   rfp: 'RFP — Request for Proposals',
   rfq: 'RFQ — Request for Quotations',
   rfi: 'RFI — Request for Information',
+};
+
+const FORMAT_LABELS: Record<string, string> = {
+  single: 'Single Envelope',
+  two: 'Two Envelope',
+};
+
+const SECURITY_TYPE_LABELS: Record<string, string> = {
+  bank_guarantee: 'Bank Guarantee',
+  cash_deposit: 'Cash Deposit',
+  insurance_bond: 'Insurance Bond',
+  fixed_deposit: 'Fixed Deposit Certificate',
 };
 
 function fmtDate(d: string | undefined): string {
@@ -98,10 +113,58 @@ const VendorTenderDetail: React.FC = () => {
             <p className="text-sm font-semibold text-gray-700 leading-relaxed whitespace-pre-line">{tender.description}</p>
           </div>
 
+          {/* Bill of Quantities */}
+          {tender.items?.length > 0 && (
+            <div className="bg-white rounded-3xl border border-gray-200 shadow-sm p-6">
+              <h2 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-4">Bill of Quantities</h2>
+              <div className="overflow-x-auto -mx-2">
+                <table className="w-full text-sm border-collapse">
+                  <thead>
+                    <tr className="text-left text-[10px] font-black text-gray-400 uppercase tracking-wider border-b border-gray-200">
+                      <th className="px-2 py-2">#</th>
+                      <th className="px-2 py-2">Item Description</th>
+                      <th className="px-2 py-2 text-right">Qty</th>
+                      <th className="px-2 py-2">Unit</th>
+                      <th className="px-2 py-2 text-right">Unit Price (Est.)</th>
+                      <th className="px-2 py-2 text-right">Total (Est.)</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {tender.items.map((it: any, idx: number) => (
+                      <tr key={idx} className="border-b border-gray-100 last:border-0">
+                        <td className="px-2 py-3 text-gray-400 font-bold">{idx + 1}</td>
+                        <td className="px-2 py-3 font-semibold text-gray-800">{it.description}</td>
+                        <td className="px-2 py-3 text-right font-bold text-gray-900">{Number(it.quantity).toLocaleString()}</td>
+                        <td className="px-2 py-3 text-gray-600">{it.unit}</td>
+                        <td className="px-2 py-3 text-right font-semibold text-gray-700">{tender.currency} {Number(it.unit_price).toLocaleString()}</td>
+                        <td className="px-2 py-3 text-right font-bold text-zammsa-green">{tender.currency} {Number(it.total_estimate).toLocaleString()}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                  <tfoot>
+                    <tr className="border-t-2 border-gray-200">
+                      <td colSpan={5} className="px-2 py-3 text-right text-[10px] font-black text-gray-400 uppercase tracking-wider">Total Estimated Value</td>
+                      <td className="px-2 py-3 text-right font-black text-zammsa-green">
+                        {tender.currency} {tender.items.reduce((s: number, it: any) => s + Number(it.total_estimate || 0), 0).toLocaleString()}
+                      </td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+              <p className="text-[11px] text-gray-400 mt-3">Estimated prices are indicative only and do not constitute the bid ceiling.</p>
+            </div>
+          )}
+
           {/* Evaluation Criteria */}
           {tender.evaluation_criteria?.length > 0 && (
             <div className="bg-white rounded-3xl border border-gray-200 shadow-sm p-6">
               <h2 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-4">Evaluation Criteria</h2>
+              {tender.evaluation_method === 'qcbs' && tender.financial_weight != null && (
+                <p className="text-xs text-gray-500 mb-3 flex items-center gap-1.5">
+                  <ClipboardListIcon className="w-4 h-4 text-gray-400" />
+                  Quality & Cost Based Selection — Financial proposal weight: <span className="font-bold text-gray-700">{tender.financial_weight}%</span>
+                </p>
+              )}
               <div className="space-y-2">
                 {tender.evaluation_criteria.map((c: any) => (
                   <div key={c.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-2xl border border-gray-100">
@@ -133,6 +196,33 @@ const VendorTenderDetail: React.FC = () => {
                       <p className="text-sm font-bold text-gray-900">Addendum #{a.number}</p>
                     </div>
                     <p className="text-sm text-gray-600">{a.description}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Clarifications */}
+          {tender.clarifications?.length > 0 && (
+            <div className="bg-white rounded-3xl border border-gray-200 shadow-sm p-6">
+              <h2 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-4">Clarifications</h2>
+              <div className="space-y-3">
+                {tender.clarifications.map((c: any) => (
+                  <div key={c.id} className="p-4 bg-gray-50 rounded-2xl border border-gray-100">
+                    <div className="flex items-start gap-2">
+                      <QuestionMarkCircleIcon className="w-4 h-4 text-blue-500 shrink-0 mt-0.5" />
+                      <div>
+                        <p className="text-sm font-bold text-gray-900">{c.question}</p>
+                        {c.answer && (
+                          <p className="text-sm text-gray-600 mt-1">
+                            <span className="font-bold text-zammsa-green">Answer: </span>{c.answer}
+                          </p>
+                        )}
+                        {!c.answer && (
+                          <p className="text-xs text-gray-400 mt-1 italic">Awaiting response</p>
+                        )}
+                      </div>
+                    </div>
                   </div>
                 ))}
               </div>
@@ -201,9 +291,116 @@ const VendorTenderDetail: React.FC = () => {
                 <p className="text-sm font-bold text-gray-900 mt-0.5 capitalize">{tender.category?.replace(/_/g, ' ') || '---'}</p>
               </div>
               <div className="p-3 bg-gray-50 rounded-2xl">
+                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Submission Format</p>
+                <p className="text-sm font-bold text-gray-900 mt-0.5">
+                  {FORMAT_LABELS[tender.submission_format] || tender.submission_format || '---'}
+                </p>
+              </div>
+              <div className="p-3 bg-gray-50 rounded-2xl">
                 <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Estimated Value</p>
                 <p className="text-sm font-bold text-zammsa-green mt-0.5">{tender.currency} {tender.estimated_value?.toLocaleString()}</p>
               </div>
+              {tender.delivery_location && (
+                <div className="p-3 bg-gray-50 rounded-2xl">
+                  <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Delivery Location</p>
+                  <p className="text-sm font-bold text-gray-900 mt-0.5 flex items-center gap-1.5">
+                    <LocationMarkerIcon className="w-4 h-4 text-gray-400 shrink-0" />
+                    {tender.delivery_location}
+                  </p>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Bid Requirements */}
+          <div className="bg-white rounded-3xl border border-gray-200 shadow-sm p-6">
+            <h2 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-4">Bid Requirements</h2>
+            <div className="space-y-3">
+              <div className="p-3 bg-gray-50 rounded-2xl flex items-start gap-3">
+                <ShieldCheckIcon className="w-4 h-4 text-gray-400 shrink-0 mt-0.5" />
+                <div>
+                  <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Bid Security</p>
+                  {tender.bid_security_required ? (
+                    <p className="text-sm font-bold text-gray-900 mt-0.5">
+                      {SECURITY_TYPE_LABELS[tender.bid_security_type] || tender.bid_security_type || 'Required'}
+                      {tender.bid_security_rate != null && (
+                        <span className="text-zammsa-green"> · {tender.bid_security_rate}%</span>
+                      )}
+                    </p>
+                  ) : (
+                    <p className="text-sm font-bold text-gray-900 mt-0.5">Not Required</p>
+                  )}
+                </div>
+              </div>
+              <div className="p-3 bg-gray-50 rounded-2xl flex items-start gap-3">
+                <CalendarIcon className="w-4 h-4 text-gray-400 shrink-0 mt-0.5" />
+                <div>
+                  <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Bid Validity</p>
+                  <p className="text-sm font-bold text-gray-900 mt-0.5">
+                    {tender.bid_validity_days ? `${tender.bid_validity_days} days from closing` : '---'}
+                  </p>
+                </div>
+              </div>
+              {tender.minimum_technical_threshold != null && (
+                <div className="p-3 bg-gray-50 rounded-2xl flex items-start gap-3">
+                  <CheckCircleIcon className="w-4 h-4 text-gray-400 shrink-0 mt-0.5" />
+                  <div>
+                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Min. Technical Threshold</p>
+                    <p className="text-sm font-bold text-gray-900 mt-0.5">{tender.minimum_technical_threshold}% to pass</p>
+                  </div>
+                </div>
+              )}
+              {tender.citizen_preference && (
+                <div className="p-3 bg-gray-50 rounded-2xl flex items-start gap-3">
+                  <BadgeCheckIcon className="w-4 h-4 text-gray-400 shrink-0 mt-0.5" />
+                  <div>
+                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Citizen / Local Preference</p>
+                    <p className="text-sm font-bold text-gray-900 mt-0.5">Applicable</p>
+                  </div>
+                </div>
+              )}
+              {tender.pre_bid_date && (
+                <div className="p-3 bg-gray-50 rounded-2xl flex items-start gap-3">
+                  <CalendarIcon className="w-4 h-4 text-gray-400 shrink-0 mt-0.5" />
+                  <div>
+                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Pre-Bid Meeting</p>
+                    <p className="text-sm font-bold text-gray-900 mt-0.5">{fmtDate(tender.pre_bid_date)}</p>
+                    {tender.pre_bid_venue && (
+                      <p className="text-xs text-gray-500 mt-0.5 flex items-center gap-1">
+                        <LocationMarkerIcon className="w-3.5 h-3.5" />{tender.pre_bid_venue}
+                      </p>
+                    )}
+                  </div>
+                </div>
+              )}
+              {tender.clarification_cutoff && (
+                <div className="p-3 bg-gray-50 rounded-2xl flex items-start gap-3">
+                  <QuestionMarkCircleIcon className="w-4 h-4 text-gray-400 shrink-0 mt-0.5" />
+                  <div>
+                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Clarification Deadline</p>
+                    <p className="text-sm font-bold text-gray-900 mt-0.5">{fmtDateTime(tender.clarification_cutoff)}</p>
+                  </div>
+                </div>
+              )}
+              {(tender.contact_person || tender.contact_email || tender.contact_phone) && (
+                <div className="p-3 bg-gray-50 rounded-2xl flex items-start gap-3">
+                  <UserIcon className="w-4 h-4 text-gray-400 shrink-0 mt-0.5" />
+                  <div>
+                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Contact (Procuring Entity)</p>
+                    {tender.contact_person && <p className="text-sm font-bold text-gray-900 mt-0.5">{tender.contact_person}</p>}
+                    {tender.contact_email && (
+                      <p className="text-xs text-gray-500 mt-0.5 flex items-center gap-1 break-all">
+                        <MailIcon className="w-3.5 h-3.5 shrink-0" />{tender.contact_email}
+                      </p>
+                    )}
+                    {tender.contact_phone && (
+                      <p className="text-xs text-gray-500 mt-0.5 flex items-center gap-1">
+                        <PhoneIcon className="w-3.5 h-3.5 shrink-0" />{tender.contact_phone}
+                      </p>
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
           </div>
 

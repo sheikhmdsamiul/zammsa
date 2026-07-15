@@ -155,15 +155,9 @@ class SolicitationDocumentSerializer(serializers.ModelSerializer):
         return obj.file_path or 'Document'
 
     def get_file_url(self, obj):
-        request = self.context.get('request')
         if obj.file:
-            url = obj.file.url
-            if request and not url.startswith('http'):
-                return request.build_absolute_uri(url)
-            return url
+            return obj.file.url
         if obj.file_path:
-            if request:
-                return request.build_absolute_uri(f'/media/solicitation_documents/{obj.file_path}')
             return f'/media/solicitation_documents/{obj.file_path}'
         return None
 

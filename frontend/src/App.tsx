@@ -219,7 +219,7 @@ function App() {
                   <Route path="dashboard" element={<DashboardRouter />} />
                   <Route path="notifications" element={<NotificationsInbox />} />
                   <Route path="requisitions" element={
-                    <ProtectedRoute roles={[ROLES.USER_DEPT_STAFF, ROLES.DEPARTMENT_HEAD, ROLES.PROCUREMENT_OFFICER, ROLES.FINANCE_OFFICER, ROLES.DIRECTOR_GENERAL]}>
+                    <ProtectedRoute roles={[ROLES.USER_DEPT_STAFF, ROLES.DEPARTMENT_HEAD, ROLES.PROCUREMENT_OFFICER, ROLES.FINANCE_OFFICER, ROLES.DIRECTOR_GENERAL, ROLES.ZPC_MEMBER]}>
                       <RequisitionsList />
                     </ProtectedRoute>
                   } />

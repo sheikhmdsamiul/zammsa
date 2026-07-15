@@ -5,6 +5,8 @@ import { vendorApi } from '../api/vendor';
 import { notificationsApi } from '../api/notifications';
 import { solicitationsApi } from '../api/solicitations';
 import { evaluationsApi } from '../api/evaluations';
+import { contractsApi } from '../api/contracts';
+import { financeApi } from '../api/finance';
 
 export interface SidebarBadges {
   requisitions: number;
@@ -16,7 +18,10 @@ export interface SidebarBadges {
   appReviews: number;
   cppReviews: number;
   contracts: number;
+  contractSignature: number;
   milestones: number;
+  overdueMilestones: number;
+  contractAmendments: number;
   invoices: number;
   unreadNotifications: number;
   myBids: number;
@@ -26,8 +31,8 @@ export interface SidebarBadges {
 
 function useSidebarBadges(userRole: string | undefined): SidebarBadges {
   const { data: reqDashboard } = useQuery({
-    queryKey: ['sidebar', 'requisitions', 'dashboard'],
-    queryFn: () => requisitionsApi.dashboard(),
+    queryKey: ['sidebar', 'requisitions', 'dashboard', userRole],
+    queryFn: () => requisitionsApi.dashboard(userRole),
     staleTime: 30_000,
     refetchInterval: 60_000,
   });
@@ -67,11 +72,21 @@ function useSidebarBadges(userRole: string | undefined): SidebarBadges {
     refetchInterval: 60_000,
   });
 
-  const pendingDeptHead = reqDashboard?.pending_dept_head ?? 0;
-  const pendingFinance = reqDashboard?.pending_finance ?? 0;
-  const pendingDG = reqDashboard?.pending_dg ?? 0;
-  const pendingZPC = reqDashboard?.pending_zpc ?? 0;
-  const submitted = reqDashboard?.submitted ?? 0;
+  const { data: contractDash } = useQuery({
+    queryKey: ['sidebar', 'contracts', 'dashboard'],
+    queryFn: () => contractsApi.dashboard(),
+    staleTime: 30_000,
+    refetchInterval: 60_000,
+  });
+
+  const { data: invoiceDash } = useQuery({
+    queryKey: ['sidebar', 'invoices', 'dashboard', userRole],
+    queryFn: () => financeApi.dashboard(userRole),
+    staleTime: 30_000,
+    refetchInterval: 60_000,
+  });
+
+  const myPending = reqDashboard?.my_pending ?? 0;
 
   const cppPendingZPC = cppDashboard?.pending_zpc ?? 0;
 
@@ -80,18 +95,29 @@ function useSidebarBadges(userRole: string | undefined): SidebarBadges {
   const solPending = solPendingApproval ?? 0;
   const activeEvaluationCount = activeEvals ?? 0;
 
+  const contractPendingSignature = contractDash?.pending_signature ?? 0;
+  const contractPendingMilestones = contractDash?.pending_milestones ?? 0;
+  const contractOverdueMilestones = contractDash?.overdue_milestones ?? 0;
+  const contractPendingAmendments = contractDash?.pending_amendments ?? 0;
+  const contractActiveCount = contractDash?.active_count ?? 0;
+
+  const invoiceMyPending = invoiceDash?.my_pending ?? 0;
+
   return {
-    requisitions: pendingDeptHead + pendingFinance + pendingDG + pendingZPC + submitted,
-    approvals: pendingDeptHead + pendingFinance + pendingDG + pendingZPC,
+    requisitions: myPending,
+    approvals: myPending,
     solicitations: solPending,
     bids: 0,
     evaluations: activeEvaluationCount,
     berPending: 0,
     appReviews: solPending,
     cppReviews: cppPendingZPC,
-    contracts: 0,
-    milestones: 0,
-    invoices: 0,
+    contracts: contractActiveCount,
+    contractSignature: contractPendingSignature,
+    milestones: contractPendingMilestones + contractOverdueMilestones,
+    overdueMilestones: contractOverdueMilestones,
+    contractAmendments: contractPendingAmendments,
+    invoices: invoiceMyPending,
     unreadNotifications: unread,
     myBids: vendorDashboard?.active_bids ?? 0,
     myContracts: vendorDashboard?.awarded_contracts ?? 0,

@@ -60,7 +60,7 @@ function useSidebarItems(userRole: string | undefined): NavItem[] {
           { label: 'Post-Qualification', path: '/evaluations/post-qualification' },
         ]
       },
-      { label: 'Contract Award', path: '/contracts', icon: <BadgeCheckIcon className={iconClass} />,
+      { label: 'Contract Award', path: '/contracts', icon: <BadgeCheckIcon className={iconClass} />, badge: badges.contracts || undefined,
         children: [
           { label: 'Award Overview', path: '/contracts/award-overview' },
           { label: 'Award Notices', path: '/contracts/award-notices' },
@@ -82,8 +82,8 @@ function useSidebarItems(userRole: string | undefined): NavItem[] {
           { label: 'Contract Plans (CPP)', path: '/procurement-planning/cpp' },
         ]
       },
-      { label: 'Solicitations', path: '/solicitations', icon: <DocumentTextIcon className={iconClass} /> },
-      { label: 'Bid Evaluation', path: '/evaluations', icon: <DocumentDuplicateIcon className={iconClass} />,
+      { label: 'Solicitations', path: '/solicitations', icon: <DocumentTextIcon className={iconClass} />, badge: badges.solicitations || undefined },
+      { label: 'Bid Evaluation', path: '/evaluations', icon: <DocumentDuplicateIcon className={iconClass} />, badge: badges.evaluations || undefined,
         children: [
           { label: 'Form EC Committee', path: '/evaluations/committee/formation' },
           { label: 'Active Evaluations', path: '/evaluations' },
@@ -91,7 +91,7 @@ function useSidebarItems(userRole: string | undefined): NavItem[] {
           { label: 'BERs Awaiting ZPC', path: '/evaluations/zpc-approval' },
         ]
       },
-      { label: 'Contract Award', path: '/contracts', icon: <BadgeCheckIcon className={iconClass} />,
+      { label: 'Contract Award', path: '/contracts', icon: <BadgeCheckIcon className={iconClass} />, badge: badges.contracts || undefined,
         children: [
           { label: 'Award Overview', path: '/contracts/award-overview' },
           { label: 'Award Notices', path: '/contracts/award-notices' },
@@ -121,11 +121,11 @@ function useSidebarItems(userRole: string | undefined): NavItem[] {
       { label: 'Dashboard', path: '/dashboard', icon: <ChartBarIcon className={iconClass} /> },
       { label: 'ZPC Approvals', path: '/requisitions', icon: <CheckCircleIcon className={iconClass} />, badge: (badges.approvals + badges.cppReviews) || undefined,
         children: [
-          { label: 'BERs Pending', path: '/evaluations/zpc-approval' },
-          { label: 'APP Reviews', path: '/procurement-planning' },
+          { label: 'BERs Pending', path: '/evaluations/zpc-approval', badge: badges.approvals || undefined },
+          { label: 'APP Reviews', path: '/procurement-planning', badge: (badges.approvals > 0 ? badges.approvals : undefined) || undefined },
           { label: 'CPP Non-Open Method', path: '/procurement-planning/cpp', badge: badges.cppReviews || undefined },
-          { label: 'Requisitions >K250K', path: '/requisitions' },
-          { label: 'Contract Amendments', path: '/contracts' },
+          { label: 'Requisitions >K250K', path: '/requisitions', badge: badges.approvals || undefined },
+          { label: 'Contract Amendments', path: '/contracts', badge: badges.contractAmendments || undefined },
         ]
       },
       { label: 'ZPC Meeting', path: '/dashboard', icon: <CalendarIcon className={iconClass} /> },
@@ -137,7 +137,7 @@ function useSidebarItems(userRole: string | undefined): NavItem[] {
         children: [
           { label: 'Requisitions', path: '/requisitions' },
           { label: 'Invoice Payments', path: '/finance/invoices', badge: badges.invoices || undefined },
-          { label: 'Contract Signing', path: '/contracts?queue=dg_signature' },
+          { label: 'Contract Signing', path: '/contracts', badge: badges.contractSignature || undefined },
         ]
       },
       { label: 'Executive Overview', path: '/dashboard', icon: <ChartBarIcon className={iconClass} />,
@@ -148,17 +148,17 @@ function useSidebarItems(userRole: string | undefined): NavItem[] {
           { label: 'Supplier Performance', path: '/contracts' },
         ]
       },
-      { label: 'Contracts', path: '/contracts', icon: <DocumentIcon className={iconClass} /> },
+      { label: 'Contracts', path: '/contracts', icon: <DocumentIcon className={iconClass} />, badge: badges.contracts || undefined },
       { label: 'Reports', path: '/reports', icon: <TrendingUpIcon className={iconClass} /> },
     ],
     [ROLES.CONTRACT_MANAGER]: [
       { label: 'Dashboard', path: '/dashboard', icon: <ChartBarIcon className={iconClass} /> },
       { label: 'My Contracts', path: '/contracts', icon: <DocumentIcon className={iconClass} />, badge: badges.contracts || undefined },
-      { label: 'Signing & Security', path: '/contracts/performance-security', icon: <ShieldCheckIcon className={iconClass} /> },
+      { label: 'Signing & Security', path: '/contracts/performance-security', icon: <ShieldCheckIcon className={iconClass} />, badge: badges.contractSignature || undefined },
       { label: 'Milestones', path: '/contracts/milestones', icon: <ClockIcon className={iconClass} />, badge: badges.milestones || undefined },
-      { label: 'Amendments', path: '/contracts/amendments', icon: <PencilIcon className={iconClass} /> },
+      { label: 'Amendments', path: '/contracts/amendments', icon: <PencilIcon className={iconClass} />, badge: badges.contractAmendments || undefined },
       { label: 'Liquidated Damages', path: '/contracts/liquidated-damages', icon: <ExclamationIcon className={iconClass} /> },
-      { label: 'Invoices & Payments', path: '/finance/invoices', icon: <CashIcon className={iconClass} /> },
+      { label: 'Invoices & Payments', path: '/finance/invoices', icon: <CashIcon className={iconClass} />, badge: badges.invoices || undefined },
       { label: 'Supplier Performance', path: '/contracts/supplier-performance', icon: <StarIcon className={iconClass} /> },
       { label: 'Contract Closure', path: '/contracts/closure', icon: <LockOpenIcon className={iconClass} /> },
     ],

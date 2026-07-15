@@ -103,4 +103,7 @@ export const contractsApi = {
 
   updateMilestoneActual: (milestoneId: string, data: { actual_date: string; notes?: string }) =>
     api.post<ContractMilestone>(`/contracts/milestones/${milestoneId}/update-actual/`, data).then((r) => r.data),
+
+  dashboard: () =>
+    api.get<{ active_count: number; pending_signature: number; pending_milestones: number; overdue_milestones: number; pending_amendments: number }>('/contracts/dashboard/').then((r) => r.data),
 };

@@ -187,14 +187,26 @@ class TenderDocumentDownload(views.APIView):
     permission_classes = [AllowAny]
 
     def get(self, request, tender_id, document_id):
-        from django.http import FileResponse, HttpResponseNotFound
+        from django.http import FileResponse, JsonResponse
+        from django.conf import settings
+        import os
         from solicitations.models import SolicitationDocument
         document = get_object_or_404(
             SolicitationDocument,
             solicitation_id=tender_id,
             document_id=document_id,
         )
-        import os
-        if os.path.exists(document.file_path):
-            return FileResponse(open(document.file_path, 'rb'), as_attachment=True)
-        return HttpResponseNotFound('File not found')
+
+        candidate_paths = []
+        if document.file:
+            candidate_paths.append(document.file.path)
+        if document.file_path:
+            candidate_paths.append(document.file_path)
+            candidate_paths.append(os.path.join(settings.MEDIA_ROOT, document.file_path))
+
+        for path in candidate_paths:
+            if path and os.path.exists(path):
+                return FileResponse(open(path, 'rb'), as_attachment=True,
+                                    filename=os.path.basename(path))
+
+        return JsonResponse({'error': 'File not found'}, status=404)

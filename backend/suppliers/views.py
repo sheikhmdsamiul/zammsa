@@ -406,8 +406,8 @@ def performance_evaluate_view(request, supplier_pk):
     supplier.risk_level = risk_level
     supplier.save()
     if risk_level == 'high':
-        notify_roles(
-            ['procurement_manager', 'contract_manager'],
+        notify_role(
+            'contract_manager',
             title=f'High supplier risk: {supplier.name}',
             message=f'{supplier.name} risk score reached {risk_score}. Review active contracts and mitigation actions.',
             notification_type='supplier',

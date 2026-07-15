@@ -667,8 +667,8 @@ def contract_upload_security_view(request, pk):
 
     contract.performance_security_uploaded = True
     contract.save()
-    notify_roles(
-        ['contract_manager', 'procurement_manager'],
+    notify_role(
+        'contract_manager',
         title=f'Performance security uploaded: {contract.contract_number}',
         message=f'The supplier uploaded performance security for contract {contract.contract_number}. Validation is required.',
         notification_type='contract',
@@ -1258,4 +1258,44 @@ def contract_milestone_update_actual_view(request, pk):
     return Response({
         'message': 'Milestone updated',
         'milestone': ContractMilestoneSerializer(milestone).data,
+    })
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def contract_dashboard_view(request):
+    """Return badge counts for contracts sidebar."""
+    from django.utils import timezone as tz
+
+    today = tz.now().date()
+    active_contracts = Contract.objects.filter(status='active')
+
+    pending_signature = Contract.objects.filter(
+        signed_by_vendor=True, signed_by_authority=False
+    ).exclude(status__in=('completed', 'terminated', 'cancelled', 'closed', 'archived')).count()
+
+    pending_milestones = ContractMilestone.objects.filter(
+        Q(status='pending') | Q(status=''),
+        Q(planned_date__lt=today) | Q(due_date__lt=today),
+    ).exclude(contract__status__in=('completed', 'terminated', 'cancelled', 'closed', 'archived')).count()
+
+    pending_amendments = ContractAmendment.objects.filter(
+        Q(signed_by_supplier=False) | Q(signed_by_authority=False),
+    ).exclude(
+        Q(signed_by_supplier=True) & Q(signed_by_authority=True),
+    ).count()
+
+    active_count = active_contracts.count()
+
+    overdue_milestones = ContractMilestone.objects.filter(
+        variance_flag__in=('red', 'orange'),
+        contract__status='active',
+    ).count()
+
+    return Response({
+        'active_count': active_count,
+        'pending_signature': pending_signature,
+        'pending_milestones': pending_milestones,
+        'overdue_milestones': overdue_milestones,
+        'pending_amendments': pending_amendments,
     })
