@@ -2,12 +2,14 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { fetchProcurementDashboard } from '../../api/dashboards';
+import { solicitationsApi } from '../../api/solicitations';
+import { evaluationsApi } from '../../api/evaluations';
 import { LoadingSpinner } from '../common/LoadingSpinner';
 import { useAppSelector } from '../../hooks/useRedux';
 import {
-  CubeIcon, ClockIcon, DocumentIcon, CheckCircleIcon,
+  ClockIcon, DocumentIcon, CheckCircleIcon,
   BellIcon, CalendarIcon, UsersIcon,
-  ExclamationIcon, ScaleIcon, TrendingUpIcon
+  ScaleIcon, TrendingUpIcon
 } from '@heroicons/react/outline';
 import { StatCard } from '../common/StatCard';
 import { PageHeader } from '../common/PageHeader';
@@ -26,13 +28,24 @@ const ProcurementDashboard: React.FC = () => {
   const [officerTab, setOfficerTab] = useState<'dashboard' | 'requisitions' | 'solicitations' | 'bids' | 'award'>('dashboard');
 
   const role = user?.role || '';
-  const isOfficer = role === ROLES.OFFICER;
   const isManager = role === ROLES.MANAGER;
   const isDirector = role === ROLES.DIRECTOR;
 
   const { isLoading } = useQuery({
     queryKey: ['procurementDashboard'],
     queryFn: fetchProcurementDashboard,
+    refetchInterval: pollInterval,
+  });
+
+  const { data: pendingApprovals } = useQuery({
+    queryKey: ['pm', 'pending-approvals'],
+    queryFn: () => solicitationsApi.list({ status: 'pending_approval', page_size: 20 }),
+    refetchInterval: pollInterval,
+  });
+
+  const { data: activeEvalData } = useQuery({
+    queryKey: ['pm', 'active-evals'],
+    queryFn: () => evaluationsApi.listCommittees({ page_size: 1 }),
     refetchInterval: pollInterval,
   });
 
@@ -60,10 +73,10 @@ const ProcurementDashboard: React.FC = () => {
         />
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-          <StatCard label="Pending Approvals" value="5" color="red" icon={<CheckCircleIcon />} description="Requiring immediate action" />
-          <StatCard label="Method Overrides" value="2" color="orange" icon={<ScaleIcon />} description="Awaiting justification review" />
-          <StatCard label="Active Committees" value="3" color="blue" icon={<UsersIcon />} description="Across all departments" />
-          <StatCard label="Active Contracts" value="38" color="green" icon={<DocumentIcon />} description="Currently in execution" />
+          <StatCard label="Pending Approvals" value={String(pendingApprovals?.count ?? 0)} color="red" icon={<CheckCircleIcon />} description="Solicitations awaiting review" />
+          <StatCard label="Active Evaluations" value={String(activeEvalData?.count ?? 0)} color="blue" icon={<UsersIcon />} description="Committees in progress" />
+          <StatCard label="Published Solicitations" value={String(pendingApprovals?.results?.filter((s: any) => s.status === 'published').length ?? 0)} color="green" icon={<DocumentIcon />} description="Currently open for bids" />
+          <StatCard label="Closed (Pending Award)" value={String(pendingApprovals?.results?.filter((s: any) => s.status === 'closed').length ?? 0)} color="orange" icon={<ClockIcon />} description="Awaiting evaluation" />
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
@@ -74,36 +87,40 @@ const ProcurementDashboard: React.FC = () => {
                 <h2 className="text-xs font-bold text-slate-500 uppercase tracking-widest flex items-center gap-2">
                   <div className="w-2 h-2 rounded-full bg-rose-500 animate-pulse" /> Action Queue
                 </h2>
+                <button onClick={() => navigate('/solicitations?status=pending_approval')} className="text-xs font-bold text-zammsa-green hover:underline">View All</button>
               </div>
               <div className="overflow-x-auto">
                 <table className="min-w-full divide-y divide-slate-100">
                   <thead className="bg-slate-50/50">
                     <tr>
                       <th className="px-6 py-3 text-left text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Reference</th>
-                      <th className="px-6 py-3 text-left text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Type</th>
+                      <th className="px-6 py-3 text-left text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Title</th>
+                      <th className="px-6 py-3 text-left text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Status</th>
                       <th className="px-6 py-3 text-right text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Action</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
-                    {[
-                      { item: 'CPP-2026-LAB-07', desc: 'Method Override', type: 'Override' },
-                      { item: 'APP-2026-LAB-001', desc: 'Director Review Stage', type: 'APP' },
-                      { item: 'BER-2026-IT-02', desc: 'Submit to ZPC', type: 'BER' },
-                      { item: 'AMD-CON-2026-07', desc: 'Amendment > 15%', type: 'Amendment' },
-                    ].map((row, i) => (
-                      <tr key={i} className="hover:bg-slate-50/50 transition-colors">
+                    {(pendingApprovals?.results ?? []).slice(0, 5).map((sol: any) => (
+                      <tr key={sol.id} className="hover:bg-slate-50/50 transition-colors cursor-pointer" onClick={() => navigate(`/solicitations/${sol.id}`)}>
                         <td className="px-6 py-4">
-                           <p className="text-sm font-semibold text-slate-900">{row.item}</p>
-                           <p className="text-xs text-slate-500">{row.desc}</p>
+                           <p className="text-sm font-semibold text-slate-900">{sol.sol_number || sol.sol_number}</p>
                         </td>
                         <td className="px-6 py-4">
-                           <StatusBadge status="pending" />
+                           <p className="text-sm text-slate-600 truncate max-w-[200px]">{sol.title}</p>
+                        </td>
+                        <td className="px-6 py-4">
+                           <StatusBadge status={sol.status} />
                         </td>
                         <td className="px-6 py-4 text-right">
                           <button className="text-xs font-bold text-zammsa-green hover:underline">Review</button>
                         </td>
                       </tr>
                     ))}
+                    {(!pendingApprovals?.results || pendingApprovals.results.length === 0) && (
+                      <tr>
+                        <td colSpan={4} className="px-6 py-8 text-center text-sm text-slate-400">No pending approvals</td>
+                      </tr>
+                    )}
                   </tbody>
                 </table>
               </div>

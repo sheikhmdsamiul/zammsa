@@ -229,7 +229,7 @@ function useSidebarItems(userRole: string | undefined): NavItem[] {
     ],
     [ROLES.PROCUREMENT_MANAGER]: [
       { label: 'Dashboard', path: '/dashboard', icon: <ChartBarIcon className={iconClass} /> },
-      { label: 'Solicitations', path: '/solicitations', icon: <DocumentTextIcon className={iconClass} /> },
+      { label: 'Solicitations', path: '/solicitations', icon: <DocumentTextIcon className={iconClass} />, badge: badges.solicitations || undefined },
       { label: 'Bid Management', path: '/bids', icon: <LockOpenIcon className={iconClass} />,
         children: [
           { label: 'Bid Opening List', path: '/bids/opening' },
@@ -239,7 +239,7 @@ function useSidebarItems(userRole: string | undefined): NavItem[] {
           { label: 'Late/Rejected Bids', path: '/bids/late-rejected' },
         ]
       },
-      { label: 'Evaluations', path: '/evaluations', icon: <DocumentDuplicateIcon className={iconClass} />,
+      { label: 'Evaluations', path: '/evaluations', icon: <DocumentDuplicateIcon className={iconClass} />, badge: badges.evaluations || undefined,
         children: [
           { label: 'Committee Formation', path: '/evaluations/committee/formation' },
           { label: 'Active Evaluations', path: '/evaluations' },

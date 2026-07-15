@@ -3,6 +3,8 @@ import { requisitionsApi } from '../api/requisitions';
 import { procurementPlanningApi } from '../api/procurement_planning';
 import { vendorApi } from '../api/vendor';
 import { notificationsApi } from '../api/notifications';
+import { solicitationsApi } from '../api/solicitations';
+import { evaluationsApi } from '../api/evaluations';
 
 export interface SidebarBadges {
   requisitions: number;
@@ -51,6 +53,20 @@ function useSidebarBadges(userRole: string | undefined): SidebarBadges {
     refetchInterval: 60_000,
   });
 
+  const { data: solPendingApproval } = useQuery({
+    queryKey: ['sidebar', 'solicitations', 'pending'],
+    queryFn: () => solicitationsApi.list({ status: 'pending_approval', page_size: 1 }).then((r) => r.count ?? 0),
+    staleTime: 30_000,
+    refetchInterval: 60_000,
+  });
+
+  const { data: activeEvals } = useQuery({
+    queryKey: ['sidebar', 'evaluations', 'active'],
+    queryFn: () => evaluationsApi.listCommittees({ page_size: 1 }).then((r) => r.count ?? 0),
+    staleTime: 30_000,
+    refetchInterval: 60_000,
+  });
+
   const pendingDeptHead = reqDashboard?.pending_dept_head ?? 0;
   const pendingFinance = reqDashboard?.pending_finance ?? 0;
   const pendingDG = reqDashboard?.pending_dg ?? 0;
@@ -61,14 +77,17 @@ function useSidebarBadges(userRole: string | undefined): SidebarBadges {
 
   const unread = notifSummary?.unread_count ?? 0;
 
+  const solPending = solPendingApproval ?? 0;
+  const activeEvaluationCount = activeEvals ?? 0;
+
   return {
     requisitions: pendingDeptHead + pendingFinance + pendingDG + pendingZPC + submitted,
     approvals: pendingDeptHead + pendingFinance + pendingDG + pendingZPC,
-    solicitations: 0,
+    solicitations: solPending,
     bids: 0,
-    evaluations: 0,
+    evaluations: activeEvaluationCount,
     berPending: 0,
-    appReviews: 0,
+    appReviews: solPending,
     cppReviews: cppPendingZPC,
     contracts: 0,
     milestones: 0,

@@ -213,11 +213,16 @@ const VendorTenderDetail: React.FC = () => {
               <h2 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-4">Documents</h2>
               <div className="space-y-2">
                 {tender.documents.map((doc: any) => (
-                  <a key={doc.id} href={doc.file} target="_blank" rel="noreferrer"
+                  <a key={doc.id} href={doc.file_url || doc.file} target="_blank" rel="noreferrer"
                     className="flex items-center gap-3 p-3 bg-gray-50 rounded-2xl border border-gray-100 hover:bg-gray-100 transition-colors"
                   >
                     <PaperClipIcon className="w-4 h-4 text-gray-400 shrink-0" />
-                    <span className="text-sm font-semibold text-gray-700 flex-1 truncate">{doc.filename}</span>
+                    <div className="flex-1 min-w-0">
+                      <span className="text-sm font-semibold text-gray-700 truncate block">{doc.filename || doc.file_path || 'Document'}</span>
+                      {doc.file_type && (
+                        <p className="text-[10px] text-gray-400 capitalize">{doc.file_type.replace(/_/g, ' ')}</p>
+                      )}
+                    </div>
                     <span className="text-[10px] font-bold text-zammsa-green uppercase">Download</span>
                   </a>
                 ))}

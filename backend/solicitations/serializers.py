@@ -143,6 +143,7 @@ class SolicitationDocumentSerializer(serializers.ModelSerializer):
     id = serializers.UUIDField(source='document_id', read_only=True)
     filename = serializers.SerializerMethodField()
     file_url = serializers.SerializerMethodField()
+    size = serializers.SerializerMethodField()
 
     class Meta:
         model = SolicitationDocument
@@ -151,11 +152,27 @@ class SolicitationDocumentSerializer(serializers.ModelSerializer):
     def get_filename(self, obj):
         if obj.file:
             return obj.file.name
-        return obj.file_path
+        return obj.file_path or 'Document'
 
     def get_file_url(self, obj):
+        request = self.context.get('request')
         if obj.file:
-            return obj.file.url
+            url = obj.file.url
+            if request and not url.startswith('http'):
+                return request.build_absolute_uri(url)
+            return url
+        if obj.file_path:
+            if request:
+                return request.build_absolute_uri(f'/media/solicitation_documents/{obj.file_path}')
+            return f'/media/solicitation_documents/{obj.file_path}'
+        return None
+
+    def get_size(self, obj):
+        if obj.file:
+            try:
+                return obj.file.size
+            except (OSError, ValueError):
+                return None
         return None
 
 
@@ -219,7 +236,6 @@ class SolicitationSerializer(serializers.ModelSerializer):
     cpp = serializers.PrimaryKeyRelatedField(read_only=True)
     cpp_number = serializers.CharField(source='cpp.cpp_number', read_only=True)
     cpp_milestones = serializers.SerializerMethodField()
-    document_sets = SolicitationDocumentSerializer(many=True, source='documents', read_only=True)
     clarification_responses = ClarificationRequestSerializer(many=True, source='clarifications', read_only=True)
     evaluation_criteria = EvaluationCriterionSerializer(many=True, read_only=True)
     addenda = SolicitationAddendumSerializer(many=True, read_only=True)

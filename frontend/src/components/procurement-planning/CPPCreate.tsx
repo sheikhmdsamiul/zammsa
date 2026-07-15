@@ -1038,7 +1038,7 @@ const CPPCreate: React.FC = () => {
                 </span>
                 <span className="text-[10px] font-bold text-gray-300">|</span>
                 <span className="text-[10px] font-bold text-gray-400">
-                  {milestones.filter(m => !m.is_system_updated).length} editable
+                  {milestones.length} editable
                 </span>
                 <button
                   onClick={generateMilestones}
@@ -1119,7 +1119,7 @@ const CPPCreate: React.FC = () => {
                         <tbody className="divide-y divide-gray-100">
                           {phaseMilestones.map((m) => {
                             const globalIdx = milestones.findIndex(mm => mm.milestone_id === m.milestone_id);
-                            const isLocked = m.variance_flag === 'green' || m.is_system_updated;
+                            const isLocked = false;
 
                             // Compute dynamic validation data
                             let daysToClosing = '';
@@ -1186,14 +1186,9 @@ const CPPCreate: React.FC = () => {
                                 <td className="px-6 py-3.5 text-xs font-black text-gray-400 align-top w-10">{m.sequence_number}</td>
                                 <td className="px-6 py-3.5 align-top">
                                   <div className="flex items-start gap-2">
-                                    <span className={`text-sm font-semibold ${isLocked ? 'text-gray-500' : 'text-gray-900'}`}>
+                                    <span className="text-sm font-semibold text-gray-900">
                                       {m.milestone_name}
                                     </span>
-                                    {isLocked && (
-                                      <span className="text-[10px] font-bold text-gray-400 bg-gray-100 border border-gray-200 rounded-md px-2 py-0.5 whitespace-nowrap mt-0.5">
-                                        locked
-                                      </span>
-                                    )}
                                   </div>
                                   {m.constraintNote && (
                                     <p className="text-[11px] font-semibold text-gray-400 mt-1 flex items-center gap-1">
@@ -1209,39 +1204,29 @@ const CPPCreate: React.FC = () => {
                                 <td className="px-6 py-3.5 align-top">
                                   <div className="flex flex-col gap-1">
                                     <div className="flex items-center gap-2">
-                                      {isLocked ? (
-                                        <div className="flex items-center gap-2">
-                                          <LockClosedIcon className="w-4 h-4 text-gray-400" />
-                                          <span className="text-sm font-bold text-gray-700">{formatDateDisplay(m.planned_date)}</span>
-                                          {m.time && (
-                                            <span className="text-xs font-bold text-gray-500 whitespace-nowrap">{m.time}</span>
-                                          )}
-                                        </div>
-                                      ) : (
-                                        <div className="flex items-center gap-2">
-                                          <CalendarIcon className="w-4 h-4 text-gray-400" />
-                                          <input
-                                            type="date"
-                                            value={m.planned_date}
-                                            onChange={(e) => updateMilestoneDate(globalIdx, e.target.value)}
-                                            className="bg-white border border-gray-200 rounded-xl px-3.5 py-2 text-sm font-semibold text-gray-800 outline-none focus:ring-2 focus:ring-zammsa-green/30 focus:border-zammsa-green transition-shadow"
-                                          />
-                                          {m.time && (
-                                            <div className="flex items-center gap-1">
-                                              <input
-                                                type="time"
-                                                value={m.time.replace(/\s*CAT/i, '')}
-                                                onChange={(e) => {
-                                                  const val = e.target.value;
-                                                  if (val) updateMilestoneTime(globalIdx, `${val} CAT`);
-                                                }}
-                                                className="bg-white border border-gray-200 rounded-xl px-2 py-2 text-sm font-semibold text-gray-800 outline-none focus:ring-2 focus:ring-zammsa-green/30 focus:border-zammsa-green transition-shadow w-32"
-                                              />
-                                              <span className="text-[10px] font-black text-gray-400 uppercase">CAT</span>
-                                            </div>
-                                          )}
-                                        </div>
-                                      )}
+                                      <div className="flex items-center gap-2">
+                                        <CalendarIcon className="w-4 h-4 text-gray-400" />
+                                        <input
+                                          type="date"
+                                          value={m.planned_date}
+                                          onChange={(e) => updateMilestoneDate(globalIdx, e.target.value)}
+                                          className="bg-white border border-gray-200 rounded-xl px-3.5 py-2 text-sm font-semibold text-gray-800 outline-none focus:ring-2 focus:ring-zammsa-green/30 focus:border-zammsa-green transition-shadow"
+                                        />
+                                        {m.time && (
+                                          <div className="flex items-center gap-1">
+                                            <input
+                                              type="time"
+                                              value={m.time.replace(/\s*CAT/i, '')}
+                                              onChange={(e) => {
+                                                const val = e.target.value;
+                                                if (val) updateMilestoneTime(globalIdx, `${val} CAT`);
+                                              }}
+                                              className="bg-white border border-gray-200 rounded-xl px-2 py-2 text-sm font-semibold text-gray-800 outline-none focus:ring-2 focus:ring-zammsa-green/30 focus:border-zammsa-green transition-shadow w-32"
+                                            />
+                                            <span className="text-[10px] font-black text-gray-400 uppercase">CAT</span>
+                                          </div>
+                                        )}
+                                      </div>
                                     </div>
                                     {m.is_system_updated && m.note && (
                                       <span className="text-[10px] font-bold text-gray-400">(auto-calculated)</span>

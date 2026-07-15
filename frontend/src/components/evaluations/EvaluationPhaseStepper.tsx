@@ -16,7 +16,7 @@ export const EVALUATION_PHASES = [
     description: 'Mandatory criteria pass/fail checks',
     icon: 'check-circle',
     order: 2,
-    roles: ['chairperson', 'member'],
+    roles: ['chairperson', 'secretary', 'member'],
     dependencies: ['coi'],
   },
   {
@@ -25,7 +25,7 @@ export const EVALUATION_PHASES = [
     description: 'Evaluate technical proposals against criteria',
     icon: 'academic-cap',
     order: 3,
-    roles: ['chairperson', 'member'],
+    roles: ['chairperson', 'secretary', 'member'],
     dependencies: ['preliminary'],
   },
   {
@@ -34,7 +34,7 @@ export const EVALUATION_PHASES = [
     description: 'Merge technical scores, calculate combined QCBS scores',
     icon: 'chart-bar',
     order: 4,
-    roles: ['chairperson', 'director_procurement'],
+    roles: ['chairperson'],
     dependencies: ['technical'],
   },
   {
@@ -43,26 +43,26 @@ export const EVALUATION_PHASES = [
     description: 'Review financial proposals and apply preferences',
     icon: 'currency-dollar',
     order: 5,
-    roles: ['chairperson', 'director_procurement'],
+    roles: ['chairperson'],
     dependencies: ['consolidation'],
+  },
+  {
+    id: 'post-qual',
+    label: 'Post-Qualification',
+    description: 'Verify winning bidder credentials and references',
+    icon: 'clipboard-check',
+    order: 6,
+    roles: ['chairperson', 'secretary', 'member'],
+    dependencies: ['financial'],
   },
   {
     id: 'ber',
     label: 'BER Workflow',
     description: 'Generate Bid Evaluation Report with signatures',
     icon: 'document-text',
-    order: 6,
-    roles: ['chairperson', 'secretary', 'member'],
-    dependencies: ['financial'],
-  },
-  {
-    id: 'post-qual',
-    label: 'Post-Qualification',
-    description: 'Verification of awarded supplier credentials',
-    icon: 'verification-check',
     order: 7,
-    roles: ['chairperson', 'director_procurement'],
-    dependencies: ['ber'],
+    roles: ['chairperson', 'secretary', 'member'],
+    dependencies: ['post-qual'],
   },
 ] as const;
 
@@ -104,13 +104,16 @@ export const EvaluationPhaseStepper: React.FC<EvaluationPhaseStepperProps> = ({
   const currentPhaseIndex = EVALUATION_PHASES.findIndex((p) => p.id === currentPhase);
   const isCompleted = (idx: number) => phasesComplete[EVALUATION_PHASES[idx].id];
   const isBlocked = (idx: number) => phasesBlocked[EVALUATION_PHASES[idx].id];
-  const canAccess = (idx: number) => idx <= currentPhaseIndex && !isBlocked(idx);
+
+  const canAccess = (idx: number) => {
+    if (isCompleted(idx)) return true;
+    if (idx <= currentPhaseIndex && !isBlocked(idx)) return true;
+    return false;
+  };
 
   return (
     <div className="w-full">
-      {/* Main Phase Tracker */}
       <div className="relative">
-        {/* Background connector line */}
         <div className="absolute top-6 left-0 right-0 h-0.5 bg-gray-200 -z-10 hidden md:block" />
 
         <div className="grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-7 gap-4 md:gap-6">
@@ -118,38 +121,39 @@ export const EvaluationPhaseStepper: React.FC<EvaluationPhaseStepperProps> = ({
             const isCurrent = idx === currentPhaseIndex;
             const isDone = isCompleted(idx);
             const isAccessible = canAccess(idx);
+            const blocked = isBlocked(idx) && !isDone;
 
             let statusBadge;
             if (isDone) {
               statusBadge = (
-                <span className="group flex items-center gap-1">
-                  <svg className="w-5 h-5 text-emerald-600" fill="currentColor" viewBox="0 0 20 20">
+                <span className="flex items-center gap-1">
+                  <svg className="w-4 h-4 text-emerald-600" fill="currentColor" viewBox="0 0 20 20">
                     <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
                   </svg>
-                  <span className="text-xs font-medium text-emerald-700">✅ Complete</span>
+                  <span className="text-xs font-medium text-emerald-700">Complete</span>
                 </span>
               );
             } else if (isCurrent) {
               statusBadge = (
-                <span className="group flex items-center gap-1">
-                  <svg className="w-5 h-5 text-zammsa-green animate-pulse" fill="currentColor" viewBox="0 0 20 20">
+                <span className="flex items-center gap-1">
+                  <svg className="w-4 h-4 text-zammsa-green animate-pulse" fill="currentColor" viewBox="0 0 20 20">
                     <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
                   </svg>
                   <span className="text-xs font-medium text-zammsa-green">Active</span>
                 </span>
               );
-            } else if (isBlocked(idx)) {
+            } else if (blocked) {
               statusBadge = (
-                <span className="group flex items-center gap-1">
-                  <svg className="w-5 h-5 text-red-500" fill="currentColor" viewBox="0 0 20 20">
-                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                <span className="flex items-center gap-1">
+                  <svg className="w-4 h-4 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clipRule="evenodd" />
                   </svg>
-                  <span className="text-xs font-medium text-red-600">Blocked</span>
+                  <span className="text-xs font-medium text-gray-400">Locked</span>
                 </span>
               );
             } else {
               statusBadge = (
-                <span className="text-xs font-medium text-gray-400">⏳ Pending</span>
+                <span className="text-xs font-medium text-gray-400">Pending</span>
               );
             }
 
@@ -159,18 +163,17 @@ export const EvaluationPhaseStepper: React.FC<EvaluationPhaseStepperProps> = ({
                 className={`relative flex flex-col items-center group ${!compact ? 'text-center' : ''}`}
                 onClick={() => isAccessible && onPhaseChange?.(phase.id)}
               >
-                {/* Phase Number Circle */}
                 <div
                   className={`
                     relative flex items-center justify-center w-10 h-10 rounded-full border-2 transition-all duration-300
                     ${isDone
-                      ? 'border-emerald-600 bg-emerald-50 text-emerald-700'
+                      ? 'border-emerald-600 bg-emerald-50 text-emerald-700 hover:border-emerald-700 hover:bg-emerald-100'
                       : isCurrent
                       ? 'border-zammsa-green bg-zammsa-green text-white shadow-lg shadow-zammsa-green/20'
-                      : isBlocked(idx)
-                      ? 'border-red-400 bg-red-50 text-red-500 cursor-not-allowed'
+                      : blocked
+                      ? 'border-gray-300 bg-gray-50 text-gray-400 cursor-not-allowed'
                       : 'border-gray-300 bg-white text-gray-500 hover:border-zammsa-green hover:text-zammsa-green'}
-                    ${!isAccessible && !isDone ? 'cursor-not-allowed' : 'cursor-pointer'}
+                    ${isAccessible ? 'cursor-pointer' : 'cursor-not-allowed'}
                   `}
                 >
                   {isDone ? (
@@ -180,44 +183,30 @@ export const EvaluationPhaseStepper: React.FC<EvaluationPhaseStepperProps> = ({
                   ) : (
                     <span className="font-bold text-sm">{phase.order}</span>
                   )}
-                  
-                  {/* Dependency check dot */}
-                  {!isDone && idx > 0 && (
-                    <div
-                      className={`
-                        absolute -top-1 -right-1 w-3 h-3 rounded-full transition-all duration-300
-                        ${isBlocked(idx - 1) ? 'bg-red-500' : 'bg-emerald-500'}
-                      `}
-                      title={isBlocked(idx - 1) ? 'Previous phase incomplete' : 'Prerequisite complete'}
-                    />
-                  )}
                 </div>
 
-                {/* Phase Label */}
                 {showLabels && (
                   <div className="mt-3 text-center">
                     <h4
                       className={`
-                        text-sm font-semibold transition-colors duration-300
-                        ${isCurrent ? 'text-zammsa-green' : isDone ? 'text-gray-700' : isBlocked(idx) ? 'text-gray-400' : 'text-gray-900'}
-                        ${!isAccessible ? 'opacity-50' : ''}
-                        ${!compact ? 'md:text-base' : 'text-xs'}
+                        text-xs font-semibold transition-colors duration-300
+                        ${isCurrent ? 'text-zammsa-green' : isDone ? 'text-gray-700' : blocked ? 'text-gray-400' : 'text-gray-900'}
+                        ${!isAccessible ? 'opacity-60' : ''}
+                        ${compact ? 'text-[10px]' : ''}
                       `}
                     >
                       {phase.label}
                     </h4>
-                    
-                    {/* Tooltip-like description (visible on hover) */}
                     <p
                       className={`
-                        text-xs mt-1 transition-opacity duration-200
+                        text-[10px] mt-0.5 transition-opacity duration-200
                         ${isCurrent || isDone ? 'text-gray-600 opacity-100' : 'text-gray-400 opacity-70'}
                       `}
                     >
                       {phase.description}
                     </p>
 
-                    <div className="mt-2 flex items-center justify-center gap-2">
+                    <div className="mt-1.5 flex items-center justify-center gap-1.5">
                       {statusBadge}
                     </div>
                   </div>
@@ -228,12 +217,11 @@ export const EvaluationPhaseStepper: React.FC<EvaluationPhaseStepperProps> = ({
         </div>
       </div>
 
-      {/* Phase Progress Summary */}
-      <div className="mt-6 flex flex-wrap items-center justify-between gap-4 text-sm">
+      <div className="mt-5 flex flex-wrap items-center justify-between gap-4 text-sm">
         <div className="flex items-center gap-2">
-          <span className="text-gray-700 font-medium">Committee Status:</span>
+          <span className="text-gray-700 font-medium text-xs">Committee Status:</span>
           <span
-            className={`px-2.5 py-1 rounded-full text-xs font-semibold ${
+            className={`px-2.5 py-0.5 rounded-full text-[10px] font-semibold ${
               committeeStatus === 'active'
                 ? 'bg-emerald-100 text-emerald-700'
                 : committeeStatus === 'completed'
@@ -246,9 +234,9 @@ export const EvaluationPhaseStepper: React.FC<EvaluationPhaseStepperProps> = ({
         </div>
 
         <div className="flex items-center gap-1">
-          <span className="text-gray-600 font-medium">Progress:</span>
-          <div className="flex items-center gap-1">
-            <div className="w-32 h-2 bg-gray-200 rounded-full overflow-hidden">
+          <span className="text-gray-600 font-medium text-xs">Progress:</span>
+          <div className="flex items-center gap-1.5">
+            <div className="w-24 h-1.5 bg-gray-200 rounded-full overflow-hidden">
               <div
                 className="h-full bg-gradient-to-r from-zammsa-green to-emerald-600 transition-all duration-500"
                 style={{
@@ -256,29 +244,27 @@ export const EvaluationPhaseStepper: React.FC<EvaluationPhaseStepperProps> = ({
                 }}
               />
             </div>
-            <span className="font-bold text-gray-700">
+            <span className="font-bold text-gray-700 text-xs">
               {Object.values(phasesComplete).filter(Boolean).length}/{EVALUATION_PHASES.length}
             </span>
           </div>
         </div>
       </div>
 
-      {/* User Role Indicator */}
-      <div className="mt-2 text-xs text-gray-500 flex items-center justify-between px-2">
+      <div className="mt-1.5 text-[10px] text-gray-500 flex items-center justify-between px-2">
         <div>
           Your Role: <span className="font-medium text-gray-700">{userRole.replace(/_/g, ' ').toUpperCase()}</span>
         </div>
         <div className="text-right">
           {userRole === 'chairperson' && 'Full access: All phases'}
-          {userRole === 'secretary' && 'Access: COI, BER, Post-Qual'}
-          {userRole === 'member' && 'Access: COI, Preliminary, Technical, BER'}
+          {userRole === 'secretary' && 'COI, Prelim, Tech, Post-Qual, BER'}
+          {userRole === 'member' && 'COI, Prelim, Tech, Post-Qual, BER'}
         </div>
       </div>
 
-      {/* Solicitation Info */}
       {solicitationTitle && (
-        <div className="mt-3 p-3 bg-gray-50 rounded-lg text-xs text-gray-600 border border-gray-200">
-          📋 <span className="font-medium text-gray-800">Solicitation:</span> {solicitationTitle}
+        <div className="mt-2 p-2 bg-gray-50 rounded-lg text-[10px] text-gray-600 border border-gray-200">
+          <span className="font-medium text-gray-800">Solicitation:</span> {solicitationTitle}
         </div>
       )}
     </div>

@@ -6,13 +6,32 @@ from .models import NewsArticle, Notice, Event, FAQItem, ContactMessage
 
 class PublicDocumentSerializer(serializers.ModelSerializer):
     id = serializers.UUIDField(source='document_id', read_only=True)
-    filename = serializers.CharField(source='file_path', read_only=True)
+    filename = serializers.SerializerMethodField()
     file_type = serializers.CharField(source='document_type', read_only=True)
+    file_url = serializers.SerializerMethodField()
     uploaded_at = serializers.DateTimeField(source='created_at', read_only=True)
 
     class Meta:
         model = SolicitationDocument
-        fields = ('id', 'filename', 'file_type', 'uploaded_at')
+        fields = ('id', 'filename', 'file_type', 'file_url', 'uploaded_at')
+
+    def get_filename(self, obj):
+        if obj.file:
+            return obj.file.name
+        return obj.file_path or 'Document'
+
+    def get_file_url(self, obj):
+        request = self.context.get('request')
+        if obj.file:
+            url = obj.file.url
+            if request and not url.startswith('http'):
+                return request.build_absolute_uri(url)
+            return url
+        if obj.file_path:
+            if request:
+                return request.build_absolute_uri(f'/media/solicitation_documents/{obj.file_path}')
+            return f'/media/solicitation_documents/{obj.file_path}'
+        return None
 
 
 class PublicEvaluationCriterionSerializer(serializers.ModelSerializer):

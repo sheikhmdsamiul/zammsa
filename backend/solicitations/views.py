@@ -17,7 +17,7 @@ import django_filters
 
 from accounts.audit import log_audit_action
 from accounts.models import User
-from system_config.notifications import send_external_bulk_email
+from system_config.notifications import create_notification, notify_role, send_external_bulk_email
 from .models import SolicitationTemplate, Solicitation, EvaluationCriterion, SolicitationAddendum, ClarificationRequest, SolicitationDocument
 from .serializers import (
     SolicitationTemplateSerializer, SolicitationSerializer, SolicitationListSerializer,
@@ -417,6 +417,30 @@ def solicitation_submit_view(request, pk):
         user=request.user, action='SOL_SUBMIT', module='solicitations',
         record_id=str(sol.solicitation_id), ip_address=request.META.get('REMOTE_ADDR', ''),
     )
+
+    notify_role(
+        'procurement_manager',
+        title=f'Solicitation {sol.sol_number} requires approval',
+        message=f'{request.user.full_name} submitted "{sol.title}" for your review and approval.',
+        notification_type='approval',
+        priority='high',
+        source_module='solicitations',
+        object_id=str(sol.solicitation_id),
+        action_url=f'/solicitations/{sol.solicitation_id}',
+        exclude_user=request.user,
+    )
+    notify_role(
+        'director_procurement',
+        title=f'Solicitation {sol.sol_number} requires approval',
+        message=f'{request.user.full_name} submitted "{sol.title}" for your review and approval.',
+        notification_type='approval',
+        priority='normal',
+        source_module='solicitations',
+        object_id=str(sol.solicitation_id),
+        action_url=f'/solicitations/{sol.solicitation_id}',
+        exclude_user=request.user,
+    )
+
     return Response({'message': 'Solicitation sent for approval', 'status': sol.status})
 
 
@@ -456,6 +480,19 @@ def solicitation_approve_view(request, pk):
         user=request.user, action='SOL_APPROVE', module='solicitations',
         record_id=str(sol.solicitation_id), ip_address=request.META.get('REMOTE_ADDR', ''),
     )
+
+    if sol.created_by:
+        create_notification(
+            recipient=sol.created_by,
+            title=f'Solicitation {sol.sol_number} has been approved',
+            message=f'{request.user.full_name} approved "{sol.title}". You may now publish it.',
+            notification_type='workflow',
+            priority='normal',
+            source_module='solicitations',
+            object_id=str(sol.solicitation_id),
+            action_url=f'/solicitations/{sol.solicitation_id}',
+        )
+
     return Response({'message': 'Solicitation approved', 'status': sol.status})
 
 
@@ -489,6 +526,19 @@ def solicitation_reject_view(request, pk):
         new_value={'status': 'draft', 'reason': reason},
         ip_address=request.META.get('REMOTE_ADDR', ''),
     )
+
+    if sol.created_by:
+        create_notification(
+            recipient=sol.created_by,
+            title=f'Solicitation {sol.sol_number} has been rejected',
+            message=f'{request.user.full_name} returned "{sol.title}" to draft. Reason: {reason}',
+            notification_type='workflow',
+            priority='high',
+            source_module='solicitations',
+            object_id=str(sol.solicitation_id),
+            action_url=f'/solicitations/{sol.solicitation_id}',
+        )
+
     return Response({'message': 'Solicitation returned to draft', 'status': sol.status, 'rejection_reason': reason})
 
 
@@ -765,6 +815,18 @@ def solicitation_addendum_submit_view(request, pk, addendum_pk):
         ip_address=request.META.get('REMOTE_ADDR', ''),
     )
 
+    notify_role(
+        'procurement_manager',
+        title=f'Addendum #{addendum.addendum_number} for {sol.sol_number} requires approval',
+        message=f'{request.user.full_name} submitted addendum #{addendum.addendum_number} for "{sol.title}" for your review.',
+        notification_type='approval',
+        priority='high',
+        source_module='solicitations',
+        object_id=str(sol.solicitation_id),
+        action_url=f'/solicitations/{sol.solicitation_id}',
+        exclude_user=request.user,
+    )
+
     return Response({'message': 'Addendum submitted for approval', 'addendum': SolicitationAddendumSerializer(addendum).data})
 
 
@@ -797,6 +859,18 @@ def solicitation_addendum_approve_view(request, pk, addendum_pk):
         new_value={'addendum_number': addendum.addendum_number, 'status': 'approved'},
         ip_address=request.META.get('REMOTE_ADDR', ''),
     )
+
+    if sol.created_by and sol.created_by != request.user:
+        create_notification(
+            recipient=sol.created_by,
+            title=f'Addendum #{addendum.addendum_number} for {sol.sol_number} approved',
+            message=f'{request.user.full_name} approved addendum #{addendum.addendum_number} for "{sol.title}".',
+            notification_type='workflow',
+            priority='normal',
+            source_module='solicitations',
+            object_id=str(sol.solicitation_id),
+            action_url=f'/solicitations/{sol.solicitation_id}',
+        )
 
     return Response({
         'message': 'Addendum approved and suppliers notified',

@@ -14,6 +14,7 @@ BER_STATUS_CHOICES = [
 
 PQ_STATUS_CHOICES = [
     ('pending', 'Pending'),
+    ('in_progress', 'In Progress'),
     ('cleared', 'Cleared'),
     ('failed', 'Failed'),
 ]
@@ -239,14 +240,34 @@ class PostQualification(models.Model):
     pq_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     ber = models.ForeignKey(BidEvaluationReport, on_delete=models.CASCADE, related_name='post_qualifications', null=True, blank=True)
     bidder = models.ForeignKey(BidSubmission, on_delete=models.CASCADE)
-    verification_items = models.JSONField(default=dict)
+    verification_items = models.JSONField(default=list, blank=True,
+        help_text='List of {id, label, category, status, notes, verified_by, verified_at}')
     status = models.CharField(max_length=20, choices=PQ_STATUS_CHOICES, default='pending')
+    assigned_to = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='pq_assignments',
+        help_text='Procurement Officer responsible for verification')
+    notes = models.TextField(blank=True, default='')
     verified_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
         db_table = 'eval_post_qualification'
         verbose_name = 'Post Qualification'
         verbose_name_plural = 'Post Qualifications'
+
+    def save(self, *args, **kwargs):
+        items = self.verification_items or []
+        if items and all(item.get('status') == 'cleared' for item in items if item.get('status')):
+            if self.status != 'cleared':
+                self.status = 'cleared'
+                self.verified_at = timezone.now()
+        elif items and any(item.get('status') == 'failed' for item in items):
+            if self.status != 'failed':
+                self.status = 'failed'
+        elif items and any(item.get('status') == 'in_progress' for item in items):
+            if self.status not in ('cleared', 'failed'):
+                self.status = 'in_progress'
+        super().save(*args, **kwargs)
 
     def __str__(self):
         return f'{self.bidder.submission_id} - {self.status}'

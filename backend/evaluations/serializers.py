@@ -29,7 +29,7 @@ class EvaluationCommitteeSerializer(serializers.ModelSerializer):
     current_phase = serializers.SerializerMethodField()
     phase_progress = serializers.SerializerMethodField()
 
-    PHASE_ORDER = ['coi', 'preliminary', 'technical', 'consolidation', 'financial', 'ber', 'post-qual']
+    PHASE_ORDER = ['coi', 'preliminary', 'technical', 'consolidation', 'financial', 'post-qual', 'ber']
     PHASE_LABELS = {
         'coi': 'COI Declaration',
         'preliminary': 'Preliminary Examination',
@@ -228,7 +228,26 @@ class PostQualificationSerializer(serializers.ModelSerializer):
     id = serializers.UUIDField(source='pq_id', read_only=True)
     bidder_name = serializers.CharField(source='bidder.supplier.full_name', read_only=True)
     submission_id = serializers.CharField(source='bidder.submission_id', read_only=True)
+    assigned_to_name = serializers.CharField(source='assigned_to.full_name', read_only=True, allow_null=True)
+    total_items = serializers.SerializerMethodField()
+    completed_items = serializers.SerializerMethodField()
+    progress_percent = serializers.SerializerMethodField()
 
     class Meta:
         model = PostQualification
         fields = '__all__'
+
+    def get_total_items(self, obj):
+        items = obj.verification_items or []
+        return len(items)
+
+    def get_completed_items(self, obj):
+        items = obj.verification_items or []
+        return len([i for i in items if i.get('status') in ('cleared', 'failed')])
+
+    def get_progress_percent(self, obj):
+        items = obj.verification_items or []
+        if not items:
+            return 0
+        done = len([i for i in items if i.get('status') in ('cleared', 'failed')])
+        return round((done / len(items)) * 100) if items else 0

@@ -22,6 +22,8 @@ const TEST_ACCOUNTS = [
   { label: 'Finance Officer', email: 'finance.officer@zammsa.gov.zm', pw: 'Test@123' },
   { label: 'ZPC Member', email: 'zpc@zammsa.gov.zm', pw: 'Test@123' },
   { label: 'EC Member', email: 'evaluator@zammsa.gov.zm', pw: 'Test@123' },
+  { label: 'EC Member Alice', email: 'ecm3@zammsa.gov.zm', pw: 'Test@123' },
+  { label: 'EC Member Brian', email: 'ecm4@zammsa.gov.zm', pw: 'Test@123' },
   { label: 'Contract Manager', email: 'contract@zammsa.gov.zm', pw: 'Test@123' },
   { label: 'ZPPA Reporter', email: 'zppa@zammsa.gov.zm', pw: 'Test@123' },
   { label: 'Auditor', email: 'auditor@zammsa.gov.zm', pw: 'Test@123' },

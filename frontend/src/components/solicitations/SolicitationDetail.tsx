@@ -10,7 +10,8 @@ import {
   CheckCircleIcon, XCircleIcon, InformationCircleIcon,
   ClockIcon, ShieldCheckIcon, LockClosedIcon, LockOpenIcon,
   DocumentTextIcon, UserCircleIcon, PaperClipIcon, DownloadIcon,
-  EnvelopeIcon, ShieldExclamationIcon, ExclamationCircleIcon,
+  ExclamationCircleIcon,
+  EyeIcon,
 } from '@heroicons/react/outline';
 
 const WORKFLOW_STEPS = [
@@ -712,62 +713,71 @@ const SolicitationDetail: React.FC = () => {
           )}
 
           {/* Documents */}
-          {(sol.document_sets?.length > 0 || (sol.documents?.length ?? 0) > 0) && (
+          {(sol.documents?.length ?? 0) > 0 && (
             <div className="bg-white rounded-3xl border border-gray-200 shadow-sm p-6">
               <h2 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-4">Documents</h2>
-              <div className="space-y-4">
-                {sol.document_sets?.length > 0 && (
-                  <div>
-                    <p className="text-xs font-bold text-gray-500 mb-2">Document Sets</p>
-                    <div className="space-y-2">
-                       {sol.document_sets.map((doc: any) => (
-                        <div key={doc.id} className="flex items-center gap-3 p-3 bg-gray-50 rounded-2xl border border-gray-100">
-                          <PaperClipIcon className="w-4 h-4 text-gray-400" />
-                          <div className="flex-1 truncate min-w-0">
-                            <span className="text-sm font-semibold text-gray-700">{doc.filename || doc.name || 'Document'}</span>
-                            {doc.document_type && (
-                              <p className="text-xs text-gray-500 mt-0.5 capitalize">{doc.document_type.replace(/_/g, ' ')}</p>
-                            )}
-                          </div>
-                          {doc.file_url ? (
-                            <a href={doc.file_url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-zammsa-green bg-zammsa-green/5 rounded-lg hover:bg-zammsa-green/10 transition-colors">
-                              <DownloadIcon className="w-3.5 h-3.5" />
-                              Download
-                            </a>
-                          ) : (
-                            <span className="text-xs font-bold text-gray-300">No file</span>
+              <div className="space-y-2">
+                {(sol.documents ?? []).map((doc: any) => {
+                  const isPdf = (doc.filename || '').toLowerCase().endsWith('.pdf') || (doc.file_type || '').includes('pdf');
+                  const typeIcons: Record<string, typeof DocumentTextIcon> = {
+                    bidding_document: DocumentTextIcon,
+                    specification: DocumentTextIcon,
+                    addendum: InformationCircleIcon,
+                    clarification: InformationCircleIcon,
+                    minutes: DocumentTextIcon,
+                  };
+                  const TypeIcon = typeIcons[doc.document_type] || PaperClipIcon;
+                  const typeLabel = (doc.document_type || '').replace(/_/g, ' ');
+
+                  return (
+                    <div key={doc.id} className="flex items-center gap-3 p-3 bg-gray-50 rounded-2xl border border-gray-100">
+                      <TypeIcon className={`w-4 h-4 shrink-0 ${isPdf ? 'text-red-400' : 'text-zammsa-green'}`} />
+                      <div className="flex-1 min-w-0">
+                        <span className="text-sm font-semibold text-gray-700 truncate block">
+                          {doc.filename || 'Document'}
+                        </span>
+                        <div className="flex items-center gap-2 mt-0.5">
+                          {typeLabel && (
+                            <p className="text-xs text-gray-500 capitalize">{typeLabel}</p>
+                          )}
+                          {doc.size && (
+                            <p className="text-xs text-gray-400">
+                              {doc.size > 1048576
+                                ? `${(doc.size / 1048576).toFixed(1)} MB`
+                                : `${(doc.size / 1024).toFixed(0)} KB`}
+                            </p>
                           )}
                         </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-                {(sol.documents?.length ?? 0) > 0 && (
-                  <div>
-                    <p className="text-xs font-bold text-gray-500 mb-2">Additional Documents</p>
-                    <div className="space-y-2">
-                       {(sol.documents ?? []).map((doc: any) => (
-                        <div key={doc.id} className="flex items-center gap-3 p-3 bg-gray-50 rounded-2xl border border-gray-100">
-                          <DocumentTextIcon className="w-4 h-4 text-zammsa-green" />
-                          <div className="flex-1 truncate min-w-0">
-                            <span className="text-sm font-semibold text-gray-700">{doc.filename || doc.name || 'Document'}</span>
-                            {doc.document_type && (
-                              <p className="text-xs text-gray-500 mt-0.5 capitalize">{doc.document_type.replace(/_/g, ' ')}</p>
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        {doc.file_url && (
+                          <a
+                            href={doc.file_url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-zammsa-green bg-zammsa-green/5 rounded-lg hover:bg-zammsa-green/10 transition-colors"
+                            title={isPdf ? 'View document' : 'Download document'}
+                          >
+                            {isPdf ? (
+                              <>
+                                <EyeIcon className="w-3.5 h-3.5" />
+                                View
+                              </>
+                            ) : (
+                              <>
+                                <DownloadIcon className="w-3.5 h-3.5" />
+                                Download
+                              </>
                             )}
-                          </div>
-                          {doc.file_url ? (
-                            <a href={doc.file_url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-zammsa-green bg-zammsa-green/5 rounded-lg hover:bg-zammsa-green/10 transition-colors">
-                              <DownloadIcon className="w-3.5 h-3.5" />
-                              Download
-                            </a>
-                          ) : (
-                            <span className="text-xs font-bold text-gray-300">No file</span>
-                          )}
-                        </div>
-                      ))}
+                          </a>
+                        )}
+                        {!doc.file_url && (
+                          <span className="text-xs font-bold text-gray-300">No file</span>
+                        )}
+                      </div>
                     </div>
-                  </div>
-                )}
+                  );
+                })}
               </div>
             </div>
           )}

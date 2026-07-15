@@ -6,6 +6,7 @@ import { useCountdown } from '../../hooks/useCountdown';
 import { StatusBadge } from '../common/StatusBadge';
 import { LoadingSpinner } from '../common/LoadingSpinner';
 import { PrintButton } from '../common/PrintButton';
+import { InformationCircleIcon } from '@heroicons/react/outline';
 
 const TenderDetail: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -107,23 +108,12 @@ const TenderDetail: React.FC = () => {
               <h2 className="text-lg font-semibold text-gray-900 mb-4">Addenda</h2>
               <div className="space-y-3">
                 {tender.addenda.map((a: any) => (
-                  <div key={a.id} className="flex items-center justify-between border border-gray-200 rounded-lg p-4">
-                    <div>
-                      <p className="text-sm font-medium text-gray-900">Addendum {a.number}</p>
-                      <p className="text-xs text-gray-500">{a.description}</p>
+                  <div key={a.id} className="border border-gray-200 rounded-lg p-4">
+                    <div className="flex items-center gap-2 mb-1">
+                      <InformationCircleIcon className="w-4 h-4 text-amber-500 shrink-0" />
+                      <p className="text-sm font-bold text-gray-900">Addendum #{a.number}</p>
                     </div>
-                    {a.document && (
-                      <a
-                        href={a.document.file}
-                        className="text-sm text-zammsa-green hover:underline flex items-center gap-1"
-                        target="_blank" rel="noreferrer"
-                      >
-                        <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                        </svg>
-                        Download
-                      </a>
-                    )}
+                    <p className="text-sm text-gray-600">{a.description}</p>
                   </div>
                 ))}
               </div>
@@ -209,14 +199,14 @@ const TenderDetail: React.FC = () => {
                 {tender.documents.map((doc: any) => (
                   <a
                     key={doc.id}
-                    href={doc.file}
+                    href={doc.file_url || doc.file}
                     className="flex items-center gap-2 p-2 rounded-lg hover:bg-gray-50 text-sm"
                     target="_blank" rel="noreferrer"
                   >
                     <svg className="h-4 w-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                     </svg>
-                    <span className="text-gray-700">{doc.filename}</span>
+                    <span className="text-gray-700">{doc.filename || doc.file_path || 'Document'}</span>
                   </a>
                 ))}
                 {tender.fee_required && (

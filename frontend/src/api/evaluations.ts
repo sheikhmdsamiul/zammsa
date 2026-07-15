@@ -1,8 +1,8 @@
 import api from './client';
 import {
   EvaluationCommittee, PaginatedResponse, ConflictOfInterest, CommitteeCOIState,
-  MyScoresResponse, ScoreAverageResult, ScoreThresholdResult, PassedTechBid,
-  CombinedScoreResult, ConsolidatedScoresResponse, QCBSResponse,
+  MyScoresResponse, ScoreAverageResult, ScoreThresholdResult,
+  ConsolidatedScoresResponse, QCBSResponse,
   SelectWinnerResponse, AuthorizeOpeningResponse, PassedTechBidsResponse,
 } from '../types';
 
@@ -98,6 +98,15 @@ export const evaluationsApi = {
 
   listPostQuals: (params?: Record<string, any>) =>
     api.get<PaginatedResponse<any>>('/evaluations/post-qualifications/', { params }).then((r) => r.data),
+
+  getPostQual: (pqId: string) =>
+    api.get<any>(`/evaluations/post-qualifications/${pqId}/`).then((r) => r.data),
+
+  updatePQItem: (pqId: string, data: { item_id: string; status?: string; notes?: string; contact_result?: string }) =>
+    api.post<any>(`/evaluations/post-qualifications/${pqId}/update-item/`, data).then((r) => r.data),
+
+  generatePQChecklist: (pqId: string) =>
+    api.post<any>(`/evaluations/post-qualifications/${pqId}/generate-checklist/`).then((r) => r.data),
 
   listBERs: (params?: Record<string, any>) =>
     api.get<PaginatedResponse<any>>('/evaluations/reports/', { params }).then((r) => r.data),

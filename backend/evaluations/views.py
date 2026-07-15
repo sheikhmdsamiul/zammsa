@@ -1061,6 +1061,14 @@ def select_winner_view(request, solicitation_pk):
     other_bids = BidSubmission.objects.filter(solicitation=sol).exclude(pk=bid_id)
     other_bids.update(status='responsive')
 
+    # Create Post-Qualification record for the winner
+    if not PostQualification.objects.filter(bidder=winner).exists():
+        PostQualification.objects.create(
+            bidder=winner,
+            status='pending',
+            verification_items=[],
+        )
+
     return Response({
         'message': f'Winner selected: {winner.submission_id}',
         'winner_id': str(winner.bid_id),
@@ -1184,12 +1192,7 @@ def ber_generate_view(request, solicitation_pk):
             ber=None,
             bidder=winner_bid,
             defaults={
-                'verification_items': {
-                    'supplier_eligibility': 'pending',
-                    'references': 'pending',
-                    'issuing_authorities': 'pending',
-                    'note': 'SRS post-qualification checklist generated before BER finalization.',
-                },
+                'verification_items': [],
             },
         )
         return Response({
@@ -1632,16 +1635,93 @@ class CombinedScoreListView(BaseView, generics.ListAPIView):
 
 
 class PostQualificationListView(BaseView, generics.ListCreateAPIView):
-    queryset = PostQualification.objects.select_related('ber', 'bidder').all()
+    queryset = PostQualification.objects.select_related('ber', 'bidder', 'assigned_to').all()
     serializer_class = PostQualificationSerializer
     filterset_class = PostQualificationFilter
     ordering = ['-pq_id']
 
 
 class PostQualificationDetailView(generics.RetrieveUpdateDestroyAPIView):
-    queryset = PostQualification.objects.all()
+    queryset = PostQualification.objects.select_related('ber', 'bidder', 'assigned_to').all()
     serializer_class = PostQualificationSerializer
     permission_classes = [IsAuthenticated]
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def pq_update_verification_item_view(request, pq_pk):
+    try:
+        pq = PostQualification.objects.get(pk=pq_pk)
+    except PostQualification.DoesNotExist:
+        return Response({'error': 'Post-qualification record not found'}, status=404)
+
+    item_id = request.data.get('item_id')
+    status = request.data.get('status')
+    notes = request.data.get('notes', '')
+    contact_result = request.data.get('contact_result', '')
+
+    if not item_id:
+        return Response({'error': 'item_id is required'}, status=400)
+
+    items = list(pq.verification_items or [])
+    updated = False
+    for item in items:
+        if item.get('id') == item_id:
+            if status:
+                item['status'] = status
+            if notes:
+                item['notes'] = notes
+            if contact_result:
+                item['contact_result'] = contact_result
+            item['verified_by'] = str(request.user.full_name)
+            item['verified_at'] = timezone.now().isoformat()
+            updated = True
+            break
+
+    if not updated:
+        return Response({'error': 'Verification item not found'}, status=404)
+
+    pq.verification_items = items
+    pq.save()
+
+    return Response({
+        'message': 'Verification item updated',
+        'pq': PostQualificationSerializer(pq).data,
+    })
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def pq_generate_checklist_view(request, pq_pk):
+    try:
+        pq = PostQualification.objects.get(pk=pq_pk)
+    except PostQualification.DoesNotExist:
+        return Response({'error': 'Post-qualification record not found'}, status=404)
+
+    DEFAULT_CHECKLIST = [
+        {'id': 'company-registration', 'label': 'Company Registration Certificate', 'category': 'legal', 'status': 'pending', 'notes': ''},
+        {'id': 'tax-clearance', 'label': 'Tax Clearance Certificate', 'category': 'legal', 'status': 'pending', 'notes': ''},
+        {'id': 'zppa-registration', 'label': 'ZPPA Registration Status', 'category': 'legal', 'status': 'pending', 'notes': ''},
+        {'id': 'financial-statements', 'label': 'Audited Financial Statements (last 2 years)', 'category': 'financial', 'status': 'pending', 'notes': ''},
+        {'id': 'bank-reference', 'label': 'Bank Reference Letter', 'category': 'financial', 'status': 'pending', 'notes': ''},
+        {'id': 'experience-cert', 'label': 'Similar Works Experience Certificate', 'category': 'technical', 'status': 'pending', 'notes': ''},
+        {'id': 'technical-capacity', 'label': 'Technical Capacity Documentation', 'category': 'technical', 'status': 'pending', 'notes': ''},
+        {'id': 'personnel-qual', 'label': 'Key Personnel Qualifications', 'category': 'technical', 'status': 'pending', 'notes': ''},
+        {'id': 'equipment-capacity', 'label': 'Equipment & Capacity Verification', 'category': 'technical', 'status': 'pending', 'notes': ''},
+        {'id': 'reference-1', 'label': 'Client Reference 1', 'category': 'reference', 'status': 'pending', 'notes': ''},
+        {'id': 'reference-2', 'label': 'Client Reference 2', 'category': 'reference', 'status': 'pending', 'notes': ''},
+        {'id': 'labor-compliance', 'label': 'Labour Law Compliance', 'category': 'compliance', 'status': 'pending', 'notes': ''},
+        {'id': 'safety-cert', 'label': 'Safety & Environmental Compliance', 'category': 'compliance', 'status': 'pending', 'notes': ''},
+    ]
+
+    pq.verification_items = DEFAULT_CHECKLIST
+    pq.status = 'in_progress'
+    pq.save()
+
+    return Response({
+        'message': 'Verification checklist generated',
+        'pq': PostQualificationSerializer(pq).data,
+    })
 
 
 def ber_pdf_view(request, pk):
@@ -1790,25 +1870,27 @@ def evaluation_phase_status_view(request, solicitation_pk):
                 'total_members': tech_total_members,
                 'total_bids': total_bids,
             },
+            'consolidation': {
+                'complete': consolidation_complete,
+                'consolidated_count': consolidated.count(),
+            },
             'financial': {
                 'complete': financial_complete,
                 'evaluations_done': financial_done,
                 'total_bids': total_bids,
             },
-            'consolidation': {
-                'complete': consolidation_complete,
-                'consolidated_count': consolidated.count(),
+            'post_qual': {
+                'complete': post_qual_complete,
+                'total': post_qual.count(),
+                'cleared': post_qual.filter(status='cleared').count(),
+                'in_progress': post_qual.filter(status='in_progress').count(),
+                'pending': post_qual.filter(status='pending').count(),
             },
             'ber': {
                 'complete': ber_complete,
                 'reports_count': ber.count(),
                 'submitted_count': ber.filter(status='submitted').count(),
                 'approved_count': ber.filter(status='approved').count(),
-            },
-            'post_qual': {
-                'complete': post_qual_complete,
-                'total': post_qual.count(),
-                'cleared': post_qual.filter(status='cleared').count(),
             },
         },
     })
