@@ -73,6 +73,99 @@ function getUserEmail(user: string | { full_name?: string; email?: string } | un
   return user.email;
 }
 
+const ANSWER_ROLES = ['procurement_officer', 'procurement_manager', 'system_admin'];
+
+const ClarificationItem: React.FC<{ clarification: any; solId: string }> = ({ clarification: c, solId }) => {
+  const queryClient = useQueryClient();
+  const { user } = useAuth();
+  const [answerText, setAnswerText] = useState('');
+  const [isAnswering, setIsAnswering] = useState(false);
+  const canAnswer = ANSWER_ROLES.includes(user?.role || '');
+
+  const answerMutation = useMutation({
+    mutationFn: (answer: string) =>
+      solicitationsApi.answerClarification(solId, c.id, { answer }),
+    onSuccess: () => {
+      toast.success('Clarification answered');
+      setAnswerText('');
+      setIsAnswering(false);
+      queryClient.invalidateQueries({ queryKey: ['solicitation', solId] });
+    },
+    onError: (err: any) => {
+      toast.error(err.response?.data?.error || 'Failed to submit answer');
+    },
+  });
+
+  return (
+    <div className="p-4 bg-gray-50 rounded-2xl border border-gray-100">
+      <div className="flex items-start gap-2">
+        <InformationCircleIcon className="w-4 h-4 text-blue-500 shrink-0 mt-0.5" />
+        <div className="flex-1">
+          <div className="flex items-center justify-between">
+            <p className="text-sm font-bold text-gray-900">Q: {c.question}</p>
+            {c.supplier_name && (
+              <span className="text-[10px] font-bold text-gray-400">{c.supplier_name}</span>
+            )}
+          </div>
+          <p className="text-[10px] text-gray-400 mt-0.5">Asked: {fmtDate(c.asked_at)}</p>
+          {c.answer ? (
+            <div className="mt-2 p-3 bg-emerald-50 border border-emerald-100 rounded-xl">
+              <p className="text-sm font-semibold text-emerald-800">A: {c.answer}</p>
+              {c.answered_at && (
+                <p className="text-[10px] text-emerald-500 mt-1">Answered: {fmtDate(c.answered_at)}</p>
+              )}
+            </div>
+          ) : (
+            <div className="mt-2">
+              {isAnswering ? (
+                <div className="p-3 bg-blue-50 border border-blue-200 rounded-xl">
+                  <textarea
+                    value={answerText}
+                    onChange={(e) => setAnswerText(e.target.value)}
+                    placeholder="Type your answer..."
+                    rows={3}
+                    className="w-full px-3 py-2 bg-white border border-blue-200 rounded-lg text-sm text-gray-900 outline-none focus:ring-2 focus:ring-blue-500/20 resize-none"
+                  />
+                  <div className="flex items-center justify-end gap-2 mt-2">
+                    <button
+                      onClick={() => { setIsAnswering(false); setAnswerText(''); }}
+                      className="px-3 py-1.5 text-xs font-bold text-gray-500 bg-white border border-gray-200 rounded-lg hover:bg-gray-50"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      onClick={() => {
+                        if (!answerText.trim()) { toast.error('Please enter an answer'); return; }
+                        answerMutation.mutate(answerText.trim());
+                      }}
+                      disabled={answerMutation.isPending || !answerText.trim()}
+                      className="px-3 py-1.5 text-xs font-bold text-white bg-zammsa-green rounded-lg hover:bg-zammsa-green/90 disabled:opacity-50"
+                    >
+                      {answerMutation.isPending ? 'Submitting...' : 'Submit Answer'}
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-bold text-amber-600 italic">Awaiting answer</span>
+                  {canAnswer && (
+                    <button
+                      onClick={() => setIsAnswering(true)}
+                      className="px-3 py-1 text-xs font-bold text-white bg-zammsa-green rounded-lg hover:bg-zammsa-green/90"
+                    >
+                      Answer
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
+
 const SolicitationDetail: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -688,29 +781,30 @@ const SolicitationDetail: React.FC = () => {
           )}
 
           {/* Clarifications */}
-          {sol.clarification_responses?.length > 0 && (
-            <div className="bg-white rounded-3xl border border-gray-200 shadow-sm p-6">
-              <h2 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-4">Clarifications</h2>
+          <div className="bg-white rounded-3xl border border-gray-200 shadow-sm p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">
+                Clarifications / Q&A ({sol.clarification_responses?.length || 0})
+              </h2>
+              {sol.clarification_cutoff && (
+                <span className="text-[10px] font-bold text-gray-400 bg-gray-50 px-2.5 py-1 rounded-lg">
+                  Deadline: {fmtDate(sol.clarification_cutoff)}
+                </span>
+              )}
+            </div>
+            {sol.clarification_responses?.length > 0 ? (
               <div className="space-y-3">
                 {sol.clarification_responses.map((c: any) => (
-                  <div key={c.id} className="p-4 bg-gray-50 rounded-2xl border border-gray-100">
-                    <div className="flex items-start gap-2">
-                      <InformationCircleIcon className="w-4 h-4 text-blue-500 shrink-0 mt-0.5" />
-                      <div>
-                        <p className="text-sm font-bold text-gray-900">Q: {c.question}</p>
-                        {c.answer ? (
-                          <p className="text-sm text-gray-600 mt-1">A: {c.answer}</p>
-                        ) : (
-                          <p className="text-xs font-bold text-yellow-600 mt-1">Awaiting answer</p>
-                        )}
-                        <p className="text-xs text-gray-400 mt-1">{fmtDate(c.asked_at)}</p>
-                      </div>
-                    </div>
-                  </div>
+                  <ClarificationItem key={c.id} clarification={c} solId={sol.id} />
                 ))}
               </div>
-            </div>
-          )}
+            ) : (
+              <div className="text-center py-6">
+                <InformationCircleIcon className="w-8 h-8 text-gray-300 mx-auto mb-2" />
+                <p className="text-sm text-gray-400">No clarification questions yet</p>
+              </div>
+            )}
+          </div>
 
           {/* Documents */}
           {(sol.documents?.length ?? 0) > 0 && (

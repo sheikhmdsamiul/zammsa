@@ -52,8 +52,6 @@ class PublicAddendumSerializer(serializers.ModelSerializer):
 class PublicClarificationSerializer(serializers.ModelSerializer):
     id = serializers.UUIDField(source='clarification_id', read_only=True)
     asked_by = serializers.CharField(source='supplier.full_name', read_only=True)
-    asked_at = serializers.DateTimeField(source='asked_at')
-    answered_at = serializers.DateTimeField(source='answered_at')
 
     class Meta:
         model = ClarificationRequest

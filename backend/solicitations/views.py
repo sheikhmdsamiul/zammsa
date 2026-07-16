@@ -921,10 +921,47 @@ class EvaluationCriterionDetailView(generics.RetrieveUpdateDestroyAPIView):
     permission_classes = [IsAuthenticated]
 
 
+CLARIFICATION_ANSWER_ROLES = (
+    'procurement_officer', 'procurement_manager', 'system_admin',
+)
+
+
 class ClarificationRequestListView(BaseView, generics.ListCreateAPIView):
     queryset = ClarificationRequest.objects.select_related('solicitation', 'supplier').all()
     serializer_class = ClarificationRequestSerializer
     ordering = ['-asked_at']
+
+    def get_queryset(self):
+        qs = super().get_queryset()
+        solicitation_id = self.request.query_params.get('solicitation')
+        if solicitation_id:
+            qs = qs.filter(solicitation_id=solicitation_id)
+        if getattr(self.request.user, 'role', '') == 'supplier_user':
+            qs = qs.filter(supplier=self.request.user)
+        return qs
+
+    def perform_create(self, serializer):
+        sol = serializer.validated_data.get('solicitation')
+        if not sol:
+            solicitation_id = self.request.data.get('solicitation')
+            if solicitation_id:
+                try:
+                    sol = Solicitation.objects.get(pk=solicitation_id)
+                except Solicitation.DoesNotExist:
+                    pass
+        if sol and sol.clarification_cutoff:
+            now = timezone.now()
+            if now > sol.clarification_cutoff:
+                from rest_framework.exceptions import ValidationError
+                raise ValidationError({
+                    'error': 'Clarification deadline has passed',
+                    'clarification_cutoff': sol.clarification_cutoff.isoformat(),
+                    'server_time': now.isoformat(),
+                })
+        if getattr(self.request.user, 'role', '') not in ('supplier_user', 'system_admin'):
+            from rest_framework.exceptions import PermissionDenied
+            raise PermissionDenied('Only supplier users can submit clarification questions')
+        serializer.save(supplier=self.request.user)
 
 
 class ClarificationRequestDetailView(generics.RetrieveUpdateDestroyAPIView):
@@ -936,6 +973,9 @@ class ClarificationRequestDetailView(generics.RetrieveUpdateDestroyAPIView):
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def clarification_answer_view(request, pk):
+    if getattr(request.user, 'role', '') not in CLARIFICATION_ANSWER_ROLES:
+        return Response({'error': 'Only procurement officers can answer clarifications'}, status=403)
+
     try:
         cr = ClarificationRequest.objects.get(pk=pk)
     except ClarificationRequest.DoesNotExist:
@@ -948,6 +988,23 @@ def clarification_answer_view(request, pk):
     cr.answer = answer
     cr.answered_at = timezone.now()
     cr.save()
+
+    try:
+        if cr.supplier and cr.supplier.email:
+            create_notification(
+                cr.supplier,
+                title=f'Clarification Answered: {cr.solicitation.sol_number}',
+                message=f'Your question on {cr.solicitation.sol_number} has been answered.\n\nQuestion: {cr.question}\n\nAnswer: {answer}',
+                notification_type='supplier',
+                priority='normal',
+                source_module='solicitations',
+                object_id=str(cr.clarification_id),
+                action_url=f'/vendor/open-tenders/{cr.solicitation.solicitation_id}',
+                email_required=True,
+            )
+    except Exception:
+        pass
+
     log_audit_action(
         user=request.user, action='SOL_CLARIFICATION_ANSWER', module='solicitations',
         record_id=str(cr.clarification_id), ip_address=request.META.get('REMOTE_ADDR', ''),

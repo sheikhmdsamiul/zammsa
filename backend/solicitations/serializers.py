@@ -136,7 +136,7 @@ class ClarificationRequestSerializer(serializers.ModelSerializer):
     class Meta:
         model = ClarificationRequest
         fields = '__all__'
-        read_only_fields = ('clarification_id', 'asked_at')
+        read_only_fields = ('clarification_id', 'asked_at', 'supplier')
 
 
 class SolicitationDocumentSerializer(serializers.ModelSerializer):

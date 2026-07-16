@@ -1,7 +1,9 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import toast from 'react-hot-toast';
 import { vendorApi } from '../../api/vendor';
+import api from '../../api/client';
 import { LoadingSpinner } from '../common/LoadingSpinner';
 import { StatusBadge } from '../common/StatusBadge';
 import {
@@ -9,7 +11,7 @@ import {
   CheckCircleIcon, InformationCircleIcon,
   LocationMarkerIcon, PhoneIcon, MailIcon, ShieldCheckIcon,
   CalendarIcon, ClipboardListIcon, UserIcon, CurrencyDollarIcon,
-  QuestionMarkCircleIcon, BadgeCheckIcon,
+  QuestionMarkCircleIcon, BadgeCheckIcon, PaperAirplaneIcon,
 } from '@heroicons/react/outline';
 
 const TYPE_LABELS: Record<string, string> = {
@@ -49,11 +51,28 @@ function fmtDateTime(d: string | undefined): string {
 const VendorTenderDetail: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  const [questionText, setQuestionText] = useState('');
+  const [showQuestionForm, setShowQuestionForm] = useState(false);
 
   const { data: tender, isLoading } = useQuery({
     queryKey: ['vendor-tender', id],
     queryFn: () => vendorApi.openTenders.get(id!),
     enabled: !!id,
+  });
+
+  const submitQuestion = useMutation({
+    mutationFn: (question: string) =>
+      api.post('/solicitations/clarifications/', { solicitation: id, question }).then(r => r.data),
+    onSuccess: () => {
+      toast.success('Question submitted successfully');
+      setQuestionText('');
+      setShowQuestionForm(false);
+      queryClient.invalidateQueries({ queryKey: ['vendor-tender', id] });
+    },
+    onError: (err: any) => {
+      toast.error(err.response?.data?.error || err.response?.data?.detail || 'Failed to submit question');
+    },
   });
 
   if (isLoading) return <LoadingSpinner className="py-20" />;
@@ -203,31 +222,128 @@ const VendorTenderDetail: React.FC = () => {
           )}
 
           {/* Clarifications */}
-          {tender.clarifications?.length > 0 && (
-            <div className="bg-white rounded-3xl border border-gray-200 shadow-sm p-6">
-              <h2 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-4">Clarifications</h2>
+          <div className="bg-white rounded-3xl border border-gray-200 shadow-sm p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">Clarifications / Q&A</h2>
+              {tender.clarification_cutoff && !isExpired && (() => {
+                const cutoff = new Date(tender.clarification_cutoff);
+                const now = new Date();
+                const canAsk = now <= cutoff;
+                return canAsk ? (
+                  <button
+                    onClick={() => setShowQuestionForm(!showQuestionForm)}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors"
+                  >
+                    <QuestionMarkCircleIcon className="w-3.5 h-3.5" />
+                    Ask a Question
+                  </button>
+                ) : (
+                  <span className="text-[10px] font-bold text-gray-400 bg-gray-50 px-2.5 py-1 rounded-lg">
+                    Clarification period ended
+                  </span>
+                );
+              })()}
+              {!tender.clarification_cutoff && !isExpired && (
+                <button
+                  onClick={() => setShowQuestionForm(!showQuestionForm)}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors"
+                >
+                  <QuestionMarkCircleIcon className="w-3.5 h-3.5" />
+                  Ask a Question
+                </button>
+              )}
+            </div>
+
+            {showQuestionForm && (
+              <div className="mb-4 p-4 bg-blue-50 border border-blue-200 rounded-2xl">
+                <p className="text-xs font-bold text-blue-800 mb-2">Submit a clarification question</p>
+                <p className="text-[11px] text-blue-600 mb-3">
+                  Your question and its answer will be visible to all bidders for transparency.
+                  {tender.clarification_cutoff && (
+                    <> Deadline: {fmtDateTime(tender.clarification_cutoff)}</>
+                  )}
+                </p>
+                <textarea
+                  value={questionText}
+                  onChange={(e) => setQuestionText(e.target.value)}
+                  placeholder="Type your question about this solicitation..."
+                  rows={3}
+                  className="w-full px-4 py-3 bg-white border border-blue-200 rounded-xl text-sm text-gray-900 outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition-all resize-none"
+                />
+                <div className="flex items-center justify-end gap-2 mt-3">
+                  <button
+                    onClick={() => { setShowQuestionForm(false); setQuestionText(''); }}
+                    className="px-4 py-2 text-xs font-bold text-gray-500 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={() => {
+                      if (!questionText.trim()) {
+                        toast.error('Please enter a question');
+                        return;
+                      }
+                      submitQuestion.mutate(questionText.trim());
+                    }}
+                    disabled={submitQuestion.isPending || !questionText.trim()}
+                    className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-bold text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50"
+                  >
+                    {submitQuestion.isPending ? (
+                      <LoadingSpinner size="sm" />
+                    ) : (
+                      <PaperAirplaneIcon className="w-3.5 h-3.5" />
+                    )}
+                    Submit Question
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {tender.clarifications?.length > 0 ? (
               <div className="space-y-3">
                 {tender.clarifications.map((c: any) => (
                   <div key={c.id} className="p-4 bg-gray-50 rounded-2xl border border-gray-100">
                     <div className="flex items-start gap-2">
                       <QuestionMarkCircleIcon className="w-4 h-4 text-blue-500 shrink-0 mt-0.5" />
-                      <div>
-                        <p className="text-sm font-bold text-gray-900">{c.question}</p>
+                      <div className="flex-1">
+                        <div className="flex items-center justify-between">
+                          <p className="text-sm font-bold text-gray-900">{c.question}</p>
+                          {c.asked_by && (
+                            <span className="text-[10px] font-bold text-gray-400">{c.asked_by}</span>
+                          )}
+                        </div>
                         {c.answer && (
-                          <p className="text-sm text-gray-600 mt-1">
-                            <span className="font-bold text-zammsa-green">Answer: </span>{c.answer}
-                          </p>
+                          <div className="mt-2 p-3 bg-emerald-50 border border-emerald-100 rounded-xl">
+                            <p className="text-sm text-emerald-800">
+                              <span className="font-bold text-emerald-700">Answer: </span>{c.answer}
+                            </p>
+                            {c.answered_at && (
+                              <p className="text-[10px] text-emerald-500 mt-1">Answered: {fmtDateTime(c.answered_at)}</p>
+                            )}
+                          </div>
                         )}
                         {!c.answer && (
-                          <p className="text-xs text-gray-400 mt-1 italic">Awaiting response</p>
+                          <p className="text-xs text-amber-600 mt-2 italic font-semibold flex items-center gap-1">
+                            <ClockIcon className="w-3 h-3" /> Awaiting response from procurement
+                          </p>
                         )}
                       </div>
                     </div>
                   </div>
                 ))}
               </div>
-            </div>
-          )}
+            ) : (
+              <div className="text-center py-6">
+                <QuestionMarkCircleIcon className="w-8 h-8 text-gray-300 mx-auto mb-2" />
+                <p className="text-sm text-gray-400">No clarifications yet</p>
+                {tender.clarification_cutoff && !isExpired && (
+                  <p className="text-xs text-gray-400 mt-1">
+                    You can ask questions until {fmtDateTime(tender.clarification_cutoff)}
+                  </p>
+                )}
+              </div>
+            )}
+          </div>
 
           {/* Award Notice */}
           {tender.award_notice && (
