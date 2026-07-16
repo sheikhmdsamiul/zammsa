@@ -32,6 +32,7 @@ const EventsList = React.lazy(() => import('./components/public/EventsList'));
 const FAQ = React.lazy(() => import('./components/public/FAQ'));
 const Contact = React.lazy(() => import('./components/public/Contact'));
 const About = React.lazy(() => import('./components/public/About'));
+const PublicBidOpening = React.lazy(() => import('./components/public/PublicBidOpening'));
 
 const VendorLayout = React.lazy(() => import('./components/layout/VendorLayout'));
 const VendorDashboard = React.lazy(() => import('./components/vendor/VendorDashboard'));
@@ -205,6 +206,7 @@ function App() {
                   <Route path="gpns" element={<GPNListPublic />} />
                   <Route path="gpns/:id" element={<GPNDetailPublic />} />
                   <Route path="about" element={<About />} />
+                  <Route path="bids/public/openings/:id" element={<PublicBidOpening />} />
                 </Route>
 
                 <Route

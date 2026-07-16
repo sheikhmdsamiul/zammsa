@@ -20,7 +20,6 @@ const OpeningSetup: React.FC = () => {
   const [location, setLocation] = useState('');
   const [witness1, setWitness1] = useState('');
   const [witness2, setWitness2] = useState('');
-  const [publicLink, setPublicLink] = useState('');
   const [notes, setNotes] = useState('');
 
   const formatLocalDateTime = (date: Date) => {
@@ -108,7 +107,6 @@ const OpeningSetup: React.FC = () => {
       return bidsApi.startOpeningSession(selectedSol, {
         witnesses: [witness1, witness2],
         scheduled_opening_time: scheduledTime,
-        public_live_link: publicLink || undefined,
         observations: notes || undefined,
         location: location || undefined,
       });
@@ -309,11 +307,28 @@ const OpeningSetup: React.FC = () => {
                 Public Live Stream
               </h3>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Public Live View Link (optional)</label>
-                <input type="url" value={publicLink} onChange={(e) => setPublicLink(e.target.value)}
-                    placeholder="https://..."
-                  className="w-full border rounded-lg px-3 py-2 text-sm" />
-                <p className="text-xs text-gray-400 mt-1">Share this link with the public to watch the opening live</p>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Public Live View Link</label>
+                <div className="flex items-center gap-2">
+                  <input readOnly value={selectedSol ? `${window.location.origin}/bids/public/openings/${selectedSol}` : ''}
+                    className="flex-1 border rounded-lg px-3 py-2 text-sm bg-gray-50 font-mono text-xs" />
+                  <button type="button" onClick={() => {
+                    navigator.clipboard.writeText(`${window.location.origin}/bids/public/openings/${selectedSol}`);
+                    toast.success('Link copied to clipboard');
+                  }} disabled={!selectedSol}
+                    className="text-sm text-zammsa-green font-medium px-3 py-2 border border-zammsa-green rounded-lg hover:bg-green-50 disabled:opacity-50">
+                    Copy Link
+                  </button>
+                  <button type="button" onClick={() => {
+                    const link = `${window.location.origin}/bids/public/openings/${selectedSol}`;
+                    navigator.clipboard.writeText(link);
+                    toast.success('Link ready to share');
+                  }} disabled={!selectedSol}
+                    className="text-sm text-zammsa-green font-medium px-3 py-2 border border-zammsa-green rounded-lg hover:bg-green-50 flex items-center gap-1 disabled:opacity-50">
+                    <LinkIcon className="w-4 h-4" />
+                    Share
+                  </button>
+                </div>
+                <p className="text-xs text-gray-400 mt-1">Auto-generated link. Anyone with this link can view the bid opening live.</p>
               </div>
             </div>
 
@@ -386,10 +401,10 @@ const OpeningSetup: React.FC = () => {
                   })}
                 </div>
               </div>
-              {publicLink && (
+              {selectedSol && (
                 <div className="border-t pt-4">
                   <p className="text-sm text-gray-500 mb-1">Public Live Link</p>
-                  <p className="text-sm font-medium text-blue-600">{publicLink}</p>
+                  <p className="text-sm font-medium text-blue-600">{`${window.location.origin}/bids/public/openings/${selectedSol}`}</p>
                 </div>
               )}
               {notes && (

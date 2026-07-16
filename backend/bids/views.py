@@ -631,6 +631,16 @@ def bid_opening_start_view(request, pk):
         else:
             resolved_witnesses.append(w)
 
+    # Determine public link dynamically based on frontend referer if possible
+    referer = request.META.get('HTTP_REFERER')
+    if referer:
+        from urllib.parse import urlparse
+        parsed = urlparse(referer)
+        origin = f"{parsed.scheme}://{parsed.netloc}"
+        auto_public_link = f"{origin}/bids/public/openings/{sol.solicitation_id}"
+    else:
+        auto_public_link = request.build_absolute_uri(f'/bids/public/openings/{sol.solicitation_id}')
+
     opening = BidOpening.objects.create(
         solicitation=sol,
         conducted_by=request.user,
@@ -638,7 +648,7 @@ def bid_opening_start_view(request, pk):
         started_at=timezone.now(),
         scheduled_opening_time=opening_time,
         location=request.data.get('location', 'ZAMMSA Boardroom, Lusaka / Virtual'),
-        public_live_link=request.data.get('public_live_link', f'https://portal.zammsa.gov.zm/opening/{sol.sol_number}-live'),
+        public_live_link=request.data.get('public_live_link', auto_public_link),
         viewers_connected=int(request.data.get('viewers_connected', 0) or 0),
         witnesses=resolved_witnesses,
         witness_signatures=request.data.get('witness_signatures', []),

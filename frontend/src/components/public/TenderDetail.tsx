@@ -170,6 +170,23 @@ const TenderDetail: React.FC = () => {
             </div>
           </div>
 
+          {countdown.expired && (
+            <Link
+              to={`/bids/public/openings/${id}`}
+              className="block bg-gradient-to-r from-red-500 to-red-600 rounded-xl p-5 text-white hover:from-red-600 hover:to-red-700 transition-all shadow-sm"
+            >
+              <div className="flex items-center gap-3 mb-2">
+                <div className="relative flex h-3 w-3">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-white opacity-75" />
+                  <span className="relative inline-flex rounded-full h-3 w-3 bg-white" />
+                </div>
+                <span className="text-xs font-bold uppercase tracking-widest opacity-90">Live Bid Opening</span>
+              </div>
+              <p className="text-sm font-semibold opacity-95">View the public bid opening session for this tender</p>
+              <p className="text-xs opacity-70 mt-2">Click to watch bids being opened in real-time</p>
+            </Link>
+          )}
+
           <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
             <h3 className="font-semibold text-gray-900 mb-4">Tender Details</h3>
             <dl className="space-y-3 text-sm">
