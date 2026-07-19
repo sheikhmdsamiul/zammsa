@@ -23,7 +23,9 @@ PQ_STATUS_CHOICES = [
 class EvaluationCommittee(models.Model):
     committee_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     solicitation = models.ForeignKey(Solicitation, on_delete=models.CASCADE, related_name='evaluation_committees')
-    members = models.JSONField(default=list)
+    members = models.JSONField(default=list, help_text='List of user IDs for official committee members')
+    non_official_members = models.JSONField(default=list, blank=True,
+        help_text='List of {first_name, last_name, email, expertise, valid_from, valid_until} for external/non-official members')
     chairperson = models.ForeignKey(User, on_delete=models.CASCADE, related_name='chaired_committees')
     secretary = models.ForeignKey(User, on_delete=models.CASCADE, related_name='secretary_committees')
     require_coi = models.BooleanField(default=True, help_text='Require COI declarations from all members before evaluation')
@@ -35,7 +37,7 @@ class EvaluationCommittee(models.Model):
         verbose_name_plural = 'Evaluation Committees'
 
     def total_members_count(self):
-        """Return total number of committee members including chair and secretary."""
+        """Return total number of committee members including chair, secretary, and non-official members."""
         members_set = set()
         for m in self.members or []:
             uid = m.get('user') if isinstance(m, dict) else m
@@ -45,7 +47,8 @@ class EvaluationCommittee(models.Model):
             members_set.add(str(self.chairperson_id))
         if self.secretary_id:
             members_set.add(str(self.secretary_id))
-        return len(members_set)
+        non_official_count = len(self.non_official_members or [])
+        return len(members_set) + non_official_count
 
     def quorum_required(self):
         """Return the minimum number of members needed for quorum (ceil(2/3))."""

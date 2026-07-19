@@ -26,6 +26,7 @@ class EvaluationCommitteeSerializer(serializers.ModelSerializer):
     quorum_met = serializers.SerializerMethodField()
     solicitation_number = serializers.CharField(source='solicitation.sol_number', read_only=True, default='')
     solicitation_title = serializers.CharField(source='solicitation.title', read_only=True, default='')
+    solicitation_status = serializers.CharField(source='solicitation.status', read_only=True, default='')
     current_phase = serializers.SerializerMethodField()
     phase_progress = serializers.SerializerMethodField()
 
@@ -49,9 +50,9 @@ class EvaluationCommitteeSerializer(serializers.ModelSerializer):
         return 'active'
 
     def get_member_count(self, obj):
-        if isinstance(obj.members, list):
-            return len(obj.members)
-        return 0
+        official = len(obj.members) if isinstance(obj.members, list) else 0
+        non_official = len(obj.non_official_members or [])
+        return official + non_official
 
     def get_total_members(self, obj):
         return obj.total_members_count()
@@ -119,8 +120,21 @@ class EvaluationCommitteeSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError('Members must be a list.')
         return value
 
+    def validate_non_official_members(self, value):
+        if not isinstance(value, list):
+            raise serializers.ValidationError('Non-official members must be a list.')
+        for m in value:
+            if not isinstance(m, dict):
+                raise serializers.ValidationError('Each non-official member must be an object.')
+            if not m.get('first_name') or not m.get('last_name'):
+                raise serializers.ValidationError('Each non-official member must have a first and last name.')
+            if not m.get('expertise'):
+                raise serializers.ValidationError('Each non-official member must have defined expertise.')
+        return value
+
     def validate(self, attrs):
         members = attrs.get('members', [])
+        non_official = attrs.get('non_official_members', [])
         def _to_id(val):
             if val is None:
                 return ''
@@ -138,9 +152,9 @@ class EvaluationCommitteeSerializer(serializers.ModelSerializer):
         if chairperson_id in [_to_id(m) for m in members if _to_id(m)]:
             pass  # chairperson can also be a member
         all_members = list({_to_id(m) for m in members if _to_id(m)} | {chairperson_id, secretary_id})
-        if len(all_members) < 3:
+        if len(all_members) + len(non_official) < 3:
             raise serializers.ValidationError(
-                'Committee must have at least 3 unique members (including chairperson and secretary).'
+                'Committee must have at least 3 unique members (including chairperson, secretary, and non-official members).'
             )
         attrs['members'] = all_members
         return attrs

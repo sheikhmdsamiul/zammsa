@@ -307,7 +307,9 @@ export interface EvaluationCommittee {
   solicitation: string;
   solicitation_number?: string;
   solicitation_title?: string;
+  solicitation_status?: string;
   members: any[];
+  non_official_members?: {first_name: string; last_name: string; email: string; expertise: string}[];
   chairperson: string;
   chairperson_name?: string;
   secretary: string;

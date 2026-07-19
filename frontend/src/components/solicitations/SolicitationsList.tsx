@@ -49,6 +49,11 @@ const SolicitationsList: React.FC = () => {
   const canCreateSolicitation = user?.role !== 'procurement_manager';
 
   const columns = [
+    {
+      key: 'sol_number',
+      label: 'Solicitation #',
+      render: (v: string) => v ? <span className="text-xs font-semibold text-slate-500">{v}</span> : '-'
+    },
     { 
       key: 'title', 
       label: 'Title', 

@@ -10,6 +10,7 @@ import { ROLES, EVALUATION_COMMITTEE_ROLES } from '../../config/rbac';
 import toast from 'react-hot-toast';
 import {
   UsersIcon, ShieldCheckIcon, PlusIcon, CheckCircleIcon, XCircleIcon, TrashIcon,
+  CalendarIcon, DocumentReportIcon,
 } from '@heroicons/react/outline';
 
 const CommitteeFormation: React.FC = () => {
@@ -20,6 +21,7 @@ const CommitteeFormation: React.FC = () => {
   const [chairperson, setChairperson] = useState('');
   const [secretary, setSecretary] = useState('');
   const [members, setMembers] = useState<string[]>([]);
+  const [nonOfficialMembers, setNonOfficialMembers] = useState<{firstName: string; lastName: string; email: string; expertise: string; validFrom?: string; validUntil?: string; userId?: string}[]>([]);
   const [coiRequired, setCoiRequired] = useState(true);
   const [editingCommitteeId, setEditingCommitteeId] = useState<string | null>(null);
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -44,7 +46,7 @@ const CommitteeFormation: React.FC = () => {
 
   const eligibleUsers = useMemo(() =>
     allUsers.filter((u: any) =>
-      EVALUATION_COMMITTEE_ROLES.includes(u.role)
+      EVALUATION_COMMITTEE_ROLES.includes(u.role) && !u.temp_password
     ),
     [allUsers],
   );
@@ -79,13 +81,27 @@ const CommitteeFormation: React.FC = () => {
   const formMutation = useMutation({
     mutationFn: () => {
       const allMembers = Array.from(new Set([...members, chairperson, secretary].filter(Boolean)));
-      const payload = {
+      const payload: Record<string, any> = {
         solicitation,
         chairperson,
         secretary,
         members: allMembers,
         require_coi: coiRequired,
       };
+      if (nonOfficialMembers.length > 0) {
+        payload.non_official_members = nonOfficialMembers.map(m => {
+          const obj: Record<string, string> = {
+            first_name: m.firstName,
+            last_name: m.lastName,
+            email: m.email,
+            expertise: m.expertise,
+          };
+          if (m.validFrom) obj.valid_from = m.validFrom;
+          if (m.validUntil) obj.valid_until = m.validUntil;
+          if (m.userId) obj.user_id = m.userId;
+          return obj;
+        });
+      }
       return editingCommitteeId
         ? evaluationsApi.updateCommittee(editingCommitteeId, payload)
         : evaluationsApi.formCommittee(payload);
@@ -96,6 +112,7 @@ const CommitteeFormation: React.FC = () => {
       setChairperson('');
       setSecretary('');
       setMembers([]);
+      setNonOfficialMembers([]);
       setCoiRequired(true);
       setEditingCommitteeId(null);
       setErrors({});
@@ -142,6 +159,8 @@ const CommitteeFormation: React.FC = () => {
     return keys.map((k: string) => EXPERTISE_LABELS[k] || k).join(', ');
   }, [cppRequirements]);
 
+  const [committeePage, setCommitteePage] = useState(1);
+  const COMMITTEE_PAGE_SIZE = 5;
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
 
   const deleteMutation = useMutation({
@@ -151,6 +170,7 @@ const CommitteeFormation: React.FC = () => {
       setDeleteConfirmId(null);
       queryClient.invalidateQueries({ queryKey: ['evaluation-committees'] });
       queryClient.invalidateQueries({ queryKey: ['evaluation-committee'] });
+      setCommitteePage(1);
     },
     onError: (err: any) => {
       toast.error(err?.response?.data?.error || err?.response?.data?.detail || 'Failed to delete committee');
@@ -167,7 +187,8 @@ const CommitteeFormation: React.FC = () => {
       newErrors.secretary = 'Chairperson and secretary must be different';
     }
     const uniqueTotal = new Set([chairperson, secretary, ...members].filter(Boolean)).size;
-    if (uniqueTotal < 3) newErrors.members = `At least 3 unique people required (chairperson + secretary + members). Currently: ${uniqueTotal}`;
+    const nonOfficialTotal = nonOfficialMembers.length;
+    if (uniqueTotal + nonOfficialTotal < 3) newErrors.members = `At least 3 unique people required (chairperson + secretary + members + non-official members). Currently: ${uniqueTotal + nonOfficialTotal}`;
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
@@ -189,6 +210,15 @@ const CommitteeFormation: React.FC = () => {
     setChairperson(chairpersonId);
     setSecretary(secretaryId);
     setMembers(Array.from(new Set(committeeMembers.filter((id: string) => id !== chairpersonId && id !== secretaryId))));
+    setNonOfficialMembers((c.non_official_members || []).map((nom: any) => ({
+      firstName: nom.first_name || '',
+      lastName: nom.last_name || '',
+      email: nom.email || '',
+      expertise: nom.expertise || '',
+      validFrom: nom.valid_from || '',
+      validUntil: nom.valid_until || '',
+      userId: nom.user_id || nom.userId || '',
+    })));
     setCoiRequired(c.require_coi !== false);
     setErrors({});
   };
@@ -199,6 +229,7 @@ const CommitteeFormation: React.FC = () => {
     setChairperson('');
     setSecretary('');
     setMembers([]);
+    setNonOfficialMembers([]);
     setCoiRequired(true);
     setErrors({});
   };
@@ -333,6 +364,89 @@ const CommitteeFormation: React.FC = () => {
           </div>
 
           <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+            <h2 className="text-lg font-semibold text-gray-900 mb-4">Non-Official Members</h2>
+            <p className="text-xs text-gray-500 mb-4">
+              Add external/non-official members to provide required expertise not available in-house.
+            </p>
+            {nonOfficialMembers.map((nom, index) => (
+              <div key={index} className="flex items-start gap-3 p-4 bg-gray-50 rounded-lg mb-3">
+                <div className="flex-1 grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 mb-1">First Name</label>
+                    <input type="text" value={nom.firstName} onChange={(e) => {
+                      const updated = [...nonOfficialMembers];
+                      updated[index] = {...updated[index], firstName: e.target.value};
+                      setNonOfficialMembers(updated);
+                    }}
+                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-zammsa-green/20 focus:border-zammsa-green" />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 mb-1">Last Name</label>
+                    <input type="text" value={nom.lastName} onChange={(e) => {
+                      const updated = [...nonOfficialMembers];
+                      updated[index] = {...updated[index], lastName: e.target.value};
+                      setNonOfficialMembers(updated);
+                    }}
+                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-zammsa-green/20 focus:border-zammsa-green" />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 mb-1">Email</label>
+                    <input type="email" value={nom.email} onChange={(e) => {
+                      const updated = [...nonOfficialMembers];
+                      updated[index] = {...updated[index], email: e.target.value};
+                      setNonOfficialMembers(updated);
+                    }}
+                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-zammsa-green/20 focus:border-zammsa-green" />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 mb-1">Expertise</label>
+                    <select value={nom.expertise} onChange={(e) => {
+                      const updated = [...nonOfficialMembers];
+                      updated[index] = {...updated[index], expertise: e.target.value};
+                      setNonOfficialMembers(updated);
+                    }}
+                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-zammsa-green/20 focus:border-zammsa-green">
+                      <option value="">Select expertise...</option>
+                      {Object.entries(EXPERTISE_LABELS).map(([key, label]) => (
+                        <option key={key} value={key}>{label}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 mb-1">Valid From</label>
+                    <input type="date" value={nom.validFrom || ''} onChange={(e) => {
+                      const updated = [...nonOfficialMembers];
+                      updated[index] = {...updated[index], validFrom: e.target.value};
+                      setNonOfficialMembers(updated);
+                    }}
+                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-zammsa-green/20 focus:border-zammsa-green" />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 mb-1">Valid Until</label>
+                    <input type="date" value={nom.validUntil || ''} onChange={(e) => {
+                      const updated = [...nonOfficialMembers];
+                      updated[index] = {...updated[index], validUntil: e.target.value};
+                      setNonOfficialMembers(updated);
+                    }}
+                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-zammsa-green/20 focus:border-zammsa-green" />
+                  </div>
+                </div>
+                <button onClick={() => setNonOfficialMembers(nonOfficialMembers.filter((_, i) => i !== index))}
+                  className="p-2 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors mt-6"
+                  title="Remove member">
+                  <XCircleIcon className="w-5 h-5" />
+                </button>
+              </div>
+            ))}
+            <button onClick={() => setNonOfficialMembers([...nonOfficialMembers, {firstName: '', lastName: '', email: '', expertise: ''}])}
+              className="flex items-center gap-2 px-4 py-2.5 border border-dashed border-gray-300 rounded-lg text-sm font-medium text-gray-500 hover:text-gray-700 hover:border-gray-400 w-full justify-center"
+            >
+              <PlusIcon className="w-4 h-4" />
+              Add Non-Official Member
+            </button>
+          </div>
+
+          <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
             <h2 className="text-lg font-semibold text-gray-900 mb-4">Conflict of Interest Configuration</h2>
             <label className="flex items-center gap-3 p-4 bg-gray-50 rounded-xl cursor-pointer">
               <input type="checkbox" checked={coiRequired} onChange={(e) => setCoiRequired(e.target.checked)}
@@ -348,7 +462,7 @@ const CommitteeFormation: React.FC = () => {
             <button onClick={resetForm} className="px-4 py-2.5 border border-gray-300 rounded-lg text-sm hover:bg-gray-50">
               {editingCommitteeId ? 'Cancel Edit' : 'Reset'}
             </button>
-            <button onClick={handleSubmit} disabled={formMutation.isPending || !solicitation || !chairperson || !secretary || new Set([chairperson, secretary, ...members].filter(Boolean)).size < 3}
+            <button onClick={handleSubmit} disabled={formMutation.isPending || !solicitation || !chairperson || !secretary || (new Set([chairperson, secretary, ...members].filter(Boolean)).size + nonOfficialMembers.length < 3)}
               className={`px-6 py-2.5 rounded-lg text-sm font-bold disabled:opacity-50 flex items-center gap-2 ${errors && Object.keys(errors).length ? 'bg-orange-500 hover:bg-orange-600 text-white' : 'bg-zammsa-green hover:bg-zammsa-green-dark text-white'}`}>
               {formMutation.isPending ? (
                 <><LoadingSpinner size="sm" /> {editingCommitteeId ? 'Updating...' : 'Creating...'}</>
@@ -364,45 +478,234 @@ const CommitteeFormation: React.FC = () => {
             <h2 className="text-lg font-semibold text-gray-900 mb-4">
               <UsersIcon className="w-5 h-5 inline mr-2 text-zammsa-green" />
               Existing Committees
+              {committees.length > 0 && (
+                <span className="ml-2 text-xs font-normal text-gray-400">({committees.length})</span>
+              )}
             </h2>
             {committeesLoading ? (
               <LoadingSpinner size="sm" className="py-4" />
             ) : (
-              <div className="space-y-3">
-                {committees.slice(0, 10).map((c: any) => (
-                  <div key={c.id} className="p-3 bg-gray-50 rounded-lg text-sm hover:bg-gray-100 transition-colors">
-                    <p className="font-medium text-gray-900 truncate">{c.solicitation_number || c.solicitation_title || c.solicitation?.slice(0, 12)}</p>
-                    <p className="text-xs text-gray-500">
-                      {c.member_count || 0} members · {c.chairperson_name ? `Chair: ${c.chairperson_name.split(' ')[0]}` : ''}
-                    </p>
-                    <div className="flex gap-2 mt-2">
-                      <button type="button" onClick={() => openEditCommittee(c)}
-                        className="px-3 py-1.5 bg-white border border-gray-300 rounded-lg text-xs font-semibold text-gray-700 hover:bg-gray-50">
-                        Edit
-                      </button>
-                      {deleteConfirmId === c.id ? (
-                        <div className="flex gap-1">
-                          <button type="button" onClick={() => deleteMutation.mutate(c.id)}
-                            className="px-3 py-1.5 bg-red-600 text-white rounded-lg text-xs font-semibold hover:bg-red-700">
-                            {deleteMutation.isPending ? 'Deleting...' : 'Confirm'}
+              <div className="space-y-4">
+                {(() => {
+                  const totalPages = Math.ceil(committees.length / COMMITTEE_PAGE_SIZE);
+                  const paginated = committees.slice((committeePage - 1) * COMMITTEE_PAGE_SIZE, committeePage * COMMITTEE_PAGE_SIZE);
+                  return (
+                    <>
+                      {paginated.map((c: any) => {
+                        const solStatus = c.solicitation_status || '';
+                        const phaseProgress = c.phase_progress || { completed: 0, total: 7, percent: 0 };
+                        const currentPhase = c.current_phase || null;
+                        const isComplete = phaseProgress.percent === 100;
+
+                        const solStatusColors: Record<string, string> = {
+                          draft: 'bg-gray-100 text-gray-700',
+                          pending_approval: 'bg-yellow-100 text-yellow-800',
+                          approved: 'bg-blue-100 text-blue-800',
+                          published: 'bg-green-100 text-green-800',
+                          closed: 'bg-gray-200 text-gray-600',
+                          awarded: 'bg-emerald-100 text-emerald-800',
+                          cancelled: 'bg-red-100 text-red-700',
+                        };
+
+                        const phaseColors: Record<string, string> = {
+                          coi: 'bg-blue-500',
+                          preliminary: 'bg-indigo-500',
+                          technical: 'bg-purple-500',
+                          consolidation: 'bg-orange-500',
+                          financial: 'bg-amber-500',
+                          'post-qual': 'bg-teal-500',
+                          ber: 'bg-emerald-500',
+                        };
+
+                        return (
+                          <div key={c.id} className="border border-gray-200 rounded-lg overflow-hidden hover:border-zammsa-green/30 transition-colors">
+                            {/* Header: Solicitation info */}
+                            <div className="p-3 bg-gray-50 border-b border-gray-100">
+                              <div className="flex items-start justify-between gap-2">
+                                <div className="min-w-0 flex-1">
+                                  <p className="text-xs font-bold text-zammsa-green uppercase tracking-wide">{c.solicitation_number || 'N/A'}</p>
+                                  <p className="text-sm font-medium text-gray-900 truncate mt-0.5" title={c.solicitation_title}>{c.solicitation_title || 'Untitled Solicitation'}</p>
+                                </div>
+                                {solStatus && (
+                                  <span className={`shrink-0 text-[10px] font-bold uppercase px-2 py-0.5 rounded-full ${solStatusColors[solStatus] || 'bg-gray-100 text-gray-600'}`}>
+                                    {solStatus.replace(/_/g, ' ')}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+
+                            {/* Evaluation progress */}
+                            <div className="px-3 pt-3 pb-2">
+                              <div className="flex items-center justify-between mb-1.5">
+                                <span className="text-[11px] font-semibold text-gray-600 uppercase tracking-wide">Evaluation Progress</span>
+                                {isComplete ? (
+                                  <span className="flex items-center gap-1 text-[11px] font-bold text-emerald-600">
+                                    <CheckCircleIcon className="w-3.5 h-3.5" /> Complete
+                                  </span>
+                                ) : (
+                                  <span className="text-[11px] font-semibold text-gray-500">{phaseProgress.completed}/{phaseProgress.total} phases</span>
+                                )}
+                              </div>
+                              <div className="w-full bg-gray-200 rounded-full h-1.5 mb-1.5">
+                                <div
+                                  className={`h-1.5 rounded-full transition-all ${isComplete ? 'bg-emerald-500' : 'bg-zammsa-green'}`}
+                                  style={{ width: `${phaseProgress.percent}%` }}
+                                />
+                              </div>
+                              {currentPhase && !isComplete && (
+                                <div className="flex items-center gap-1.5 mt-1">
+                                  <span className={`w-2 h-2 rounded-full ${phaseColors[currentPhase.id] || 'bg-gray-400'} animate-pulse`} />
+                                  <span className="text-[11px] text-gray-600">
+                                    Current: <span className="font-semibold text-gray-800">{currentPhase.label}</span>
+                                  </span>
+                                </div>
+                              )}
+                            </div>
+
+                            {/* Committee info */}
+                            <div className="px-3 pb-3">
+                              <div className="flex items-center gap-3 text-[11px] text-gray-500 mb-2">
+                                <span className="flex items-center gap-1">
+                                  <CalendarIcon className="w-3 h-3" />
+                                  Formed {c.formed_date ? new Date(c.formed_date).toLocaleDateString() : 'N/A'}
+                                </span>
+                                <span>•</span>
+                                <span>{c.member_count || 0} members</span>
+                                {c.quorum_met !== undefined && (
+                                  <>
+                                    <span>•</span>
+                                    <span className={c.quorum_met ? 'text-emerald-600 font-semibold' : 'text-amber-600'}>
+                                      {c.quorum_met ? 'Quorum met' : 'Quorum not met'}
+                                    </span>
+                                  </>
+                                )}
+                              </div>
+
+                              {/* Chairperson & Secretary */}
+                              <div className="space-y-1.5 mb-2">
+                                {c.chairperson_name && (
+                                  <div className="flex items-center gap-2 text-xs">
+                                    <span className="w-5 h-5 rounded-full bg-zammsa-green/10 text-zammsa-green flex items-center justify-center text-[10px] font-bold shrink-0">C</span>
+                                    <span className="text-gray-700 truncate">
+                                      <span className="font-semibold">{c.chairperson_name}</span>
+                                      <span className="text-gray-400 ml-1">Chairperson</span>
+                                    </span>
+                                  </div>
+                                )}
+                                {c.secretary_name && (
+                                  <div className="flex items-center gap-2 text-xs">
+                                    <span className="w-5 h-5 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center text-[10px] font-bold shrink-0">S</span>
+                                    <span className="text-gray-700 truncate">
+                                      <span className="font-semibold">{c.secretary_name}</span>
+                                      <span className="text-gray-400 ml-1">Secretary</span>
+                                    </span>
+                                  </div>
+                                )}
+                              </div>
+
+                              {/* Member chips */}
+                              {Array.isArray(c.members) && c.members.length > 0 && (
+                                <div className="flex flex-wrap gap-1 mb-2">
+                                  {c.members.slice(0, 6).map((m: any, idx: number) => {
+                                    const memberId = typeof m === 'string' ? m : m?.user || m?.id;
+                                    const name = getUserName(memberId);
+                                    const displayName = name.split(' (')[0] || memberId?.slice(0, 8);
+                                    return (
+                                      <span key={idx} className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-gray-100 text-gray-600" title={name}>
+                                        {displayName}
+                                      </span>
+                                    );
+                                  })}
+                                  {c.members.length > 6 && (
+                                    <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-gray-200 text-gray-500">
+                                      +{c.members.length - 6} more
+                                    </span>
+                                  )}
+                                </div>
+                              )}
+
+                              {/* Non-official members */}
+                              {c.non_official_members?.length > 0 && (
+                                <div className="mt-2 pt-2 border-t border-gray-100">
+                                  <p className="text-[10px] font-bold text-amber-700 uppercase tracking-wide mb-1">External Members</p>
+                                  {c.non_official_members.map((nom: any, i: number) => (
+                                    <div key={i} className="text-[11px] text-amber-700 pl-2 border-l-2 border-amber-300 mb-1.5">
+                                      <p className="font-semibold">{nom.first_name} {nom.last_name}</p>
+                                      <p className="text-amber-600">{nom.expertise}</p>
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+
+                              {/* COI declarations */}
+                              {c.coi_declarations && c.coi_declarations.length > 0 && (
+                                <div className="mt-2 pt-2 border-t border-gray-100">
+                                  <p className="text-[10px] font-semibold text-gray-500">
+                                    COI Declarations: {c.coi_declarations.length} submitted
+                                    {c.coi_declarations.filter((d: any) => d.has_conflict).length > 0 && (
+                                      <span className="text-amber-600 ml-1">({c.coi_declarations.filter((d: any) => d.has_conflict).length} conflicts)</span>
+                                    )}
+                                  </p>
+                                </div>
+                              )}
+                            </div>
+
+                            {/* Actions */}
+                            <div className="flex gap-2 px-3 pb-3">
+                              <button type="button" onClick={() => openEditCommittee(c)}
+                                className="px-3 py-1.5 bg-white border border-gray-300 rounded-lg text-xs font-semibold text-gray-700 hover:bg-gray-50 flex items-center gap-1">
+                                <DocumentReportIcon className="w-3 h-3" /> Edit
+                              </button>
+                              {deleteConfirmId === c.id ? (
+                                <div className="flex gap-1">
+                                  <button type="button" onClick={() => deleteMutation.mutate(c.id)}
+                                    className="px-3 py-1.5 bg-red-600 text-white rounded-lg text-xs font-semibold hover:bg-red-700">
+                                    {deleteMutation.isPending ? 'Deleting...' : 'Confirm'}
+                                  </button>
+                                  <button type="button" onClick={() => setDeleteConfirmId(null)}
+                                    className="px-3 py-1.5 bg-gray-200 text-gray-600 rounded-lg text-xs font-semibold hover:bg-gray-300">
+                                    <XCircleIcon className="w-3.5 h-3.5" />
+                                  </button>
+                                </div>
+                              ) : (
+                                <button type="button" onClick={() => setDeleteConfirmId(c.id)}
+                                  className="px-3 py-1.5 bg-white border border-red-200 text-red-600 rounded-lg text-xs font-semibold hover:bg-red-50">
+                                  <TrashIcon className="w-3.5 h-3.5 inline" />
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+
+                      {committees.length === 0 && (
+                        <p className="text-sm text-gray-400 text-center py-4">No committees formed yet</p>
+                      )}
+
+                      {totalPages > 1 && (
+                        <div className="flex items-center justify-between pt-2 border-t border-gray-100">
+                          <button
+                            onClick={() => setCommitteePage(p => Math.max(1, p - 1))}
+                            disabled={committeePage === 1}
+                            className="px-3 py-1.5 text-xs font-semibold rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed"
+                          >
+                            Prev
                           </button>
-                          <button type="button" onClick={() => setDeleteConfirmId(null)}
-                            className="px-3 py-1.5 bg-gray-200 text-gray-600 rounded-lg text-xs font-semibold hover:bg-gray-300">
-                            <XCircleIcon className="w-3.5 h-3.5" />
+                          <span className="text-[11px] text-gray-500 font-medium">
+                            {committeePage} / {totalPages}
+                          </span>
+                          <button
+                            onClick={() => setCommitteePage(p => Math.min(totalPages, p + 1))}
+                            disabled={committeePage === totalPages}
+                            className="px-3 py-1.5 text-xs font-semibold rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed"
+                          >
+                            Next
                           </button>
                         </div>
-                      ) : (
-                        <button type="button" onClick={() => setDeleteConfirmId(c.id)}
-                          className="px-3 py-1.5 bg-white border border-red-200 text-red-600 rounded-lg text-xs font-semibold hover:bg-red-50">
-                          <TrashIcon className="w-3.5 h-3.5 inline" />
-                        </button>
                       )}
-                    </div>
-                  </div>
-                ))}
-                {committees.length === 0 && (
-                  <p className="text-sm text-gray-400 text-center py-4">No committees formed yet</p>
-                )}
+                    </>
+                  );
+                })()}
               </div>
             )}
           </div>

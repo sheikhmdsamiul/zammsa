@@ -15,7 +15,8 @@ import django_filters
 import pdfkit
 from accounts.permissions import CanManageEvaluationCommittees
 from accounts.models import User
-from system_config.notifications import notify_role, notify_users
+from accounts.serializers import UserCreateSerializer
+from system_config.notifications import notify_role, notify_users, send_external_email
 
 from .crypto_sign import sign_ber_payload, verify_signature
 from .models import EvaluationCommittee, ConflictOfInterest, PreliminaryExam, TechnicalScore, FinancialEvaluation, CombinedScore, BidEvaluationReport, PostQualification
@@ -49,6 +50,89 @@ def _committee_membership_ids(committee):
     if committee.secretary_id:
         member_ids.add(str(committee.secretary_id))
     return member_ids
+
+
+def _create_temp_accounts_for_non_official_members(committee):
+    non_official = committee.non_official_members or []
+    if not non_official:
+        return
+
+    updated_non_official = []
+    for member in non_official:
+        first = member.get('first_name', '')
+        last = member.get('last_name', '')
+        email = member.get('email', '')
+        expertise = member.get('expertise', '')
+        if not email:
+            updated_non_official.append(member)
+            continue
+
+        full_name = f'{first} {last}'.strip()
+        if not full_name:
+            updated_non_official.append(member)
+            continue
+
+        # Check if a user with this email already exists (e.g. from a previous create without user_id storage)
+        existing_user = User.objects.filter(email=email).first()
+        if existing_user:
+            needs_email = not member.get('user_id')
+            member['user_id'] = str(existing_user.id)
+            updated_non_official.append(member)
+            if needs_email:
+                temp_pw = existing_user.temp_password or 'Contact the procurement team for new credentials.'
+                subject = f'Evaluation Committee Access - {committee.solicitation.sol_number}'
+                message = (
+                    f'Dear {full_name},\n\n'
+                    f'You have been assigned as a non-official evaluation committee member for '
+                    f'{committee.solicitation.sol_number} — {committee.solicitation.title}.\n\n'
+                    f'Your expertise area: {expertise}\n\n'
+                    f'You can log in to the ZAMMSA Procurement System using the following credentials:\n\n'
+                    f'Email: {email}\n'
+                    f'Temporary Password: {temp_pw}\n\n'
+                    f'You will be required to change your password on first login.\n'
+                    f'This account is temporary and will be deactivated once the solicitation is awarded.\n\n'
+                    f'Please log in and complete your Conflict of Interest declaration.\n\n'
+                    f'Regards,\nZAMMSA Procurement Team'
+                )
+                send_external_email(subject, message, email)
+            continue
+
+        temp_password = str(uuid.uuid4())[:12]
+        employee_id = f'TMP-EC-{uuid.uuid4().hex[:8].upper()}'
+
+        user = User.objects.create_user(
+            email=email,
+            password=temp_password,
+            employee_id=employee_id,
+            full_name=full_name,
+            role='evaluation_committee_member',
+            is_active=True,
+            must_change_password=True,
+            temp_password=temp_password,
+        )
+
+        member['user_id'] = str(user.id)
+        updated_non_official.append(member)
+
+        subject = f'Evaluation Committee Access - {committee.solicitation.sol_number}'
+        message = (
+            f'Dear {full_name},\n\n'
+            f'You have been assigned as a non-official evaluation committee member for '
+            f'{committee.solicitation.sol_number} — {committee.solicitation.title}.\n\n'
+            f'Your expertise area: {expertise}\n\n'
+            f'You can log in to the ZAMMSA Procurement System using the following credentials:\n\n'
+            f'Email: {email}\n'
+            f'Temporary Password: {temp_password}\n\n'
+            f'You will be required to change your password on first login.\n'
+            f'This account is temporary and will be deactivated once the solicitation is awarded.\n\n'
+            f'Please log in and complete your Conflict of Interest declaration.\n\n'
+            f'Regards,\nZAMMSA Procurement Team'
+        )
+        send_external_email(subject, message, email)
+
+    if updated_non_official:
+        committee.non_official_members = updated_non_official
+        committee.save(update_fields=['non_official_members'])
 
 
 def _require_coi_clearance(solicitation):
@@ -214,11 +298,17 @@ class EvaluationCommitteeListView(BaseView, generics.ListCreateAPIView):
             email_required=True,
         )
 
+        _create_temp_accounts_for_non_official_members(committee)
+
 
 class EvaluationCommitteeDetailView(generics.RetrieveUpdateDestroyAPIView):
     queryset = EvaluationCommittee.objects.all()
     serializer_class = EvaluationCommitteeSerializer
     permission_classes = [CanManageEvaluationCommittees]
+
+    def perform_update(self, serializer):
+        committee = serializer.save()
+        _create_temp_accounts_for_non_official_members(committee)
 
 
 class PreliminaryExamListView(BaseView, generics.ListCreateAPIView):
@@ -1068,6 +1158,17 @@ def select_winner_view(request, solicitation_pk):
             status='pending',
             verification_items=[],
         )
+
+    # Deactivate temp accounts for non-official committee members
+    committees = EvaluationCommittee.objects.filter(solicitation=sol)
+    temp_user_ids = []
+    for c in committees:
+        for nom in (c.non_official_members or []):
+            uid = nom.get('user_id')
+            if uid:
+                temp_user_ids.append(uid)
+    if temp_user_ids:
+        User.objects.filter(id__in=temp_user_ids, role='evaluation_committee_member').update(is_active=False)
 
     return Response({
         'message': f'Winner selected: {winner.submission_id}',
