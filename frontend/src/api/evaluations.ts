@@ -108,6 +108,9 @@ export const evaluationsApi = {
   generatePQChecklist: (pqId: string) =>
     api.post<any>(`/evaluations/post-qualifications/${pqId}/generate-checklist/`).then((r) => r.data),
 
+  getPQVerificationContext: (pqId: string) =>
+    api.get<any>(`/evaluations/post-qualifications/${pqId}/verification-context/`).then((r) => r.data),
+
   listBERs: (params?: Record<string, any>) =>
     api.get<PaginatedResponse<any>>('/evaluations/reports/', { params }).then((r) => r.data),
 
@@ -125,4 +128,19 @@ export const evaluationsApi = {
 
   getPhaseStatus: (solicitationId: string) =>
     api.get<any>(`/evaluations/phase-status/${solicitationId}/`).then((r) => r.data),
+
+  listAppeals: (params?: Record<string, any>) =>
+    api.get<PaginatedResponse<any>>('/evaluations/award-appeals/', { params }).then((r) => r.data),
+
+  getAppeal: (appealId: string) =>
+    api.get<any>(`/evaluations/award-appeals/${appealId}/`).then((r) => r.data),
+
+  fileAppeal: (data: { solicitation: string; bidder: string; grounds: string; grounds_detail?: string; supporting_documents?: any[] }) =>
+    api.post<any>('/evaluations/award-appeals/', data).then((r) => r.data),
+
+  updateAppeal: (appealId: string, data: { status?: string; resolution?: string }) =>
+    api.patch<any>(`/evaluations/award-appeals/${appealId}/`, data).then((r) => r.data),
+
+  withdrawAppeal: (appealId: string) =>
+    api.patch<any>(`/evaluations/award-appeals/${appealId}/`, { status: 'withdrawn' }).then((r) => r.data),
 };

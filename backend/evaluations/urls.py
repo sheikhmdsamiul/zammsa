@@ -36,5 +36,8 @@ urlpatterns = [
     path('post-qualifications/<uuid:pk>/', views.PostQualificationDetailView.as_view(), name='pq-detail'),
     path('post-qualifications/<uuid:pq_pk>/update-item/', views.pq_update_verification_item_view, name='pq-update-item'),
     path('post-qualifications/<uuid:pq_pk>/generate-checklist/', views.pq_generate_checklist_view, name='pq-generate-checklist'),
+    path('post-qualifications/<uuid:pq_pk>/verification-context/', views.pq_verification_context_view, name='pq-verification-context'),
     path('phase-status/<uuid:solicitation_pk>/', views.evaluation_phase_status_view, name='phase-status'),
+    path('award-appeals/', views.AwardAppealListView.as_view(), name='appeal-list'),
+    path('award-appeals/<uuid:appeal_pk>/', views.AwardAppealDetailView.as_view(), name='appeal-detail'),
 ]

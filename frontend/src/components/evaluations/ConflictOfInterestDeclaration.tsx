@@ -122,6 +122,12 @@ const ConflictOfInterestDeclaration: React.FC = () => {
     const name = typeof m === 'string' ? m.slice(0, 8) : m.full_name || m.user;
     addMember(id, name, 'Member');
   });
+  (committee.non_official_members || []).forEach((nom: any) => {
+    if (nom?.user_id) {
+      const name = [nom.first_name, nom.last_name].filter(Boolean).join(' ') || 'Non-Official Member';
+      addMember(nom.user_id, name, 'Non-Official Member');
+    }
+  });
 
   const members = Array.from(memberMap.values());
 
@@ -145,9 +151,15 @@ const ConflictOfInterestDeclaration: React.FC = () => {
   if (hasMyDeclaration) {
     const isRecused = myDeclaration?.recused;
     return (
-      <div className="max-w-4xl mx-auto space-y-6">
+        <div className="max-w-4xl mx-auto space-y-6">
         <div className="flex items-center justify-between">
           <div>
+            <button
+              onClick={() => navigate(`/evaluations/${committeeId}`)}
+              className="text-sm text-gray-500 hover:text-gray-900 mb-2 flex items-center gap-1 transition-colors"
+            >
+              ← Back to Evaluation Committee
+            </button>
             <div className="flex items-center gap-3">
               <h1 className="text-2xl font-bold text-gray-900">Conflict of Interest Declaration</h1>
               <StatusBadge status={allDeclared ? 'completed' : 'active'} />
@@ -256,6 +268,12 @@ const ConflictOfInterestDeclaration: React.FC = () => {
     <div className="max-w-4xl mx-auto space-y-6">
       <div className="flex items-center justify-between">
         <div>
+          <button
+            onClick={() => navigate(`/evaluations/${committeeId}`)}
+            className="text-sm text-gray-500 hover:text-gray-900 mb-2 flex items-center gap-1 transition-colors"
+          >
+            ← Back to Evaluation Committee
+          </button>
           <div className="flex items-center gap-3">
             <h1 className="text-2xl font-bold text-gray-900">Conflict of Interest Declaration</h1>
             <StatusBadge status="active" />

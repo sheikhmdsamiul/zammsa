@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { evaluationsApi } from '../../api/evaluations';
 import { LoadingSpinner } from '../common/LoadingSpinner';
@@ -9,6 +10,8 @@ import toast from 'react-hot-toast';
 import {
   CheckCircleIcon, XCircleIcon, ClipboardListIcon,
   ChevronDownIcon, ChevronUpIcon, ClockIcon,
+  ShieldCheckIcon, DocumentTextIcon, CurrencyDollarIcon,
+  ExclamationIcon, OfficeBuildingIcon, UserGroupIcon,
 } from '@heroicons/react/outline';
 
 const CATEGORY_LABELS: Record<string, string> = {
@@ -28,6 +31,9 @@ const CATEGORY_COLORS: Record<string, string> = {
 };
 
 const PostQualification: React.FC = () => {
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const solicitationFilter = searchParams.get('solicitation') || '';
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
   const [search, setSearch] = useState('');
@@ -41,13 +47,19 @@ const PostQualification: React.FC = () => {
   const queryClient = useQueryClient();
 
   const { data, isLoading } = useQuery({
-    queryKey: ['post-qualifications', page, pageSize, search],
-    queryFn: () => evaluationsApi.listPostQuals({ page, page_size: pageSize, search }),
+    queryKey: ['post-qualifications', page, pageSize, search, solicitationFilter],
+    queryFn: () => evaluationsApi.listPostQuals({ page, page_size: pageSize, search, solicitation: solicitationFilter || undefined }),
   });
 
   const { data: selectedData, isLoading: selectedLoading } = useQuery({
     queryKey: ['post-qualification', selectedPQ],
     queryFn: () => evaluationsApi.getPostQual(selectedPQ!),
+    enabled: !!selectedPQ,
+  });
+
+  const { data: contextData, isLoading: contextLoading } = useQuery({
+    queryKey: ['pq-verification-context', selectedPQ],
+    queryFn: () => evaluationsApi.getPQVerificationContext(selectedPQ!),
     enabled: !!selectedPQ,
   });
 
@@ -57,6 +69,7 @@ const PostQualification: React.FC = () => {
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['post-qualifications'] });
       queryClient.invalidateQueries({ queryKey: ['post-qualification', selectedPQ] });
+      queryClient.invalidateQueries({ queryKey: ['pq-verification-context', selectedPQ] });
       queryClient.invalidateQueries({ queryKey: ['phase-status'] });
       setEditingItem(null);
       setItemNotes('');
@@ -71,6 +84,7 @@ const PostQualification: React.FC = () => {
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['post-qualifications'] });
       queryClient.invalidateQueries({ queryKey: ['post-qualification', selectedPQ] });
+      queryClient.invalidateQueries({ queryKey: ['pq-verification-context', selectedPQ] });
       toast.success('Verification checklist generated');
     },
     onError: (err: any) => toast.error(err?.response?.data?.error || 'Failed to generate checklist'),
@@ -118,8 +132,27 @@ const PostQualification: React.FC = () => {
 
   // Detail view
   if (selectedPQ && selected) {
+    const ctx = contextData;
+    const verificationItems = ctx?.verification_items || selected?.verification_items || [];
+    const overallProgress = verificationItems.length > 0
+      ? Math.round((verificationItems.filter((i: any) => i.status === 'cleared' || i.status === 'failed').length / verificationItems.length) * 100)
+      : 0;
+    const groupedItems = verificationItems.reduce((acc: Record<string, any[]>, item: any) => {
+      const cat = item.category || 'other';
+      if (!acc[cat]) acc[cat] = [];
+      acc[cat].push(item);
+      return acc;
+    }, {});
+
+    const DetailRow = ({ label, value, mono }: { label: string; value: any; mono?: boolean }) => (
+      <div className="flex justify-between py-1.5">
+        <span className="text-xs text-gray-500">{label}</span>
+        <span className={`text-xs font-medium text-gray-900 ${mono ? 'font-mono' : ''}`}>{value || '-'}</span>
+      </div>
+    );
+
     return (
-      <div className="max-w-5xl mx-auto space-y-6">
+      <div className="max-w-6xl mx-auto space-y-6">
         <div className="flex items-center justify-between">
           <div>
             <button
@@ -148,9 +181,242 @@ const PostQualification: React.FC = () => {
           )}
         </div>
 
-        {selectedLoading ? <LoadingSpinner className="py-12" /> : (
+        {selectedLoading || contextLoading ? <LoadingSpinner className="py-12" /> : (
           <>
-            {/* Progress Overview */}
+            {/* Blacklist Warning */}
+            {ctx?.blacklist && (
+              <div className="bg-red-50 border-2 border-red-300 rounded-xl p-4 flex items-start gap-3">
+                <ExclamationIcon className="w-6 h-6 text-red-600 shrink-0 mt-0.5" />
+                <div>
+                  <p className="text-sm font-bold text-red-800">BLACKLISTED SUPPLIER</p>
+                  <p className="text-xs text-red-700 mt-1">Reason: {ctx.blacklist.reason}</p>
+                  {ctx.blacklist.debarred_until && (
+                    <p className="text-xs text-red-700">Debarred until: {new Date(ctx.blacklist.debarred_until).toLocaleDateString()}</p>
+                  )}
+                  {ctx.blacklist.source && <p className="text-xs text-red-700">Source: {ctx.blacklist.source}</p>}
+                </div>
+              </div>
+            )}
+
+            {/* Supplier & Bid Context - Two Column */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {/* Supplier Company Profile */}
+              {ctx?.supplier_profile && (
+                <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-5">
+                  <div className="flex items-center gap-2 mb-3">
+                    <OfficeBuildingIcon className="w-4 h-4 text-gray-400" />
+                    <h3 className="text-sm font-bold text-gray-900">Supplier Company Profile</h3>
+                  </div>
+                  <div className="divide-y divide-gray-50">
+                    <DetailRow label="Company Name" value={ctx.supplier_profile.name} />
+                    <DetailRow label="Registration No." value={ctx.supplier_profile.registration_number} mono />
+                    <DetailRow label="TIN" value={ctx.supplier_profile.tin} mono />
+                    <DetailRow label="CEEC Category" value={ctx.supplier_profile.ceec_category?.replace(/_/g, ' ')} />
+                    <DetailRow label="Supplier Status" value={
+                      <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${
+                        ctx.supplier_profile.status === 'active' ? 'bg-emerald-100 text-emerald-700' :
+                        ctx.supplier_profile.status === 'suspended' ? 'bg-red-100 text-red-700' :
+                        'bg-gray-100 text-gray-600'
+                      }`}>{ctx.supplier_profile.status}</span>
+                    } />
+                    <DetailRow label="Risk Level" value={
+                      <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${
+                        ctx.supplier_profile.risk_level === 'low' ? 'bg-emerald-100 text-emerald-700' :
+                        ctx.supplier_profile.risk_level === 'high' ? 'bg-red-100 text-red-700' :
+                        'bg-amber-100 text-amber-700'
+                      }`}>{ctx.supplier_profile.risk_level || 'N/A'}</span>
+                    } />
+                    <DetailRow label="Bank" value={ctx.supplier_profile.bank_name} />
+                    <DetailRow label="Account No." value={ctx.supplier_profile.bank_account_number} mono />
+                  </div>
+                </div>
+              )}
+
+              {/* Vendor Application Profile */}
+              {ctx?.vendor_application && (
+                <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-5">
+                  <div className="flex items-center gap-2 mb-3">
+                    <DocumentTextIcon className="w-4 h-4 text-gray-400" />
+                    <h3 className="text-sm font-bold text-gray-900">Vendor Registration Details</h3>
+                  </div>
+                  <div className="divide-y divide-gray-50">
+                    <DetailRow label="Business Type" value={ctx.vendor_application.business_type} />
+                    <DetailRow label="Year Established" value={ctx.vendor_application.year_established} />
+                    <DetailRow label="Employee Count" value={ctx.vendor_application.employee_count} />
+                    <DetailRow label="Annual Turnover" value={ctx.vendor_application.annual_turnover ? `ZMW ${Number(ctx.vendor_application.annual_turnover).toLocaleString()}` : '-'} />
+                    <DetailRow label="Contact Person" value={ctx.vendor_application.contact_person} />
+                    <DetailRow label="Phone" value={ctx.vendor_application.contact_phone} />
+                    <DetailRow label="PACRA Validated" value={
+                      ctx.vendor_application.pacra_validated ?
+                        <CheckCircleIcon className="w-4 h-4 text-emerald-500" /> :
+                        <XCircleIcon className="w-4 h-4 text-gray-300" />
+                    } />
+                    <DetailRow label="CEEC Validated" value={
+                      ctx.vendor_application.ceec_validated ?
+                        <CheckCircleIcon className="w-4 h-4 text-emerald-500" /> :
+                        <XCircleIcon className="w-4 h-4 text-gray-300" />
+                    } />
+                  </div>
+                </div>
+              )}
+
+              {/* Bid Details */}
+              {ctx?.bid && (
+                <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-5">
+                  <div className="flex items-center gap-2 mb-3">
+                    <CurrencyDollarIcon className="w-4 h-4 text-gray-400" />
+                    <h3 className="text-sm font-bold text-gray-900">Bid Details</h3>
+                  </div>
+                  <div className="divide-y divide-gray-50">
+                    <DetailRow label="Submission ID" value={ctx.bid.submission_id} mono />
+                    <DetailRow label="Bid Price" value={`ZMW ${Number(ctx.bid.bid_price).toLocaleString(undefined, { minimumFractionDigits: 2 })}`} />
+                    <DetailRow label="Currency" value={ctx.bid.currency} />
+                    <DetailRow label="Validity Period" value={ctx.bid.validity_period_days ? `${ctx.bid.validity_period_days} days` : '-'} />
+                    <DetailRow label="Security Amount" value={ctx.bid.security_amount ? `ZMW ${Number(ctx.bid.security_amount).toLocaleString()}` : '-'} />
+                    <DetailRow label="Security Type" value={ctx.bid.security_type?.replace(/_/g, ' ')} />
+                    <DetailRow label="Submitted" value={ctx.bid.submitted_at ? new Date(ctx.bid.submitted_at).toLocaleString() : '-'} />
+                  </div>
+                </div>
+              )}
+
+              {/* Bid Securities */}
+              {ctx?.bid_securities?.length > 0 && (
+                <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-5">
+                  <div className="flex items-center gap-2 mb-3">
+                    <ShieldCheckIcon className="w-4 h-4 text-gray-400" />
+                    <h3 className="text-sm font-bold text-gray-900">Bid Securities</h3>
+                  </div>
+                  <div className="space-y-3">
+                    {ctx.bid_securities.map((sec: any) => (
+                      <div key={sec.security_id} className="bg-gray-50 rounded-lg p-3">
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="text-xs font-semibold text-gray-700">{sec.security_type?.replace(/_/g, ' ').toUpperCase()}</span>
+                          <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${
+                            sec.verification_status === 'verified' ? 'bg-emerald-100 text-emerald-700' :
+                            sec.verification_status === 'rejected' ? 'bg-red-100 text-red-700' :
+                            'bg-amber-100 text-amber-700'
+                          }`}>{sec.verification_status}</span>
+                        </div>
+                        <div className="text-[11px] text-gray-600 space-y-0.5">
+                          <p>Amount: ZMW {Number(sec.amount).toLocaleString()}</p>
+                          <p>Institution: {sec.issuing_institution}</p>
+                          <p>Ref: {sec.reference_number}</p>
+                          <p>Valid until: {sec.validity_date ? new Date(sec.validity_date).toLocaleDateString() : '-'}</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Bid Documents */}
+            {ctx?.bid_documents?.length > 0 && (
+              <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-5">
+                <div className="flex items-center gap-2 mb-3">
+                  <DocumentTextIcon className="w-4 h-4 text-gray-400" />
+                  <h3 className="text-sm font-bold text-gray-900">Submitted Bid Documents</h3>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                  {ctx.bid_documents.map((doc: any) => (
+                    <div key={doc.document_id} className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg border border-gray-200">
+                      <DocumentTextIcon className="w-5 h-5 text-blue-500 shrink-0" />
+                      <div className="min-w-0">
+                        <p className="text-xs font-medium text-gray-900 truncate">{doc.document_type?.replace(/_/g, ' ')}</p>
+                        <p className="text-[10px] text-gray-500">Uploaded {doc.uploaded_at ? new Date(doc.uploaded_at).toLocaleDateString() : '-'}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Technical & Financial Scores */}
+            {ctx?.technical_scores?.length > 0 && (
+              <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-5">
+                <div className="flex items-center gap-2 mb-3">
+                  <ClipboardListIcon className="w-4 h-4 text-gray-400" />
+                  <h3 className="text-sm font-bold text-gray-900">Evaluation Scores</h3>
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="min-w-full text-xs">
+                    <thead>
+                      <tr className="border-b border-gray-200">
+                        <th className="text-left py-2 font-medium text-gray-500">Criterion</th>
+                        <th className="text-left py-2 font-medium text-gray-500">Evaluator</th>
+                        <th className="text-right py-2 font-medium text-gray-500">Raw Score</th>
+                        <th className="text-right py-2 font-medium text-gray-500">Weighted</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-50">
+                      {ctx.technical_scores.map((ts: any, i: number) => (
+                        <tr key={i}>
+                          <td className="py-1.5 text-gray-900">{ts.criterion}</td>
+                          <td className="py-1.5 text-gray-600">{ts.evaluator}</td>
+                          <td className="py-1.5 text-right font-mono">{ts.raw_score.toFixed(1)}</td>
+                          <td className="py-1.5 text-right font-mono font-medium">{ts.weighted_score.toFixed(2)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                {ctx.financial_evaluation && (
+                  <div className="mt-3 pt-3 border-t border-gray-200 grid grid-cols-2 md:grid-cols-4 gap-3">
+                    <div className="bg-emerald-50 rounded-lg p-2 text-center">
+                      <p className="text-[10px] text-emerald-600">Original Price</p>
+                      <p className="text-xs font-bold text-emerald-800 font-mono">ZMW {Number(ctx.financial_evaluation.original_price).toLocaleString()}</p>
+                    </div>
+                    <div className="bg-emerald-50 rounded-lg p-2 text-center">
+                      <p className="text-[10px] text-emerald-600">Evaluated Price</p>
+                      <p className="text-xs font-bold text-emerald-800 font-mono">ZMW {Number(ctx.financial_evaluation.evaluated_price).toLocaleString()}</p>
+                    </div>
+                    <div className="bg-blue-50 rounded-lg p-2 text-center">
+                      <p className="text-[10px] text-blue-600">Financial Score</p>
+                      <p className="text-xs font-bold text-blue-800 font-mono">{ctx.financial_evaluation.financial_score.toFixed(2)}</p>
+                    </div>
+                    <div className="bg-purple-50 rounded-lg p-2 text-center">
+                      <p className="text-[10px] text-purple-600">Preference</p>
+                      <p className="text-xs font-bold text-purple-800">{ctx.financial_evaluation.preference_category?.replace(/_/g, ' ')}</p>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Supplier Documents */}
+            {ctx?.supplier_documents?.length > 0 && (
+              <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-5">
+                <div className="flex items-center gap-2 mb-3">
+                  <DocumentTextIcon className="w-4 h-4 text-gray-400" />
+                  <h3 className="text-sm font-bold text-gray-900">Supplier Documents on File</h3>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                  {ctx.supplier_documents.map((doc: any) => (
+                    <div key={doc.document_id} className="flex items-center justify-between p-2.5 bg-gray-50 rounded-lg">
+                      <div className="flex items-center gap-2">
+                        <DocumentTextIcon className="w-4 h-4 text-gray-400" />
+                        <div>
+                          <p className="text-xs font-medium text-gray-900">{doc.document_type?.replace(/_/g, ' ')}</p>
+                          {doc.expiry_date && (
+                            <p className={`text-[10px] ${new Date(doc.expiry_date) < new Date() ? 'text-red-600 font-bold' : 'text-gray-500'}`}>
+                              Expires: {new Date(doc.expiry_date).toLocaleDateString()}
+                              {new Date(doc.expiry_date) < new Date() && ' (EXPIRED)'}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                      <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${
+                        doc.verification_status === 'verified' ? 'bg-emerald-100 text-emerald-700' :
+                        doc.verification_status === 'rejected' ? 'bg-red-100 text-red-700' :
+                        'bg-amber-100 text-amber-700'
+                      }`}>{doc.verification_status}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Verification Progress */}
             {verificationItems.length > 0 && (
               <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
                 <div className="flex items-center justify-between mb-4">
@@ -374,6 +640,12 @@ const PostQualification: React.FC = () => {
   return (
     <div className="max-w-6xl mx-auto space-y-6">
       <div>
+        <button
+          onClick={() => navigate('/evaluations')}
+          className="text-sm text-gray-500 hover:text-gray-900 mb-2 flex items-center gap-1 transition-colors"
+        >
+          ← Back to Evaluations
+        </button>
         <h1 className="text-2xl font-bold text-gray-900">Post-Qualification</h1>
         <p className="text-sm text-gray-500 mt-1">
           Verify winning bidder credentials, references, and compliance before contract award

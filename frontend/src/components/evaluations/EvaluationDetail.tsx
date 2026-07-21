@@ -79,13 +79,18 @@ const EvaluationDetail: React.FC = () => {
     refetchInterval: 10000,
   });
 
-  const [currentPhase, setCurrentPhase] = useState<EvaluationPhaseId>('coi');
-  const [viewingPhase, setViewingPhase] = useState<EvaluationPhaseId | null>(null);
+  const [viewingPhaseId, setViewingPhaseId] = useState<EvaluationPhaseId | null>(null);
 
-  const isChairperson = committee?.chairperson === user?.id;
-  const isSecretary = committee?.secretary === user?.id;
+  const myId = String(user?.id || '');
+  const isChairperson = String(committee?.chairperson || '') === myId;
+  const isSecretary = String(committee?.secretary || '') === myId;
   const isMember = isChairperson || isSecretary || (committee?.members || []).some(
-    (m: any) => (typeof m === 'string' ? m : m.user) === user?.id
+    (m: any) => {
+      const uid = typeof m === 'object' && m !== null ? (m.user || m.id) : m;
+      return String(uid || '') === myId;
+    }
+  ) || (committee?.non_official_members || []).some(
+    (nom: any) => String(nom?.user_id || '') === myId
   );
   const alreadyDeclared = !!coiState?.declarations?.some(
     (d: any) => d.member === user?.id || d.user === user?.id || d.user_id === user?.id
@@ -121,19 +126,16 @@ const EvaluationDetail: React.FC = () => {
     return 'external';
   }, [isChairperson, isSecretary, isMember]);
 
-  // Auto-advance current phase
-  useEffect(() => {
+  const currentPhaseId = useMemo<EvaluationPhaseId>(() => {
     const phaseOrder = EVALUATION_PHASES.map(p => p.id);
-    const currentIndex = phaseOrder.indexOf(currentPhase);
-    if (phasesComplete[currentPhase] && currentIndex < phaseOrder.length - 1) {
-      const nextIncomplete = phaseOrder.find((phaseId, idx) => idx > currentIndex && !phasesComplete[phaseId]);
-      if (nextIncomplete) {
-        setCurrentPhase(nextIncomplete);
-        setViewingPhase(null);
-        return;
-      }
+    return phaseOrder.find(id => !phasesComplete[id]) || phaseOrder[phaseOrder.length - 1];
+  }, [phasesComplete]);
+
+  useEffect(() => {
+    if (viewingPhaseId && viewingPhaseId === currentPhaseId) {
+      setViewingPhaseId(null);
     }
-  }, [phasesComplete, currentPhase]);
+  }, [currentPhaseId, viewingPhaseId]);
 
   useEffect(() => {
     if (needsCoiDeclaration && id) {
@@ -150,43 +152,51 @@ const EvaluationDetail: React.FC = () => {
     if (!uid || memberListMap.has(uid)) return;
     memberListMap.set(uid, member);
   };
-  addMember(committee.chairperson, { user: committee.chairperson, full_name: committee.chairperson_name || committee.chairperson, role: 'Chairperson' });
-  addMember(committee.secretary, { user: committee.secretary, full_name: committee.secretary_name || committee.secretary, role: 'Secretary' });
+  addMember(String(committee.chairperson || ''), { user: committee.chairperson, full_name: committee.chairperson_name || committee.chairperson, role: 'Chairperson' });
+  addMember(String(committee.secretary || ''), { user: committee.secretary, full_name: committee.secretary_name || committee.secretary, role: 'Secretary' });
   (committee.members || []).forEach((m: any) => {
-    const uid = typeof m === 'string' ? m : m.user;
-    addMember(uid, typeof m === 'string' ? { user: m, full_name: m.slice(0, 8) } : m);
+    const uid = typeof m === 'object' && m !== null ? (m.user || m.id) : m;
+    const uidStr = String(uid || '');
+    addMember(uidStr, typeof m === 'object' && m !== null ? m : { user: m, full_name: String(m).slice(0, 8) });
+  });
+  (committee.non_official_members || []).forEach((m: any) => {
+    if (typeof m !== 'object' || m === null) return;
+    const uid = String(m.user_id || m.id || m.email || '');
+    if (!uid) return;
+    addMember(uid, {
+      ...m,
+      user: m.user_id || m.id || uid,
+      full_name: [m.first_name, m.last_name].filter(Boolean).join(' ') || m.email || 'External',
+      role: m.expertise || 'External Member',
+      is_external: true,
+    });
   });
   const memberList = Array.from(memberListMap.values());
 
-  const activePhase = viewingPhase || currentPhase;
+  const activePhase = viewingPhaseId || currentPhaseId;
   const activePhaseConfig = EVALUATION_PHASES.find(p => p.id === activePhase);
   const activePhaseIdx = EVALUATION_PHASES.findIndex(p => p.id === activePhase);
+  const currentPhaseIdx = EVALUATION_PHASES.findIndex(p => p.id === currentPhaseId);
   const isFirstPhase = activePhaseIdx === 0;
-  const isLastPhase = activePhaseIdx === EVALUATION_PHASES.length - 1;
   const prevPhase = !isFirstPhase ? EVALUATION_PHASES[activePhaseIdx - 1] : null;
-  const nextPhase = !isLastPhase ? EVALUATION_PHASES[activePhaseIdx + 1] : null;
-  const canGoBack = viewingPhase !== null || (prevPhase && phasesComplete[prevPhase.id]);
-  const canGoForward = nextPhase && phasesComplete[activePhase];
+  const nextPhase = activePhaseIdx < EVALUATION_PHASES.length - 1 ? EVALUATION_PHASES[activePhaseIdx + 1] : null;
+  const canGoBack = activePhaseIdx > 0;
+  const canGoForward = viewingPhaseId !== null || activePhaseIdx < currentPhaseIdx;
   const colors = PHASE_COLORS[activePhase] || PHASE_COLORS.coi;
 
   const handleNavigate = (direction: 'back' | 'forward') => {
     if (direction === 'back' && prevPhase) {
-      if (phasesComplete[prevPhase.id]) {
-        setViewingPhase(prevPhase.id);
-        setCurrentPhase(prevPhase.id);
-      }
+      setViewingPhaseId(prevPhase.id === currentPhaseId ? null : prevPhase.id);
     } else if (direction === 'forward' && nextPhase) {
-      setViewingPhase(null);
-      setCurrentPhase(nextPhase.id);
+      setViewingPhaseId(nextPhase.id === currentPhaseId ? null : nextPhase.id);
     }
   };
 
   const handlePhaseClick = (phaseId: EvaluationPhaseId) => {
-    const idx = EVALUATION_PHASES.findIndex(p => p.id === phaseId);
-    const currentIdx = EVALUATION_PHASES.findIndex(p => p.id === currentPhase);
-    if (phasesComplete[phaseId] || idx <= currentIdx) {
-      setViewingPhase(phaseId);
-      setCurrentPhase(phaseId);
+    if (phaseId === currentPhaseId) {
+      setViewingPhaseId(null);
+    } else if (phasesComplete[phaseId]) {
+      setViewingPhaseId(phaseId);
     }
   };
 
@@ -214,7 +224,7 @@ const EvaluationDetail: React.FC = () => {
       {/* Phase Stepper */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
         <EvaluationPhaseStepper
-          currentPhase={currentPhase}
+          currentPhase={currentPhaseId}
           phasesComplete={phasesComplete}
           phasesBlocked={phasesBlocked}
           onPhaseChange={handlePhaseClick}
@@ -365,17 +375,14 @@ const EvaluationDetail: React.FC = () => {
                 {prevPhase ? EVALUATION_PHASES.find(p => p.id === prevPhase?.id)?.label : 'Previous'}
               </button>
               <button
-                onClick={() => {
-                  if (viewingPhase) {
-                    setViewingPhase(null);
-                  } else {
-                    handleNavigate('forward');
-                  }
-                }}
-                disabled={!canGoForward && !viewingPhase}
+                onClick={() => handleNavigate('forward')}
+                disabled={!canGoForward}
                 className="flex items-center gap-2 px-4 py-2 text-sm font-bold rounded-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed bg-zammsa-green text-white hover:bg-green-700"
               >
-                {viewingPhase ? 'Return to Current' : (nextPhase ? EVALUATION_PHASES.find(p => p.id === nextPhase?.id)?.label : 'Complete')}
+                {viewingPhaseId
+                  ? (nextPhase && nextPhase.id === currentPhaseId ? 'Return to Current' : (nextPhase ? EVALUATION_PHASES.find(p => p.id === nextPhase.id)?.label : 'Complete'))
+                  : (nextPhase ? EVALUATION_PHASES.find(p => p.id === nextPhase.id)?.label : 'Complete')
+                }
                 <ArrowRightIcon className="w-4 h-4" />
               </button>
             </div>
@@ -388,7 +395,8 @@ const EvaluationDetail: React.FC = () => {
               {EVALUATION_PHASES.map((phase) => {
                 const isDone = phasesComplete[phase.id];
                 const isCurrent = phase.id === activePhase;
-                const isAccessible = isDone || (!phasesBlocked[phase.id]);
+                const isRealActive = phase.id === currentPhaseId;
+                const isAccessible = isDone || isRealActive;
                 const phaseColors = PHASE_COLORS[phase.id];
 
                 return (
@@ -398,6 +406,7 @@ const EvaluationDetail: React.FC = () => {
                     className={`flex items-center gap-3 p-3 rounded-lg transition-all ${
                       isCurrent ? `${phaseColors.bg} ${phaseColors.border} border` :
                       isDone ? 'bg-gray-50 hover:bg-gray-100 cursor-pointer border border-transparent' :
+                      isRealActive ? `${phaseColors.bg} border border-transparent` :
                       'bg-gray-50/50 border border-transparent'
                     }`}
                   >
@@ -415,7 +424,7 @@ const EvaluationDetail: React.FC = () => {
                       )}
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className={`text-sm font-medium ${isCurrent ? phaseColors.text : isDone ? 'text-gray-900' : 'text-gray-500'}`}>
+                      <p className={`text-sm font-medium ${isCurrent ? phaseColors.text : isDone ? 'text-gray-900' : isRealActive ? 'text-gray-900' : 'text-gray-500'}`}>
                         {phase.label}
                       </p>
                       <p className="text-[10px] text-gray-400 truncate">{phase.description}</p>
@@ -497,9 +506,12 @@ const EvaluationDetail: React.FC = () => {
                 );
                 const recused = coiState?.recused_members?.includes(m.user);
                 return (
-                  <div key={i} className="flex items-center justify-between p-2 bg-gray-50 rounded-lg text-xs">
+                  <div key={i} className={`flex items-center justify-between p-2 rounded-lg text-xs ${m.is_external ? 'bg-purple-50' : 'bg-gray-50'}`}>
                     <div>
-                      <p className="font-medium text-gray-900">{m.full_name || m.user}</p>
+                      <p className="font-medium text-gray-900">
+                        {m.full_name || m.user}
+                        {m.is_external && <span className="ml-1 text-[9px] font-medium text-purple-600 bg-purple-100 px-1 py-0.5 rounded">External</span>}
+                      </p>
                       <p className="text-gray-500">{m.role}</p>
                     </div>
                     {recused ? (
@@ -609,7 +621,8 @@ const PreliminaryContent: React.FC<{
   bidsData: any;
 } & PhaseNavProps> = ({ committee, phasesComplete, bidsData }) => {
   const navigate = useNavigate();
-  const bidCount = bidsData?.results?.length || 0;
+  const bids = bidsData?.results || [];
+  const bidCount = bids.length;
 
   return (
     <div className="space-y-3">
@@ -617,6 +630,30 @@ const PreliminaryContent: React.FC<{
         Review mandatory compliance requirements for all {bidCount} submitted bid(s).
         Each bid is checked against mandatory criteria — pass or fail.
       </p>
+
+      {bidCount > 0 && (
+        <div className="border border-gray-200 rounded-lg overflow-hidden">
+          <table className="min-w-full divide-y divide-gray-200 text-xs">
+            <thead className="bg-gray-50">
+              <tr>
+                <th className="px-3 py-2 text-left font-medium text-gray-500">#</th>
+                <th className="px-3 py-2 text-left font-medium text-gray-500">Bidder</th>
+                <th className="px-3 py-2 text-left font-medium text-gray-500">Bid No.</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-100">
+              {bids.map((bid: any, i: number) => (
+                <tr key={bid.id} className="bg-white">
+                  <td className="px-3 py-2 text-gray-500">{i + 1}</td>
+                  <td className="px-3 py-2 font-medium text-gray-900">{bid.supplier_name || bid.bidder_name || bid.id}</td>
+                  <td className="px-3 py-2 text-gray-500">{bid.submission_id || bid.bid_number || '—'}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
       {phasesComplete.preliminary ? (
         <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-4 flex items-center gap-3">
           <CheckCircleIcon className="w-5 h-5 text-emerald-600" />
@@ -644,6 +681,8 @@ const TechnicalContent: React.FC<{
   isRecused: boolean;
 } & PhaseNavProps> = ({ committee, phasesComplete, bidsData, isRecused }) => {
   const navigate = useNavigate();
+  const bids = bidsData?.results || [];
+  const bidCount = bids.length;
 
   if (isRecused) {
     return (
@@ -659,6 +698,30 @@ const TechnicalContent: React.FC<{
         Score each bid against the technical evaluation criteria. Your scores are private
         until you submit them. All committee members must score independently.
       </p>
+
+      {bidCount > 0 && (
+        <div className="border border-gray-200 rounded-lg overflow-hidden">
+          <table className="min-w-full divide-y divide-gray-200 text-xs">
+            <thead className="bg-gray-50">
+              <tr>
+                <th className="px-3 py-2 text-left font-medium text-gray-500">#</th>
+                <th className="px-3 py-2 text-left font-medium text-gray-500">Bidder</th>
+                <th className="px-3 py-2 text-left font-medium text-gray-500">Bid No.</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-100">
+              {bids.map((bid: any, i: number) => (
+                <tr key={bid.id} className="bg-white">
+                  <td className="px-3 py-2 text-gray-500">{i + 1}</td>
+                  <td className="px-3 py-2 font-medium text-gray-900">{bid.supplier_name || bid.bidder_name || bid.vendor_name || bid.id}</td>
+                  <td className="px-3 py-2 text-gray-500">{bid.submission_id || bid.bid_number || '—'}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
       {phasesComplete.technical ? (
         <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-4 flex items-center gap-3">
           <CheckCircleIcon className="w-5 h-5 text-emerald-600" />
@@ -760,6 +823,7 @@ const PostQualContent: React.FC<{
   phasesComplete: Record<string, boolean>;
 } & PhaseNavProps> = ({ committee, phasesComplete }) => {
   const navigate = useNavigate();
+  const solicitationAwarded = committee?.solicitation_status === 'awarded';
 
   return (
     <div className="space-y-3">
@@ -776,9 +840,13 @@ const PostQualContent: React.FC<{
             <p className="text-xs text-emerald-700">All verification items have been cleared.</p>
           </div>
         </div>
+      ) : !solicitationAwarded ? (
+        <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
+          <p className="text-xs font-medium text-amber-800">Post-qualification will be available after a winning bidder is selected.</p>
+        </div>
       ) : (
         <button
-          onClick={() => navigate(`/evaluations/post-qualification`)}
+          onClick={() => navigate(`/evaluations/post-qualification?solicitation=${committee.solicitation}`)}
           className="px-5 py-2.5 bg-teal-600 text-white rounded-lg text-sm font-bold hover:bg-teal-700"
         >
           Open Post-Qualification →

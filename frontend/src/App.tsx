@@ -85,6 +85,7 @@ const ScoreConsolidation = React.lazy(() => import('./components/evaluations/Sco
 const BERWorkflow = React.lazy(() => import('./components/evaluations/BERWorkflow'));
 const PostQualification = React.lazy(() => import('./components/evaluations/PostQualification'));
 const ZPCApproval = React.lazy(() => import('./components/evaluations/ZPCApproval'));
+const AwardAppealManagement = React.lazy(() => import('./components/evaluations/AwardAppealManagement'));
 
 const ContractsList = React.lazy(() => import('./components/contracts/ContractsList'));
 // DEPRECATED: Direct creation route now redirects to ContractGeneration
@@ -336,6 +337,11 @@ function App() {
                   <Route path="evaluations/ber/:solId" element={
                     <ProtectedRoute roles={[...EVALUATION_COMMITTEE_ROLES, ROLES.ZPC_MEMBER, ROLES.DIRECTOR_PROCUREMENT]}>
                       <BERWorkflow />
+                    </ProtectedRoute>
+                  } />
+                  <Route path="evaluations/award-appeals" element={
+                    <ProtectedRoute roles={[...EVALUATION_COMMITTEE_ROLES, ROLES.DIRECTOR_PROCUREMENT, ROLES.PROCUREMENT_OFFICER, ROLES.SUPPLIER_USER]}>
+                      <AwardAppealManagement />
                     </ProtectedRoute>
                   } />
                   <Route path="contracts" element={

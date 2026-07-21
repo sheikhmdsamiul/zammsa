@@ -49,10 +49,6 @@ const FinancialEvaluation: React.FC = () => {
   const [lastUpdated, setLastUpdated] = useState<string>('');
   const [showCalculateConfirm, setShowCalculateConfirm] = useState(false);
 
-  const isChair = user?.role === ROLES.EVALUATION_COMMITTEE_CHAIR;
-  const isDirector = user?.role === ROLES.DIRECTOR_PROCUREMENT;
-  const canManage = isChair || isDirector;
-
   const [computedQcbsData, setComputedQcbsData] = useState<QCBSResponse | null>(null);
 
   const { data: passedBidsData, isLoading: bidsLoading, refetch: refetchBids } = useQuery({
@@ -66,6 +62,18 @@ const FinancialEvaluation: React.FC = () => {
     queryFn: () => solicitationsApi.get(solId!),
     enabled: !!solId,
   });
+
+  const { data: committeeData } = useQuery({
+    queryKey: ['committees-for-financial', solId],
+    queryFn: () => evaluationsApi.listCommittees({ solicitation: solId, page_size: 5 }),
+    enabled: !!solId,
+  });
+  const primaryCommittee = (committeeData?.results || [])[0];
+
+  const isChairSystem = user?.role === ROLES.EVALUATION_COMMITTEE_CHAIR;
+  const isChairCommittee = primaryCommittee ? String(primaryCommittee.chairperson || '') === String(user?.id || '') : false;
+  const isDirector = user?.role === ROLES.DIRECTOR_PROCUREMENT;
+  const canManage = isChairSystem || isChairCommittee || isDirector;
 
   const passedBids = passedBidsData?.bids || [];
   const solicitationAwarded = solicitation?.status === 'awarded';
@@ -198,6 +206,8 @@ const FinancialEvaluation: React.FC = () => {
       setWinner(data.winner_name);
       setWinnerSelected(true);
       queryClient.invalidateQueries({ queryKey: ['phase-status', solId] });
+      queryClient.invalidateQueries({ queryKey: ['passed-tech-bids', solId] });
+      queryClient.invalidateQueries({ queryKey: ['solicitation', solId] });
       toast.success(`Winner selected: ${data.winner_name}`);
     },
     onError: (err: any) => toast.error(err?.response?.data?.error || 'Failed to select winner'),
@@ -232,6 +242,12 @@ const FinancialEvaluation: React.FC = () => {
     <div className="max-w-6xl mx-auto space-y-6">
       <div className="flex items-center justify-between">
         <div>
+          <button
+            onClick={() => navigate(primaryCommittee ? `/evaluations/${primaryCommittee.id}` : '/evaluations')}
+            className="text-sm text-gray-500 hover:text-gray-900 mb-2 flex items-center gap-1 transition-colors"
+          >
+            ← Back to Evaluation Committee
+          </button>
           <div className="flex items-center gap-3">
             <h1 className="text-2xl font-bold text-gray-900">Financial Evaluation</h1>
             <StatusBadge
@@ -554,10 +570,10 @@ const FinancialEvaluation: React.FC = () => {
               &larr; Back to Consolidation
             </button>
             <button
-              onClick={() => navigate(`/evaluations/ber/${solId}`)}
+              onClick={() => navigate(`/evaluations/post-qualification?solicitation=${solId}`)}
               className="px-6 py-3 bg-emerald-600 text-white rounded-xl text-sm font-bold hover:bg-emerald-700 transition-colors"
             >
-              Proceed to BER &rarr;
+              Proceed to Post-Qualification &rarr;
             </button>
           </div>
         </div>

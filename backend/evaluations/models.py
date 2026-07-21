@@ -274,3 +274,52 @@ class PostQualification(models.Model):
 
     def __str__(self):
         return f'{self.bidder.submission_id} - {self.status}'
+
+
+APPEAL_STATUS_CHOICES = [
+    ('filed', 'Filed'),
+    ('under_review', 'Under Review'),
+    ('upheld', 'Upheld (Award Overturned)'),
+    ('dismissed', 'Dismissed'),
+    ('withdrawn', 'Withdrawn'),
+]
+
+APPEAL_GROUNDS_CHOICES = [
+    ('scoring_error', 'Scoring or Evaluation Error'),
+    ('procedural', 'Procedural Irregularity'),
+    ('conflict_of_interest', 'Conflict of Interest'),
+    ('eligibility', 'Eligibility / Qualification Error'),
+    ('specification', 'Specification Deviation'),
+    ('bias', 'Bias or Discrimination'),
+    ('other', 'Other'),
+]
+
+
+class AwardAppeal(models.Model):
+    appeal_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    solicitation = models.ForeignKey('solicitations.Solicitation', on_delete=models.CASCADE, related_name='award_appeals')
+    bidder = models.ForeignKey('bids.BidSubmission', on_delete=models.CASCADE, related_name='appeals')
+    filed_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name='filed_appeals')
+    status = models.CharField(max_length=20, choices=APPEAL_STATUS_CHOICES, default='filed')
+    grounds = models.CharField(max_length=30, choices=APPEAL_GROUNDS_CHOICES)
+    grounds_detail = models.TextField(blank=True, default='',
+        help_text='Detailed description of the grounds for appeal')
+    supporting_documents = models.JSONField(default=list, blank=True,
+        help_text='List of {name, description, file_url} for supporting evidence')
+    resolution = models.TextField(blank=True, default='',
+        help_text='Resolution outcome and reasoning')
+    resolved_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='resolved_appeals')
+    filed_at = models.DateTimeField(auto_now_add=True)
+    resolution_deadline = models.DateTimeField(null=True, blank=True,
+        help_text='Deadline for resolving the appeal (typically 14 days from filing)')
+    resolved_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'eval_award_appeal'
+        verbose_name = 'Award Appeal'
+        verbose_name_plural = 'Award Appeals'
+
+    def __str__(self):
+        return f'Appeal {self.appeal_id} - {self.bidder.submission_id} - {self.status}'

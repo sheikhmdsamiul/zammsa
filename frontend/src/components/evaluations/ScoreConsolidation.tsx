@@ -10,8 +10,8 @@ import { useAuth } from '../../hooks/useAuth';
 import { ROLES } from '../../config/rbac';
 import toast from 'react-hot-toast';
 import {
-  LockOpenIcon, ExclamationIcon, CheckCircleIcon, ChevronDownIcon, ChevronUpIcon,
-  DocumentDownloadIcon, ChartBarIcon, StarIcon, ClipboardListIcon,
+  LockOpenIcon, ExclamationIcon, CheckCircleIcon, ChevronDownIcon,
+  DocumentDownloadIcon, ChartBarIcon, ArrowRightIcon, ArrowLeftIcon,
 } from '@heroicons/react/outline';
 import type {
   ConsolidatedBid, ConsolidatedMember, ConsolidatedDetail,
@@ -25,26 +25,21 @@ type ScoreRow = {
   weighted_score: number;
 };
 
-type CriterionDetail = {
-  criterion_id: string;
-  criterion_name: string;
-  weight: number;
-  scores_by_evaluator: ScoreRow[];
-};
-
 const ScoreConsolidation: React.FC = () => {
   const { solId } = useParams<{ solId: string }>();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { user } = useAuth();
 
-  const [expandedBids, setExpandedBids] = useState<Record<string, boolean>>({});
+  const [expandedBid, setExpandedBid] = useState<string | null>(null);
   const [discussionNotes, setDiscussionNotes] = useState('');
   const [authChecked, setAuthChecked] = useState(false);
-  const [showConfirmAuth, setShowConfirmAuth] = useState(false);
   const [showExportMenu, setShowExportMenu] = useState(false);
   const [showQCBSModal, setShowQCBSModal] = useState(false);
   const [showQcbsConfirm, setShowQcbsConfirm] = useState(false);
+  const [showConfirmAuth, setShowConfirmAuth] = useState(false);
+  const [sortField, setSortField] = useState<'score' | 'name'>('score');
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
   const exportMenuRef = useRef<HTMLDivElement>(null);
 
   const { data: solicitation, isLoading: solLoading } = useQuery({
@@ -52,6 +47,13 @@ const ScoreConsolidation: React.FC = () => {
     queryFn: () => solicitationsApi.get(solId!),
     enabled: !!solId,
   });
+
+  const { data: committeeData } = useQuery({
+    queryKey: ['committees-for-consolidation', solId],
+    queryFn: () => evaluationsApi.listCommittees({ solicitation: solId, page_size: 5 }),
+    enabled: !!solId,
+  });
+  const primaryCommittee = (committeeData?.results || [])[0];
 
   const solicitationAwarded = solicitation?.status === 'awarded';
   const isCombinedMethod = solicitation?.evaluation_method === 'qcbs' || solicitation?.evaluation_method === 'qbs' || (!solicitation?.evaluation_method && solicitation?.type === 'proposal');
@@ -94,30 +96,26 @@ const ScoreConsolidation: React.FC = () => {
 
   const consolidatedScores: ConsolidatedBid[] = consolidatedData?.bids || [];
   const passedBids: any[] = passedBidsData?.bids || [];
-  const awardedWinner = passedBidsData?.winner_name || null;
   const financialOpened = passedBids.some((bid: any) => bid.financial_sealed === false);
 
   useEffect(() => {
-    if (financialOpened) {
-      setAuthChecked(true);
-    }
+    if (financialOpened) setAuthChecked(true);
   }, [financialOpened]);
 
   const criteria: EvaluationCriterion[] = (solicitation?.evaluation_criteria || []).filter(
     (c: EvaluationCriterion) => c.criterion_type === 'technical'
   );
 
-  const isChair = user?.role === ROLES.EVALUATION_COMMITTEE_CHAIR;
+  const isChairSystem = user?.role === ROLES.EVALUATION_COMMITTEE_CHAIR;
+  const isChairCommittee = primaryCommittee ? String(primaryCommittee.chairperson || '') === String(user?.id || '') : false;
   const isDirector = user?.role === ROLES.DIRECTOR_PROCUREMENT;
-  const canManage = isChair || isDirector;
+  const canManage = isChairSystem || isChairCommittee || isDirector;
 
   const committeeMembers = useMemo(() => {
     const memberMap = new Map<string, ConsolidatedMember>();
     consolidatedScores.forEach((bid) => {
       bid.members.forEach((m) => {
-        if (!memberMap.has(m.id)) {
-          memberMap.set(m.id, m);
-        }
+        if (!memberMap.has(m.id)) memberMap.set(m.id, m);
       });
     });
     return Array.from(memberMap.values());
@@ -138,39 +136,28 @@ const ScoreConsolidation: React.FC = () => {
   const discrepancies = useMemo(() => {
     const flags: {
       bidId: string; bidderName: string; criterionName: string;
-      memberName: string; score: number; avg: number; diff: number; memberId: string;
+      memberName: string; score: number; avg: number; diff: number;
     }[] = [];
-
-    consolidatedScores.forEach((bid: ConsolidatedBid) => {
-      bid.details.forEach((detail: ConsolidatedDetail) => {
+    consolidatedScores.forEach((bid) => {
+      bid.details.forEach((detail) => {
         const scores = detail.scores_by_evaluator || [];
         if (scores.length < 2) return;
-
-        const rawScores = scores.map((s: ScoreRow) => s.raw_score);
-        const avg = rawScores.reduce((sum: number, s: number) => sum + s, 0) / rawScores.length;
-
-        scores.forEach((s: ScoreRow) => {
+        const rawScores = scores.map((s) => s.raw_score);
+        const avg = rawScores.reduce((sum, s) => sum + s, 0) / rawScores.length;
+        scores.forEach((s) => {
           const diff = Math.abs(s.raw_score - avg);
           if (diff > 15) {
             flags.push({
-              bidId: bid.bidId,
-              bidderName: bid.bidderName,
-              criterionName: detail.criterion_name,
-              memberName: s.evaluator_name,
-              score: s.raw_score,
-              avg: Number(avg.toFixed(2)),
-              diff: Number(diff.toFixed(2)),
-              memberId: s.evaluator_id,
+              bidId: bid.bidId, bidderName: bid.bidderName,
+              criterionName: detail.criterion_name, memberName: s.evaluator_name,
+              score: s.raw_score, avg: Number(avg.toFixed(2)), diff: Number(diff.toFixed(2)),
             });
           }
         });
       });
     });
-
     return flags;
   }, [consolidatedScores]);
-
-  const hasDiscrepancies = discrepancies.length > 0;
 
   const authorizeMutation = useMutation({
     mutationFn: () => evaluationsApi.authorizeFinancialOpening(solId!),
@@ -180,10 +167,7 @@ const ScoreConsolidation: React.FC = () => {
       queryClient.invalidateQueries({ queryKey: ['consolidated-scores', solId] });
       queryClient.invalidateQueries({ queryKey: ['phase-status', solId] });
     },
-    onError: (err: any) => {
-      const errorMessage = err?.response?.data?.error || 'Failed to authorize';
-      toast.error(errorMessage);
-    },
+    onError: (err: any) => toast.error(err?.response?.data?.error || 'Failed to authorize'),
   });
 
   const qcbsMutation = useMutation({
@@ -194,47 +178,23 @@ const ScoreConsolidation: React.FC = () => {
       queryClient.invalidateQueries({ queryKey: ['phase-status', solId] });
       queryClient.invalidateQueries({ queryKey: ['evaluation-committee'] });
       queryClient.invalidateQueries({ queryKey: ['evaluation-committees'] });
-      if (isCombinedMethod) {
-        toast.success(`Combined scores calculated: Tech ${data.tech_weight}% / Fin ${data.fin_weight}%`);
-      } else {
-        toast.success('Rankings persisted successfully');
-      }
+      toast.success(isCombinedMethod ? `Combined scores calculated: Tech ${data.tech_weight}% / Fin ${data.fin_weight}%` : 'Rankings persisted');
     },
-    onError: (err: any) => {
-      const label = isCombinedMethod ? 'combined scores' : 'rankings';
-      toast.error(err?.response?.data?.error || `Failed to calculate ${label}`);
-    },
+    onError: (err: any) => toast.error(err?.response?.data?.error || 'Failed to calculate'),
   });
-
-  const toggleBidExpansion = (bidId: string) => {
-    setExpandedBids(prev => ({ ...prev, [bidId]: !prev[bidId] }));
-  };
 
   const exportCSV = () => {
     setShowExportMenu(false);
     toast.loading('Preparing CSV export...');
-
-    const headers = [
-      'Bidder', 'Submission ID', 'Overall Tech Score', 'Passed',
-      ...committeeMembers.map(m => `${m.name}`),
-      'Financial Sealed',
-    ];
-
-    const rows = consolidatedScores.map(bid => {
+    const headers = ['Rank', 'Bidder', 'Submission ID', 'Tech Score', 'Passed', 'Financial', ...committeeMembers.map(m => m.name)];
+    const sorted = [...consolidatedScores].sort((a, b) => b.overallTechnicalScore - a.overallTechnicalScore);
+    const rows = sorted.map((bid, i) => {
       const memberChecks = committeeMembers.map(m => {
         const member = bid.members.find(mm => mm.id === m.id);
         return member?.submitted ? '1' : '0';
       });
-      return [
-        `"${bid.bidderName}"`,
-        bid.submissionId,
-        bid.overallTechnicalScore.toFixed(2),
-        bid.passed ? 'Yes' : 'No',
-        ...memberChecks,
-        bid.financialSealed ? 'Sealed' : 'Opened',
-      ].join(',');
+      return [i + 1, `"${bid.bidderName}"`, bid.submissionId, bid.overallTechnicalScore.toFixed(2), bid.passed ? 'Yes' : 'No', bid.financialSealed ? 'Sealed' : 'Opened', ...memberChecks].join(',');
     });
-
     const csvContent = '\uFEFF' + [headers.join(','), ...rows].join('\n');
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
@@ -248,32 +208,28 @@ const ScoreConsolidation: React.FC = () => {
     toast.success('CSV exported');
   };
 
-  const exportJSON = () => {
-    setShowExportMenu(false);
-    if (!consolidatedData) {
-      toast.error('No data to export');
-      return;
+  const sortedBids = useMemo(() => {
+    const list = [...consolidatedScores];
+    if (sortField === 'score') {
+      list.sort((a, b) => sortDir === 'desc' ? b.overallTechnicalScore - a.overallTechnicalScore : a.overallTechnicalScore - b.overallTechnicalScore);
+    } else {
+      list.sort((a, b) => sortDir === 'desc' ? b.bidderName.localeCompare(a.bidderName) : a.bidderName.localeCompare(b.bidderName));
     }
-    const jsonStr = JSON.stringify(consolidatedData, null, 2);
-    const blob = new Blob([jsonStr], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `${consolidatedData.solicitation_number || 'consolidation'}_${new Date().toISOString().split('T')[0]}.json`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
-    toast.success('JSON exported');
+    return list;
+  }, [consolidatedScores, sortField, sortDir]);
+
+  const toggleSort = (field: 'score' | 'name') => {
+    if (sortField === field) setSortDir(d => d === 'desc' ? 'asc' : 'desc');
+    else { setSortField(field); setSortDir('desc'); }
   };
 
   if (solLoading || consolidatedLoading) {
     return (
       <div className="flex items-center justify-center min-h-[50vh]">
-        <LoadingSpinner className="w-16 h-16" />
+        <LoadingSpinner className="w-12 h-12" />
         <div className="ml-4">
-          <h2 className="text-xl font-semibold text-gray-700">Loading Consolidated Scores...</h2>
-          <p className="text-sm text-gray-500">Compiling all technical evaluation data.</p>
+          <h2 className="text-lg font-semibold text-gray-700">Loading Consolidated Scores...</h2>
+          <p className="text-sm text-gray-500">Compiling technical evaluation data.</p>
         </div>
       </div>
     );
@@ -281,115 +237,103 @@ const ScoreConsolidation: React.FC = () => {
 
   const passedBidsCount = consolidatedScores.filter(b => b.passed).length;
   const totalBids = consolidatedScores.length;
-
-  const totalMembers = committeeMembers.length;
-  const submissionRate = totalMembers > 0 ? Math.round((membersSubmitted.size / totalMembers) * 100) : 0;
+  const submissionRate = committeeMembers.length > 0 ? Math.round((membersSubmitted.size / committeeMembers.length) * 100) : 0;
 
   return (
     <div className="max-w-7xl mx-auto space-y-6">
-      <div className="bg-gradient-to-r from-blue-600 to-blue-800 rounded-2xl shadow-lg p-6 text-white">
+      {/* Header */}
+      <div className="bg-gradient-to-r from-indigo-600 to-indigo-800 rounded-2xl shadow-lg p-6 text-white">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-3xl font-bold text-white mb-2">Score Consolidation</h1>
-            <div className="flex items-center gap-4 text-blue-100">
-              <div className="flex items-center gap-2">
-                <span className="text-lg font-semibold">{consolidatedData?.solicitation_number || solId}</span>
-                <span className="text-xl">&bull;</span>
-                <span>{consolidatedData?.solicitation_title || ''}</span>
-              </div>
-              <StatusBadge
-                status={financialOpened ? 'completed' : 'active'}
-                className="bg-white/20 border-white/30 text-white"
-              />
-            </div>
+            <button
+              onClick={() => navigate(primaryCommittee ? `/evaluations/${primaryCommittee.id}` : '/evaluations')}
+              className="text-sm text-indigo-200 hover:text-white mb-2 flex items-center gap-1 transition-colors"
+            >
+              <ArrowLeftIcon className="w-4 h-4" /> Back to Evaluation Committee
+            </button>
+            <h1 className="text-2xl font-bold">Score Consolidation</h1>
+            <p className="text-indigo-200 text-sm mt-1">
+              {consolidatedData?.solicitation_number} &mdash; {consolidatedData?.solicitation_title}
+            </p>
           </div>
           <div className="text-right">
-            <div className="text-sm font-medium text-blue-200 mb-2">Committee Progress</div>
-            <div className="flex items-center gap-3">
-              <div className="flex flex-col items-end">
-                <span className="text-3xl font-bold">{membersSubmitted.size}</span>
-                <span className="text-xs text-blue-200">Submitted</span>
-              </div>
-              <div className="flex flex-col items-end">
-                <span className="text-3xl font-bold">{totalMembers}</span>
-                <span className="text-xs text-blue-200">Total</span>
-              </div>
-              <div className="flex flex-col items-end min-w-[60px]">
-                <span className={`text-3xl font-bold ${submissionRate >= 100 ? 'text-emerald-300' : 'text-amber-300'}`}>
-                  {submissionRate}%
-                </span>
-                <span className="text-xs text-blue-200">Done</span>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div className="mt-6">
-          <div className="flex justify-between text-xs text-blue-200 mb-2">
-            <span>Submission Progress</span>
-            <span>{submissionRate}% Complete</span>
-          </div>
-          <div className="w-full bg-blue-900/50 rounded-full h-3 overflow-hidden">
-            <div
-              className={`h-full transition-all duration-500 ease-in-out rounded-full ${
-                submissionRate >= 100 ? 'bg-emerald-400' : 'bg-amber-400'
-              }`}
-              style={{ width: `${submissionRate}%` }}
+            <StatusBadge
+              status={financialOpened ? 'completed' : 'active'}
+              className="bg-white/20 border-white/30 text-white"
             />
           </div>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-5">
-          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Total Bids</p>
-          <p className="text-3xl font-bold text-gray-900 mt-1">{totalBids}</p>
-        </div>
-        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-5">
-          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Passed Technical</p>
-          <p className="text-3xl font-bold text-emerald-600 mt-1">{passedBidsCount}</p>
-        </div>
-        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-5">
-          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Discrepancies</p>
-          <p className={`text-3xl font-bold mt-1 ${hasDiscrepancies ? 'text-amber-500' : 'text-gray-900'}`}>
-            {hasDiscrepancies ? discrepancies.length : 0}
-          </p>
-        </div>
-        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-5">
-          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Financial Status</p>
-          <p className={`text-3xl font-bold mt-1 ${financialOpened ? 'text-emerald-600' : 'text-amber-600'}`}>
-            {financialOpened ? 'Opened' : 'Sealed'}
-          </p>
+      {/* Workflow Steps */}
+      <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-5">
+        <div className="flex items-center justify-between">
+          {[
+            { label: 'Technical Scoring', done: allMembersSubmitted, active: false },
+            { label: 'Score Consolidation', done: allMembersSubmitted, active: !allMembersSubmitted },
+            { label: 'Financial Opening', done: financialOpened, active: allMembersSubmitted && !financialOpened },
+            { label: 'Combined Scoring', done: false, active: financialOpened },
+          ].map((step, i) => (
+            <React.Fragment key={step.label}>
+              {i > 0 && (
+                <div className={`flex-1 h-0.5 mx-2 rounded ${step.done ? 'bg-indigo-500' : 'bg-gray-200'}`} />
+              )}
+              <div className="flex items-center gap-2">
+                <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold shrink-0 ${
+                  step.done ? 'bg-indigo-500 text-white' : step.active ? 'bg-indigo-100 text-indigo-700 ring-2 ring-indigo-300' : 'bg-gray-100 text-gray-400'
+                }`}>
+                  {step.done ? <CheckCircleIcon className="w-4 h-4" /> : i + 1}
+                </div>
+                <span className={`text-sm font-medium hidden sm:inline ${step.active ? 'text-indigo-700' : step.done ? 'text-gray-700' : 'text-gray-400'}`}>
+                  {step.label}
+                </span>
+              </div>
+            </React.Fragment>
+          ))}
         </div>
       </div>
 
-      {hasDiscrepancies && (
-        <div className="bg-amber-50 border-2 border-amber-200 rounded-xl p-5 shadow-sm">
+      {/* Summary Cards */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
+          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Total Bids</p>
+          <p className="text-2xl font-bold text-gray-900 mt-1">{totalBids}</p>
+        </div>
+        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
+          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Passed Technical</p>
+          <p className="text-2xl font-bold text-emerald-600 mt-1">{passedBidsCount}</p>
+          <p className="text-xs text-gray-400 mt-0.5">{totalBids > 0 ? Math.round((passedBidsCount / totalBids) * 100) : 0}% of total</p>
+        </div>
+        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
+          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Committee</p>
+          <p className="text-2xl font-bold text-indigo-600 mt-1">{membersSubmitted.size}<span className="text-base font-normal text-gray-400">/{committeeMembers.length}</span></p>
+          <p className="text-xs text-gray-400 mt-0.5">{submissionRate}% submitted</p>
+        </div>
+        <div className={`bg-white rounded-xl shadow-sm border p-4 ${discrepancies.length > 0 ? 'border-amber-200' : 'border-gray-100'}`}>
+          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Discrepancies</p>
+          <p className={`text-2xl font-bold mt-1 ${discrepancies.length > 0 ? 'text-amber-500' : 'text-gray-900'}`}>{discrepancies.length}</p>
+          <p className="text-xs text-gray-400 mt-0.5">{discrepancies.length > 0 ? 'Score gaps > 15pts' : 'No issues'}</p>
+        </div>
+      </div>
+
+      {/* Discrepancy Alert */}
+      {discrepancies.length > 0 && (
+        <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
           <div className="flex items-start gap-3">
-            <ExclamationIcon className="w-6 h-6 text-amber-500 shrink-0 mt-0.5" />
+            <ExclamationIcon className="w-5 h-5 text-amber-500 shrink-0 mt-0.5" />
             <div className="flex-1">
-              <h3 className="text-sm font-bold text-amber-900 mb-2">Score Discrepancies Detected</h3>
-              <p className="text-sm text-amber-800 mb-3">
-                {discrepancies.length} member score(s) deviate more than 15 points from the average on specific criteria.
-                Review scores in chair notes below.
+              <h3 className="text-sm font-bold text-amber-900">Score Discrepancies Detected</h3>
+              <p className="text-xs text-amber-700 mt-1">
+                {discrepancies.length} score(s) deviate more than 15 points from the evaluator average. Review the expanded bid details below.
               </p>
-              <div className="max-h-48 overflow-y-auto bg-white border border-amber-100 rounded-lg p-3 text-sm">
-                <p className="font-semibold text-amber-800 mb-2">Discrepancies:</p>
-                {discrepancies.slice(0, 10).map((d, i) => (
-                  <div key={i} className="flex items-start gap-2 mb-1">
-                    <span className="w-4 h-4 rounded-full bg-amber-200 text-amber-700 flex items-center justify-center text-[10px] font-bold shrink-0">
-                      {i + 1}
-                    </span>
-                    <div>
-                      <p className="text-amber-900 font-medium">{d.bidderName}</p>
-                      <p className="text-xs text-amber-700">
-                        {d.criterionName}: {d.memberName} scored {d.score} vs avg {d.avg}
-                      </p>
-                    </div>
-                  </div>
+              <div className="mt-2 space-y-1">
+                {discrepancies.slice(0, 5).map((d, i) => (
+                  <p key={i} className="text-xs text-amber-800">
+                    <span className="font-semibold">{d.bidderName}</span> &mdash; {d.criterionName}: {d.memberName} scored {d.score} vs avg {d.avg}
+                  </p>
                 ))}
-                {discrepancies.length > 10 && (
-                  <p className="text-xs text-amber-600 mt-2">+{discrepancies.length - 10} more</p>
+                {discrepancies.length > 5 && (
+                  <p className="text-xs text-amber-600 font-medium">+{discrepancies.length - 5} more discrepancies</p>
                 )}
               </div>
             </div>
@@ -397,363 +341,370 @@ const ScoreConsolidation: React.FC = () => {
         </div>
       )}
 
-      <div className="flex items-center justify-end gap-3">
-        <div className="relative" ref={exportMenuRef}>
-          <button
-            onClick={() => setShowExportMenu(!showExportMenu)}
-            className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50"
-          >
-            <DocumentDownloadIcon className="w-4 h-4" />
-            Export
-          </button>
-          {showExportMenu && (
-            <div className="absolute right-0 mt-2 w-48 bg-white border border-gray-200 rounded-lg shadow-lg z-10">
-              <button onClick={exportCSV} className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">
-                Export as CSV
-              </button>
-              <button onClick={exportJSON} className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">
-                Export as JSON
-              </button>
-            </div>
-          )}
-        </div>
-      </div>
-
-      {consolidatedScores.map((bid: ConsolidatedBid) => {
-        const isExpanded = expandedBids[bid.bidId];
-        const passed = bid.passed;
-
-        return (
-          <div key={bid.bidId} className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden transition-all duration-200">
-            <div
-              className="p-5 cursor-pointer hover:bg-gray-50 transition-colors"
-              onClick={() => toggleBidExpansion(bid.bidId)}
-            >
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-full bg-blue-600 text-white flex items-center justify-center font-bold text-sm shrink-0">
-                    {bid.bidderName.substring(0, 2).toUpperCase()}
-                  </div>
-                  <div>
-                    <h2 className="text-lg font-bold text-gray-900">{bid.bidderName}</h2>
-                    <p className="text-xs text-gray-500">{bid.submissionId}</p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-4">
-                  <div className="text-right">
-                    <p className={`text-lg font-bold ${passed ? 'text-emerald-600' : 'text-red-600'}`}>
-                      {bid.overallTechnicalScore.toFixed(1)}
-                    </p>
-                    <span className={`text-xs font-medium px-2 py-0.5 rounded ${
-                      passed ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'
-                    }`}>
-                      {passed ? 'Passes' : 'Fails'}
-                    </span>
-                  </div>
-                  <div className="px-3 py-1 rounded bg-gray-100 text-xs font-medium text-gray-600">
-                    Fin: {bid.financialSealed ? 'Sealed' : 'Open'}
-                  </div>
-                  {isExpanded ? (
-                    <ChevronDownIcon className="w-5 h-5 text-gray-400 rotate-180 transition-transform" />
-                  ) : (
-                    <ChevronDownIcon className="w-5 h-5 text-gray-400 transition-transform" />
-                  )}
-                </div>
+      {/* Main Content: Table + Sidebar */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Left: Scores Table */}
+        <div className="lg:col-span-2 space-y-4">
+          <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+            <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
+              <h2 className="text-base font-bold text-gray-900">Consolidated Technical Scores</h2>
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-gray-500">Sort:</span>
+                <button
+                  onClick={() => toggleSort('score')}
+                  className={`px-2 py-1 text-xs font-medium rounded ${sortField === 'score' ? 'bg-indigo-100 text-indigo-700' : 'text-gray-500 hover:bg-gray-100'}`}
+                >
+                  Score {sortField === 'score' ? (sortDir === 'desc' ? '↓' : '↑') : ''}
+                </button>
+                <button
+                  onClick={() => toggleSort('name')}
+                  className={`px-2 py-1 text-xs font-medium rounded ${sortField === 'name' ? 'bg-indigo-100 text-indigo-700' : 'text-gray-500 hover:bg-gray-100'}`}
+                >
+                  Name {sortField === 'name' ? (sortDir === 'desc' ? '↓' : '↑') : ''}
+                </button>
               </div>
             </div>
 
-            {isExpanded && (
-              <>
-                <div className="border-t border-gray-100 bg-gray-50/50">
-                  {bid.details.length > 0 && (
-                    <div className="overflow-x-auto">
-                      <table className="min-w-full divide-y divide-gray-200">
-                        <thead className="bg-gray-100">
+            <div className="overflow-x-auto">
+              <table className="min-w-full divide-y divide-gray-200">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider w-10">#</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Bidder</th>
+                    <th className="px-4 py-3 text-center text-xs font-semibold text-gray-500 uppercase tracking-wider">Tech Score</th>
+                    <th className="px-4 py-3 text-center text-xs font-semibold text-gray-500 uppercase tracking-wider">Status</th>
+                    <th className="px-4 py-3 text-center text-xs font-semibold text-gray-500 uppercase tracking-wider">Financial</th>
+                    <th className="px-4 py-3 text-center text-xs font-semibold text-gray-500 uppercase tracking-wider">Evaluators</th>
+                    <th className="px-4 py-3 w-10"></th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {sortedBids.map((bid, i) => {
+                    const isExpanded = expandedBid === bid.bidId;
+                    return (
+                      <React.Fragment key={bid.bidId}>
+                        <tr
+                          className="hover:bg-gray-50 cursor-pointer transition-colors"
+                          onClick={() => setExpandedBid(isExpanded ? null : bid.bidId)}
+                        >
+                          <td className="px-4 py-3 text-sm font-medium text-gray-500">{i + 1}</td>
+                          <td className="px-4 py-3">
+                            <div className="flex items-center gap-2">
+                              <div className="w-8 h-8 rounded-lg bg-indigo-100 text-indigo-700 flex items-center justify-center text-xs font-bold shrink-0">
+                                {bid.bidderName.substring(0, 2).toUpperCase()}
+                              </div>
+                              <div>
+                                <p className="text-sm font-semibold text-gray-900">{bid.bidderName}</p>
+                                <p className="text-xs text-gray-400">{bid.submissionId}</p>
+                              </div>
+                            </div>
+                          </td>
+                          <td className="px-4 py-3 text-center">
+                            <span className={`text-lg font-bold ${bid.passed ? 'text-emerald-600' : 'text-red-500'}`}>
+                              {bid.overallTechnicalScore.toFixed(1)}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3 text-center">
+                            <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${
+                              bid.passed ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'
+                            }`}>
+                              {bid.passed ? 'Passed' : 'Failed'}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3 text-center">
+                            <span className={`text-xs font-medium px-2 py-0.5 rounded ${
+                              bid.financialSealed ? 'bg-gray-100 text-gray-500' : 'bg-blue-100 text-blue-700'
+                            }`}>
+                              {bid.financialSealed ? 'Sealed' : 'Opened'}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3 text-center">
+                            <span className="text-xs text-gray-500">
+                              {bid.membersSubmittedCount}/{bid.totalMembers}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3 text-center">
+                            <ChevronDownIcon className={`w-4 h-4 text-gray-400 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
+                          </td>
+                        </tr>
+
+                        {isExpanded && (
                           <tr>
-                            <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Criterion</th>
-                            <th className="px-4 py-3 text-center text-xs font-semibold text-gray-600 uppercase tracking-wider">Weight</th>
-                            {bid.members.map(m => (
-                              <th key={m.id} className="px-4 py-3 text-center text-xs font-semibold text-gray-600 uppercase tracking-wider">
-                                <div className="flex items-center gap-1">
-                                  {m.name.split(' ')[0]}
-                                  {m.submitted && <CheckCircleIcon className="w-3 h-3 text-emerald-500" />}
+                            <td colSpan={7} className="p-0">
+                              <div className="bg-gray-50 border-t border-gray-100 p-4 space-y-4">
+                                {/* Score Breakdown Table */}
+                                {bid.details.length > 0 && (
+                                  <div>
+                                    <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Score Breakdown by Criterion</h4>
+                                    <div className="bg-white rounded-lg border border-gray-200 overflow-x-auto">
+                                      <table className="min-w-full divide-y divide-gray-200">
+                                        <thead className="bg-gray-100">
+                                          <tr>
+                                            <th className="px-3 py-2 text-left text-xs font-semibold text-gray-600">Criterion</th>
+                                            <th className="px-3 py-2 text-center text-xs font-semibold text-gray-600">Weight</th>
+                                            {bid.members.map(m => (
+                                              <th key={m.id} className="px-3 py-2 text-center text-xs font-semibold text-gray-600">
+                                                <div className="flex items-center justify-center gap-1">
+                                                  {m.name.split(' ')[0]}
+                                                  {m.submitted && <CheckCircleIcon className="w-3 h-3 text-emerald-500" />}
+                                                </div>
+                                              </th>
+                                            ))}
+                                            <th className="px-3 py-2 text-center text-xs font-semibold text-gray-600">Avg</th>
+                                            <th className="px-3 py-2 text-center text-xs font-semibold text-gray-600">Weighted</th>
+                                          </tr>
+                                        </thead>
+                                        <tbody className="divide-y divide-gray-100">
+                                          {bid.details.map((detail) => {
+                                            const rawScores = detail.scores_by_evaluator?.map((s) => s.raw_score) || [];
+                                            const avgRaw = rawScores.length > 0 ? rawScores.reduce((sum, s) => sum + s, 0) / rawScores.length : 0;
+                                            const weightedScore = avgRaw * (detail.weight / 100);
+                                            return (
+                                              <tr key={detail.criterion_id} className="hover:bg-gray-50">
+                                                <td className="px-3 py-2 text-sm font-medium text-gray-900">{detail.criterion_name}</td>
+                                                <td className="px-3 py-2 text-center text-xs text-gray-500">{detail.weight}%</td>
+                                                {bid.members.map((member) => {
+                                                  const memberScore = detail.scores_by_evaluator?.find(
+                                                    (s) => s.evaluator_id === member.id
+                                                  );
+                                                  return (
+                                                    <td key={member.id} className="px-3 py-2 text-center">
+                                                      {memberScore ? (
+                                                        <span className={`text-sm font-mono ${
+                                                          memberScore.raw_score >= 70 ? 'text-emerald-600' :
+                                                          memberScore.raw_score >= 50 ? 'text-amber-600' : 'text-red-600'
+                                                        }`}>
+                                                          {memberScore.raw_score.toFixed(1)}
+                                                        </span>
+                                                      ) : (
+                                                        <span className="text-gray-300">&mdash;</span>
+                                                      )}
+                                                    </td>
+                                                  );
+                                                })}
+                                                <td className="px-3 py-2 text-center text-sm font-bold text-gray-700">{avgRaw.toFixed(1)}</td>
+                                                <td className="px-3 py-2 text-center text-sm font-bold text-indigo-600">{weightedScore.toFixed(2)}</td>
+                                              </tr>
+                                            );
+                                          })}
+                                          <tr className="bg-gray-50 font-bold">
+                                            <td className="px-3 py-2 text-sm text-gray-900">Total</td>
+                                            <td className="px-3 py-2 text-center text-xs text-gray-500">100%</td>
+                                            {bid.members.map(m => <td key={m.id} />)}
+                                            <td />
+                                            <td className="px-3 py-2 text-center text-sm text-indigo-700">{bid.overallTechnicalScore.toFixed(2)}</td>
+                                          </tr>
+                                        </tbody>
+                                      </table>
+                                    </div>
+                                  </div>
+                                )}
+
+                                {/* Member Submission Status */}
+                                <div>
+                                  <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Evaluator Status</h4>
+                                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
+                                    {bid.members.map((member) => (
+                                      <div
+                                        key={member.id}
+                                        className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs ${
+                                          member.submitted
+                                            ? 'bg-emerald-50 border border-emerald-200 text-emerald-800'
+                                            : 'bg-gray-100 border border-gray-200 text-gray-600'
+                                        }`}
+                                      >
+                                        <div className={`w-2 h-2 rounded-full shrink-0 ${member.submitted ? 'bg-emerald-500' : 'bg-gray-300'}`} />
+                                        <div className="min-w-0">
+                                          <p className="font-medium truncate">{member.name}</p>
+                                          <p className="text-gray-400 capitalize">{member.role}</p>
+                                        </div>
+                                      </div>
+                                    ))}
+                                  </div>
                                 </div>
-                              </th>
-                            ))}
-                            <th className="px-4 py-3 text-center text-xs font-semibold text-gray-600 uppercase tracking-wider">Avg</th>
-                            <th className="px-4 py-3 text-center text-xs font-semibold text-gray-600 uppercase tracking-wider">WTotal</th>
+                              </div>
+                            </td>
                           </tr>
-                        </thead>
-                        <tbody className="divide-y divide-gray-200 bg-white">
-                          {bid.details.map((detail: ConsolidatedDetail) => {
-                            const rawScores = detail.scores_by_evaluator?.map((s: ScoreRow) => s.raw_score) || [];
-                            const avgRaw = rawScores.length > 0
-                              ? rawScores.reduce((sum: number, s: number) => sum + s, 0) / rawScores.length
-                              : 0;
-                            const weightedScore = avgRaw * (detail.weight / 100);
-
-                            return (
-                              <tr key={detail.criterion_id} className="hover:bg-gray-50">
-                                <td className="px-4 py-3 text-sm font-medium text-gray-900">{detail.criterion_name}</td>
-                                <td className="px-4 py-3 text-center text-sm text-gray-600">{detail.weight}%</td>
-                                {bid.members.map((member) => {
-                                  const memberScore = detail.scores_by_evaluator?.find(
-                                    (s: ScoreRow) => s.evaluator_id === member.id
-                                  );
-                                  return (
-                                    <td key={member.id} className="px-4 py-3 text-center">
-                                      {memberScore ? (
-                                        <span className={`text-sm font-mono ${
-                                          memberScore.raw_score >= 70 ? 'text-emerald-600' :
-                                          memberScore.raw_score >= 50 ? 'text-amber-600' : 'text-red-600'
-                                        }`}>
-                                          {memberScore.raw_score.toFixed(1)}
-                                        </span>
-                                      ) : (
-                                        <span className="text-sm text-gray-300">&mdash;</span>
-                                      )}
-                                    </td>
-                                  );
-                                })}
-                                <td className="px-4 py-3 text-center text-sm font-bold text-gray-700">
-                                  {avgRaw.toFixed(1)}
-                                </td>
-                                <td className="px-4 py-3 text-center text-sm font-bold text-emerald-600">
-                                  {weightedScore.toFixed(2)}
-                                </td>
-                              </tr>
-                            );
-                          })}
-                        </tbody>
-                      </table>
-                    </div>
-                  )}
-                </div>
-
-                <div className="border-t border-gray-100 p-5 bg-gray-50">
-                  <h4 className="text-sm font-semibold text-gray-700 mb-3">Member Submission Status</h4>
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                    {bid.members.map((member) => (
-                      <div
-                        key={member.id}
-                        className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm ${
-                          member.submitted
-                            ? 'bg-emerald-50 border border-emerald-200'
-                            : 'bg-gray-100 border border-gray-200'
-                        }`}
-                      >
-                        <div className={`w-2 h-2 rounded-full ${
-                          member.submitted ? 'bg-emerald-500' : 'bg-gray-300'
-                        }`} />
-                        <div>
-                          <p className="text-xs font-medium text-gray-900">{member.name}</p>
-                          <p className="text-xs text-gray-500 capitalize">{member.role}</p>
-                        </div>
-                        {member.submitted && (
-                          <CheckCircleIcon className="w-4 h-4 text-emerald-500 ml-auto" />
                         )}
-                      </div>
-                    ))}
-                  </div>
-                  <div className="mt-3 pt-3 border-t border-gray-200 flex items-center justify-between">
-                    <span className="text-xs font-medium text-gray-600">
-                      {bid.membersSubmittedCount} of {bid.totalMembers} members submitted
-                    </span>
-                    {bid.allMembersSubmitted && (
-                      <span className="text-xs font-bold text-emerald-700 bg-emerald-100 px-2 py-1 rounded">
-                        Complete
-                      </span>
-                    )}
-                  </div>
+                      </React.Fragment>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+
+            {consolidatedScores.length === 0 && !solicitationAwarded && (
+              <div className="p-12 text-center">
+                <div className="w-14 h-14 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-3">
+                  <ChartBarIcon className="w-7 h-7 text-gray-400" />
                 </div>
-              </>
+                <h3 className="text-base font-semibold text-gray-900 mb-1">No Scores Available Yet</h3>
+                <p className="text-sm text-gray-500">Technical scores haven't been finalized. Waiting for committee members to complete scoring.</p>
+              </div>
+            )}
+
+            {consolidatedScores.length === 0 && solicitationAwarded && (
+              <div className="p-12 text-center">
+                <div className="w-14 h-14 bg-emerald-100 rounded-full flex items-center justify-center mx-auto mb-3">
+                  <CheckCircleIcon className="w-7 h-7 text-emerald-500" />
+                </div>
+                <h3 className="text-base font-semibold text-gray-900 mb-1">Solicitation Awarded</h3>
+                <p className="text-sm text-gray-500 mb-4">This solicitation has been awarded. View the BER for full details.</p>
+                <button
+                  onClick={() => navigate(`/evaluations/ber/${solId}`)}
+                  className="inline-flex items-center gap-2 px-5 py-2.5 bg-emerald-600 text-white text-sm font-bold rounded-lg hover:bg-emerald-700"
+                >
+                  View BER <ArrowRightIcon className="w-4 h-4" />
+                </button>
+              </div>
             )}
           </div>
-        );
-      })}
-
-      {consolidatedScores.length === 0 && !solicitationAwarded && (
-        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-12 text-center">
-          <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
-            <DocumentDownloadIcon className="w-8 h-8 text-gray-400" />
-          </div>
-          <h3 className="text-lg font-semibold text-gray-900 mb-2">No Consolidated Scores Available</h3>
-          <p className="text-sm text-gray-500 mb-6">
-            Technical scores haven't been finalized yet.
-          </p>
-          <div className="inline-flex items-center gap-2 text-xs text-gray-400 bg-gray-50 px-3 py-2 rounded-lg">
-            <span className="w-2 h-2 bg-amber-400 rounded-full animate-pulse" />
-            Awaiting member submissions
-          </div>
         </div>
-      )}
 
-      {consolidatedScores.length === 0 && solicitationAwarded && (
-        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-12 text-center">
-          <div className="w-16 h-16 bg-emerald-100 rounded-full flex items-center justify-center mx-auto mb-4">
-            <CheckCircleIcon className="w-8 h-8 text-emerald-500" />
-          </div>
-          <h3 className="text-lg font-semibold text-gray-900 mb-2">
-            Awarded to {awardedWinner || 'Unknown'}
-          </h3>
-          <p className="text-sm text-gray-500 mb-6">
-            This solicitation has been awarded. You can view the BER for details.
-          </p>
-          <button
-            onClick={() => navigate(`/evaluations/ber/${solId}`)}
-            className="inline-flex items-center gap-2 px-6 py-3 bg-emerald-600 text-white text-sm font-bold rounded-lg hover:bg-emerald-700 transition-colors"
-          >
-            View BER &rarr;
-          </button>
-        </div>
-      )}
-
-      <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-        <div className="px-6 py-4 bg-gray-50 border-b border-gray-100 flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-gray-900">Technical Ranking</h2>
-          {canManage && allMembersSubmitted && (
-            <button
-              onClick={() => setShowQcbsConfirm(true)}
-              disabled={qcbsMutation.isPending}
-              className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white text-sm font-bold rounded-lg hover:bg-indigo-700 disabled:opacity-50 transition-colors"
-            >
-              <ChartBarIcon className="w-4 h-4" />
-              {qcbsMutation.isPending ? 'Calculating...' : computeLabel}
-            </button>
-          )}
-        </div>
-        <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
-              <tr>
-                <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">#</th>
-                <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Bidder</th>
-                <th className="px-6 py-3 text-center text-xs font-semibold text-gray-600 uppercase tracking-wider">Tech Score</th>
-                <th className="px-6 py-3 text-center text-xs font-semibold text-gray-600 uppercase tracking-wider">Passed</th>
-                <th className="px-6 py-3 text-center text-xs font-semibold text-gray-600 uppercase tracking-wider">Financial</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-200">
-              {[...consolidatedScores]
-                .sort((a: ConsolidatedBid, b: ConsolidatedBid) => b.overallTechnicalScore - a.overallTechnicalScore)
-                .map((bid: ConsolidatedBid, i: number) => (
-                  <tr key={bid.bidId} className="hover:bg-gray-50">
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-500">{i + 1}</td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{bid.bidderName}</td>
-                    <td className="px-6 py-4 whitespace-nowrap text-center">
-                      <span className={`font-bold ${
-                        bid.passed ? 'text-emerald-600' : 'text-red-600'
-                      }`}>
-                        {bid.overallTechnicalScore.toFixed(1)}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-center">
-                      <span className={bid.passed ? 'text-emerald-600' : 'text-red-600'}>
-                        {bid.passed ? 'Yes' : 'No'}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-center">
-                      <span className="text-xs text-amber-600 font-medium">
-                        {bid.financialSealed ? 'Sealed' : 'Opened'}
-                      </span>
-                    </td>
-                  </tr>
-                ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
-        <h2 className="text-lg font-semibold text-gray-900 mb-4">Chair Discussion Notes</h2>
-        <textarea
-          value={discussionNotes}
-          onChange={(e) => setDiscussionNotes(e.target.value)}
-          rows={4}
-          className="w-full border border-gray-200 rounded-lg px-4 py-3 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-          placeholder="Enter discussion notes for the BER (conflicts, discrepancies, notable observations)..."
-        />
-        <p className="text-xs text-gray-500 mt-2">
-          These notes will be carried into the Bid Evaluation Report.
-        </p>
-      </div>
-
-      {canManage && (
-        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
-          <h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
-            <LockOpenIcon className="w-5 h-5 text-blue-500" />
-            Authorize Financial Envelope Opening
-          </h2>
-          <p className="text-sm text-gray-600 mb-4">
-            Once technical consolidation is complete, authorize the opening of financial envelopes
-            for all technically passing bids.
-          </p>
-
-          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
-            <div className="flex items-start gap-3">
-              <div className="w-5 h-5 rounded-full bg-blue-500 text-white flex items-center justify-center text-[10px] font-bold shrink-0 mt-0.5">
-                i
-              </div>
-              <div>
-                <p className="text-sm font-medium text-blue-900 mb-1">Consolidation Status</p>
-                <div className="text-xs text-blue-700 space-y-1">
-                  <p>&bull; Committee: {membersSubmitted.size} of {totalMembers} submitted</p>
-                  <p>&bull; Evaluated: {totalBids} bids (Passed: {passedBidsCount})</p>
-                  <p>&bull; Financial: {financialOpened ? 'Already opened' : 'Still sealed'}</p>
-                  <p>&bull; Discrepancies: {hasDiscrepancies ? `${discrepancies.length} flagged` : 'None'}</p>
+        {/* Right: Actions Sidebar */}
+        <div className="space-y-4">
+          {/* Submission Progress */}
+          <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
+            <h3 className="text-sm font-bold text-gray-900 mb-3">Committee Progress</h3>
+            <div className="flex items-center justify-between text-sm mb-2">
+              <span className="text-gray-500">Scoring</span>
+              <span className={`font-bold ${submissionRate >= 100 ? 'text-emerald-600' : 'text-amber-600'}`}>
+                {membersSubmitted.size}/{committeeMembers.length} ({submissionRate}%)
+              </span>
+            </div>
+            <div className="w-full bg-gray-100 rounded-full h-2 overflow-hidden">
+              <div
+                className={`h-full transition-all duration-500 rounded-full ${submissionRate >= 100 ? 'bg-emerald-500' : 'bg-amber-400'}`}
+                style={{ width: `${submissionRate}%` }}
+              />
+            </div>
+            <div className="mt-3 space-y-1.5">
+              {committeeMembers.map((m) => (
+                <div key={m.id} className="flex items-center gap-2 text-xs">
+                  <div className={`w-2 h-2 rounded-full shrink-0 ${membersSubmitted.has(m.id) ? 'bg-emerald-500' : 'bg-gray-300'}`} />
+                  <span className="text-gray-700 truncate">{m.name}</span>
+                  <span className="text-gray-400 capitalize ml-auto">{m.role}</span>
                 </div>
-              </div>
+              ))}
             </div>
           </div>
 
-          <label className="flex items-start gap-3 p-4 bg-blue-50 border border-blue-200 rounded-lg cursor-pointer hover:bg-blue-75 transition-colors">
-            <input
-              type="checkbox"
-              checked={authChecked}
-              onChange={(e) => setAuthChecked(e.target.checked)}
-              className="mt-0.5 w-4 h-4 accent-emerald-500 focus:ring-blue-500"
-            />
-            <div>
-              <p className="text-sm font-medium text-blue-900">I confirm technical consolidation is complete</p>
-              <p className="text-xs text-blue-700 mt-0.5">
-                This will unseal financial envelopes for passing bids only. Irreversible.
+          {/* Calculate / Compute Button */}
+          {canManage && (
+            <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
+              <h3 className="text-sm font-bold text-gray-900 mb-2">{methodTitle}</h3>
+              <p className="text-xs text-gray-500 mb-3">
+                {isCombinedMethod
+                  ? `Compute combined scores using Tech ${solicitation?.financial_weight || 70}% + Financial weight.`
+                  : 'Persist current technical rankings for all passing bids.'}
               </p>
-            </div>
-          </label>
-
-          <div className="flex flex-wrap gap-3 mt-4">
-            <button
-              onClick={() => setShowConfirmAuth(true)}
-              disabled={!authChecked || authorizeMutation.isPending || financialOpened}
-              className={`px-6 py-3 text-sm font-bold rounded-lg transition-all ${
-                !authChecked || financialOpened
-                  ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
-                  : 'bg-emerald-600 text-white hover:bg-emerald-700 hover:shadow-lg'
-              } ${authorizeMutation.isPending ? 'opacity-70' : ''}`}
-            >
-              {financialOpened
-                ? 'Financial Envelopes Already Opened'
-                : authorizeMutation.isPending
-                  ? 'Authorizing...'
-                  : 'Authorize Financial Envelope Opening'}
-            </button>
-            <button
-              onClick={() => navigate(`/evaluations/${solId}/financial`)}
-              className="px-6 py-3 bg-white border border-gray-300 text-gray-700 text-sm font-bold rounded-lg hover:bg-gray-50 hover:border-gray-400 transition-all"
-            >
-              Go to Financial Evaluation &rarr;
-            </button>
-          </div>
-
-          {authorizeMutation.isPending && (
-            <div className="mt-4 flex items-center justify-center gap-2 text-sm text-blue-600 bg-blue-50 py-2 rounded-lg">
-              <div className="w-4 h-4 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
-              Processing authorization...
+              <button
+                onClick={() => setShowQcbsConfirm(true)}
+                disabled={!allMembersSubmitted || qcbsMutation.isPending}
+                className={`w-full px-4 py-2.5 text-sm font-bold rounded-lg transition-all flex items-center justify-center gap-2 ${
+                  allMembersSubmitted && !qcbsMutation.isPending
+                    ? 'bg-indigo-600 text-white hover:bg-indigo-700'
+                    : 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                }`}
+              >
+                <ChartBarIcon className="w-4 h-4" />
+                {qcbsMutation.isPending ? 'Calculating...' : computeLabel}
+              </button>
+              {!allMembersSubmitted && (
+                <p className="text-xs text-amber-600 mt-2 text-center">Waiting for all evaluators to submit scores.</p>
+              )}
             </div>
           )}
-        </div>
-      )}
 
+          {/* Authorize Financial Opening */}
+          {canManage && (
+            <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
+              <h3 className="text-sm font-bold text-gray-900 mb-2 flex items-center gap-2">
+                <LockOpenIcon className="w-4 h-4 text-blue-500" />
+                Financial Envelope Opening
+              </h3>
+              {financialOpened ? (
+                <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-3">
+                  <p className="text-xs font-medium text-emerald-700">Financial envelopes have been opened.</p>
+                </div>
+              ) : !allMembersSubmitted ? (
+                <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
+                  <p className="text-xs font-medium text-amber-800">Complete all technical scoring first.</p>
+                  <p className="text-xs text-amber-600 mt-1">
+                    {committeeMembers.length - membersSubmitted.size} evaluator(s) have not submitted scores yet. Financial envelopes cannot be opened until all members complete technical scoring.
+                  </p>
+                </div>
+              ) : (
+                <>
+                  <p className="text-xs text-gray-500 mb-3">
+                    Unseal financial envelopes for technically passing bids. This action is irreversible.
+                  </p>
+                  <label className="flex items-start gap-2 p-3 bg-blue-50 border border-blue-200 rounded-lg cursor-pointer mb-3">
+                    <input
+                      type="checkbox"
+                      checked={authChecked}
+                      onChange={(e) => setAuthChecked(e.target.checked)}
+                      className="mt-0.5 w-4 h-4 accent-indigo-500"
+                    />
+                    <span className="text-xs text-blue-800">I confirm technical consolidation is complete</span>
+                  </label>
+                  <button
+                    onClick={() => setShowConfirmAuth(true)}
+                    disabled={!authChecked || authorizeMutation.isPending}
+                    className={`w-full px-4 py-2.5 text-sm font-bold rounded-lg transition-all flex items-center justify-center gap-2 ${
+                      authChecked && !authorizeMutation.isPending
+                        ? 'bg-emerald-600 text-white hover:bg-emerald-700'
+                        : 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                    }`}
+                  >
+                    <LockOpenIcon className="w-4 h-4" />
+                    {authorizeMutation.isPending ? 'Authorizing...' : 'Open Financial Envelopes'}
+                  </button>
+                </>
+              )}
+            </div>
+          )}
+
+          {/* Export */}
+          <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
+            <h3 className="text-sm font-bold text-gray-900 mb-2">Export Data</h3>
+            <div className="relative" ref={exportMenuRef}>
+              <button
+                onClick={() => setShowExportMenu(!showExportMenu)}
+                className="w-full px-4 py-2.5 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 flex items-center justify-center gap-2 transition-colors"
+              >
+                <DocumentDownloadIcon className="w-4 h-4" />
+                Export as...
+              </button>
+              {showExportMenu && (
+                <div className="absolute bottom-full left-0 right-0 mb-1 bg-white border border-gray-200 rounded-lg shadow-lg z-10">
+                  <button onClick={exportCSV} className="block w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 rounded-t-lg">
+                    CSV Spreadsheet
+                  </button>
+                  <button onClick={() => { setShowExportMenu(false); toast.success('JSON export coming soon'); }} className="block w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 rounded-b-lg border-t border-gray-100">
+                    JSON Data
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Discussion Notes */}
+          <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
+            <h3 className="text-sm font-bold text-gray-900 mb-2">Chair Discussion Notes</h3>
+            <textarea
+              value={discussionNotes}
+              onChange={(e) => setDiscussionNotes(e.target.value)}
+              rows={3}
+              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent resize-none"
+              placeholder="Notes for the BER (conflicts, discrepancies, observations)..."
+            />
+            <p className="text-xs text-gray-400 mt-1">Carried into the Bid Evaluation Report.</p>
+          </div>
+        </div>
+      </div>
+
+      {/* Modals */}
       <ConfirmModal
         open={showConfirmAuth}
         onClose={() => setShowConfirmAuth(false)}
@@ -769,71 +720,65 @@ const ScoreConsolidation: React.FC = () => {
         open={showQcbsConfirm}
         onClose={() => setShowQcbsConfirm(false)}
         onConfirm={() => { setShowQcbsConfirm(false); qcbsMutation.mutate(); }}
-        title={isCombinedMethod ? "Calculate Combined Scores?" : "Persist Rankings?"}
+        title={isCombinedMethod ? 'Calculate Combined Scores?' : 'Persist Rankings?'}
         message={isCombinedMethod
-          ? "This will compute combined technical and financial scores for all technically passing bids. Ensure all financial evaluations are complete."
-          : "This will persist the current rankings for all technically passing bids. Ensure all financial evaluations are complete."}
+          ? `This will compute combined technical (${solicitation?.financial_weight || 70}%) and financial scores for all technically passing bids.`
+          : 'This will persist the current technical rankings for all passing bids.'}
         variant="info"
-        confirmText={isCombinedMethod ? "Calculate" : "Persist"}
+        confirmText={isCombinedMethod ? 'Calculate' : 'Persist'}
         cancelText="Cancel"
       />
 
       {showQCBSModal && qcbsMutation.data && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30" onClick={() => setShowQCBSModal(false)}>
-          <div className="bg-white rounded-xl shadow-xl max-w-2xl w-full mx-4 max-h-[80vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
-            <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => setShowQCBSModal(false)}>
+          <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full mx-4 max-h-[80vh] overflow-hidden" onClick={e => e.stopPropagation()}>
+            <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
               <div>
-                <h2 className="text-lg font-bold text-gray-900">{isCombinedMethod ? 'Combined Scores' : 'Rankings'} Results</h2>
-                {isCombinedMethod ? (
-                  <p className="text-xs text-gray-500">
-                    Weight: Tech {qcbsMutation.data.tech_weight}% / Financial {qcbsMutation.data.fin_weight}%
-                  </p>
-                ) : (
-                  <p className="text-xs text-gray-500">Evaluated price-based ranking</p>
-                )}
+                <h2 className="text-lg font-bold text-gray-900">{methodTitle} Results</h2>
+                <p className="text-xs text-gray-500 mt-0.5">
+                  {isCombinedMethod ? `Tech ${qcbsMutation.data.tech_weight}% + Financial ${qcbsMutation.data.fin_weight}%` : 'Evaluated price-based ranking'}
+                </p>
               </div>
-              <button onClick={() => setShowQCBSModal(false)} className="text-gray-400 hover:text-gray-600">&times;</button>
+              <button onClick={() => setShowQCBSModal(false)} className="text-gray-400 hover:text-gray-600 text-xl">&times;</button>
             </div>
-            <div className="p-6">
+            <div className="p-6 overflow-y-auto max-h-[50vh]">
               <table className="min-w-full divide-y divide-gray-200 text-sm">
                 <thead className="bg-gray-50">
                   <tr>
-                    <th className="px-4 py-2 text-left font-medium text-gray-500">Rank</th>
+                    <th className="px-4 py-2 text-center font-medium text-gray-500">Rank</th>
                     <th className="px-4 py-2 text-left font-medium text-gray-500">Bidder</th>
                     {isCombinedMethod ? (
                       <>
-                        <th className="px-4 py-2 text-right font-medium text-gray-500">Tech ({qcbsMutation.data.tech_weight}%)</th>
-                        <th className="px-4 py-2 text-right font-medium text-gray-500">Fin ({qcbsMutation.data.fin_weight}%)</th>
+                        <th className="px-4 py-2 text-right font-medium text-gray-500">Tech</th>
+                        <th className="px-4 py-2 text-right font-medium text-gray-500">Financial</th>
                         <th className="px-4 py-2 text-center font-medium text-gray-500">Total</th>
                       </>
                     ) : (
                       <>
                         <th className="px-4 py-2 text-right font-medium text-gray-500">Tech Score</th>
-                        <th className="px-4 py-2 text-right font-medium text-gray-500">Original Price (ZMW)</th>
-                        <th className="px-4 py-2 text-center font-medium text-gray-500">Evaluated Price (ZMW)</th>
+                        <th className="px-4 py-2 text-right font-medium text-gray-500">Evaluated Price</th>
                       </>
                     )}
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
-                  {(qcbsMutation.data.results as QCBSResult[]).map((r: QCBSResult, i: number) => (
+                  {(qcbsMutation.data.results as QCBSResult[]).map((r, i) => (
                     <tr key={r.bid_id} className={i === 0 ? 'bg-emerald-50' : 'hover:bg-gray-50'}>
-                      <td className="px-4 py-2 text-center font-medium text-gray-500">{r.rank || i + 1}</td>
+                      <td className="px-4 py-2 text-center font-bold text-gray-500">{r.rank || i + 1}</td>
                       <td className="px-4 py-2 font-medium text-gray-900">
                         {r.bidder_name}
-                        {i === 0 && <StarIcon className="w-4 h-4 text-yellow-500 inline ml-1" />}
+                        {i === 0 && <span className="ml-1.5 text-yellow-500">★</span>}
                       </td>
                       {isCombinedMethod ? (
                         <>
-                          <td className="px-4 py-2 text-right font-mono">{r.technical_score.toFixed(2)}</td>
-                          <td className="px-4 py-2 text-right font-mono">{r.financial_score.toFixed(2)}</td>
+                          <td className="px-4 py-2 text-right font-mono text-gray-700">{r.technical_score.toFixed(2)}</td>
+                          <td className="px-4 py-2 text-right font-mono text-gray-700">{r.financial_score.toFixed(2)}</td>
                           <td className="px-4 py-2 text-center font-mono font-bold text-emerald-600">{r.total_score.toFixed(2)}</td>
                         </>
                       ) : (
                         <>
-                          <td className="px-4 py-2 text-right font-mono">{r.technical_score.toFixed(2)}</td>
-                          <td className="px-4 py-2 text-right font-mono">{Number(r.original_price ?? 0).toLocaleString()}</td>
-                          <td className="px-4 py-2 text-center font-mono font-bold text-emerald-600">
+                          <td className="px-4 py-2 text-right font-mono text-gray-700">{r.technical_score.toFixed(2)}</td>
+                          <td className="px-4 py-2 text-right font-mono text-gray-700">
                             {r.evaluated_price != null ? Number(r.evaluated_price).toLocaleString() : 'N/A'}
                           </td>
                         </>
@@ -843,12 +788,12 @@ const ScoreConsolidation: React.FC = () => {
                 </tbody>
               </table>
             </div>
-            <div className="sticky bottom-0 bg-gray-50 border-t border-gray-200 px-6 py-3 flex justify-end">
+            <div className="px-6 py-3 bg-gray-50 border-t border-gray-200 flex justify-end">
               <button
                 onClick={() => navigate(`/evaluations/${solId}/financial`)}
-                className="px-4 py-2 bg-emerald-600 text-white text-sm font-bold rounded-lg hover:bg-emerald-700"
+                className="px-4 py-2 bg-indigo-600 text-white text-sm font-bold rounded-lg hover:bg-indigo-700 flex items-center gap-2"
               >
-                Proceed to Financial Evaluation &rarr;
+                Proceed to Financial Evaluation <ArrowRightIcon className="w-4 h-4" />
               </button>
             </div>
           </div>

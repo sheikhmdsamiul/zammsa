@@ -59,7 +59,7 @@ const BERWorkflow: React.FC = () => {
   const primaryCommittee = committees[0];
   const currentBer = berListData?.results?.[0] || null;
   const reportContent = currentBer?.report_content || {};
-  const isChair = primaryCommittee?.chairperson === user?.id;
+  const isChair = String(primaryCommittee?.chairperson || '') === String(user?.id || '');
 
   const { data: passedBidsData } = useQuery({
     queryKey: ['passed-tech-bids-ber', solId],
@@ -133,8 +133,8 @@ const BERWorkflow: React.FC = () => {
       add(primaryCommittee.chairperson, primaryCommittee.chairperson_name || primaryCommittee.chairperson, 'Chair');
       add(primaryCommittee.secretary, primaryCommittee.secretary_name || primaryCommittee.secretary, 'Secretary');
       (primaryCommittee.members || []).forEach((m: any) => {
-        const uid = typeof m === 'string' ? m : m.user;
-        add(uid, typeof m === 'string' ? uid?.slice(0, 8) : m.full_name || uid, 'Member');
+        const uid = typeof m === 'object' && m !== null ? (m.user || m.id) : m;
+        add(String(uid || ''), typeof m === 'object' && m !== null ? (m.full_name || String(uid || '')) : String(uid || '').slice(0, 8), 'Member');
       });
     }
 
@@ -241,7 +241,7 @@ const BERWorkflow: React.FC = () => {
   if (loading) return <LoadingSpinner className="py-12" />;
 
   const allSigned = committeeMembers.length > 0 && committeeMembers.every((m) => signed[m.id]);
-  const userCanSign = committeeMembers.some(m => m.id === user?.id) && !signed[user?.id || ''];
+  const userCanSign = committeeMembers.some(m => String(m.id) === String(user?.id || '')) && !signed[user?.id || ''];
   const isFinalised = berSubmitted || currentBer?.status === 'approved' || currentBer?.status === 'rejected';
 
   const berStatus = currentBer?.status || (berGenerated ? 'draft' : 'pending');
@@ -265,6 +265,12 @@ const BERWorkflow: React.FC = () => {
     <div className="max-w-6xl mx-auto space-y-6">
       <div className="flex items-center justify-between">
         <div>
+          <button
+            onClick={() => navigate(primaryCommittee ? `/evaluations/${primaryCommittee.id}` : '/evaluations')}
+            className="text-sm text-gray-500 hover:text-gray-900 mb-2 flex items-center gap-1 transition-colors"
+          >
+            ← Back to Evaluation Committee
+          </button>
           <div className="flex items-center gap-3">
             <h1 className="text-2xl font-bold text-gray-900">Bid Evaluation Report — BER-{solId?.slice(0, 8) || ''}</h1>
             <StatusBadge status={berStatus} />

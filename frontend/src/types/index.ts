@@ -287,6 +287,7 @@ export interface Bid {
   solicitation_title?: string;
   solicitation_number?: string;
   solicitation_type?: string;
+  solicitation_status?: string;
   closing_date?: string;
 }
 

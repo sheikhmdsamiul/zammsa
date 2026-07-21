@@ -9,7 +9,7 @@ import toast from 'react-hot-toast';
 import {
   CheckCircleIcon, XCircleIcon, DocumentTextIcon,
   PaperClipIcon, ClockIcon, ShieldCheckIcon,
-  ArrowLeftIcon,
+  ArrowLeftIcon, ExclamationIcon,
 } from '@heroicons/react/outline';
 
 function fmtDate(d: string | undefined | null): string {
@@ -100,6 +100,19 @@ const BidDetail: React.FC = () => {
             <button onClick={() => verifyMutation.mutate(true)} className="inline-flex items-center gap-1.5 px-4 py-2.5 text-sm font-bold text-white bg-emerald-600 rounded-xl hover:bg-emerald-700 transition-colors">
               <ShieldCheckIcon className="w-4 h-4" /> Verify Security
             </button>
+          </div>
+        )}
+        {isSupplier && bid.solicitation_status === 'awarded' && bid.status === 'evaluated' && (
+          <div className="mt-4 pt-4 border-t border-gray-100 flex gap-2">
+            <button
+              onClick={() => window.location.href = `/evaluations/award-appeals?solicitation=${bid.solicitation}&bidder=${bid.id}`}
+              className="inline-flex items-center gap-1.5 px-4 py-2.5 text-sm font-bold text-white bg-amber-600 rounded-xl hover:bg-amber-700 transition-colors"
+            >
+              <ExclamationIcon className="w-4 h-4" /> File Appeal
+            </button>
+            <p className="text-sm text-gray-500 self-center mt-0.5">
+              The solicitation has been awarded. You have 14 days to file an appeal.
+            </p>
           </div>
         )}
       </div>

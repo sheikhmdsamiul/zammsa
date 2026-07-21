@@ -19,11 +19,11 @@ from accounts.serializers import UserCreateSerializer
 from system_config.notifications import notify_role, notify_users, send_external_email
 
 from .crypto_sign import sign_ber_payload, verify_signature
-from .models import EvaluationCommittee, ConflictOfInterest, PreliminaryExam, TechnicalScore, FinancialEvaluation, CombinedScore, BidEvaluationReport, PostQualification
+from .models import EvaluationCommittee, ConflictOfInterest, PreliminaryExam, TechnicalScore, FinancialEvaluation, CombinedScore, BidEvaluationReport, PostQualification, AwardAppeal
 from .serializers import (
     EvaluationCommitteeSerializer, ConflictOfInterestSerializer, PreliminaryExamSerializer, TechnicalScoreSerializer,
     FinancialEvaluationSerializer, CombinedScoreSerializer, BidEvaluationReportSerializer,
-    PostQualificationSerializer,
+    PostQualificationSerializer, AwardAppealSerializer,
 )
 from solicitations.models import Solicitation, EvaluationCriterion
 from bids.models import BidSubmission, BidOpening, BidOpeningDetail
@@ -49,6 +49,10 @@ def _committee_membership_ids(committee):
         member_ids.add(str(committee.chairperson_id))
     if committee.secretary_id:
         member_ids.add(str(committee.secretary_id))
+    for nom in committee.non_official_members or []:
+        uid = nom.get('user_id')
+        if uid:
+            member_ids.add(str(uid))
     return member_ids
 
 
@@ -268,7 +272,9 @@ class EvaluationCommitteeListView(BaseView, generics.ListCreateAPIView):
                 else:
                     member_ids.append(str(member))
 
-            if str(committee.chairperson_id) == user_id or str(committee.secretary_id) == user_id or user_id in member_ids:
+            non_official_ids = [str(nom.get('user_id')) for nom in (committee.non_official_members or []) if nom.get('user_id')]
+
+            if str(committee.chairperson_id) == user_id or str(committee.secretary_id) == user_id or user_id in member_ids or user_id in non_official_ids:
                 my_committee_ids.append(committee.committee_id)
 
         return qs.filter(committee_id__in=my_committee_ids)
@@ -376,7 +382,8 @@ def coi_declare_view(request, committee_pk):
         return Response({'error': 'Committee not found'}, status=404)
 
     member_ids = [m.get('user') if isinstance(m, dict) else m for m in committee.members]
-    if str(request.user.id) not in member_ids and request.user != committee.chairperson and request.user != committee.secretary:
+    non_official_ids = [str(nom.get('user_id')) for nom in (committee.non_official_members or []) if nom.get('user_id')]
+    if str(request.user.id) not in member_ids and str(request.user.id) not in non_official_ids and request.user != committee.chairperson and request.user != committee.secretary:
         return Response({'error': 'You are not a member of this committee'}, status=403)
 
     has_conflict = request.data.get('has_conflict', False)
@@ -471,6 +478,10 @@ def _get_committee_member_ids_for_bid(bid):
             member_ids.add(uid)
         member_ids.add(str(c.chairperson.id))
         member_ids.add(str(c.secretary.id))
+        for nom in c.non_official_members or []:
+            uid = nom.get('user_id')
+            if uid:
+                member_ids.add(str(uid))
 
     # remove recused members
     recused = ConflictOfInterest.objects.filter(committee__solicitation=bid.solicitation, recused=True).values_list('member_id', flat=True)
@@ -652,6 +663,11 @@ def list_passed_tech_bids_view(request, solicitation_pk):
     criteria = EvaluationCriterion.objects.filter(solicitation=sol, criterion_type='technical')
     total_tech_weight = criteria.aggregate(s=Sum('weight'))['s'] or Decimal('100')
 
+    # Financial envelopes are only truly "opened" after chairperson authorization
+    # (which creates CombinedScore records). Raw BidOpeningDetail.financial_sealed
+    # may be False from the bid opening ceremony itself.
+    financial_authorized = CombinedScore.objects.filter(bid__solicitation=sol).exists()
+
     bids = BidSubmission.objects.filter(solicitation=sol, status__in=['submitted', 'opened', 'responsive', 'awarded'])
     results = []
 
@@ -707,14 +723,22 @@ def list_passed_tech_bids_view(request, solicitation_pk):
             'financial_evaluation_id': str(financial_eval.evaluation_id) if financial_eval else None,
             'evaluated_price': float(financial_eval.evaluated_price) if financial_eval else None,
             'financial_score': float(financial_eval.financial_score) if financial_eval else None,
-            'financial_sealed': opening_detail.financial_sealed if opening_detail else True,
+            'financial_sealed': not financial_authorized,
             'details': details,
+            'is_winner': bid.status == 'awarded',
         })
+
+    winner_name = None
+    if sol.status == 'awarded':
+        awarded_bid = BidSubmission.objects.filter(solicitation=sol, status='awarded').select_related('supplier').first()
+        if awarded_bid and awarded_bid.supplier:
+            winner_name = awarded_bid.supplier.full_name
 
     return Response({
         'solicitation_id': str(sol.solicitation_id),
         'threshold': float(threshold),
         'bids': results,
+        'winner_name': winner_name,
     })
 
 
@@ -738,6 +762,8 @@ def calculate_qcbs_view(request, solicitation_pk):
     is_director = request.user.role == 'director_procurement'
     if not is_chair and not is_director:
         return Response({'error': 'Only the committee chair or Director of Procurement can calculate QCBS'}, status=403)
+
+    financial_authorized = CombinedScore.objects.filter(bid__solicitation=sol).exists()
 
     criteria = EvaluationCriterion.objects.filter(solicitation=sol)
 
@@ -856,7 +882,7 @@ def calculate_qcbs_view(request, solicitation_pk):
             'passed': True,
             'financial_evaluation_id': str(fin_eval.evaluation_id) if fin_eval else None,
             'evaluated_price': float(fin_eval.evaluated_price) if fin_eval else None,
-            'financial_sealed': opening_detail.financial_sealed if opening_detail else True,
+            'financial_sealed': not financial_authorized,
             'ceec_category': ceec_category,
             'ceec_priority': ceec_priority,
             'details': details,
@@ -911,6 +937,23 @@ def authorize_financial_opening_view(request, solicitation_pk):
     if not is_chair and not is_director:
         return Response({'error': 'Only the committee chair or Director of Procurement can authorize financial opening'}, status=403)
 
+    # Verify all committee members have submitted technical scores for all bids
+    criteria = EvaluationCriterion.objects.filter(solicitation=sol, criterion_type='technical')
+    criteria_count = criteria.count()
+    bids = BidSubmission.objects.filter(solicitation=sol, status__in=['submitted', 'opened', 'responsive'])
+    committee_member_ids = set()
+    for c in committees:
+        committee_member_ids.update(_committee_membership_ids(c))
+
+    for bid in bids:
+        scored_evaluators = TechnicalScore.objects.filter(
+            bid=bid, criterion__in=criteria
+        ).values('evaluator').distinct().count()
+        if scored_evaluators < len(committee_member_ids):
+            return Response({
+                'error': 'All committee members must complete technical scoring for all bids before financial envelopes can be opened.',
+            }, status=400)
+
     threshold = Decimal(str(sol.minimum_technical_threshold or TECHNICAL_THRESHOLD_DEFAULT))
     criteria = EvaluationCriterion.objects.filter(solicitation=sol, criterion_type='technical')
     total_tech_weight = criteria.aggregate(s=Sum('weight'))['s'] or Decimal('100')
@@ -936,16 +979,17 @@ def authorize_financial_opening_view(request, solicitation_pk):
         eligible_bids.append((bid, overall_pct))
 
         opening_detail = BidOpeningDetail.objects.filter(bid=bid).first()
-        if opening_detail and opening_detail.financial_sealed:
-            opening_detail.financial_sealed = False
-            opening_detail.save(update_fields=['financial_sealed'])
+        if opening_detail:
+            if opening_detail.financial_sealed:
+                opening_detail.financial_sealed = False
+                opening_detail.save(update_fields=['financial_sealed'])
             opened_count += 1
 
     # Persist combined scores to mark consolidation phase complete
     eval_method = sol.evaluation_method or ('qcbs' if sol.method == 'rfp' else 'lowest_price')
     if eval_method == 'qcbs' and sol.financial_weight is not None:
-        fin_weight = Decimal(str(sol.financial_weight))
-        tech_weight_combined = Decimal('100') - fin_weight
+        fin_weight_combined = Decimal(str(sol.financial_weight))
+        tech_weight_combined = Decimal('100') - fin_weight_combined
     elif eval_method == 'qbs':
         tech_weight_combined = Decimal('100')
         fin_weight_combined = Decimal('0')
@@ -978,18 +1022,17 @@ def authorize_financial_opening_view(request, solicitation_pk):
                 preference_category='0',
             )
 
-        if eval_method in ('qcbs', 'qbs'):
-            total_score = (overall_pct * tech_weight_combined / Decimal('100')) + (Decimal(str(fin_score)) * fin_weight_combined / Decimal('100'))
-            cs, _ = CombinedScore.objects.update_or_create(
-                bid=bid,
-                defaults={
-                    'technical_score': overall_pct,
-                    'financial_score': fin_score,
-                    'total_score': total_score,
-                    'rank': 0,
-                }
-            )
-            combined_records.append(cs)
+        total_score = (overall_pct * tech_weight_combined / Decimal('100')) + (Decimal(str(fin_score)) * fin_weight_combined / Decimal('100'))
+        cs, _ = CombinedScore.objects.update_or_create(
+            bid=bid,
+            defaults={
+                'technical_score': overall_pct,
+                'financial_score': fin_score,
+                'total_score': total_score,
+                'rank': 0,
+            }
+        )
+        combined_records.append(cs)
 
     if combined_records:
         if eval_method in ('qcbs', 'qbs'):
@@ -1564,6 +1607,8 @@ def consolidated_scores_view(request, solicitation_pk):
     total_tech_weight = criteria.aggregate(s=Sum('weight'))['s'] or Decimal('100')
     threshold = Decimal(str(sol.minimum_technical_threshold or 70))
 
+    financial_authorized = CombinedScore.objects.filter(bid__solicitation=sol).exists()
+
     bids = BidSubmission.objects.filter(solicitation=sol, status__in=['submitted', 'opened', 'responsive', 'awarded'])
     
     all_member_list = []
@@ -1574,6 +1619,11 @@ def consolidated_scores_view(request, solicitation_pk):
     for c in committees:
         for m in c.members:
             uid = m.get('user') if isinstance(m, dict) else m
+            if uid and str(uid) not in member_ids_set:
+                member_ids_set.add(str(uid))
+                raw_member_ids.append(str(uid))
+        for nm in (c.non_official_members or []):
+            uid = nm.get('user_id')
             if uid and str(uid) not in member_ids_set:
                 member_ids_set.add(str(uid))
                 raw_member_ids.append(str(uid))
@@ -1601,6 +1651,17 @@ def consolidated_scores_view(request, solicitation_pk):
                     'id': str(uid),
                     'name': member_name,
                     'role': member_role,
+                })
+        for nm in (c.non_official_members or []):
+            uid = nm.get('user_id')
+            if uid and str(uid) not in member_ids_set:
+                member_ids_set.add(str(uid))
+                user_obj = user_cache.get(str(uid))
+                member_name = user_obj.full_name if user_obj else f"{nm.get('first_name', '')} {nm.get('last_name', '')}".strip() or str(uid)[:8]
+                member_list.append({
+                    'id': str(uid),
+                    'name': member_name,
+                    'role': nm.get('expertise', 'member'),
                 })
         if c.chairperson_id and str(c.chairperson.id) not in member_ids_set:
             member_ids_set.add(str(c.chairperson.id))
@@ -1699,7 +1760,7 @@ def consolidated_scores_view(request, solicitation_pk):
             'financial_evaluation_id': str(financial_eval.evaluation_id) if financial_eval else None,
             'evaluated_price': float(financial_eval.evaluated_price) if financial_eval else None,
             'financial_score': float(financial_eval.financial_score) if financial_eval else None,
-            'financial_sealed': opening_detail.financial_sealed if opening_detail else True,
+            'financial_sealed': not financial_authorized,
             'details': details,
             'members': members_data,
             'all_members_submitted': len(members_submitted) >= len([m for m in all_member_list if m['id']]),
@@ -1739,7 +1800,42 @@ class PostQualificationListView(BaseView, generics.ListCreateAPIView):
     queryset = PostQualification.objects.select_related('ber', 'bidder', 'assigned_to').all()
     serializer_class = PostQualificationSerializer
     filterset_class = PostQualificationFilter
+    search_fields = ['bidder__submission_id', 'status', 'notes']
     ordering = ['-pq_id']
+
+    def get_queryset(self):
+        qs = super().get_queryset()
+        solicitation = self.request.query_params.get('solicitation')
+        if solicitation:
+            qs = qs.filter(Q(ber__solicitation_id=solicitation) | Q(bidder__solicitation_id=solicitation))
+        return qs
+
+    def create(self, request, *args, **kwargs):
+        solicitation_id = request.data.get('solicitation_id')
+        bidder_id = request.data.get('bidder_id')
+        if not solicitation_id or not bidder_id:
+            return Response({'error': 'solicitation_id and bidder_id are required'}, status=400)
+
+        sol = Solicitation.objects.filter(pk=solicitation_id).first()
+        if not sol:
+            return Response({'error': 'Solicitation not found'}, status=404)
+
+        if sol.status != 'awarded':
+            return Response({'error': 'Post-qualification can only begin after a winning bidder has been selected.'}, status=400)
+
+        winner = BidSubmission.objects.filter(pk=bidder_id, solicitation=sol, status='awarded').first()
+        if not winner:
+            return Response({'error': 'The specified bid is not the awarded winner for this solicitation.'}, status=400)
+
+        if PostQualification.objects.filter(bidder=winner).exists():
+            return Response({'error': 'Post-qualification already exists for this bid.'}, status=400)
+
+        pq = PostQualification.objects.create(
+            bidder=winner,
+            status='pending',
+            verification_items=[],
+        )
+        return Response(PostQualificationSerializer(pq).data, status=201)
 
 
 class PostQualificationDetailView(generics.RetrieveUpdateDestroyAPIView):
@@ -1822,6 +1918,140 @@ def pq_generate_checklist_view(request, pq_pk):
     return Response({
         'message': 'Verification checklist generated',
         'pq': PostQualificationSerializer(pq).data,
+    })
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def pq_verification_context_view(request, pq_pk):
+    try:
+        pq = PostQualification.objects.select_related('bidder', 'bidder__supplier', 'assigned_to').get(pk=pq_pk)
+    except PostQualification.DoesNotExist:
+        return Response({'error': 'Post-qualification record not found'}, status=404)
+
+    bid = pq.bidder
+    user = bid.supplier
+
+    supplier_profile = None
+    from suppliers.models import Supplier as SupplierModel, VendorApplication, SupplierDocument
+    if user.employee_id and str(user.employee_id).startswith('SUP-'):
+        supplier_profile = SupplierModel.objects.filter(
+            registration_number=str(user.employee_id).replace('SUP-', '', 1)
+        ).first()
+    if not supplier_profile:
+        supplier_profile = SupplierModel.objects.filter(name=user.full_name).first()
+    if not supplier_profile:
+        va = VendorApplication.objects.filter(email=user.email, status='approved').order_by('-created_at').first()
+        if va:
+            supplier_profile = SupplierModel.objects.filter(
+                Q(registration_number=va.registration_number) | Q(tin=va.tin)
+            ).first()
+
+    supplier_docs = []
+    blacklist_entry = None
+    if supplier_profile:
+        supplier_docs = list(SupplierDocument.objects.filter(supplier=supplier_profile).values(
+            'document_id', 'document_type', 'file_path', 'expiry_date', 'verification_status'
+        ))
+        from suppliers.models import Blacklist
+        blacklist_entry = Blacklist.objects.filter(
+            Q(registration_number=supplier_profile.registration_number) |
+            Q(tin=supplier_profile.tin)
+        ).order_by('-created_at').first()
+
+    from bids.models import BidDocument, BidSecurity
+    bid_docs = list(BidDocument.objects.filter(bid=bid).values(
+        'document_id', 'document_type', 'file_path', 'uploaded_at'
+    ))
+    bid_securities = list(BidSecurity.objects.filter(bid=bid).values(
+        'security_id', 'security_type', 'amount', 'issuing_institution',
+        'reference_number', 'validity_date', 'verification_status'
+    ))
+
+    from evaluations.models import TechnicalScore, FinancialEvaluation
+    tech_scores = TechnicalScore.objects.filter(bid=bid, is_final=True).select_related('criterion', 'evaluator')
+    tech_data = []
+    for ts in tech_scores:
+        tech_data.append({
+            'criterion': ts.criterion.criterion_name if ts.criterion else '',
+            'evaluator': ts.evaluator.full_name if ts.evaluator else '',
+            'raw_score': float(ts.raw_score),
+            'weighted_score': float(ts.weighted_score),
+        })
+
+    fin_eval = FinancialEvaluation.objects.filter(bid=bid).first()
+    fin_data = None
+    if fin_eval:
+        fin_data = {
+            'original_price': float(fin_eval.original_price or 0),
+            'corrected_price': float(fin_eval.corrected_price or 0),
+            'evaluated_price': float(fin_eval.evaluated_price or 0),
+            'financial_score': float(fin_eval.financial_score or 0),
+            'preference_category': fin_eval.preference_category or 'non_citizen',
+            'preference_margin': float(fin_eval.preference_applied or 0),
+        }
+
+    vendor_app = VendorApplication.objects.filter(email=user.email).order_by('-created_at').first()
+    va_data = None
+    if vendor_app:
+        va_data = {
+            'company_name': vendor_app.company_name,
+            'business_type': vendor_app.business_type,
+            'year_established': vendor_app.year_established,
+            'employee_count': vendor_app.employee_count,
+            'annual_turnover': str(vendor_app.annual_turnover) if vendor_app.annual_turnover else None,
+            'contact_person': vendor_app.contact_person,
+            'contact_phone': vendor_app.contact_phone,
+            'address': vendor_app.address,
+            'pacra_validated': vendor_app.pacra_validated,
+            'ceec_validated': vendor_app.ceec_validated,
+            'status': vendor_app.status,
+        }
+
+    return Response({
+        'pq_id': str(pq.pq_id),
+        'status': pq.status,
+        'verification_items': pq.verification_items or [],
+        'notes': pq.notes,
+        'assigned_to_name': pq.assigned_to.full_name if pq.assigned_to else None,
+        'bid': {
+            'submission_id': bid.submission_id,
+            'bid_price': float(bid.bid_price or 0),
+            'currency': bid.currency or 'ZMW',
+            'validity_period_days': bid.validity_period_days,
+            'security_amount': float(bid.security_amount or 0),
+            'security_type': bid.security_type or '',
+            'status': bid.status,
+            'submitted_at': bid.submitted_at.isoformat() if bid.submitted_at else None,
+            'line_items': bid.line_items or [],
+        },
+        'supplier_user': {
+            'full_name': user.full_name,
+            'email': user.email,
+            'employee_id': user.employee_id or '',
+        },
+        'supplier_profile': {
+            'supplier_id': str(supplier_profile.supplier_id) if supplier_profile else None,
+            'registration_number': supplier_profile.registration_number if supplier_profile else None,
+            'tin': supplier_profile.tin if supplier_profile else None,
+            'name': supplier_profile.name if supplier_profile else None,
+            'ceec_category': supplier_profile.ceec_category if supplier_profile else None,
+            'status': supplier_profile.status if supplier_profile else None,
+            'risk_level': supplier_profile.risk_level if supplier_profile else None,
+            'bank_name': supplier_profile.bank_name if supplier_profile else None,
+            'bank_account_number': supplier_profile.bank_account_number if supplier_profile else None,
+        } if supplier_profile else None,
+        'supplier_documents': supplier_docs,
+        'blacklist': {
+            'reason': blacklist_entry.reason if blacklist_entry else None,
+            'debarred_until': blacklist_entry.debarred_until.isoformat() if blacklist_entry and blacklist_entry.debarred_until else None,
+            'source': blacklist_entry.source if blacklist_entry else None,
+        } if blacklist_entry else None,
+        'bid_documents': bid_docs,
+        'bid_securities': bid_securities,
+        'technical_scores': tech_data,
+        'financial_evaluation': fin_data,
+        'vendor_application': va_data,
     })
 
 
@@ -1932,20 +2162,19 @@ def evaluation_phase_status_view(request, solicitation_pk):
     tech_total_members = 0
     committees = EvaluationCommittee.objects.filter(solicitation=solicitation_pk)
     for c in committees:
-        tech_total_members = max(tech_total_members, len(c.members or []))
+        official_count = len(c.members or [])
+        non_official_count = sum(1 for nom in (c.non_official_members or []) if nom.get('user_id'))
+        tech_total_members = max(tech_total_members, official_count + non_official_count)
     tech_expected_pairs = total_bids * tech_total_members if tech_total_members > 0 else 0
     tech_complete = tech_unique_pairs >= tech_expected_pairs and tech_expected_pairs > 0
 
     financial_evals = FinancialEvaluation.objects.filter(bid__solicitation=solicitation_pk)
     financial_done = financial_evals.values('bid').distinct().count()
-    financial_complete = financial_done >= total_bids and total_bids > 0
+    winner_selected = BidSubmission.objects.filter(solicitation=solicitation_pk, status='awarded').exists()
+    financial_complete = financial_done >= total_bids and total_bids > 0 and winner_selected
 
     consolidated = CombinedScore.objects.filter(bid__solicitation=solicitation_pk)
-    financially_opened = BidOpeningDetail.objects.filter(
-        bid__solicitation=solicitation_pk,
-        financial_sealed=False
-    ).exists()
-    consolidation_complete = consolidated.exists() or financially_opened
+    consolidation_complete = consolidated.exists()
 
     ber = BidEvaluationReport.objects.filter(solicitation=solicitation_pk)
     ber_complete = ber.filter(status__in=['submitted', 'approved']).exists()
@@ -1993,5 +2222,193 @@ def evaluation_phase_status_view(request, solicitation_pk):
                 'submitted_count': ber.filter(status='submitted').count(),
                 'approved_count': ber.filter(status='approved').count(),
             },
+            'appeal': {
+                'active_appeals': AwardAppeal.objects.filter(
+                    solicitation=solicitation_pk,
+                    status__in=['filed', 'under_review']
+                ).count(),
+                'has_active_appeal': AwardAppeal.objects.filter(
+                    solicitation=solicitation_pk,
+                    status__in=['filed', 'under_review']
+                ).exists(),
+            },
         },
     })
+
+
+AWARD_APPEAL_STATUSES = ['filed', 'under_review', 'upheld', 'dismissed', 'withdrawn']
+
+
+class AwardAppealListView(generics.ListCreateAPIView):
+    serializer_class = AwardAppealSerializer
+    permission_classes = [IsAuthenticated]
+    pagination_class = PageNumberPagination
+    page_size = 25
+    filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
+    filterset_fields = ['status', 'solicitation']
+    search_fields = ['bidder__submission_id', 'solicitation__sol_number', 'grounds_detail']
+    ordering_fields = ['filed_at', 'status']
+    ordering = ['-filed_at']
+
+    def get_queryset(self):
+        user = self.request.user
+        role = getattr(user, 'role', '')
+        qs = AwardAppeal.objects.select_related(
+            'solicitation', 'bidder', 'bidder__supplier', 'filed_by', 'resolved_by'
+        )
+        if role == 'supplier_user':
+            qs = qs.filter(bidder__supplier=user)
+        solicitation = self.request.query_params.get('solicitation')
+        if solicitation:
+            qs = qs.filter(solicitation_id=solicitation)
+        return qs
+
+    def create(self, request, *args, **kwargs):
+        user = request.user
+        role = getattr(user, 'role', '')
+        if role != 'supplier_user':
+            return Response({'error': 'Only supplier users can file appeals'}, status=403)
+
+        solicitation_id = request.data.get('solicitation')
+        bidder_id = request.data.get('bidder')
+        grounds = request.data.get('grounds')
+        grounds_detail = request.data.get('grounds_detail', '')
+        supporting_documents = request.data.get('supporting_documents', [])
+
+        if not solicitation_id or not bidder_id or not grounds:
+            return Response({'error': 'solicitation, bidder, and grounds are required'}, status=400)
+
+        from solicitations.models import Solicitation
+        from bids.models import BidSubmission
+
+        try:
+            sol = Solicitation.objects.get(pk=solicitation_id)
+        except Solicitation.DoesNotExist:
+            return Response({'error': 'Solicitation not found'}, status=404)
+
+        try:
+            bid = BidSubmission.objects.get(pk=bidder_id, solicitation=sol)
+        except BidSubmission.DoesNotExist:
+            return Response({'error': 'Bid not found for this solicitation'}, status=404)
+
+        if bid.supplier != user:
+            return Response({'error': 'You can only file appeals for your own bids'}, status=403)
+
+        if sol.status != 'awarded':
+            return Response({'error': 'Appeals can only be filed after the solicitation is awarded'}, status=400)
+
+        if AwardAppeal.objects.filter(
+            solicitation=sol, bidder=bid, status__in=['filed', 'under_review']
+        ).exists():
+            return Response({'error': 'An active appeal already exists for this bid'}, status=400)
+
+        from datetime import timedelta
+        deadline = timezone.now() + timedelta(days=14)
+
+        appeal = AwardAppeal.objects.create(
+            solicitation=sol,
+            bidder=bid,
+            filed_by=user,
+            grounds=grounds,
+            grounds_detail=grounds_detail,
+            supporting_documents=supporting_documents or [],
+            resolution_deadline=deadline,
+        )
+
+        contract = getattr(sol, 'contract', None)
+        if contract:
+            contract.appeal_pending = True
+            contract.save()
+
+        from accounts.models import User
+        proc_officers = User.objects.filter(role='procurement_officer', is_active=True)
+        pq_members = User.objects.filter(
+            role__in=['evaluation_committee_chair', 'evaluation_committee_member'], is_active=True
+        )
+        ground_label = dict(AwardAppeal._meta.get_field('grounds').choices).get(grounds, grounds)
+        notify_users(
+            list(set(list(proc_officers) + list(pq_members))),
+            f'New Award Appeal Filed — {sol.sol_number}',
+            f'{user.full_name} filed an appeal for bid {bid.submission_id} under {sol.sol_number}. '
+            f'Grounds: {ground_label}. '
+            f'Resolution deadline: {deadline.strftime("%d %B %Y")}.',
+            priority='high',
+        )
+
+        return Response(AwardAppealSerializer(appeal).data, status=201)
+
+
+class AwardAppealDetailView(generics.RetrieveUpdateDestroyAPIView):
+    serializer_class = AwardAppealSerializer
+    permission_classes = [IsAuthenticated]
+    queryset = AwardAppeal.objects.select_related(
+        'solicitation', 'bidder', 'bidder__supplier', 'filed_by', 'resolved_by'
+    )
+    lookup_url_kwarg = 'appeal_pk'
+
+    def get_queryset(self):
+        user = self.request.user
+        role = getattr(user, 'role', '')
+        qs = super().get_queryset()
+        if role == 'supplier_user':
+            qs = qs.filter(bidder__supplier=user)
+        return qs
+
+    def partial_update(self, request, *args, **kwargs):
+        user = request.user
+        role = getattr(user, 'role', '')
+        appeal = self.get_object()
+
+        if role == 'supplier_user':
+            if request.data.get('status') == 'withdrawn' and appeal.status in ('filed', 'under_review'):
+                appeal.status = 'withdrawn'
+                appeal.save()
+                contract = getattr(appeal.solicitation, 'contract', None)
+                if contract and not AwardAppeal.objects.filter(
+                    solicitation=appeal.solicitation, status__in=['filed', 'under_review']
+                ).exclude(pk=appeal.pk).exists():
+                    contract.appeal_pending = False
+                    contract.save()
+                return Response(AwardAppealSerializer(appeal).data)
+            return Response({'error': 'Suppliers can only withdraw their own appeals'}, status=403)
+
+        new_status = request.data.get('status')
+        if new_status and new_status not in ('under_review', 'upheld', 'dismissed'):
+            return Response({'error': f'Invalid status: {new_status}'}, status=400)
+
+        if new_status == 'under_review':
+            appeal.status = 'under_review'
+        elif new_status == 'upheld':
+            appeal.status = 'upheld'
+            appeal.resolution = request.data.get('resolution', '')
+            appeal.resolved_by = user
+            appeal.resolved_at = timezone.now()
+        elif new_status == 'dismissed':
+            appeal.status = 'dismissed'
+            appeal.resolution = request.data.get('resolution', '')
+            appeal.resolved_by = user
+            appeal.resolved_at = timezone.now()
+
+        appeal.save()
+
+        if new_status in ('upheld', 'dismissed', 'withdrawn'):
+            contract = getattr(appeal.solicitation, 'contract', None)
+            if contract and not AwardAppeal.objects.filter(
+                solicitation=appeal.solicitation, status__in=['filed', 'under_review']
+            ).exclude(pk=appeal.pk).exists():
+                contract.appeal_pending = False
+                contract.save()
+
+        if new_status in ('upheld', 'dismissed'):
+            try:
+                notify_users(
+                    [appeal.filed_by],
+                    f'Appeal {new_status.title()} — {appeal.solicitation.sol_number}',
+                    f'Your appeal for bid {appeal.bidder.submission_id} under {appeal.solicitation.sol_number} '
+                    f'has been {new_status}. Resolution: {appeal.resolution}',
+                    priority='high',
+                )
+            except Exception:
+                pass
+
+        return Response(AwardAppealSerializer(appeal).data)

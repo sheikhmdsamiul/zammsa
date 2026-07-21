@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import EvaluationCommittee, ConflictOfInterest, PreliminaryExam, TechnicalScore, FinancialEvaluation, CombinedScore, BidEvaluationReport, PostQualification
+from .models import EvaluationCommittee, ConflictOfInterest, PreliminaryExam, TechnicalScore, FinancialEvaluation, CombinedScore, BidEvaluationReport, PostQualification, AwardAppeal
 
 
 class ConflictOfInterestSerializer(serializers.ModelSerializer):
@@ -242,7 +242,7 @@ class PostQualificationSerializer(serializers.ModelSerializer):
     id = serializers.UUIDField(source='pq_id', read_only=True)
     bidder_name = serializers.CharField(source='bidder.supplier.full_name', read_only=True)
     submission_id = serializers.CharField(source='bidder.submission_id', read_only=True)
-    assigned_to_name = serializers.CharField(source='assigned_to.full_name', read_only=True, allow_null=True)
+    assigned_to_name = serializers.SerializerMethodField()
     total_items = serializers.SerializerMethodField()
     completed_items = serializers.SerializerMethodField()
     progress_percent = serializers.SerializerMethodField()
@@ -250,6 +250,11 @@ class PostQualificationSerializer(serializers.ModelSerializer):
     class Meta:
         model = PostQualification
         fields = '__all__'
+
+    def get_assigned_to_name(self, obj):
+        if obj.assigned_to:
+            return obj.assigned_to.full_name
+        return None
 
     def get_total_items(self, obj):
         items = obj.verification_items or []
@@ -265,3 +270,34 @@ class PostQualificationSerializer(serializers.ModelSerializer):
             return 0
         done = len([i for i in items if i.get('status') in ('cleared', 'failed')])
         return round((done / len(items)) * 100) if items else 0
+
+
+class AwardAppealSerializer(serializers.ModelSerializer):
+    id = serializers.UUIDField(source='appeal_id', read_only=True)
+    bidder_name = serializers.CharField(source='bidder.supplier.full_name', read_only=True)
+    submission_id = serializers.CharField(source='bidder.submission_id', read_only=True)
+    solicitation_number = serializers.CharField(source='solicitation.sol_number', read_only=True)
+    solicitation_title = serializers.CharField(source='solicitation.title', read_only=True)
+    filed_by_name = serializers.SerializerMethodField()
+    resolved_by_name = serializers.SerializerMethodField()
+    ground_label = serializers.CharField(source='get_grounds_display', read_only=True)
+    status_label = serializers.CharField(source='get_status_display', read_only=True)
+    is_active = serializers.SerializerMethodField()
+
+    class Meta:
+        model = AwardAppeal
+        fields = '__all__'
+        read_only_fields = ('appeal_id', 'filed_at', 'resolved_at', 'created_at', 'updated_at')
+
+    def get_filed_by_name(self, obj):
+        if obj.filed_by:
+            return obj.filed_by.full_name
+        return None
+
+    def get_resolved_by_name(self, obj):
+        if obj.resolved_by:
+            return obj.resolved_by.full_name
+        return None
+
+    def get_is_active(self, obj):
+        return obj.status in ('filed', 'under_review')

@@ -460,4 +460,18 @@ class ContractSerializer(serializers.ModelSerializer):
         currency = self.initial_data.get('currency')
         if currency and 'currency' not in validated_data:
             validated_data['currency'] = currency
+
+        solicitation = validated_data.get('solicitation')
+        if solicitation:
+            from evaluations.models import AwardAppeal
+            active_appeals = AwardAppeal.objects.filter(
+                solicitation=solicitation,
+                status__in=['filed', 'under_review']
+            ).count()
+            if active_appeals > 0:
+                raise serializers.ValidationError(
+                    f'Cannot create contract: {active_appeals} active appeal(s) exist for this solicitation. '
+                    'All appeals must be resolved before contract creation.'
+                )
+
         return super().create(validated_data)

@@ -66,6 +66,7 @@ class BidSubmissionSerializer(serializers.ModelSerializer):
     solicitation_title = serializers.CharField(source='solicitation.title', read_only=True)
     solicitation_number = serializers.CharField(source='solicitation.sol_number', read_only=True)
     solicitation_type = serializers.CharField(source='solicitation.method', read_only=True)
+    solicitation_status = serializers.CharField(source='solicitation.status', read_only=True)
     closing_date = serializers.DateTimeField(source='solicitation.closing_date', read_only=True)
 
     class Meta:

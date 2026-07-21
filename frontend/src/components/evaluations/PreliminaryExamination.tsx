@@ -11,6 +11,8 @@ import toast from 'react-hot-toast';
 import {
   CheckCircleIcon, XCircleIcon, DocumentSearchIcon,
   ShieldCheckIcon, InformationCircleIcon,
+  ChevronDownIcon, ChevronUpIcon, CurrencyDollarIcon,
+  DocumentTextIcon, ExternalLinkIcon,
 } from '@heroicons/react/outline';
 
 interface CheckState {
@@ -26,6 +28,124 @@ interface BidExamState {
   notes: string;
 }
 
+const BidInfoPanel: React.FC<{ bid: any }> = ({ bid }) => {
+  const { data: fullBid, isLoading } = useQuery({
+    queryKey: ['bid-detail', bid.bid_id || bid.id],
+    queryFn: () => bidsApi.get(bid.bid_id || bid.id),
+    enabled: true,
+  });
+
+  const bidData = fullBid || bid;
+  const lineItems: any[] = bidData.line_items || [];
+  const documents: any[] = bidData.documents || bidData.bid_documents || [];
+
+  return (
+    <div className="bg-blue-50/50 border border-blue-100 rounded-lg p-4 space-y-4">
+      {isLoading && <LoadingSpinner className="py-4" />}
+
+      {!isLoading && (
+        <>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            <div>
+              <p className="text-[10px] text-gray-500 uppercase tracking-wide font-medium">Bid Price</p>
+              <p className="text-sm font-bold text-gray-900 mt-0.5">
+                {bidData.bid_amount != null
+                  ? `${bidData.currency || 'ZMW'} ${Number(bidData.bid_amount).toLocaleString()}`
+                  : '—'}
+              </p>
+            </div>
+            <div>
+              <p className="text-[10px] text-gray-500 uppercase tracking-wide font-medium">Submission</p>
+              <p className="text-sm font-bold text-gray-900 mt-0.5">{bidData.submission_id || bidData.bid_number || '—'}</p>
+            </div>
+            <div>
+              <p className="text-[10px] text-gray-500 uppercase tracking-wide font-medium">Status</p>
+              <p className="text-sm font-bold text-gray-900 mt-0.5 capitalize">{bidData.status || '—'}</p>
+            </div>
+            <div>
+              <p className="text-[10px] text-gray-500 uppercase tracking-wide font-medium">Submitted</p>
+              <p className="text-sm font-bold text-gray-900 mt-0.5">
+                {bidData.submitted_at ? new Date(bidData.submitted_at).toLocaleDateString() : '—'}
+              </p>
+            </div>
+          </div>
+
+          {lineItems.length > 0 && (
+            <div>
+              <p className="text-[10px] text-gray-500 uppercase tracking-wide font-medium mb-2">Line Items</p>
+              <div className="border border-blue-100 rounded-lg overflow-hidden">
+                <table className="min-w-full text-[11px]">
+                  <thead className="bg-blue-100/50">
+                    <tr>
+                      <th className="px-2 py-1.5 text-left font-medium text-gray-600">Item</th>
+                      <th className="px-2 py-1 text-left font-medium text-gray-600">Description</th>
+                      <th className="px-2 py-1 text-right font-medium text-gray-600">Qty</th>
+                      <th className="px-2 py-1 text-right font-medium text-gray-600">Unit Price</th>
+                      <th className="px-2 py-1 text-right font-medium text-gray-600">Total</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-blue-100">
+                    {lineItems.map((item: any, idx: number) => (
+                      <tr key={idx} className="bg-white/60">
+                        <td className="px-2 py-1.5 font-medium text-gray-900">{item.item_code || idx + 1}</td>
+                        <td className="px-2 py-1 text-gray-700">{item.description || '—'}</td>
+                        <td className="px-2 py-1 text-right text-gray-700">{item.quantity || 0}</td>
+                        <td className="px-2 py-1 text-right text-gray-700">
+                          {item.unit_price != null ? Number(item.unit_price).toLocaleString() : '—'}
+                        </td>
+                        <td className="px-2 py-1 text-right font-medium text-gray-900">
+                          {item.total_price != null ? Number(item.total_price).toLocaleString() : '—'}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {documents.length > 0 && (
+            <div>
+              <p className="text-[10px] text-gray-500 uppercase tracking-wide font-medium mb-2">Attached Documents</p>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                {documents.map((doc: any, idx: number) => (
+                  <div key={idx} className="flex items-center gap-2 p-2 bg-white rounded-lg border border-blue-100">
+                    <DocumentTextIcon className="w-4 h-4 text-blue-500 shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-[11px] font-medium text-gray-900 truncate">
+                        {doc.document_type || doc.name || `Document ${idx + 1}`}
+                      </p>
+                      {doc.uploaded_at && (
+                        <p className="text-[10px] text-gray-400">
+                          {new Date(doc.uploaded_at).toLocaleDateString()}
+                        </p>
+                      )}
+                    </div>
+                    {doc.file_path && (
+                      <a
+                        href={doc.file_path}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="shrink-0 text-blue-600 hover:text-blue-800"
+                      >
+                        <ExternalLinkIcon className="w-3.5 h-3.5" />
+                      </a>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {lineItems.length === 0 && documents.length === 0 && (
+            <p className="text-xs text-gray-400 text-center py-2">No line items or documents on file</p>
+          )}
+        </>
+      )}
+    </div>
+  );
+};
+
 const PreliminaryExamination: React.FC = () => {
   const { solId } = useParams<{ solId: string }>();
   const navigate = useNavigate();
@@ -33,6 +153,7 @@ const PreliminaryExamination: React.FC = () => {
 
   const [exams, setExams] = useState<Record<string, BidExamState>>({});
   const [allCompleted, setAllCompleted] = useState(false);
+  const [expandedBidId, setExpandedBidId] = useState<string | null>(null);
 
   const { data: solicitation, isLoading: solLoading } = useQuery({
     queryKey: ['solicitation', solId],
@@ -143,6 +264,12 @@ const PreliminaryExamination: React.FC = () => {
     <div className="max-w-6xl mx-auto space-y-6">
       <div className="flex items-center justify-between">
         <div>
+          <button
+            onClick={() => navigate(primaryCommittee ? `/evaluations/${primaryCommittee.id}` : '/evaluations')}
+            className="text-sm text-gray-500 hover:text-gray-900 mb-2 flex items-center gap-1 transition-colors"
+          >
+            ← Back to Evaluation Committee
+          </button>
           <div className="flex items-center gap-3">
             <h1 className="text-2xl font-bold text-gray-900">Preliminary Examination</h1>
             <StatusBadge status={allExamined ? 'completed' : 'active'} />
@@ -194,18 +321,41 @@ const PreliminaryExamination: React.FC = () => {
           {bids.map((bid: any) => {
             const bidId = bid.bid_id || bid.id;
             const exam = exams[bidId];
+            const isExpanded = expandedBidId === bidId;
 
             if (!exam) {
               return (
-                <div key={bidId} className="p-4 bg-gray-50 rounded-xl border border-gray-200 flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-medium text-gray-900">{bid.supplier_name || bid.bidder_name || 'Unknown'}</p>
-                    <p className="text-xs text-gray-500">Click to begin examination</p>
+                <div key={bidId} className="p-4 bg-gray-50 rounded-xl border border-gray-200">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-medium text-gray-900">{bid.supplier_name || bid.bidder_name || 'Unknown'}</p>
+                      <div className="flex items-center gap-3 mt-1 text-[11px] text-gray-500">
+                        {bid.submission_id && <span>{bid.submission_id}</span>}
+                        {bid.bid_amount != null && (
+                          <span className="flex items-center gap-1">
+                            <CurrencyDollarIcon className="w-3 h-3" />
+                            {bid.currency || 'ZMW'} {Number(bid.bid_amount).toLocaleString()}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button onClick={() => setExpandedBidId(isExpanded ? null : bidId)}
+                        className="px-3 py-1.5 bg-gray-100 text-gray-600 text-xs rounded-lg hover:bg-gray-200 flex items-center gap-1">
+                        {isExpanded ? <ChevronUpIcon className="w-3.5 h-3.5" /> : <ChevronDownIcon className="w-3.5 h-3.5" />}
+                        Bid Info
+                      </button>
+                      <button onClick={() => initExamination(bid)}
+                        className="px-3 py-1.5 bg-zammsa-green text-white text-xs rounded-lg">
+                        Examine
+                      </button>
+                    </div>
                   </div>
-                  <button onClick={() => initExamination(bid)}
-                    className="px-3 py-1.5 bg-zammsa-green text-white text-xs rounded-lg">
-                    Examine
-                  </button>
+                  {isExpanded && (
+                    <div className="mt-3">
+                      <BidInfoPanel bid={bid} />
+                    </div>
+                  )}
                 </div>
               );
             }
@@ -215,12 +365,33 @@ const PreliminaryExamination: React.FC = () => {
                 <div className="flex items-center justify-between mb-4">
                   <div>
                     <p className="text-sm font-semibold text-gray-900">{exam.bidderName}</p>
-                    <p className="text-xs text-gray-500">BID-{bidId.slice(0, 8)}</p>
+                    <div className="flex items-center gap-3 mt-1 text-[11px] text-gray-500">
+                      {bid.submission_id && <span>{bid.submission_id}</span>}
+                      {bid.bid_amount != null && (
+                        <span className="flex items-center gap-1">
+                          <CurrencyDollarIcon className="w-3 h-3" />
+                          {bid.currency || 'ZMW'} {Number(bid.bid_amount).toLocaleString()}
+                        </span>
+                      )}
+                    </div>
                   </div>
-                  <StatusBadge status={
-                    exam.checks.length > 0 && exam.checks.every(c => c.passed) ? 'approved' : 'draft'
-                  } />
+                  <div className="flex items-center gap-2">
+                    <button onClick={() => setExpandedBidId(isExpanded ? null : bidId)}
+                      className="px-3 py-1.5 bg-gray-100 text-gray-600 text-xs rounded-lg hover:bg-gray-200 flex items-center gap-1">
+                      {isExpanded ? <ChevronUpIcon className="w-3.5 h-3.5" /> : <ChevronDownIcon className="w-3.5 h-3.5" />}
+                      Bid Info
+                    </button>
+                    <StatusBadge status={
+                      exam.checks.length > 0 && exam.checks.every(c => c.passed) ? 'approved' : 'draft'
+                    } />
+                  </div>
                 </div>
+
+                {isExpanded && (
+                  <div className="mb-4">
+                    <BidInfoPanel bid={bid} />
+                  </div>
+                )}
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                   {exam.checks.map((check, idx) => {

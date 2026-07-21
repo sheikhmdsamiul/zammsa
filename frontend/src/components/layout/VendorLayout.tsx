@@ -5,7 +5,7 @@ import Sidebar, { NavItem } from './Sidebar';
 import useSidebarBadges from '../../hooks/useSidebarBadges';
 import {
   ChartBarIcon, ClipboardListIcon, DocumentTextIcon,
-  DuplicateIcon, CashIcon, UserIcon,
+  DuplicateIcon, CashIcon, UserIcon, ExclamationIcon,
 } from '@heroicons/react/outline';
 import NotificationBell from '../common/NotificationBell';
 
@@ -23,6 +23,7 @@ function useVendorNavItems(): NavItem[] {
     { label: 'Dashboard', path: '/vendor/dashboard', icon: <ChartBarIcon className={iconClass} /> },
     { label: 'Open Tenders', path: '/vendor/open-tenders', icon: <ClipboardListIcon className={iconClass} /> },
     { label: 'My Bids', path: '/vendor/bids', icon: <DocumentTextIcon className={iconClass} />, badge: badges.myBids || undefined },
+    { label: 'Award Appeals', path: '/evaluations/award-appeals', icon: <ExclamationIcon className={iconClass} /> },
     { label: 'My Contracts', path: '/vendor/contracts', icon: <DuplicateIcon className={iconClass} />, badge: badges.myContracts || undefined },
     { label: 'Invoices & Payments', path: '/vendor/invoices', icon: <CashIcon className={iconClass} />, badge: badges.vendorInvoices || undefined },
     { label: 'My Profile', path: '/vendor/profile', icon: <UserIcon className={iconClass} /> },
