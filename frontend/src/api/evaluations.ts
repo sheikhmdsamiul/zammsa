@@ -135,12 +135,35 @@ export const evaluationsApi = {
   getAppeal: (appealId: string) =>
     api.get<any>(`/evaluations/award-appeals/${appealId}/`).then((r) => r.data),
 
+  getAppealEvidence: (appealId: string) =>
+    api.get<any>(`/evaluations/award-appeals/${appealId}/evidence/`).then((r) => r.data),
+
   fileAppeal: (data: { solicitation: string; bidder: string; grounds: string; grounds_detail?: string; supporting_documents?: any[] }) =>
     api.post<any>('/evaluations/award-appeals/', data).then((r) => r.data),
 
-  updateAppeal: (appealId: string, data: { status?: string; resolution?: string }) =>
+  updateAppeal: (appealId: string, data: { status?: string; resolution?: string; action?: string; [key: string]: any }) =>
     api.patch<any>(`/evaluations/award-appeals/${appealId}/`, data).then((r) => r.data),
 
   withdrawAppeal: (appealId: string) =>
     api.patch<any>(`/evaluations/award-appeals/${appealId}/`, { status: 'withdrawn' }).then((r) => r.data),
+
+  addReviewNotes: (appealId: string, notes: string) =>
+    api.patch<any>(`/evaluations/award-appeals/${appealId}/`, { action: 'add_review_notes', review_notes: notes }).then((r) => r.data),
+
+  setHearingDate: (appealId: string, hearingDate: string) =>
+    api.patch<any>(`/evaluations/award-appeals/${appealId}/`, { action: 'set_hearing_date', hearing_date: hearingDate }).then((r) => r.data),
+
+  requestClarification: (appealId: string, question: string) =>
+    api.patch<any>(`/evaluations/award-appeals/${appealId}/`, { action: 'request_clarification', clarification_request: question }).then((r) => r.data),
+
+  respondClarification: (appealId: string, response: string) =>
+    api.patch<any>(`/evaluations/award-appeals/${appealId}/`, { clarification_response: response }).then((r) => r.data),
+
+  resolveAppeal: (appealId: string, formData: FormData) =>
+    api.patch<any>(`/evaluations/award-appeals/${appealId}/`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    }).then((r) => r.data),
+
+  getAppealActionLogs: (appealId: string) =>
+    api.get<any>(`/evaluations/award-appeals/${appealId}/action-logs/`).then((r) => r.data),
 };

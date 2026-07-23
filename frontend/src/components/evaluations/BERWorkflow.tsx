@@ -136,6 +136,14 @@ const BERWorkflow: React.FC = () => {
         const uid = typeof m === 'object' && m !== null ? (m.user || m.id) : m;
         add(String(uid || ''), typeof m === 'object' && m !== null ? (m.full_name || String(uid || '')) : String(uid || '').slice(0, 8), 'Member');
       });
+      // Include temporary / external (non-official) committee members
+      (primaryCommittee.non_official_members || []).forEach((nom: any) => {
+        if (!nom?.user_id) return;
+        const uid = String(nom.user_id);
+        const fullName = [nom.first_name, nom.last_name].filter(Boolean).join(' ') || nom.email || uid;
+        const roleLabel = nom.expertise ? `Ext. Member (${nom.expertise})` : 'Ext. Member';
+        add(uid, fullName, roleLabel);
+      });
     }
 
     return Array.from(memberMap.values());

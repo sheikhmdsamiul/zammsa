@@ -11,6 +11,7 @@ import { StatusBadge } from '../common/StatusBadge';
 import { SearchBar } from '../common/SearchBar';
 import { Pagination } from '../common/Pagination';
 import { LoadingSpinner } from '../common/LoadingSpinner';
+import { ExclamationCircleIcon } from '@heroicons/react/outline';
 import toast from 'react-hot-toast';
 
 const STATUS_CONFIG: Record<string, { label: string; color: string; bg: string }> = {
@@ -184,6 +185,8 @@ const EvaluationsList: React.FC = () => {
           render: (_: any, row: any) => {
             const phaseInfo = row.current_phase || { id: 'coi', label: 'COI Declaration' };
             const progress = row.phase_progress || { completed: 0, total: 7, percent: 0 };
+            const reEval = row.re_evaluation_required;
+            const reEvalReason = row.re_evaluation_reason;
             const phaseColors: Record<string, string> = {
               coi: 'bg-amber-100 text-amber-700',
               preliminary: 'bg-yellow-100 text-yellow-700',
@@ -203,15 +206,31 @@ const EvaluationsList: React.FC = () => {
               'post-qual': '🔷',
             };
             return (
-              <div className="flex items-center gap-2">
-                <span className={`text-xs ${phaseColors[phaseInfo.id] || 'bg-gray-100 text-gray-700'} px-2 py-1 rounded-full font-medium`}>
-                  {phaseIcons[phaseInfo.id] || '📋'} {phaseInfo.label}
-                </span>
-                <div className="w-16 h-1.5 bg-gray-200 rounded-full overflow-hidden">
-                  <div
-                    className="h-full bg-zammsa-green transition-all duration-300"
-                    style={{ width: `${progress.percent}%` }}
-                  />
+              <div className="space-y-1.5">
+                {reEval && (
+                  <div className="flex items-start gap-1.5 bg-red-50 border border-red-200 rounded-lg px-2.5 py-1.5">
+                    <ExclamationCircleIcon className="w-4 h-4 text-red-500 mt-0.5 flex-shrink-0" />
+                    <div className="min-w-0">
+                      <p className="text-xs font-bold text-red-700 leading-tight">Re-Evaluation Required</p>
+                      {reEvalReason?.grounds && (
+                        <p className="text-[10px] text-red-600 leading-tight truncate">
+                          Reason: {reEvalReason.grounds}
+                          {reEvalReason.resolution ? ` — ${reEvalReason.resolution.slice(0, 80)}` : ''}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                )}
+                <div className="flex items-center gap-2">
+                  <span className={`text-xs ${phaseColors[phaseInfo.id] || 'bg-gray-100 text-gray-700'} px-2 py-1 rounded-full font-medium`}>
+                    {phaseIcons[phaseInfo.id] || '📋'} {phaseInfo.label}
+                  </span>
+                  <div className="w-16 h-1.5 bg-gray-200 rounded-full overflow-hidden">
+                    <div
+                      className="h-full bg-zammsa-green transition-all duration-300"
+                      style={{ width: `${progress.percent}%` }}
+                    />
+                  </div>
                 </div>
               </div>
             );

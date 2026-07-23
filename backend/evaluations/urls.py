@@ -40,4 +40,6 @@ urlpatterns = [
     path('phase-status/<uuid:solicitation_pk>/', views.evaluation_phase_status_view, name='phase-status'),
     path('award-appeals/', views.AwardAppealListView.as_view(), name='appeal-list'),
     path('award-appeals/<uuid:appeal_pk>/', views.AwardAppealDetailView.as_view(), name='appeal-detail'),
+    path('award-appeals/<uuid:appeal_pk>/evidence/', views.appeal_evidence_view, name='appeal-evidence'),
+    path('award-appeals/<uuid:appeal_pk>/action-logs/', views.appeal_action_logs_view, name='appeal-action-logs'),
 ]

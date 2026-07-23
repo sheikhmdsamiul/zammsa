@@ -19,11 +19,11 @@ from accounts.serializers import UserCreateSerializer
 from system_config.notifications import notify_role, notify_users, send_external_email
 
 from .crypto_sign import sign_ber_payload, verify_signature
-from .models import EvaluationCommittee, ConflictOfInterest, PreliminaryExam, TechnicalScore, FinancialEvaluation, CombinedScore, BidEvaluationReport, PostQualification, AwardAppeal
+from .models import EvaluationCommittee, ConflictOfInterest, PreliminaryExam, TechnicalScore, FinancialEvaluation, CombinedScore, BidEvaluationReport, PostQualification, AwardAppeal, AppealActionLog
 from .serializers import (
     EvaluationCommitteeSerializer, ConflictOfInterestSerializer, PreliminaryExamSerializer, TechnicalScoreSerializer,
     FinancialEvaluationSerializer, CombinedScoreSerializer, BidEvaluationReportSerializer,
-    PostQualificationSerializer, AwardAppealSerializer,
+    PostQualificationSerializer, AwardAppealSerializer, AwardAppealDetailSerializer, AppealActionLogSerializer,
 )
 from solicitations.models import Solicitation, EvaluationCriterion
 from bids.models import BidSubmission, BidOpening, BidOpeningDetail
@@ -1192,7 +1192,7 @@ def select_winner_view(request, solicitation_pk):
     sol.save(update_fields=['status'])
 
     other_bids = BidSubmission.objects.filter(solicitation=sol).exclude(pk=bid_id)
-    other_bids.update(status='responsive')
+    other_bids.update(status='unsuccessful')
 
     # Create Post-Qualification record for the winner
     if not PostQualification.objects.filter(bidder=winner).exists():
@@ -1202,16 +1202,60 @@ def select_winner_view(request, solicitation_pk):
             verification_items=[],
         )
 
-    # Deactivate temp accounts for non-official committee members
-    committees = EvaluationCommittee.objects.filter(solicitation=sol)
-    temp_user_ids = []
-    for c in committees:
-        for nom in (c.non_official_members or []):
-            uid = nom.get('user_id')
-            if uid:
-                temp_user_ids.append(uid)
-    if temp_user_ids:
-        User.objects.filter(id__in=temp_user_ids, role='evaluation_committee_member').update(is_active=False)
+    # Notify unsuccessful bidders of their appeal rights (ZPPA standard practice)
+    unsuccessful_bids = BidSubmission.objects.filter(solicitation=sol).exclude(pk=bid_id).select_related('supplier')
+    for unsuccessful_bid in unsuccessful_bids:
+        if unsuccessful_bid.supplier:
+            try:
+                from datetime import timedelta
+                appeal_deadline = timezone.now() + timedelta(days=14)
+                notify_users(
+                    [unsuccessful_bid.supplier],
+                    f'Award Notification — {sol.sol_number}',
+                    (
+                        f'Dear {unsuccessful_bid.supplier.full_name},\n\n'
+                        f'We wish to inform you that the evaluation for solicitation {sol.sol_number} '
+                        f'({sol.title}) has been completed and an award has been made to another bidder.\n\n'
+                        f'Your bid reference: {unsuccessful_bid.submission_id}\n'
+                        f'Bid amount: {unsuccessful_bid.currency or "ZMW"} {unsuccessful_bid.bid_price:,.2f}\n\n'
+                        f'In accordance with the Zambia Public Procurement Act (ZPPA) and standard procurement '
+                        f'practice, you have the right to file an appeal within 14 days of this notification.\n\n'
+                        f'Appeal Deadline: {appeal_deadline.strftime("%d %B %Y")}\n\n'
+                        f'To file an appeal, please:\n'
+                        f'1. Log in to the ZAMMSA Procurement System\n'
+                        f'2. Navigate to Vendor Portal > Award Appeals\n'
+                        f'3. Click "File Appeal" and select this solicitation\n'
+                        f'4. Provide the grounds for your appeal with supporting evidence\n\n'
+                        f'Valid grounds for appeal include:\n'
+                        f'- Scoring or evaluation error\n'
+                        f'- Procedural irregularity\n'
+                        f'- Conflict of interest\n'
+                        f'- Eligibility or qualification error\n'
+                        f'- Specification deviation\n'
+                        f'- Bias or discrimination\n\n'
+                        f'Please note that appeals must be filed within the stipulated timeframe. '
+                        f'Late submissions may not be considered.\n\n'
+                        f'Regards,\nZAMMSA Procurement Team'
+                    ),
+                    notification_type='info',
+                    priority='high',
+                    source_module='evaluations',
+                    object_id=sol.pk,
+                    action_url=f'/vendor/appeals?solicitation={sol.solicitation_id}&bidder={unsuccessful_bid.bid_id}',
+                    metadata={
+                        'alert_key': 'award_notification_appeal_rights',
+                        'solicitation_id': str(sol.solicitation_id),
+                        'sol_number': sol.sol_number,
+                        'appeal_deadline': appeal_deadline.isoformat(),
+                        'submission_id': unsuccessful_bid.submission_id,
+                    },
+                    email_required=True,
+                )
+            except Exception:
+                pass
+
+    # NOTE: Temporary non-official member accounts are deactivated only after the
+    # BER is submitted to ZPC (ber_submit_view), so they can still sign the BER.
 
     return Response({
         'message': f'Winner selected: {winner.submission_id}',
@@ -1318,7 +1362,12 @@ def ber_generate_view(request, solicitation_pk):
         member_list = []
         for m in c.members:
             uid = m.get('user') if isinstance(m, dict) else m
-            member_list.append({'id': str(uid)})
+            member_list.append({'id': str(uid), 'role': 'member'})
+        for nom in (c.non_official_members or []):
+            uid = nom.get('user_id')
+            if not uid:
+                continue
+            member_list.append({'id': str(uid), 'role': 'external_member'})
         cois = ConflictOfInterest.objects.filter(committee=c)
         committee_data.append({
             'chairperson_name': c.chairperson.full_name,
@@ -1402,6 +1451,12 @@ def ber_sign_view(request, pk):
                 is_member = True
                 member_role = 'member'
                 break
+        if not is_member:
+            for nom in (c.non_official_members or []):
+                if str(nom.get('user_id', '')) == str(request.user.id):
+                    is_member = True
+                    member_role = 'external_member'
+                    break
         if is_member:
             break
 
@@ -1476,6 +1531,17 @@ def ber_committee_status_view(request, pk):
                 'role': 'member',
                 'signed': any(s['member_id'] == str(uid) for s in ber.signatures),
             })
+        for nom in (c.non_official_members or []):
+            uid = nom.get('user_id')
+            if not uid:
+                continue
+            full_name = ' '.join(filter(None, [nom.get('first_name', ''), nom.get('last_name', '')])) or nom.get('email', str(uid)[:8])
+            members.append({
+                'id': str(uid),
+                'full_name': full_name,
+                'role': f"external_member ({nom.get('expertise', '')})" if nom.get('expertise') else 'external_member',
+                'signed': any(s['member_id'] == str(uid) for s in ber.signatures),
+            })
 
     return Response({
         'ber_id': str(ber.ber_id),
@@ -1517,6 +1583,25 @@ def ber_submit_view(request, pk):
     ber.status = 'submitted'
     ber.submitted_at = timezone.now()
     ber.save()
+
+    # Now that all signatures are collected and BER is submitted, deactivate
+    # temporary accounts created for non-official committee members.
+    # BUT: Keep them active if there's an active appeal that could trigger re-evaluation
+    from evaluations.models import AwardAppeal
+    has_active_appeal = AwardAppeal.objects.filter(
+        solicitation=ber.solicitation,
+        status__in=['filed', 'under_review']
+    ).exists()
+    
+    temp_user_ids = []
+    for c in committees:
+        for nom in (c.non_official_members or []):
+            uid = nom.get('user_id')
+            if uid:
+                temp_user_ids.append(uid)
+    if temp_user_ids and not has_active_appeal:
+        User.objects.filter(id__in=temp_user_ids, role='evaluation_committee_member').update(is_active=False)
+
     return Response({'message': 'BER submitted for ZPC approval', 'status': ber.status, 'submitted_at': ber.submitted_at.isoformat()})
 
 
@@ -2146,10 +2231,30 @@ def ber_pdf_view(request, pk):
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def evaluation_phase_status_view(request, solicitation_pk):
-    from .models import PreliminaryExam, TechnicalScore, FinancialEvaluation, CombinedScore, BidEvaluationReport, PostQualification, EvaluationCommittee
+    from .models import PreliminaryExam, TechnicalScore, FinancialEvaluation, CombinedScore, BidEvaluationReport, PostQualification, EvaluationCommittee, ConflictOfInterest
     from bids.models import BidSubmission
 
     total_bids = BidSubmission.objects.filter(solicitation=solicitation_pk).count()
+
+    # COI: check if all committee members have declared
+    committees = EvaluationCommittee.objects.filter(solicitation=solicitation_pk)
+    all_member_ids = set()
+    for c in committees:
+        if c.chairperson_id:
+            all_member_ids.add(str(c.chairperson_id))
+        if c.secretary_id:
+            all_member_ids.add(str(c.secretary_id))
+        for m in (c.members or []):
+            uid = m.get('user') if isinstance(m, dict) else m
+            if uid:
+                all_member_ids.add(str(uid))
+    coi_declared_count = 0
+    if all_member_ids:
+        coi_declared_count = ConflictOfInterest.objects.filter(
+            committee__solicitation=solicitation_pk,
+            member_id__in=all_member_ids,
+        ).values('member').distinct().count()
+    coi_complete = coi_declared_count >= len(all_member_ids) and len(all_member_ids) > 0
 
     preliminary_exams = PreliminaryExam.objects.filter(bid__solicitation=solicitation_pk)
     prelim_done_bids = preliminary_exams.values('bid').distinct().count()
@@ -2160,7 +2265,6 @@ def evaluation_phase_status_view(request, solicitation_pk):
     tech_bids_scored = tech_scores.values('bid').distinct().count()
     tech_evaluators = tech_scores.values('evaluator').distinct().count()
     tech_total_members = 0
-    committees = EvaluationCommittee.objects.filter(solicitation=solicitation_pk)
     for c in committees:
         official_count = len(c.members or [])
         non_official_count = sum(1 for nom in (c.non_official_members or []) if nom.get('user_id'))
@@ -2179,13 +2283,18 @@ def evaluation_phase_status_view(request, solicitation_pk):
     ber = BidEvaluationReport.objects.filter(solicitation=solicitation_pk)
     ber_complete = ber.filter(status__in=['submitted', 'approved']).exists()
 
-    post_qual = PostQualification.objects.filter(ber__solicitation=solicitation_pk)
+    post_qual = PostQualification.objects.filter(bidder__solicitation=solicitation_pk)
     post_qual_complete = post_qual.filter(status='cleared').exists()
 
     return Response({
         'solicitation': str(solicitation_pk),
         'total_bids': total_bids,
         'phases': {
+            'coi': {
+                'complete': coi_complete,
+                'declared_count': coi_declared_count,
+                'total_members': len(all_member_ids),
+            },
             'preliminary': {
                 'complete': prelim_complete,
                 'examined_bids': prelim_done_bids,
@@ -2237,6 +2346,17 @@ def evaluation_phase_status_view(request, solicitation_pk):
 
 
 AWARD_APPEAL_STATUSES = ['filed', 'under_review', 'upheld', 'dismissed', 'withdrawn']
+
+
+def _log_appeal_action(appeal, action, user=None, details='', metadata=None):
+    """Log an action taken on an appeal for audit trail purposes."""
+    AppealActionLog.objects.create(
+        appeal=appeal,
+        action=action,
+        performed_by=user,
+        details=details,
+        metadata=metadata or {},
+    )
 
 
 class AwardAppealListView(generics.ListCreateAPIView):
@@ -2315,23 +2435,71 @@ class AwardAppealListView(generics.ListCreateAPIView):
             resolution_deadline=deadline,
         )
 
-        contract = getattr(sol, 'contract', None)
+        # Log the appeal filing action
+        _log_appeal_action(
+            appeal, 'filed', user,
+            details=f'Appeal filed for bid {bid.submission_id} under {sol.sol_number}. Grounds: {dict(AwardAppeal._meta.get_field("grounds").choices).get(grounds, grounds)}.',
+            metadata={'grounds': grounds, 'solicitation_id': str(sol.solicitation_id), 'bid_id': str(bid.bid_id)}
+        )
+
+        contract = sol.contracts.first()
         if contract:
             contract.appeal_pending = True
             contract.save()
 
+        # Send formal acknowledgement to the appellant
+        try:
+            notify_users(
+                [user],
+                f'Appeal Acknowledged — {sol.sol_number}',
+                (
+                    f'Dear {user.full_name},\n\n'
+                    f'This is to acknowledge receipt of your award appeal filed on '
+                    f'{timezone.now().strftime("%d %B %Y")}.\n\n'
+                    f'Appeal Details:\n'
+                    f'- Solicitation: {sol.sol_number} — {sol.title}\n'
+                    f'- Bid Reference: {bid.submission_id}\n'
+                    f'- Grounds: {dict(AwardAppeal._meta.get_field("grounds").choices).get(grounds, grounds)}\n'
+                    f'- Resolution Deadline: {deadline.strftime("%d %B %Y")}\n\n'
+                    f'Your appeal will be reviewed by the Procurement Officer within 2 business days. '
+                    f'The procurement team may request additional clarification or schedule a hearing.\n\n'
+                    f'You will be notified of all updates regarding your appeal. '
+                    f'You may withdraw your appeal at any time before a decision is made.\n\n'
+                    f'If you have additional evidence to submit, please upload it through the '
+    f'Award Appeals section in the Vendor Portal.\n\n'
+                    f'Regards,\nZAMMSA Procurement Team'
+                ),
+                notification_type='info',
+                priority='high',
+                source_module='evaluations',
+                object_id=appeal.pk,
+                action_url='/vendor/appeals',
+                metadata={
+                    'alert_key': 'appeal_acknowledgement',
+                    'appeal_id': str(appeal.appeal_id),
+                    'solicitation_id': str(sol.solicitation_id),
+                    'sol_number': sol.sol_number,
+                    'deadline': deadline.isoformat(),
+                },
+                email_required=True,
+            )
+        except Exception:
+            pass
+
+        # Notify procurement officers and managers about the new appeal
         from accounts.models import User
-        proc_officers = User.objects.filter(role='procurement_officer', is_active=True)
-        pq_members = User.objects.filter(
-            role__in=['evaluation_committee_chair', 'evaluation_committee_member'], is_active=True
+        proc_officers = User.objects.filter(
+            role__in=['procurement_officer', 'procurement_manager', 'director_procurement'],
+            is_active=True
         )
         ground_label = dict(AwardAppeal._meta.get_field('grounds').choices).get(grounds, grounds)
         notify_users(
-            list(set(list(proc_officers) + list(pq_members))),
+            list(proc_officers),
             f'New Award Appeal Filed — {sol.sol_number}',
-            f'{user.full_name} filed an appeal for bid {bid.submission_id} under {sol.sol_number}. '
-            f'Grounds: {ground_label}. '
-            f'Resolution deadline: {deadline.strftime("%d %B %Y")}.',
+            f'{user.full_name} (Bid: {bid.submission_id}) filed an appeal for {sol.sol_number}.\n'
+            f'Grounds: {ground_label}.\n'
+            f'Resolution deadline: {deadline.strftime("%d %B %Y")}.\n'
+            f'Action required: Review and take under review within 2 business days.',
             priority='high',
         )
 
@@ -2339,11 +2507,11 @@ class AwardAppealListView(generics.ListCreateAPIView):
 
 
 class AwardAppealDetailView(generics.RetrieveUpdateDestroyAPIView):
-    serializer_class = AwardAppealSerializer
+    serializer_class = AwardAppealDetailSerializer
     permission_classes = [IsAuthenticated]
     queryset = AwardAppeal.objects.select_related(
         'solicitation', 'bidder', 'bidder__supplier', 'filed_by', 'resolved_by'
-    )
+    ).prefetch_related('action_logs')
     lookup_url_kwarg = 'appeal_pk'
 
     def get_queryset(self):
@@ -2359,56 +2527,598 @@ class AwardAppealDetailView(generics.RetrieveUpdateDestroyAPIView):
         role = getattr(user, 'role', '')
         appeal = self.get_object()
 
+        # ── Supplier: withdraw or respond to clarification ───────────────────
         if role == 'supplier_user':
             if request.data.get('status') == 'withdrawn' and appeal.status in ('filed', 'under_review'):
+                old_status = appeal.status
                 appeal.status = 'withdrawn'
                 appeal.save()
-                contract = getattr(appeal.solicitation, 'contract', None)
+                _log_appeal_action(
+                    appeal, 'withdrawn', user,
+                    details=f'Appeal withdrawn by appellant.',
+                    metadata={'old_status': old_status, 'new_status': 'withdrawn'}
+                )
+                contract = appeal.solicitation.contracts.first()
                 if contract and not AwardAppeal.objects.filter(
                     solicitation=appeal.solicitation, status__in=['filed', 'under_review']
                 ).exclude(pk=appeal.pk).exists():
                     contract.appeal_pending = False
                     contract.save()
-                return Response(AwardAppealSerializer(appeal).data)
-            return Response({'error': 'Suppliers can only withdraw their own appeals'}, status=403)
+                return Response(AwardAppealDetailSerializer(appeal).data)
+            # Bidder responds to a clarification request
+            if 'clarification_response' in request.data:
+                if not appeal.clarification_requested:
+                    return Response({'error': 'No clarification was requested for this appeal'}, status=400)
+                appeal.clarification_response = request.data['clarification_response'].strip()
+                appeal.save()
+                _log_appeal_action(
+                    appeal, 'clarification_received', user,
+                    details=f'Clarification response submitted: {appeal.clarification_response[:500]}',
+                )
+                # Notify officers that a response was received
+                try:
+                    from accounts.models import User as UserModel
+                    officers = UserModel.objects.filter(
+                        role__in=['procurement_officer', 'procurement_manager', 'director_procurement'], is_active=True
+                    )
+                    notify_users(
+                        list(officers),
+                        f'Clarification Response Received — {appeal.solicitation.sol_number}',
+                        f'{user.full_name} responded to the clarification request for appeal '
+                        f'(Bid: {appeal.bidder.submission_id}, {appeal.solicitation.sol_number}).\n'
+                        f'Response: {appeal.clarification_response[:200]}',
+                        priority='normal',
+                    )
+                except Exception:
+                    pass
+                return Response(AwardAppealDetailSerializer(appeal).data)
+            return Response({'error': 'Suppliers can only withdraw their own appeals or respond to clarification requests'}, status=403)
+
+        # ── Internal staff actions ───────────────────────────────────────────
+        OFFICER_ROLES = ('procurement_officer',)
+        RESOLVER_ROLES = ('procurement_manager', 'director_procurement', 'zpc_member')
+        ALL_INTERNAL = OFFICER_ROLES + RESOLVER_ROLES
+
+        if role not in ALL_INTERNAL:
+            return Response({'error': 'Permission denied'}, status=403)
 
         new_status = request.data.get('status')
-        if new_status and new_status not in ('under_review', 'upheld', 'dismissed'):
-            return Response({'error': f'Invalid status: {new_status}'}, status=400)
+        action = request.data.get('action')  # custom action field
 
-        if new_status == 'under_review':
-            appeal.status = 'under_review'
-        elif new_status == 'upheld':
-            appeal.status = 'upheld'
-            appeal.resolution = request.data.get('resolution', '')
-            appeal.resolved_by = user
-            appeal.resolved_at = timezone.now()
-        elif new_status == 'dismissed':
-            appeal.status = 'dismissed'
-            appeal.resolution = request.data.get('resolution', '')
-            appeal.resolved_by = user
-            appeal.resolved_at = timezone.now()
+        # ── Action: Add internal review notes ────────────────────────────────
+        if action == 'add_review_notes':
+            notes = request.data.get('review_notes', '').strip()
+            if not notes:
+                return Response({'error': 'review_notes is required'}, status=400)
+            appeal.review_notes = notes
+            appeal.save()
+            _log_appeal_action(
+                appeal, 'review_notes_added', user,
+                details=f'Review notes updated.',
+            )
+            return Response(AwardAppealDetailSerializer(appeal).data)
 
-        appeal.save()
-
-        if new_status in ('upheld', 'dismissed', 'withdrawn'):
-            contract = getattr(appeal.solicitation, 'contract', None)
-            if contract and not AwardAppeal.objects.filter(
-                solicitation=appeal.solicitation, status__in=['filed', 'under_review']
-            ).exclude(pk=appeal.pk).exists():
-                contract.appeal_pending = False
-                contract.save()
-
-        if new_status in ('upheld', 'dismissed'):
+        # ── Action: Schedule hearing date ────────────────────────────────────
+        if action == 'set_hearing_date':
+            hearing_date_str = request.data.get('hearing_date')
+            if not hearing_date_str:
+                return Response({'error': 'hearing_date is required'}, status=400)
+            from django.utils.dateparse import parse_datetime
+            parsed = parse_datetime(hearing_date_str)
+            if not parsed:
+                return Response({'error': 'Invalid date format. Use ISO 8601 (e.g. 2026-07-30T10:00:00)'}, status=400)
+            appeal.hearing_date = parsed
+            appeal.save()
+            _log_appeal_action(
+                appeal, 'hearing_scheduled', user,
+                details=f'Hearing scheduled for {parsed.strftime("%d %B %Y at %H:%M")}.',
+                metadata={'hearing_date': parsed.isoformat()}
+            )
+            # Notify the bidder of the scheduled hearing
             try:
                 notify_users(
                     [appeal.filed_by],
-                    f'Appeal {new_status.title()} — {appeal.solicitation.sol_number}',
-                    f'Your appeal for bid {appeal.bidder.submission_id} under {appeal.solicitation.sol_number} '
-                    f'has been {new_status}. Resolution: {appeal.resolution}',
+                    f'Hearing Scheduled — {appeal.solicitation.sol_number}',
+                    f'A hearing for your appeal (Bid: {appeal.bidder.submission_id}) has been scheduled for '
+                    f'{parsed.strftime("%d %B %Y at %H:%M")}.\n'
+                    f'Please be available to present your case.',
+                    priority='normal',
+                )
+            except Exception:
+                pass
+            return Response(AwardAppealDetailSerializer(appeal).data)
+
+        # ── Action: Request clarification from bidder ────────────────────────
+        if action == 'request_clarification':
+            question = request.data.get('clarification_request', '').strip()
+            if not question:
+                return Response({'error': 'clarification_request text is required'}, status=400)
+            appeal.clarification_requested = True
+            appeal.clarification_request = question
+            appeal.clarification_response = ''  # reset previous response
+            appeal.save()
+            _log_appeal_action(
+                appeal, 'clarification_requested', user,
+                details=f'Clarification requested: {question[:500]}',
+            )
+            try:
+                notify_users(
+                    [appeal.filed_by],
+                    f'Clarification Requested — {appeal.solicitation.sol_number}',
+                    f'The procurement team requires additional information regarding your appeal '
+                    f'(Bid: {appeal.bidder.submission_id}).\n\nQuestion: {question}\n\n'
+                    f'Please log in and respond to this request via the Award Appeals section.',
                     priority='high',
                 )
             except Exception:
                 pass
+            return Response(AwardAppealDetailSerializer(appeal).data)
 
-        return Response(AwardAppealSerializer(appeal).data)
+        # ── Status transition: filed → under_review ──────────────────────────
+        if new_status == 'under_review':
+            if appeal.status != 'filed':
+                return Response({'error': 'Only a filed appeal can be taken under review'}, status=400)
+            appeal.status = 'under_review'
+            appeal.save()
+            _log_appeal_action(
+                appeal, 'under_review', user,
+                details=f'Appeal taken under review by {user.full_name}.',
+                metadata={'old_status': 'filed', 'new_status': 'under_review'}
+            )
+            try:
+                notify_users(
+                    [appeal.filed_by],
+                    f'Appeal Under Review — {appeal.solicitation.sol_number}',
+                    f'Your appeal for bid {appeal.bidder.submission_id} is now under review by the procurement team.\n'
+                    f'Resolution deadline: {appeal.resolution_deadline.strftime("%d %B %Y") if appeal.resolution_deadline else "TBD"}.',
+                    priority='normal',
+                )
+            except Exception:
+                pass
+            return Response(AwardAppealDetailSerializer(appeal).data)
+
+        # ── Status transition: under_review → upheld | dismissed ─────────────
+        if new_status in ('upheld', 'dismissed'):
+            if role not in RESOLVER_ROLES:
+                return Response(
+                    {'error': 'Only Procurement Managers or Directors can uphold or dismiss appeals'},
+                    status=403
+                )
+            if appeal.status != 'under_review':
+                return Response(
+                    {'error': 'An appeal must be under review before it can be upheld or dismissed. Take it under review first.'},
+                    status=400
+                )
+            resolution = request.data.get('resolution', '').strip()
+            if not resolution:
+                return Response({'error': 'A resolution note is required when upholding or dismissing an appeal'}, status=400)
+
+            appeal.status = new_status
+            appeal.resolution = resolution
+            appeal.resolved_by = user
+            appeal.resolved_at = timezone.now()
+            # Store decision letter PDF if uploaded
+            decision_file = request.FILES.get('decision_letter')
+            if decision_file:
+                appeal.decision_letter = decision_file
+            appeal.save()
+
+            _log_appeal_action(
+                appeal, new_status, user,
+                details=f'Appeal {new_status} by {user.full_name}. Resolution: {resolution[:500]}',
+                metadata={
+                    'old_status': 'under_review',
+                    'new_status': new_status,
+                    'decision_letter': str(appeal.decision_letter) if appeal.decision_letter else '',
+                    'reopen_evaluation': request.data.get('reopen_evaluation', False),
+                    'cancel_procurement': request.data.get('cancel_procurement', False),
+                }
+            )
+
+            sol = appeal.solicitation
+            contract = sol.contracts.first()
+
+            # Gather evaluation committee members for notifications
+            from evaluations.models import EvaluationCommittee
+            committees = EvaluationCommittee.objects.filter(solicitation=sol).select_related('chairperson', 'secretary')
+            ec_member_users = []
+            ec_member_ids = set()
+            ec_non_official_emails = []
+            for c in committees:
+                if c.chairperson and str(c.chairperson_id) not in ec_member_ids:
+                    ec_member_users.append(c.chairperson)
+                    ec_member_ids.add(str(c.chairperson_id))
+                if c.secretary and str(c.secretary_id) not in ec_member_ids:
+                    ec_member_users.append(c.secretary)
+                    ec_member_ids.add(str(c.secretary_id))
+                for m in c.members or []:
+                    uid = m.get('user') if isinstance(m, dict) else m
+                    if uid and str(uid) not in ec_member_ids:
+                        try:
+                            u = User.objects.get(pk=uid)
+                            ec_member_users.append(u)
+                            ec_member_ids.add(str(uid))
+                        except User.DoesNotExist:
+                            pass
+                for nm in c.non_official_members or []:
+                    email = nm.get('email', '')
+                    if email:
+                        ec_non_official_emails.append({'email': email, 'name': f"{nm.get('first_name', '')} {nm.get('last_name', '')}".strip()})
+
+            if new_status == 'dismissed':
+                if contract and not AwardAppeal.objects.filter(
+                    solicitation=appeal.solicitation, status__in=['filed', 'under_review']
+                ).exclude(pk=appeal.pk).exists():
+                    contract.appeal_pending = False
+                    contract.save()
+            elif new_status == 'upheld':
+                # Keep appeal_pending = True; contract stays blocked
+                if contract:
+                    contract.appeal_pending = True
+                    contract.save()
+                # Re-open evaluation: reset solicitation back to evaluation phase
+                if request.data.get('reopen_evaluation', False):
+                    sol.status = 'evaluation'
+                    sol.save()
+                    # Cancel existing contract if any
+                    if contract:
+                        contract.status = 'cancelled'
+                        contract.save()
+
+                    # Reset all evaluation data for a fresh re-evaluation
+                    from evaluations.models import (
+                        PreliminaryExam, TechnicalScore, FinancialEvaluation,
+                        CombinedScore, BidEvaluationReport, PostQualification,
+                        ConflictOfInterest,
+                    )
+                    from bids.models import BidSubmission
+
+                    # Clear COI declarations so members re-declare
+                    ConflictOfInterest.objects.filter(
+                        committee__solicitation=sol
+                    ).delete()
+
+                    # Clear preliminary examination results
+                    PreliminaryExam.objects.filter(
+                        bid__solicitation=sol
+                    ).delete()
+
+                    # Clear all technical scores
+                    TechnicalScore.objects.filter(
+                        bid__solicitation=sol
+                    ).delete()
+
+                    # Clear all financial evaluations
+                    FinancialEvaluation.objects.filter(
+                        bid__solicitation=sol
+                    ).delete()
+
+                    # Clear all combined/consolidated scores
+                    CombinedScore.objects.filter(
+                        bid__solicitation=sol
+                    ).delete()
+
+                    # Reset BER reports to draft or clear them
+                    BidEvaluationReport.objects.filter(
+                        solicitation=sol
+                    ).update(status='draft', signatures=[], submitted_at=None, approved_at=None, approved_by=None)
+
+                    # Clear post-qualification records
+                    PostQualification.objects.filter(
+                        bidder__solicitation=sol
+                    ).delete()
+
+                    # Reset bid statuses: awarded/non_responsive/unsuccessful → opened
+                    BidSubmission.objects.filter(
+                        solicitation=sol, status__in=['awarded', 'non_responsive', 'unsuccessful']
+                    ).update(status='opened')
+
+                    # Re-seal financial envelopes so authorization flow restarts
+                    from bids.models import BidOpeningDetail
+                    BidOpeningDetail.objects.filter(
+                        bid__solicitation=sol
+                    ).update(financial_sealed=True, price_read=None)
+
+                    # Reactivate temporary accounts for non-official committee members
+                    # so they can participate in the re-evaluation
+                    temp_user_ids = []
+                    committees = EvaluationCommittee.objects.filter(solicitation=sol)
+                    for c in committees:
+                        for nom in (c.non_official_members or []):
+                            uid = nom.get('user_id')
+                            if uid:
+                                temp_user_ids.append(uid)
+                    if temp_user_ids:
+                        User.objects.filter(id__in=temp_user_ids).update(is_active=True)
+
+                    # Log the full reset
+                    _log_appeal_action(
+                        appeal, 're_evaluation_initiated', user,
+                        details=(
+                            'Evaluation fully reset for re-evaluation. Cleared: COI declarations, '
+                            'preliminary exams, technical scores, financial evaluations, '
+                            'combined scores, BER signatures, post-qualification records. '
+                            'Bid statuses reset from awarded to opened.'
+                        ),
+                        metadata={
+                            'sol_number': sol.sol_number,
+                            'action': 'reopen_evaluation',
+                        }
+                    )
+                    # Notify all EC members + chair + secretary
+                    sol_context = (
+                        f'The solicitation {sol.sol_number} has been re-opened for re-evaluation following '
+                        f'an upheld award appeal by {user.full_name}.\n\n'
+                        f'All previous evaluation data has been cleared:\n'
+                        f'- COI declarations reset (please re-declare)\n'
+                        f'- Preliminary examination cleared\n'
+                        f'- Technical scores cleared\n'
+                        f'- Financial evaluations cleared\n'
+                        f'- Combined scores cleared\n'
+                        f'- BER signatures reset\n'
+                        f'- Post-qualification records cleared\n'
+                        f'- Bid statuses reset\n\n'
+                        f'Please restart the evaluation process from the beginning.\n'
+                        f'Grounds of upheld appeal: {appeal.get_grounds_display()}.\n'
+                        f'Resolution: {resolution}'
+                    )
+                    sol_title = f'Re-Evaluation Required — {sol.sol_number}'
+                    try:
+                        notify_users(
+                            ec_member_users,
+                            sol_title,
+                            sol_context,
+                            priority='high',
+                            email_required=True,
+                        )
+                    except Exception:
+                        pass
+                    for nm_info in ec_non_official_emails:
+                        try:
+                            send_external_email(sol_title, sol_context, nm_info['email'])
+                        except Exception:
+                            pass
+                # Cancel procurement: cancel solicitation and its contract
+                elif request.data.get('cancel_procurement', False):
+                    sol = appeal.solicitation
+                    sol.status = 'cancelled'
+                    sol.save()
+                    if contract:
+                        contract.status = 'cancelled'
+                        contract.save()
+                    # Notify all bidders that the procurement has been cancelled
+                    cancel_title = f'Procurement Cancelled — {sol.sol_number}'
+                    cancel_msg = (
+                        f'The solicitation {sol.sol_number} ({sol.title}) has been cancelled following '
+                        f'an upheld award appeal.\n'
+                        f'Resolution: {resolution}'
+                    )
+                    try:
+                        from bids.models import BidSubmission
+                        bids = BidSubmission.objects.filter(solicitation=sol).select_related('supplier')
+                        bidder_users = [b.supplier for b in bids if b.supplier]
+                        if bidder_users:
+                            notify_users(
+                                bidder_users,
+                                cancel_title,
+                                cancel_msg,
+                                priority='high',
+                                email_required=True,
+                            )
+                    except Exception:
+                        pass
+                    # Notify EC members and procurement officers
+                    try:
+                        officers = User.objects.filter(
+                            role__in=['procurement_officer', 'procurement_manager', 'director_procurement'],
+                            is_active=True,
+                        )
+                        internal_notifiers = list(ec_member_users) + list(officers)
+                        notify_users(
+                            internal_notifiers,
+                            cancel_title,
+                            cancel_msg,
+                            priority='high',
+                            email_required=True,
+                        )
+                        for nm_info in ec_non_official_emails:
+                            send_external_email(cancel_title, cancel_msg, nm_info['email'])
+                    except Exception:
+                        pass
+
+            # Notify all EC members + procurement officers of the decision
+            decision_title = f'Appeal {new_status.title()} — {appeal.solicitation.sol_number}'
+            decision_msg = (
+                f'The award appeal for {appeal.bidder.submission_id} under {appeal.solicitation.sol_number} '
+                f'has been {new_status} by {user.full_name}.\n'
+                f'Grounds: {appeal.get_grounds_display()}\n'
+                f'Resolution: {resolution}'
+            )
+            try:
+                officers = User.objects.filter(
+                    role__in=['procurement_officer', 'procurement_manager', 'director_procurement'],
+                    is_active=True,
+                )
+                all_notifiers = list(set(ec_member_users + list(officers)))
+                notify_users(
+                    all_notifiers,
+                    decision_title,
+                    decision_msg,
+                    priority='high',
+                    email_required=True,
+                )
+                for nm_info in ec_non_official_emails:
+                    send_external_email(decision_title, decision_msg, nm_info['email'])
+            except Exception:
+                pass
+
+            # Notify the appellant of the decision
+            appellant_title = f'Appeal {new_status.title()} — {appeal.solicitation.sol_number}'
+            appellant_msg = (
+                f'Your appeal for bid {appeal.bidder.submission_id} under {appeal.solicitation.sol_number} '
+                f'has been {new_status}.\n'
+                f'Resolution: {resolution}'
+            )
+            try:
+                notify_users(
+                    [appeal.filed_by],
+                    appellant_title,
+                    appellant_msg,
+                    priority='high',
+                    email_required=True,
+                )
+            except Exception:
+                pass
+
+            return Response(AwardAppealDetailSerializer(appeal).data)
+
+        return Response({'error': f'Invalid action or status transition: {new_status or action}'}, status=400)
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def appeal_evidence_view(request, appeal_pk):
+    """Return full evaluation evidence (technical scores, financial ranking, COI) for an appeal."""
+    try:
+        appeal = AwardAppeal.objects.select_related(
+            'solicitation', 'bidder', 'bidder__supplier'
+        ).get(pk=appeal_pk)
+    except AwardAppeal.DoesNotExist:
+        return Response({'error': 'Appeal not found'}, status=404)
+
+    user = request.user
+    role = getattr(user, 'role', '')
+    INTERNAL_ROLES = ('procurement_officer', 'procurement_manager', 'director_procurement', 'zpc_member',
+                      'evaluation_committee_chair', 'evaluation_committee_member')
+    if role not in INTERNAL_ROLES:
+        return Response({'error': 'Permission denied'}, status=403)
+
+    sol = appeal.solicitation
+    appellant_bid = appeal.bidder
+
+    # ── Technical Scores for appellant's bid ──────────────────────────────
+    tech_scores = TechnicalScore.objects.filter(bid=appellant_bid).select_related('criterion', 'evaluator')
+    tech_data = []
+    criteria_seen = {}
+    for ts in tech_scores:
+        cid = str(ts.criterion.criterion_id)
+        if cid not in criteria_seen:
+            criteria_seen[cid] = {
+                'criterion_id': cid,
+                'criterion_name': ts.criterion.criterion_name,
+                'weight': float(ts.criterion.weight),
+                'scores': [],
+            }
+        criteria_seen[cid]['scores'].append({
+            'evaluator': ts.evaluator.full_name,
+            'raw_score': float(ts.raw_score),
+            'weighted_score': float(ts.weighted_score),
+        })
+    for cdata in criteria_seen.values():
+        avg = sum(s['raw_score'] for s in cdata['scores']) / len(cdata['scores']) if cdata['scores'] else 0
+        cdata['average_score'] = round(avg, 2)
+        tech_data.append(cdata)
+
+    # ── All bids' combined scores for ranking context ─────────────────────
+    combined_scores = CombinedScore.objects.filter(
+        bid__solicitation=sol
+    ).select_related('bid', 'bid__supplier').order_by('rank')
+    ranking = []
+    for cs in combined_scores:
+        ranking.append({
+            'rank': cs.rank,
+            'submission_id': cs.bid.submission_id,
+            'bidder_name': cs.bid.supplier.full_name,
+            'technical_score': float(cs.technical_score),
+            'financial_score': float(cs.financial_score),
+            'total_score': float(cs.total_score),
+            'is_appellant': cs.bid.bid_id == appellant_bid.bid_id,
+            'status': cs.bid.status,
+        })
+
+    # ── Financial evaluation for appellant ───────────────────────────────
+    fin_eval = FinancialEvaluation.objects.filter(bid=appellant_bid).first()
+    fin_data = None
+    if fin_eval:
+        fin_data = {
+            'original_price': float(fin_eval.original_price or 0),
+            'corrected_price': float(fin_eval.corrected_price or 0),
+            'evaluated_price': float(fin_eval.evaluated_price or 0),
+            'financial_score': float(fin_eval.financial_score or 0),
+            'preference_category': fin_eval.preference_category or 'non_citizen',
+            'preference_margin': float(fin_eval.preference_applied or 0),
+            'arithmetic_corrections': fin_eval.arithmetic_corrections or [],
+        }
+
+    # ── Preliminary exam results for appellant ────────────────────────────
+    prelim = PreliminaryExam.objects.filter(bid=appellant_bid)
+    prelim_data = [
+        {
+            'criterion': p.criterion,
+            'is_compliant': p.is_compliant,
+            'comment': p.comment,
+        }
+        for p in prelim
+    ]
+
+    # ── COI declarations for the solicitation ────────────────────────────
+    committees = EvaluationCommittee.objects.filter(solicitation=sol).prefetch_related('conflict_declarations')
+    coi_data = []
+    for c in committees:
+        for decl in c.conflict_declarations.all():
+            coi_data.append({
+                'member': decl.member.full_name if decl.member else 'Unknown',
+                'declaration_type': decl.declaration_type,
+                'has_conflict': decl.has_conflict,
+                'recused': decl.recused,
+                'conflicted_bidders': decl.conflicted_bidders or [],
+                'explanation': decl.explanation,
+            })
+
+    return Response({
+        'appeal_id': str(appeal.appeal_id),
+        'solicitation': {
+            'id': str(sol.solicitation_id),
+            'number': sol.sol_number,
+            'title': sol.title,
+            'status': sol.status,
+        },
+        'appellant': {
+            'bid_id': str(appellant_bid.bid_id),
+            'submission_id': appellant_bid.submission_id,
+            'bidder_name': appellant_bid.supplier.full_name,
+            'bid_amount': float(appellant_bid.bid_price or 0),
+            'currency': appellant_bid.currency or 'ZMW',
+            'status': appellant_bid.status,
+        },
+        'technical_scores': tech_data,
+        'ranking': ranking,
+        'financial_evaluation': fin_data,
+        'preliminary_exam': prelim_data,
+        'coi_declarations': coi_data,
+    })
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def appeal_action_logs_view(request, appeal_pk):
+    """Return the full action history for an appeal."""
+    try:
+        appeal = AwardAppeal.objects.get(pk=appeal_pk)
+    except AwardAppeal.DoesNotExist:
+        return Response({'error': 'Appeal not found'}, status=404)
+
+    user = request.user
+    role = getattr(user, 'role', '')
+    INTERNAL_ROLES = ('procurement_officer', 'procurement_manager', 'director_procurement', 'zpc_member')
+    if role == 'supplier_user':
+        if appeal.filed_by != user:
+            return Response({'error': 'Permission denied'}, status=403)
+    elif role not in INTERNAL_ROLES:
+        return Response({'error': 'Permission denied'}, status=403)
+
+    logs = AppealActionLog.objects.filter(appeal=appeal).select_related('performed_by')
+    return Response({
+        'appeal_id': str(appeal.appeal_id),
+        'action_logs': AppealActionLogSerializer(logs, many=True).data,
+    })

@@ -1,5 +1,6 @@
 from rest_framework import serializers
-from .models import EvaluationCommittee, ConflictOfInterest, PreliminaryExam, TechnicalScore, FinancialEvaluation, CombinedScore, BidEvaluationReport, PostQualification, AwardAppeal
+from .models import EvaluationCommittee, ConflictOfInterest, PreliminaryExam, TechnicalScore, FinancialEvaluation, CombinedScore, BidEvaluationReport, PostQualification, AwardAppeal, AppealActionLog
+from bids.models import BidSubmission
 
 
 class ConflictOfInterestSerializer(serializers.ModelSerializer):
@@ -29,6 +30,9 @@ class EvaluationCommitteeSerializer(serializers.ModelSerializer):
     solicitation_status = serializers.CharField(source='solicitation.status', read_only=True, default='')
     current_phase = serializers.SerializerMethodField()
     phase_progress = serializers.SerializerMethodField()
+    re_evaluation_required = serializers.SerializerMethodField()
+    re_evaluation_reason = serializers.SerializerMethodField()
+    re_evaluation_date = serializers.SerializerMethodField()
 
     PHASE_ORDER = ['coi', 'preliminary', 'technical', 'consolidation', 'financial', 'post-qual', 'ber']
     PHASE_LABELS = {
@@ -64,10 +68,31 @@ class EvaluationCommitteeSerializer(serializers.ModelSerializer):
         return obj.quorum_met()
 
     def _check_phase_completion(self, sol):
-        from .models import PreliminaryExam, TechnicalScore, FinancialEvaluation, CombinedScore, BidEvaluationReport, PostQualification, EvaluationCommittee
+        from .models import PreliminaryExam, TechnicalScore, FinancialEvaluation, CombinedScore, BidEvaluationReport, PostQualification, EvaluationCommittee, ConflictOfInterest
         from bids.models import BidSubmission
 
         total_bids = BidSubmission.objects.filter(solicitation=sol).count()
+
+        # COI: check if all committee members have declared
+        coi_done = False
+        committees = EvaluationCommittee.objects.filter(solicitation=sol)
+        if committees.exists():
+            all_member_ids = set()
+            for c in committees:
+                if c.chairperson_id:
+                    all_member_ids.add(str(c.chairperson_id))
+                if c.secretary_id:
+                    all_member_ids.add(str(c.secretary_id))
+                for m in (c.members or []):
+                    uid = m.get('user') if isinstance(m, dict) else m
+                    if uid:
+                        all_member_ids.add(str(uid))
+            if all_member_ids:
+                declared_count = ConflictOfInterest.objects.filter(
+                    committee__solicitation=sol,
+                    member_id__in=all_member_ids,
+                ).values('member').distinct().count()
+                coi_done = declared_count >= len(all_member_ids)
 
         prelim_bids = PreliminaryExam.objects.filter(bid__solicitation=sol).values('bid').distinct().count()
         prelim_done = prelim_bids >= total_bids and total_bids > 0
@@ -75,7 +100,6 @@ class EvaluationCommitteeSerializer(serializers.ModelSerializer):
         tech_scores = TechnicalScore.objects.filter(bid__solicitation=sol)
         tech_unique_pairs = tech_scores.values('bid', 'evaluator').distinct().count()
         total_members = 0
-        committees = EvaluationCommittee.objects.filter(solicitation=sol)
         for c in committees:
             total_members = max(total_members, len(c.members or []))
         expected_pairs = total_bids * total_members if total_members > 0 else 0
@@ -91,7 +115,7 @@ class EvaluationCommitteeSerializer(serializers.ModelSerializer):
         pq_done = PostQualification.objects.filter(ber__solicitation=sol, status='cleared').exists()
 
         return {
-            'coi': True,
+            'coi': coi_done,
             'preliminary': prelim_done,
             'technical': tech_done,
             'financial': fin_done,
@@ -114,6 +138,58 @@ class EvaluationCommitteeSerializer(serializers.ModelSerializer):
         completed = sum(1 for pid in self.PHASE_ORDER if phase_done.get(pid, False))
         total = len(self.PHASE_ORDER)
         return {'completed': completed, 'total': total, 'percent': round((completed / total) * 100) if total else 0}
+
+    def _get_re_evaluation_context(self, obj):
+        """Get the re-evaluation log and appeal for this solicitation."""
+        if not obj.solicitation_id:
+            return None, None
+        log = AppealActionLog.objects.filter(
+            action='re_evaluation_initiated',
+            appeal__solicitation=obj.solicitation,
+        ).order_by('-created_at').first()
+        if log:
+            return log, log.appeal
+        # Fallback: check for an upheld appeal where solicitation is in evaluation status
+        appeal = AwardAppeal.objects.filter(
+            solicitation=obj.solicitation,
+            status='upheld',
+        ).order_by('-resolved_at').first()
+        if appeal and obj.solicitation.status == 'evaluation':
+            return None, appeal
+        return None, None
+
+    def get_re_evaluation_required(self, obj):
+        """Check if there's a pending re-evaluation for this solicitation."""
+        log, appeal = self._get_re_evaluation_context(obj)
+        if not appeal:
+            return False
+        sol = obj.solicitation
+        prelim_done = PreliminaryExam.objects.filter(bid__solicitation=sol).values('bid').distinct().count()
+        total_bids = BidSubmission.objects.filter(solicitation=sol).count()
+        return prelim_done == 0 and total_bids > 0
+
+    def get_re_evaluation_reason(self, obj):
+        """Get the reason for the re-evaluation."""
+        log, appeal = self._get_re_evaluation_context(obj)
+        if not appeal:
+            return None
+        resolution = appeal.resolution or ''
+        grounds = appeal.get_grounds_display() if hasattr(appeal, 'get_grounds_display') else appeal.grounds
+        return {
+            'grounds': grounds,
+            'resolution': resolution,
+            'initiated_by': log.performed_by.full_name if log and log.performed_by else (appeal.resolved_by.full_name if appeal.resolved_by else None),
+            'details': log.details if log else '',
+        }
+
+    def get_re_evaluation_date(self, obj):
+        """Get when the re-evaluation was initiated."""
+        log, appeal = self._get_re_evaluation_context(obj)
+        if log:
+            return log.created_at.isoformat() if log.created_at else None
+        if appeal and appeal.resolved_at:
+            return appeal.resolved_at.isoformat()
+        return None
 
     def validate_members(self, value):
         if not isinstance(value, list):
@@ -283,6 +359,10 @@ class AwardAppealSerializer(serializers.ModelSerializer):
     ground_label = serializers.CharField(source='get_grounds_display', read_only=True)
     status_label = serializers.CharField(source='get_status_display', read_only=True)
     is_active = serializers.SerializerMethodField()
+    days_remaining = serializers.SerializerMethodField()
+    days_since_filed = serializers.SerializerMethodField()
+    is_overdue = serializers.SerializerMethodField()
+    hearing_date_display = serializers.SerializerMethodField()
 
     class Meta:
         model = AwardAppeal
@@ -290,14 +370,86 @@ class AwardAppealSerializer(serializers.ModelSerializer):
         read_only_fields = ('appeal_id', 'filed_at', 'resolved_at', 'created_at', 'updated_at')
 
     def get_filed_by_name(self, obj):
-        if obj.filed_by:
-            return obj.filed_by.full_name
-        return None
+        return obj.filed_by.full_name if obj.filed_by else None
 
     def get_resolved_by_name(self, obj):
-        if obj.resolved_by:
-            return obj.resolved_by.full_name
-        return None
+        return obj.resolved_by.full_name if obj.resolved_by else None
 
     def get_is_active(self, obj):
         return obj.status in ('filed', 'under_review')
+
+    def get_days_remaining(self, obj):
+        return obj.days_remaining()
+
+    def get_days_since_filed(self, obj):
+        from django.utils import timezone
+        return (timezone.now() - obj.filed_at).days if obj.filed_at else None
+
+    def get_is_overdue(self, obj):
+        return obj.is_overdue()
+
+    def get_hearing_date_display(self, obj):
+        if obj.hearing_date:
+            return obj.hearing_date.strftime('%d %b %Y, %H:%M')
+        return None
+
+
+class AppealActionLogSerializer(serializers.ModelSerializer):
+    id = serializers.UUIDField(source='log_id', read_only=True)
+    performed_by_name = serializers.SerializerMethodField()
+    action_display = serializers.CharField(source='get_action_display', read_only=True)
+
+    class Meta:
+        model = AppealActionLog
+        fields = '__all__'
+        read_only_fields = ('log_id', 'created_at')
+
+    def get_performed_by_name(self, obj):
+        return obj.performed_by.full_name if obj.performed_by else None
+
+
+class AwardAppealDetailSerializer(serializers.ModelSerializer):
+    id = serializers.UUIDField(source='appeal_id', read_only=True)
+    bidder_name = serializers.CharField(source='bidder.supplier.full_name', read_only=True)
+    submission_id = serializers.CharField(source='bidder.submission_id', read_only=True)
+    solicitation_number = serializers.CharField(source='solicitation.sol_number', read_only=True)
+    solicitation_title = serializers.CharField(source='solicitation.title', read_only=True)
+    filed_by_name = serializers.SerializerMethodField()
+    resolved_by_name = serializers.SerializerMethodField()
+    ground_label = serializers.CharField(source='get_grounds_display', read_only=True)
+    status_label = serializers.CharField(source='get_status_display', read_only=True)
+    is_active = serializers.SerializerMethodField()
+    days_remaining = serializers.SerializerMethodField()
+    days_since_filed = serializers.SerializerMethodField()
+    is_overdue = serializers.SerializerMethodField()
+    hearing_date_display = serializers.SerializerMethodField()
+    action_logs = AppealActionLogSerializer(many=True, read_only=True)
+
+    class Meta:
+        model = AwardAppeal
+        fields = '__all__'
+        read_only_fields = ('appeal_id', 'filed_at', 'resolved_at', 'created_at', 'updated_at')
+
+    def get_filed_by_name(self, obj):
+        return obj.filed_by.full_name if obj.filed_by else None
+
+    def get_resolved_by_name(self, obj):
+        return obj.resolved_by.full_name if obj.resolved_by else None
+
+    def get_is_active(self, obj):
+        return obj.status in ('filed', 'under_review')
+
+    def get_days_remaining(self, obj):
+        return obj.days_remaining()
+
+    def get_days_since_filed(self, obj):
+        from django.utils import timezone
+        return (timezone.now() - obj.filed_at).days if obj.filed_at else None
+
+    def get_is_overdue(self, obj):
+        return obj.is_overdue()
+
+    def get_hearing_date_display(self, obj):
+        if obj.hearing_date:
+            return obj.hearing_date.strftime('%d %b %Y, %H:%M')
+        return None

@@ -1,5 +1,5 @@
 import React from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { bidsApi } from '../../api/bids';
 import { StatusBadge } from '../common/StatusBadge';
@@ -29,6 +29,7 @@ function fmtDateTime(d: string | undefined | null): string {
 
 const BidDetail: React.FC = () => {
   const { id } = useParams<{ id: string }>();
+  const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { user } = useAuth();
 
@@ -102,19 +103,38 @@ const BidDetail: React.FC = () => {
             </button>
           </div>
         )}
-        {isSupplier && bid.solicitation_status === 'awarded' && bid.status === 'evaluated' && (
-          <div className="mt-4 pt-4 border-t border-gray-100 flex gap-2">
-            <button
-              onClick={() => window.location.href = `/evaluations/award-appeals?solicitation=${bid.solicitation}&bidder=${bid.id}`}
-              className="inline-flex items-center gap-1.5 px-4 py-2.5 text-sm font-bold text-white bg-amber-600 rounded-xl hover:bg-amber-700 transition-colors"
-            >
-              <ExclamationIcon className="w-4 h-4" /> File Appeal
-            </button>
-            <p className="text-sm text-gray-500 self-center mt-0.5">
-              The solicitation has been awarded. You have 14 days to file an appeal.
-            </p>
-          </div>
-        )}
+        {isSupplier && bid.solicitation_status === 'awarded' && (bid.status === 'unsuccessful' || bid.status === 'evaluated') && (() => {
+          // Calculate days remaining from when solicitation was awarded (use bid updated_at as proxy)
+          const awardedAt = bid.updated_at ? new Date(bid.updated_at) : null;
+          const deadline = awardedAt ? new Date(awardedAt.getTime() + 14 * 24 * 60 * 60 * 1000) : null;
+          const daysLeft = deadline ? Math.ceil((deadline.getTime() - Date.now()) / (1000 * 60 * 60 * 24)) : null;
+          const isExpired = daysLeft !== null && daysLeft < 0;
+          return (
+            <div className="mt-4 pt-4 border-t border-gray-100 flex flex-wrap items-center gap-3">
+              {!isExpired ? (
+                <button
+                  onClick={() => navigate(`/vendor/appeals?solicitation=${bid.solicitation}&bidder=${bid.id}`)}
+                  className="inline-flex items-center gap-1.5 px-4 py-2.5 text-sm font-bold text-white bg-amber-600 rounded-xl hover:bg-amber-700 transition-colors"
+                >
+                  <ExclamationIcon className="w-4 h-4" /> File Appeal
+                </button>
+              ) : (
+                <span className="inline-flex items-center gap-1.5 px-4 py-2.5 text-sm font-bold text-gray-400 bg-gray-100 rounded-xl cursor-not-allowed">
+                  <ExclamationIcon className="w-4 h-4" /> Appeal Window Closed
+                </span>
+              )}
+              <div className={`text-sm font-semibold ${isExpired ? 'text-gray-400' : daysLeft !== null && daysLeft <= 3 ? 'text-red-600' : 'text-gray-600'}`}>
+                {daysLeft !== null
+                  ? isExpired
+                    ? 'The 14-day appeal window has passed.'
+                    : daysLeft === 0
+                    ? '⚠️ Last day to file an appeal!'
+                    : `⏱ ${daysLeft} day${daysLeft !== 1 ? 's' : ''} remaining to appeal`
+                  : 'You have 14 days to file an appeal.'}
+              </div>
+            </div>
+          );
+        })()}
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">

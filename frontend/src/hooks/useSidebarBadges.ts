@@ -27,6 +27,7 @@ export interface SidebarBadges {
   myBids: number;
   myContracts: number;
   vendorInvoices: number;
+  appeals: number;
 }
 
 function useSidebarBadges(userRole: string | undefined): SidebarBadges {
@@ -86,6 +87,16 @@ function useSidebarBadges(userRole: string | undefined): SidebarBadges {
     refetchInterval: 60_000,
   });
 
+  const isOfficer = ['procurement_officer', 'procurement_manager', 'director_procurement'].includes(userRole || '');
+  const { data: activeAppealsCount } = useQuery({
+    queryKey: ['sidebar', 'appeals', 'active'],
+    queryFn: () =>
+      evaluationsApi.listAppeals({ page_size: 1 }).then((r: any) => r.count ?? 0),
+    staleTime: 30_000,
+    refetchInterval: 60_000,
+    enabled: isOfficer,
+  });
+
   const myPending = reqDashboard?.my_pending ?? 0;
 
   const cppPendingZPC = cppDashboard?.pending_zpc ?? 0;
@@ -122,6 +133,7 @@ function useSidebarBadges(userRole: string | undefined): SidebarBadges {
     myBids: vendorDashboard?.active_bids ?? 0,
     myContracts: vendorDashboard?.awarded_contracts ?? 0,
     vendorInvoices: vendorDashboard?.pending_invoices ?? 0,
+    appeals: activeAppealsCount ?? 0,
   };
 }
 

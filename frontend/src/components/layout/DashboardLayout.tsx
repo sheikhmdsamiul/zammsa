@@ -65,7 +65,7 @@ function useSidebarItems(userRole: string | undefined): NavItem[] {
           { label: 'Award Overview', path: '/contracts/award-overview' },
           { label: 'Award Notices', path: '/contracts/award-notices' },
           { label: 'Standstill Monitor', path: '/contracts/award-notices' },
-          { label: 'Award Appeals', path: '/evaluations/award-appeals' },
+          { label: 'Award Appeals', path: '/evaluations/award-appeals', badge: badges.appeals || undefined },
           { label: 'Generate Contract', path: '/contracts/generate' },
           { label: 'Performance Security', path: '/contracts/performance-security' },
         ]
@@ -96,7 +96,7 @@ function useSidebarItems(userRole: string | undefined): NavItem[] {
           { label: 'Award Overview', path: '/contracts/award-overview' },
           { label: 'Award Notices', path: '/contracts/award-notices' },
           { label: 'Standstill Monitor', path: '/contracts/award-notices' },
-          { label: 'Award Appeals', path: '/evaluations/award-appeals' },
+          { label: 'Award Appeals', path: '/evaluations/award-appeals', badge: badges.appeals || undefined },
           { label: 'Generate Contract', path: '/contracts/generate' },
           { label: 'Performance Security', path: '/contracts/performance-security' },
         ]
@@ -252,7 +252,7 @@ function useSidebarItems(userRole: string | undefined): NavItem[] {
           { label: 'Award Overview', path: '/contracts/award-overview' },
           { label: 'Award Notices', path: '/contracts/award-notices' },
           { label: 'Standstill Monitor', path: '/contracts/award-notices' },
-          { label: 'Award Appeals', path: '/evaluations/award-appeals' },
+          { label: 'Award Appeals', path: '/evaluations/award-appeals', badge: badges.appeals || undefined },
           { label: 'Generate Contract', path: '/contracts/generate' },
           { label: 'Performance Security', path: '/contracts/performance-security' },
         ]

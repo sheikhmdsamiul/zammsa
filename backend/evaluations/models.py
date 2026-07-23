@@ -233,6 +233,11 @@ class BidEvaluationReport(models.Model):
                 required.append(str(c.chairperson_id))
             if c.secretary_id:
                 required.append(str(c.secretary_id))
+            # Non-official members with a user_id are also required signatories
+            for nom in (c.non_official_members or []):
+                uid = nom.get('user_id')
+                if uid:
+                    required.append(str(uid))
         if not required:
             return False
         signed_ids = {s['member_id'] for s in self.signatures}
@@ -306,6 +311,20 @@ class AwardAppeal(models.Model):
         help_text='Detailed description of the grounds for appeal')
     supporting_documents = models.JSONField(default=list, blank=True,
         help_text='List of {name, description, file_url} for supporting evidence')
+    # Internal review fields
+    review_notes = models.TextField(blank=True, default='',
+        help_text='Internal procurement officer review notes (not visible to bidder)')
+    hearing_date = models.DateTimeField(null=True, blank=True,
+        help_text='Scheduled hearing or meeting date for reviewing the appeal')
+    clarification_requested = models.BooleanField(default=False,
+        help_text='Whether a clarification has been requested from the bidder')
+    clarification_request = models.TextField(blank=True, default='',
+        help_text='Clarification question sent to the bidder')
+    clarification_response = models.TextField(blank=True, default='',
+        help_text='Bidder response to the clarification request')
+    decision_letter = models.FileField(upload_to='appeals/decision_letters/', blank=True, default='',
+        help_text='Uploaded appeal decision letter PDF')
+    # Resolution fields
     resolution = models.TextField(blank=True, default='',
         help_text='Resolution outcome and reasoning')
     resolved_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='resolved_appeals')
@@ -321,5 +340,53 @@ class AwardAppeal(models.Model):
         verbose_name = 'Award Appeal'
         verbose_name_plural = 'Award Appeals'
 
+    def days_remaining(self):
+        """Days remaining until resolution deadline (negative = overdue)."""
+        if not self.resolution_deadline:
+            return None
+        from django.utils import timezone
+        delta = self.resolution_deadline - timezone.now()
+        return delta.days
+
+    def is_overdue(self):
+        remaining = self.days_remaining()
+        return remaining is not None and remaining < 0 and self.status in ('filed', 'under_review')
+
     def __str__(self):
         return f'Appeal {self.appeal_id} - {self.bidder.submission_id} - {self.status}'
+
+
+APPEAL_ACTION_CHOICES = [
+    ('filed', 'Appeal Filed'),
+    ('acknowledged', 'Appeal Acknowledged'),
+    ('under_review', 'Taken Under Review'),
+    ('review_notes_added', 'Review Notes Added'),
+    ('hearing_scheduled', 'Hearing Scheduled'),
+    ('clarification_requested', 'Clarification Requested'),
+    ('clarification_received', 'Clarification Response Received'),
+    ('upheld', 'Appeal Upheld'),
+    ('dismissed', 'Appeal Dismissed'),
+    ('withdrawn', 'Appeal Withdrawn'),
+    ('re_evaluation_initiated', 'Re-Evaluation Initiated'),
+]
+
+
+class AppealActionLog(models.Model):
+    log_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    appeal = models.ForeignKey(AwardAppeal, on_delete=models.CASCADE, related_name='action_logs')
+    action = models.CharField(max_length=30, choices=APPEAL_ACTION_CHOICES)
+    performed_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='appeal_actions')
+    details = models.TextField(blank=True, default='',
+        help_text='Additional details about the action taken')
+    metadata = models.JSONField(default=dict, blank=True,
+        help_text='Structured data about the action (e.g. old_status, new_status)')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'eval_appeal_action_log'
+        verbose_name = 'Appeal Action Log'
+        verbose_name_plural = 'Appeal Action Logs'
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f'{self.appeal.appeal_id} - {self.action} - {self.created_at}'

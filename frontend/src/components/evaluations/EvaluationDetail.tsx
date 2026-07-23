@@ -181,7 +181,7 @@ const EvaluationDetail: React.FC = () => {
   const prevPhase = !isFirstPhase ? EVALUATION_PHASES[activePhaseIdx - 1] : null;
   const nextPhase = activePhaseIdx < EVALUATION_PHASES.length - 1 ? EVALUATION_PHASES[activePhaseIdx + 1] : null;
   const canGoBack = activePhaseIdx > 0;
-  const canGoForward = viewingPhaseId !== null || activePhaseIdx < currentPhaseIdx;
+  const canGoForward = viewingPhaseId !== null || activePhaseIdx < currentPhaseIdx || (phasesComplete[activePhase] && !!nextPhase);
   const colors = PHASE_COLORS[activePhase] || PHASE_COLORS.coi;
 
   const handleNavigate = (direction: 'back' | 'forward') => {

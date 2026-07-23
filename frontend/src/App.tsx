@@ -613,6 +613,7 @@ function App() {
                   <Route path="invoices/new/:contractId" element={<SubmitInvoice />} />
                   <Route path="deliveries/new" element={<SupplierDeliveryLog />} />
                   <Route path="deliveries/new/:contractId" element={<SupplierDeliveryLog />} />
+                  <Route path="appeals" element={<AwardAppealManagement />} />
                   <Route path="profile" element={<VendorProfile />} />
                   <Route path="settings" element={<VendorSettings />} />
                 </Route>

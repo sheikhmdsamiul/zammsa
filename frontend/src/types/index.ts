@@ -262,7 +262,7 @@ export interface Bid {
   submission_id?: string;
   bidder_name?: string;
   receipt_number?: string;
-  status: 'draft' | 'submitted' | 'withdrawn' | 'modified' | 'opened' | 'evaluated';
+  status: 'draft' | 'submitted' | 'withdrawn' | 'modified' | 'opened' | 'evaluated' | 'unsuccessful' | 'awarded' | 'responsive';
   bid_amount: number;
   currency: string;
   validity_period_days: number;
