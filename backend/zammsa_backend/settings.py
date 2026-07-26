@@ -28,6 +28,10 @@ def env_bool(name, default=False):
     return default
 
 
+SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+USE_X_FORWARDED_HOST = True
+SECURE_PROXY_HEADER = 'X-Forwarded-Proto'
+
 DEBUG = env_bool('DEBUG', default=True)
 ALLOWED_HOSTS = config('ALLOWED_HOSTS', default='localhost,127.0.0.1', cast=Csv())
 

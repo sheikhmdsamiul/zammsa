@@ -107,9 +107,9 @@ const BidInfoPanel: React.FC<{ bidId: string }> = ({ bidId }) => {
                     </p>
                   )}
                 </div>
-                {doc.file_path && (
+                {doc.file_url && (
                   <a
-                    href={doc.file_path}
+                    href={doc.file_url}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="shrink-0 text-blue-600 hover:text-blue-800"

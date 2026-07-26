@@ -56,7 +56,9 @@ const ScoreConsolidation: React.FC = () => {
   const primaryCommittee = (committeeData?.results || [])[0];
 
   const solicitationAwarded = solicitation?.status === 'awarded';
-  const isCombinedMethod = solicitation?.evaluation_method === 'qcbs' || solicitation?.evaluation_method === 'qbs' || (!solicitation?.evaluation_method && solicitation?.type === 'proposal');
+  const evalMethod = solicitation?.evaluation_method || 'lowest_price';
+  const isCombinedMethod = evalMethod === 'qcbs' || evalMethod === 'qbs';
+  const isLowestPrice = evalMethod === 'lowest_price' || evalMethod === 'lcs' || evalMethod === 'fbs';
   const computeLabel = isCombinedMethod ? 'Calculate Combined Scores' : 'Persist Rankings';
   const methodTitle = isCombinedMethod ? 'Combined Scores' : 'Evaluated Rankings';
 
@@ -178,7 +180,15 @@ const ScoreConsolidation: React.FC = () => {
       queryClient.invalidateQueries({ queryKey: ['phase-status', solId] });
       queryClient.invalidateQueries({ queryKey: ['evaluation-committee'] });
       queryClient.invalidateQueries({ queryKey: ['evaluation-committees'] });
-      toast.success(isCombinedMethod ? `Combined scores calculated: Tech ${data.tech_weight}% / Fin ${data.fin_weight}%` : 'Rankings persisted');
+      if (isCombinedMethod) {
+        const tw = data.tech_weight ?? (100 - (solicitation?.financial_weight || 20));
+        const fw = data.fin_weight ?? (solicitation?.financial_weight || 20);
+        toast.success(`Combined scores calculated: Tech ${tw}% / Fin ${fw}%`);
+      } else if (isLowestPrice) {
+        toast.success('Rankings calculated by evaluated price');
+      } else {
+        toast.success('Rankings persisted');
+      }
     },
     onError: (err: any) => toast.error(err?.response?.data?.error || 'Failed to calculate'),
   });
@@ -186,14 +196,22 @@ const ScoreConsolidation: React.FC = () => {
   const exportCSV = () => {
     setShowExportMenu(false);
     toast.loading('Preparing CSV export...');
-    const headers = ['Rank', 'Bidder', 'Submission ID', 'Tech Score', 'Passed', 'Financial', ...committeeMembers.map(m => m.name)];
-    const sorted = [...consolidatedScores].sort((a, b) => b.overallTechnicalScore - a.overallTechnicalScore);
+    const headers = isCombinedMethod
+      ? ['Rank', 'Bidder', 'Submission ID', 'Tech Score', 'Financial Score', 'Total Score', 'Passed', ...committeeMembers.map(m => m.name)]
+      : ['Rank', 'Bidder', 'Submission ID', 'Tech Score', 'Evaluated Price', 'Passed', ...committeeMembers.map(m => m.name)];
+    const sorted = [...consolidatedScores].sort((a, b) => {
+      if (isCombinedMethod) return (b as any).totalScore - (a as any).totalScore || b.overallTechnicalScore - a.overallTechnicalScore;
+      return b.overallTechnicalScore - a.overallTechnicalScore;
+    });
     const rows = sorted.map((bid, i) => {
       const memberChecks = committeeMembers.map(m => {
         const member = bid.members.find(mm => mm.id === m.id);
         return member?.submitted ? '1' : '0';
       });
-      return [i + 1, `"${bid.bidderName}"`, bid.submissionId, bid.overallTechnicalScore.toFixed(2), bid.passed ? 'Yes' : 'No', bid.financialSealed ? 'Sealed' : 'Opened', ...memberChecks].join(',');
+      if (isCombinedMethod) {
+        return [i + 1, `"${bid.bidderName}"`, bid.submissionId, bid.overallTechnicalScore.toFixed(2), (bid as any).financialScore?.toFixed(2) || '', (bid as any).totalScore?.toFixed(2) || '', bid.passed ? 'Yes' : 'No', ...memberChecks].join(',');
+      }
+      return [i + 1, `"${bid.bidderName}"`, bid.submissionId, bid.overallTechnicalScore.toFixed(2), bid.evaluatedPrice != null ? Number(bid.evaluatedPrice).toLocaleString() : '', bid.passed ? 'Yes' : 'No', ...memberChecks].join(',');
     });
     const csvContent = '\uFEFF' + [headers.join(','), ...rows].join('\n');
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
@@ -270,9 +288,9 @@ const ScoreConsolidation: React.FC = () => {
         <div className="flex items-center justify-between">
           {[
             { label: 'Technical Scoring', done: allMembersSubmitted, active: false },
-            { label: 'Score Consolidation', done: allMembersSubmitted, active: !allMembersSubmitted },
-            { label: 'Financial Opening', done: financialOpened, active: allMembersSubmitted && !financialOpened },
-            { label: 'Combined Scoring', done: false, active: financialOpened },
+            { label: 'Score Consolidation', done: financialOpened, active: allMembersSubmitted && !financialOpened },
+            { label: 'Financial Opening', done: financialOpened, active: false },
+            { label: isCombinedMethod ? 'Combined Scoring' : 'Price Ranking', done: false, active: financialOpened },
           ].map((step, i) => (
             <React.Fragment key={step.label}>
               {i > 0 && (
@@ -595,23 +613,33 @@ const ScoreConsolidation: React.FC = () => {
               <h3 className="text-sm font-bold text-gray-900 mb-2">{methodTitle}</h3>
               <p className="text-xs text-gray-500 mb-3">
                 {isCombinedMethod
-                  ? `Compute combined scores using Tech ${solicitation?.financial_weight || 70}% + Financial weight.`
+                  ? `Compute combined scores using Tech ${100 - (solicitation?.financial_weight || 20)}% + Financial ${solicitation?.financial_weight || 20}%.`
+                  : isLowestPrice
+                  ? 'Rank bids by evaluated price. Lowest evaluated price wins.'
                   : 'Persist current technical rankings for all passing bids.'}
               </p>
-              <button
-                onClick={() => setShowQcbsConfirm(true)}
-                disabled={!allMembersSubmitted || qcbsMutation.isPending}
-                className={`w-full px-4 py-2.5 text-sm font-bold rounded-lg transition-all flex items-center justify-center gap-2 ${
-                  allMembersSubmitted && !qcbsMutation.isPending
-                    ? 'bg-indigo-600 text-white hover:bg-indigo-700'
-                    : 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                }`}
-              >
-                <ChartBarIcon className="w-4 h-4" />
-                {qcbsMutation.isPending ? 'Calculating...' : computeLabel}
-              </button>
-              {!allMembersSubmitted && (
-                <p className="text-xs text-amber-600 mt-2 text-center">Waiting for all evaluators to submit scores.</p>
+              {!financialOpened ? (
+                <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
+                  <p className="text-xs font-medium text-amber-800">Open financial envelopes first</p>
+                  <p className="text-xs text-amber-600 mt-1">
+                    Financial envelopes must be opened and evaluated before combined scores can be calculated.
+                  </p>
+                </div>
+              ) : (
+                <>
+                  <button
+                    onClick={() => setShowQcbsConfirm(true)}
+                    disabled={qcbsMutation.isPending}
+                    className={`w-full px-4 py-2.5 text-sm font-bold rounded-lg transition-all flex items-center justify-center gap-2 ${
+                      !qcbsMutation.isPending
+                        ? 'bg-indigo-600 text-white hover:bg-indigo-700'
+                        : 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                    }`}
+                  >
+                    <ChartBarIcon className="w-4 h-4" />
+                    {qcbsMutation.isPending ? 'Calculating...' : computeLabel}
+                  </button>
+                </>
               )}
             </div>
           )}
@@ -720,12 +748,14 @@ const ScoreConsolidation: React.FC = () => {
         open={showQcbsConfirm}
         onClose={() => setShowQcbsConfirm(false)}
         onConfirm={() => { setShowQcbsConfirm(false); qcbsMutation.mutate(); }}
-        title={isCombinedMethod ? 'Calculate Combined Scores?' : 'Persist Rankings?'}
+        title={isCombinedMethod ? 'Calculate Combined Scores?' : 'Calculate Rankings?'}
         message={isCombinedMethod
-          ? `This will compute combined technical (${solicitation?.financial_weight || 70}%) and financial scores for all technically passing bids.`
+          ? `This will compute combined technical (${100 - (solicitation?.financial_weight || 20)}%) and financial (${solicitation?.financial_weight || 20}%) scores for all technically passing bids with opened financial envelopes.`
+          : isLowestPrice
+          ? 'This will rank all technically passing bids by evaluated price. The lowest evaluated price wins.'
           : 'This will persist the current technical rankings for all passing bids.'}
         variant="info"
-        confirmText={isCombinedMethod ? 'Calculate' : 'Persist'}
+        confirmText={isCombinedMethod ? 'Calculate' : 'Calculate'}
         cancelText="Cancel"
       />
 
@@ -736,8 +766,17 @@ const ScoreConsolidation: React.FC = () => {
               <div>
                 <h2 className="text-lg font-bold text-gray-900">{methodTitle} Results</h2>
                 <p className="text-xs text-gray-500 mt-0.5">
-                  {isCombinedMethod ? `Tech ${qcbsMutation.data.tech_weight}% + Financial ${qcbsMutation.data.fin_weight}%` : 'Evaluated price-based ranking'}
+                  {isCombinedMethod
+                    ? `Tech ${qcbsMutation.data.tech_weight ?? (100 - (solicitation?.financial_weight || 20))}% + Financial ${qcbsMutation.data.fin_weight ?? (solicitation?.financial_weight || 20)}%`
+                    : isLowestPrice
+                    ? 'Ranked by evaluated price (lowest wins)'
+                    : 'Technical score-based ranking'}
                 </p>
+                {qcbsMutation.data.consolidated_by && qcbsMutation.data.consolidated_at && (
+                  <p className="text-xs text-gray-400 mt-0.5">
+                    Consolidated by {qcbsMutation.data.consolidated_by} at {new Date(qcbsMutation.data.consolidated_at).toLocaleString()}
+                  </p>
+                )}
               </div>
               <button onClick={() => setShowQCBSModal(false)} className="text-gray-400 hover:text-gray-600 text-xl">&times;</button>
             </div>

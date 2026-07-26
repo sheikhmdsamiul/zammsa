@@ -76,7 +76,7 @@ const EvaluationDetail: React.FC = () => {
     queryKey: ['phase-status', committee?.solicitation],
     queryFn: () => evaluationsApi.getPhaseStatus(committee!.solicitation),
     enabled: !!committee?.solicitation,
-    refetchInterval: 10000,
+    staleTime: 30000,
   });
 
   const [viewingPhaseId, setViewingPhaseId] = useState<EvaluationPhaseId | null>(null);
@@ -101,7 +101,7 @@ const EvaluationDetail: React.FC = () => {
   const phasesComplete = useMemo(() => {
     const phases = phaseStatus?.phases || {};
     return {
-      coi: !!alreadyDeclared && !isRecused,
+      coi: phases.coi?.complete || false,
       preliminary: phases.preliminary?.complete || false,
       technical: phases.technical?.complete || false,
       financial: phases.financial?.complete || false,
@@ -109,7 +109,7 @@ const EvaluationDetail: React.FC = () => {
       ber: phases.ber?.complete || false,
       'post-qual': phases.post_qual?.complete || false,
     };
-  }, [alreadyDeclared, isRecused, phaseStatus]);
+  }, [phaseStatus]);
 
   const phasesBlocked = useMemo(() => {
     const blocked: Record<string, boolean> = {};
@@ -295,6 +295,7 @@ const EvaluationDetail: React.FC = () => {
                   committee={committee}
                   phasesComplete={phasesComplete}
                   bidsData={bidsData}
+                  phaseStatus={phaseStatus}
                   onNavigate={handleNavigate}
                   canGoBack={!!canGoBack}
                   canGoForward={!!canGoForward}
@@ -619,17 +620,41 @@ const PreliminaryContent: React.FC<{
   committee: any;
   phasesComplete: Record<string, boolean>;
   bidsData: any;
-} & PhaseNavProps> = ({ committee, phasesComplete, bidsData }) => {
+  phaseStatus?: any;
+} & PhaseNavProps> = ({ committee, phasesComplete, bidsData, phaseStatus }) => {
   const navigate = useNavigate();
   const bids = bidsData?.results || [];
   const bidCount = bids.length;
+  const memberProgress: any[] = phaseStatus?.phases?.preliminary?.member_progress || [];
+  const completedMembers = memberProgress.filter((m: any) => m.complete).length;
 
   return (
     <div className="space-y-3">
       <p className="text-sm text-gray-600">
-        Review mandatory compliance requirements for all {bidCount} submitted bid(s).
-        Each bid is checked against mandatory criteria — pass or fail.
+        Every committee member must individually examine all {bidCount} submitted bid(s) against mandatory criteria.
+        The preliminary phase completes only when all members have independently reviewed every bid.
       </p>
+
+      {memberProgress.length > 0 && (
+        <div className="border border-gray-200 rounded-lg p-3">
+          <p className="text-xs font-medium text-gray-700 mb-2">Member Completion Status</p>
+          <div className="space-y-1.5">
+            {memberProgress.map((m: any) => (
+              <div key={m.member_id} className="flex items-center gap-2 text-xs">
+                {m.complete ? (
+                  <CheckCircleIcon className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
+                ) : (
+                  <XCircleIcon className="w-3.5 h-3.5 text-gray-300 shrink-0" />
+                )}
+                <span className="text-gray-700 truncate">{m.name || m.member_id}</span>
+                <span className="text-gray-400 capitalize text-[10px]">({m.role?.replace('_', ' ')})</span>
+                <span className="ml-auto text-[11px] text-gray-500">{m.bids_examined}/{m.total_bids} bids</span>
+              </div>
+            ))}
+          </div>
+          <p className="text-[11px] text-gray-400 mt-2">{completedMembers} of {memberProgress.length} members completed</p>
+        </div>
+      )}
 
       {bidCount > 0 && (
         <div className="border border-gray-200 rounded-lg overflow-hidden">
@@ -659,7 +684,7 @@ const PreliminaryContent: React.FC<{
           <CheckCircleIcon className="w-5 h-5 text-emerald-600" />
           <div>
             <p className="text-sm font-semibold text-emerald-900">Preliminary Examination Complete</p>
-            <p className="text-xs text-emerald-700">All bids have been examined against mandatory criteria.</p>
+            <p className="text-xs text-emerald-700">All committee members have individually examined all bids.</p>
           </div>
         </div>
       ) : (

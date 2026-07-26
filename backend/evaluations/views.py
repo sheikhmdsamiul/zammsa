@@ -19,7 +19,7 @@ from accounts.serializers import UserCreateSerializer
 from system_config.notifications import notify_role, notify_users, send_external_email
 
 from .crypto_sign import sign_ber_payload, verify_signature
-from .models import EvaluationCommittee, ConflictOfInterest, PreliminaryExam, TechnicalScore, FinancialEvaluation, CombinedScore, BidEvaluationReport, PostQualification, AwardAppeal, AppealActionLog
+from .models import EvaluationCommittee, ConflictOfInterest, PreliminaryExam, TechnicalScore, FinancialEvaluation, CombinedScore, BidEvaluationReport, PostQualification, AwardAppeal, AppealActionLog, PREFERENCE_MARGIN_CHOICES
 from .serializers import (
     EvaluationCommitteeSerializer, ConflictOfInterestSerializer, PreliminaryExamSerializer, TechnicalScoreSerializer,
     FinancialEvaluationSerializer, CombinedScoreSerializer, BidEvaluationReportSerializer,
@@ -161,8 +161,242 @@ def _require_coi_clearance(solicitation):
     return None
 
 
+def _require_preliminary_exam_completion(solicitation):
+    committees = EvaluationCommittee.objects.filter(solicitation=solicitation)
+    if not committees.exists():
+        return None
+
+    required_member_ids = set()
+    for c in committees:
+        for m in (c.members or []):
+            uid = m.get('user') if isinstance(m, dict) else m
+            if uid:
+                required_member_ids.add(str(uid))
+        if c.chairperson_id:
+            required_member_ids.add(str(c.chairperson_id))
+        if c.secretary_id:
+            required_member_ids.add(str(c.secretary_id))
+        for nom in (c.non_official_members or []):
+            uid = nom.get('user_id')
+            if uid:
+                required_member_ids.add(str(uid))
+
+    recused_ids = set(ConflictOfInterest.objects.filter(
+        committee__solicitation=solicitation, recused=True
+    ).values_list('member_id', flat=True))
+    required_member_ids -= {str(uid) for uid in recused_ids}
+
+    if not required_member_ids:
+        return None
+
+    bid_ids = list(BidSubmission.objects.filter(
+        solicitation=solicitation
+    ).values_list('bid_id', flat=True))
+    if not bid_ids:
+        return None
+
+    from django.db.models import Count
+    member_exam_counts = (
+        PreliminaryExam.objects.filter(
+            bid__solicitation=solicitation,
+            evaluated_by__isnull=False,
+        )
+        .values('evaluated_by')
+        .annotate(bid_count=Count('bid', distinct=True))
+        .filter(evaluated_by__isnull=False)
+    )
+    member_bid_map = {str(entry['evaluated_by']): entry['bid_count'] for entry in member_exam_counts}
+
+    total_bids = len(bid_ids)
+    incomplete_members = []
+    for mid in required_member_ids:
+        count = member_bid_map.get(mid, 0)
+        if count < total_bids:
+            incomplete_members.append(mid)
+
+    if incomplete_members:
+        return Response({
+            'error': 'Every evaluation committee member must individually examine all bids before proceeding to technical scoring.',
+            'incomplete_member_count': len(incomplete_members),
+            'required_member_count': len(required_member_ids),
+            'total_bids': total_bids,
+        }, status=400)
+    return None
+
+
 def _bid_failed_preliminary(bid):
     return PreliminaryExam.objects.filter(bid=bid, is_compliant=False).exists()
+
+
+PHASE_LABELS = {
+    'coi': 'COI Declaration',
+    'preliminary': 'Preliminary Examination',
+    'technical': 'Technical Scoring',
+    'consolidation': 'Score Consolidation',
+    'financial': 'Financial Evaluation',
+    'post-qual': 'Post-Qualification',
+    'ber': 'BER Workflow',
+}
+
+
+def _resolve_ec_members(solicitation):
+    """Return all active EC members (User objects) for a solicitation, excluding recused members."""
+    committees = EvaluationCommittee.objects.filter(solicitation=solicitation)
+    member_ids = set()
+    for c in committees:
+        for m in (c.members or []):
+            uid = m.get('user') if isinstance(m, dict) else m
+            if uid:
+                member_ids.add(str(uid))
+        if c.chairperson_id:
+            member_ids.add(str(c.chairperson_id))
+        if c.secretary_id:
+            member_ids.add(str(c.secretary_id))
+        for nom in (c.non_official_members or []):
+            uid = nom.get('user_id')
+            if uid:
+                member_ids.add(str(uid))
+    recused_ids = set(ConflictOfInterest.objects.filter(
+        committee__solicitation=solicitation, recused=True
+    ).values_list('member_id', flat=True))
+    member_ids -= {str(uid) for uid in recused_ids}
+    return User.objects.filter(id__in=member_ids, is_active=True)
+
+
+def _check_phase_completion(solicitation, phase):
+    """Check if a specific phase is complete for the given solicitation."""
+    from django.db.models import Count
+    committees = EvaluationCommittee.objects.filter(solicitation=solicitation)
+
+    if phase == 'coi':
+        all_member_ids = set()
+        for c in committees:
+            if c.chairperson_id:
+                all_member_ids.add(str(c.chairperson_id))
+            if c.secretary_id:
+                all_member_ids.add(str(c.secretary_id))
+            for m in (c.members or []):
+                uid = m.get('user') if isinstance(m, dict) else m
+                if uid:
+                    all_member_ids.add(str(uid))
+        if not all_member_ids:
+            return False
+        declared = ConflictOfInterest.objects.filter(
+            committee__solicitation=solicitation,
+            member_id__in=all_member_ids,
+        ).values('member').distinct().count()
+        return declared >= len(all_member_ids)
+
+    elif phase == 'preliminary':
+        total_bids = BidSubmission.objects.filter(solicitation=solicitation).count()
+        if total_bids == 0:
+            return False
+        required_member_ids = set()
+        for c in committees:
+            for m in (c.members or []):
+                uid = m.get('user') if isinstance(m, dict) else m
+                if uid:
+                    required_member_ids.add(str(uid))
+            if c.chairperson_id:
+                required_member_ids.add(str(c.chairperson_id))
+            if c.secretary_id:
+                required_member_ids.add(str(c.secretary_id))
+            for nom in (c.non_official_members or []):
+                uid = nom.get('user_id')
+                if uid:
+                    required_member_ids.add(str(uid))
+        recused_ids = set(ConflictOfInterest.objects.filter(
+            committee__solicitation=solicitation, recused=True
+        ).values_list('member_id', flat=True))
+        required_member_ids -= {str(uid) for uid in recused_ids}
+        if not required_member_ids:
+            return False
+        member_exam_counts = (
+            PreliminaryExam.objects.filter(
+                bid__solicitation=solicitation, evaluated_by__isnull=False,
+            )
+            .values('evaluated_by')
+            .annotate(bid_count=Count('bid', distinct=True))
+        )
+        member_bid_map = {str(e['evaluated_by']): e['bid_count'] for e in member_exam_counts}
+        return all(member_bid_map.get(mid, 0) >= total_bids for mid in required_member_ids)
+
+    elif phase == 'technical':
+        total_bids = BidSubmission.objects.filter(solicitation=solicitation).count()
+        if total_bids == 0:
+            return False
+        total_members = 0
+        for c in committees:
+            official = len(c.members or [])
+            non_official = sum(1 for nom in (c.non_official_members or []) if nom.get('user_id'))
+            total_members = max(total_members, official + non_official)
+        if total_members == 0:
+            return False
+        tech_pairs = TechnicalScore.objects.filter(
+            bid__solicitation=solicitation
+        ).values('bid', 'evaluator').distinct().count()
+        return tech_pairs >= total_bids * total_members
+
+    elif phase == 'consolidation':
+        return CombinedScore.objects.filter(bid__solicitation=solicitation).exists()
+
+    elif phase == 'financial':
+        fin_bids = FinancialEvaluation.objects.filter(
+            bid__solicitation=solicitation
+        ).values('bid').distinct().count()
+        total_bids = BidSubmission.objects.filter(solicitation=solicitation).count()
+        winner = BidSubmission.objects.filter(solicitation=solicitation, status='awarded').exists()
+        return fin_bids >= total_bids and total_bids > 0 and winner
+
+    elif phase == 'post-qual':
+        return PostQualification.objects.filter(
+            bidder__solicitation=solicitation, status='cleared'
+        ).exists()
+
+    return False
+
+
+def _notify_ec_phase_completion(solicitation, completed_phase):
+    """Notify all active EC members that a phase is complete and they can proceed to the next phase."""
+    phase_order = ['coi', 'preliminary', 'technical', 'consolidation', 'financial', 'post-qual', 'ber']
+    try:
+        idx = phase_order.index(completed_phase)
+    except ValueError:
+        return
+    if idx >= len(phase_order) - 1:
+        return
+    next_phase = phase_order[idx + 1]
+    next_label = PHASE_LABELS.get(next_phase, next_phase)
+    completed_label = PHASE_LABELS.get(completed_phase, completed_phase)
+
+    members = _resolve_ec_members(solicitation)
+    if not members.exists():
+        return
+
+    action_url = f'/evaluations/preliminary/{solicitation.solicitation_id}' if next_phase == 'preliminary' else f'/evaluations'
+
+    notify_users(
+        list(members),
+        title=f'Evaluation Phase Complete: {completed_label} — {solicitation.sol_number}',
+        message=(
+            f'The {completed_label} phase for {solicitation.sol_number} ({solicitation.title}) '
+            f'has been completed. You can now proceed to the {next_label} phase.\n\n'
+            f'Please log in to the ZAMMSA Procurement System to continue.'
+        ),
+        notification_type='workflow',
+        priority='high',
+        source_module='evaluations',
+        object_id=str(solicitation.pk),
+        action_url=action_url,
+        metadata={
+            'alert_key': 'evaluation_phase_completed',
+            'solicitation_id': str(solicitation.solicitation_id),
+            'sol_number': solicitation.sol_number,
+            'completed_phase': completed_phase,
+            'next_phase': next_phase,
+        },
+        email_required=True,
+    )
 
 
 def _technical_score_for_bid(bid):
@@ -308,7 +542,9 @@ class EvaluationCommitteeListView(BaseView, generics.ListCreateAPIView):
 
 
 class EvaluationCommitteeDetailView(generics.RetrieveUpdateDestroyAPIView):
-    queryset = EvaluationCommittee.objects.all()
+    queryset = EvaluationCommittee.objects.select_related(
+        'chairperson', 'secretary', 'solicitation'
+    ).prefetch_related('conflict_declarations__member')
     serializer_class = EvaluationCommitteeSerializer
     permission_classes = [CanManageEvaluationCommittees]
 
@@ -333,13 +569,27 @@ class PreliminaryExamListView(BaseView, generics.ListCreateAPIView):
                     return err
             except BidSubmission.DoesNotExist:
                 pass
+
+        bid = None
+        if bid_id:
+            try:
+                bid = BidSubmission.objects.get(pk=bid_id)
+            except BidSubmission.DoesNotExist:
+                pass
+        if bid:
+            committee_ids = _get_committee_member_ids_for_bid(bid)
+            if str(request.user.id) not in committee_ids:
+                return Response({'error': 'Only evaluation committee members can submit preliminary examination results'}, status=403)
+
         return super().create(request, *args, **kwargs)
 
     def perform_create(self, serializer):
-        exam = serializer.save()
+        exam = serializer.save(evaluated_by=self.request.user)
         if not exam.is_compliant and exam.bid.status != 'non_responsive':
             exam.bid.status = 'non_responsive'
             exam.bid.save(update_fields=['status'])
+        if _check_phase_completion(exam.bid.solicitation, 'preliminary'):
+            _notify_ec_phase_completion(exam.bid.solicitation, 'preliminary')
 
 
 class PreliminaryExamDetailView(generics.RetrieveUpdateDestroyAPIView):
@@ -360,6 +610,12 @@ class TechnicalScoreListView(BaseView, generics.ListCreateAPIView):
             try:
                 bid = BidSubmission.objects.get(pk=bid_id)
                 err = _require_bid_opening_completed(bid.solicitation)
+                if err:
+                    return err
+                err = _require_coi_clearance(bid.solicitation)
+                if err:
+                    return err
+                err = _require_preliminary_exam_completion(bid.solicitation)
                 if err:
                     return err
             except BidSubmission.DoesNotExist:
@@ -413,6 +669,9 @@ def coi_declare_view(request, committee_pk):
         coi.confidentiality_agreed = confidentiality_agreed
         coi.save()
 
+    if _check_phase_completion(committee.solicitation, 'coi'):
+        _notify_ec_phase_completion(committee.solicitation, 'coi')
+
     return Response({
         'message': 'Conflict of interest declared',
         'coi': ConflictOfInterestSerializer(coi).data,
@@ -423,15 +682,17 @@ def coi_declare_view(request, committee_pk):
 @permission_classes([IsAuthenticated])
 def coi_committee_view(request, committee_pk):
     try:
-        committee = EvaluationCommittee.objects.get(pk=committee_pk)
+        committee = EvaluationCommittee.objects.select_related('solicitation').get(pk=committee_pk)
     except EvaluationCommittee.DoesNotExist:
         return Response({'error': 'Committee not found'}, status=404)
 
     declarations = ConflictOfInterest.objects.filter(committee=committee).select_related('member')
-    return Response({
+    response_data = {
         'declarations': ConflictOfInterestSerializer(declarations, many=True).data,
         'recused_members': [str(d.member.id) for d in declarations if d.recused],
-    })
+    }
+
+    return Response(response_data)
 
 
 @api_view(['GET'])
@@ -498,6 +759,12 @@ def technical_score_calculate_averages_view(request, bid_pk):
         return Response({'error': 'Bid not found'}, status=404)
 
     err = _require_bid_opening_completed(bid.solicitation)
+    if err:
+        return err
+    err = _require_coi_clearance(bid.solicitation)
+    if err:
+        return err
+    err = _require_preliminary_exam_completion(bid.solicitation)
     if err:
         return err
 
@@ -593,6 +860,9 @@ def technical_score_submit_view(request):
     err = _require_coi_clearance(bid.solicitation)
     if err:
         return err
+    err = _require_preliminary_exam_completion(bid.solicitation)
+    if err:
+        return err
 
     committee_ids = _get_committee_member_ids_for_bid(bid)
     if str(request.user.id) not in committee_ids:
@@ -631,6 +901,9 @@ def technical_score_submit_view(request):
     if all_members_done:
         TechnicalScore.objects.filter(bid=bid).update(is_final=True)
 
+    if _check_phase_completion(bid.solicitation, 'technical'):
+        _notify_ec_phase_completion(bid.solicitation, 'technical')
+
     return Response({
         'message': 'Technical score submitted',
         'score': TechnicalScoreSerializer(score).data,
@@ -652,6 +925,9 @@ def list_passed_tech_bids_view(request, solicitation_pk):
     err = _require_coi_clearance(sol)
     if err:
         return err
+    err = _require_preliminary_exam_completion(sol)
+    if err:
+        return err
 
     committees = EvaluationCommittee.objects.filter(solicitation=sol)
     is_chair = any(str(c.chairperson.id) == str(request.user.id) for c in committees)
@@ -663,12 +939,9 @@ def list_passed_tech_bids_view(request, solicitation_pk):
     criteria = EvaluationCriterion.objects.filter(solicitation=sol, criterion_type='technical')
     total_tech_weight = criteria.aggregate(s=Sum('weight'))['s'] or Decimal('100')
 
-    # Financial envelopes are only truly "opened" after chairperson authorization
-    # (which creates CombinedScore records). Raw BidOpeningDetail.financial_sealed
-    # may be False from the bid opening ceremony itself.
-    financial_authorized = CombinedScore.objects.filter(bid__solicitation=sol).exists()
-
-    bids = BidSubmission.objects.filter(solicitation=sol, status__in=['submitted', 'opened', 'responsive', 'awarded'])
+    # Financial envelopes are opened when BidOpeningDetail.financial_sealed is False
+    # (set by authorize_financial_opening_view)
+    bids = BidSubmission.objects.filter(solicitation=sol, status__in=['submitted', 'opened', 'responsive', 'non_responsive', 'unsuccessful', 'awarded'])
     results = []
 
     for bid in bids:
@@ -723,7 +996,7 @@ def list_passed_tech_bids_view(request, solicitation_pk):
             'financial_evaluation_id': str(financial_eval.evaluation_id) if financial_eval else None,
             'evaluated_price': float(financial_eval.evaluated_price) if financial_eval else None,
             'financial_score': float(financial_eval.financial_score) if financial_eval else None,
-            'financial_sealed': not financial_authorized,
+            'financial_sealed': opening_detail.financial_sealed if opening_detail else True,
             'details': details,
             'is_winner': bid.status == 'awarded',
         })
@@ -748,7 +1021,7 @@ def calculate_qcbs_view(request, solicitation_pk):
     try:
         sol = Solicitation.objects.get(pk=solicitation_pk)
     except Solicitation.DoesNotExist:
-        return Response({'error': 'Solicitation not found'}, status=404)
+        return Response({'error': 'Solicitation found'}, status=404)
 
     err = _require_bid_opening_completed(sol)
     if err:
@@ -756,14 +1029,15 @@ def calculate_qcbs_view(request, solicitation_pk):
     err = _require_coi_clearance(sol)
     if err:
         return err
+    err = _require_preliminary_exam_completion(sol)
+    if err:
+        return err
 
     committees = EvaluationCommittee.objects.filter(solicitation=sol)
     is_chair = any(str(c.chairperson.id) == str(request.user.id) for c in committees)
     is_director = request.user.role == 'director_procurement'
     if not is_chair and not is_director:
-        return Response({'error': 'Only the committee chair or Director of Procurement can calculate QCBS'}, status=403)
-
-    financial_authorized = CombinedScore.objects.filter(bid__solicitation=sol).exists()
+        return Response({'error': 'Only the committee chair or Director of Procurement can calculate combined scores'}, status=403)
 
     criteria = EvaluationCriterion.objects.filter(solicitation=sol)
 
@@ -776,17 +1050,16 @@ def calculate_qcbs_view(request, solicitation_pk):
         tech_weight = Decimal('100')
         fin_weight = Decimal('0')
     else:
-        tech_weight = Decimal('80')
-        fin_weight = Decimal('20')
+        tech_weight = None
+        fin_weight = None
 
     threshold = Decimal(str(sol.minimum_technical_threshold or TECHNICAL_THRESHOLD_DEFAULT))
     tech_criteria = criteria.filter(criterion_type='technical')
     total_tech_weight = tech_criteria.aggregate(s=Sum('weight'))['s'] or Decimal('100')
 
-    bids = BidSubmission.objects.filter(solicitation=sol, status__in=['submitted', 'opened', 'responsive', 'awarded'])
+    bids = BidSubmission.objects.filter(solicitation=sol, status__in=['submitted', 'opened', 'responsive', 'non_responsive', 'unsuccessful', 'awarded'])
     results = []
 
-    # Pre-compute evaluated prices for all tech-passing bids
     eligible_bids = []
     evaluated_prices = {}
     for bid in bids:
@@ -811,10 +1084,9 @@ def calculate_qcbs_view(request, solicitation_pk):
 
     for bid in eligible_bids:
         opening_detail = BidOpeningDetail.objects.filter(bid=bid).first()
-        if opening_detail and opening_detail.financial_sealed and eval_method != 'qbs':
-            continue
-        tech_scores = TechnicalScore.objects.filter(bid=bid, is_final=True)
+        opening_sealed = opening_detail and opening_detail.financial_sealed
 
+        tech_scores = TechnicalScore.objects.filter(bid=bid, is_final=True)
         total_weighted = Decimal('0')
         details = []
         for criterion in tech_criteria:
@@ -835,33 +1107,18 @@ def calculate_qcbs_view(request, solicitation_pk):
 
         if fin_eval:
             fin_score = fin_eval.financial_score
-        else:
+        elif not opening_sealed:
             fin_score = (min_evaluated_price / evaluated_price) * Decimal('100') if evaluated_price > 0 else Decimal('100')
-            fin_eval = FinancialEvaluation.objects.create(
-                bid=bid,
-                original_price=bid.bid_price or 0,
-                corrected_price=bid.bid_price or 0,
-                evaluated_price=evaluated_price,
-                financial_score=fin_score,
-                preference_category='0',
-            )
-
-        avg_tech = overall_pct
-        if eval_method in ('qcbs', 'qbs'):
-            total_score = (avg_tech * tech_weight / Decimal('100')) + (Decimal(str(fin_score)) * fin_weight / Decimal('100'))
-
-            CombinedScore.objects.update_or_create(
-                bid=bid,
-                defaults={
-                    'technical_score': avg_tech,
-                    'financial_score': fin_score,
-                    'total_score': total_score,
-                    'rank': 0,
-                }
-            )
         else:
-            total_score = Decimal('0')
-            
+            fin_score = Decimal('0')
+
+        if eval_method in ('qcbs', 'qbs') and not opening_sealed:
+            total_score = (overall_pct * tech_weight / Decimal('100')) + (Decimal(str(fin_score)) * fin_weight / Decimal('100'))
+        elif eval_method in ('qcbs', 'qbs'):
+            total_score = overall_pct
+        else:
+            total_score = overall_pct
+
         from suppliers.models import Supplier as SupplierModel
         emp_id = getattr(bid.supplier, 'employee_id', '') or ''
         sup = SupplierModel.objects.filter(registration_number=emp_id.replace('SUP-', '', 1)).first() if emp_id else None
@@ -877,27 +1134,38 @@ def calculate_qcbs_view(request, solicitation_pk):
             'preference_category': fin_eval.preference_category if fin_eval else 'non_citizen',
             'preference_margin': float(fin_eval.preference_applied or 0) if fin_eval else 0,
             'technical_score': float(overall_pct),
-            'financial_score': float(fin_score),
+            'financial_score': float(fin_score) if not opening_sealed else 0,
             'total_score': float(total_score),
             'passed': True,
             'financial_evaluation_id': str(fin_eval.evaluation_id) if fin_eval else None,
             'evaluated_price': float(fin_eval.evaluated_price) if fin_eval else None,
-            'financial_sealed': not financial_authorized,
+            'financial_sealed': opening_sealed,
             'ceec_category': ceec_category,
             'ceec_priority': ceec_priority,
             'details': details,
         })
 
-    # BR-EVAL-04: Tie-breaking: higher tech score wins; if still tied, higher citizen ownership wins
+    # Ranking: QCBS/QBS sort by total_score; lowest_price/LCS/FBS sort by evaluated price
     if eval_method in ('qcbs', 'qbs'):
         results.sort(key=lambda x: (x.get('total_score', 0), x.get('technical_score', 0), x.get('ceec_priority', 0)), reverse=True)
-        for i, bid_data in enumerate(results):
-            bid_data['rank'] = i + 1
-            CombinedScore.objects.filter(bid_id=bid_data['bid_id']).update(rank=i + 1)
     else:
-        results.sort(key=lambda x: x.get('evaluated_price', 0))
+        results.sort(key=lambda x: x.get('evaluated_price') or float('inf'))
+
+    with transaction.atomic():
         for i, bid_data in enumerate(results):
             bid_data['rank'] = i + 1
+            bid_id_for_update = bid_data['bid_id']
+            CombinedScore.objects.update_or_create(
+                bid_id=bid_id_for_update,
+                defaults={
+                    'technical_score': Decimal(str(bid_data['technical_score'])),
+                    'financial_score': Decimal(str(bid_data['financial_score'])),
+                    'total_score': Decimal(str(bid_data['total_score'])),
+                    'rank': i + 1,
+                    'consolidated_by': request.user,
+                    'consolidated_at': timezone.now(),
+                }
+            )
 
     winner_name = None
     if sol.status == 'awarded':
@@ -906,13 +1174,16 @@ def calculate_qcbs_view(request, solicitation_pk):
             winner_name = awarded_bid.supplier.full_name
 
     return Response({
-        'message': 'QCBS calculation completed successfully',
+        'message': 'Combined scores calculated successfully',
         'solicitation_id': str(sol.solicitation_id),
+        'eval_method': eval_method,
         'threshold': float(threshold),
-        'tech_weight': float(tech_weight),
-        'fin_weight': float(fin_weight),
+        'tech_weight': float(tech_weight) if tech_weight is not None else None,
+        'fin_weight': float(fin_weight) if fin_weight is not None else None,
         'results': results,
         'winner_name': winner_name,
+        'consolidated_by': request.user.full_name,
+        'consolidated_at': timezone.now().isoformat(),
     })
 
 
@@ -930,6 +1201,9 @@ def authorize_financial_opening_view(request, solicitation_pk):
     err = _require_coi_clearance(sol)
     if err:
         return err
+    err = _require_preliminary_exam_completion(sol)
+    if err:
+        return err
 
     committees = EvaluationCommittee.objects.filter(solicitation=sol)
     is_chair = any(str(c.chairperson.id) == str(request.user.id) for c in committees)
@@ -940,7 +1214,7 @@ def authorize_financial_opening_view(request, solicitation_pk):
     # Verify all committee members have submitted technical scores for all bids
     criteria = EvaluationCriterion.objects.filter(solicitation=sol, criterion_type='technical')
     criteria_count = criteria.count()
-    bids = BidSubmission.objects.filter(solicitation=sol, status__in=['submitted', 'opened', 'responsive'])
+    bids = BidSubmission.objects.filter(solicitation=sol, status__in=['submitted', 'opened', 'responsive', 'non_responsive'])
     committee_member_ids = set()
     for c in committees:
         committee_member_ids.update(_committee_membership_ids(c))
@@ -958,88 +1232,36 @@ def authorize_financial_opening_view(request, solicitation_pk):
     criteria = EvaluationCriterion.objects.filter(solicitation=sol, criterion_type='technical')
     total_tech_weight = criteria.aggregate(s=Sum('weight'))['s'] or Decimal('100')
 
-    bids = BidSubmission.objects.filter(solicitation=sol, status__in=['submitted', 'opened', 'responsive'])
+    bids = BidSubmission.objects.filter(solicitation=sol, status__in=['submitted', 'opened', 'responsive', 'non_responsive'])
     opened_count = 0
     eligible_bids = []
 
-    for bid in bids:
-        tech_scores = TechnicalScore.objects.filter(bid=bid, is_final=True)
-        if not tech_scores.exists():
-            continue
+    with transaction.atomic():
+        for bid in bids:
+            tech_scores = TechnicalScore.objects.filter(bid=bid, is_final=True)
+            if not tech_scores.exists():
+                continue
 
-        total_weighted = Decimal('0')
-        for criterion in criteria:
-            avg = tech_scores.filter(criterion=criterion).aggregate(avg=Avg('raw_score'))['avg'] or Decimal('0')
-            total_weighted += avg * criterion.weight / Decimal('100')
-        overall_pct = (total_weighted / total_tech_weight * Decimal('100')) if total_tech_weight > 0 else Decimal('0')
+            total_weighted = Decimal('0')
+            for criterion in criteria:
+                avg = tech_scores.filter(criterion=criterion).aggregate(avg=Avg('raw_score'))['avg'] or Decimal('0')
+                total_weighted += avg * criterion.weight / Decimal('100')
+            overall_pct = (total_weighted / total_tech_weight * Decimal('100')) if total_tech_weight > 0 else Decimal('0')
 
-        if overall_pct < threshold:
-            continue
+            if overall_pct < threshold:
+                continue
 
-        eligible_bids.append((bid, overall_pct))
+            eligible_bids.append((bid, overall_pct))
 
-        opening_detail = BidOpeningDetail.objects.filter(bid=bid).first()
-        if opening_detail:
-            if opening_detail.financial_sealed:
-                opening_detail.financial_sealed = False
-                opening_detail.save(update_fields=['financial_sealed'])
-            opened_count += 1
+            opening_detail = BidOpeningDetail.objects.filter(bid=bid).first()
+            if opening_detail:
+                if opening_detail.financial_sealed:
+                    opening_detail.financial_sealed = False
+                    opening_detail.save(update_fields=['financial_sealed'])
+                opened_count += 1
 
-    # Persist combined scores to mark consolidation phase complete
-    eval_method = sol.evaluation_method or ('qcbs' if sol.method == 'rfp' else 'lowest_price')
-    if eval_method == 'qcbs' and sol.financial_weight is not None:
-        fin_weight_combined = Decimal(str(sol.financial_weight))
-        tech_weight_combined = Decimal('100') - fin_weight_combined
-    elif eval_method == 'qbs':
-        tech_weight_combined = Decimal('100')
-        fin_weight_combined = Decimal('0')
-    else:
-        tech_weight_combined = Decimal('80')
-        fin_weight_combined = Decimal('20')
-
-    evaluated_prices = {}
-    for bid, _ in eligible_bids:
-        fe = FinancialEvaluation.objects.filter(bid=bid).first()
-        evaluated_prices[bid.bid_id] = fe.evaluated_price if fe else Decimal(str(bid.bid_price or 0))
-
-    min_eval_price = min(evaluated_prices.values()) if evaluated_prices else Decimal('0')
-
-    combined_records = []
-    for bid, overall_pct in eligible_bids:
-        fe = FinancialEvaluation.objects.filter(bid=bid).first()
-        eval_price = evaluated_prices.get(bid.bid_id, Decimal('0'))
-
-        if fe:
-            fin_score = fe.financial_score
-        else:
-            fin_score = (min_eval_price / eval_price) * Decimal('100') if eval_price > 0 else Decimal('100')
-            fe = FinancialEvaluation.objects.create(
-                bid=bid,
-                original_price=bid.bid_price or 0,
-                corrected_price=bid.bid_price or 0,
-                evaluated_price=eval_price,
-                financial_score=fin_score,
-                preference_category='0',
-            )
-
-        total_score = (overall_pct * tech_weight_combined / Decimal('100')) + (Decimal(str(fin_score)) * fin_weight_combined / Decimal('100'))
-        cs, _ = CombinedScore.objects.update_or_create(
-            bid=bid,
-            defaults={
-                'technical_score': overall_pct,
-                'financial_score': fin_score,
-                'total_score': total_score,
-                'rank': 0,
-            }
-        )
-        combined_records.append(cs)
-
-    if combined_records:
-        if eval_method in ('qcbs', 'qbs'):
-            combined_records.sort(key=lambda x: x.total_score, reverse=True)
-        for i, cr in enumerate(combined_records):
-            cr.rank = i + 1
-            cr.save(update_fields=['rank'])
+    if _check_phase_completion(sol, 'consolidation'):
+        _notify_ec_phase_completion(sol, 'consolidation')
 
     return Response({
         'message': f'Financial envelopes opened for {opened_count} bids',
@@ -1055,10 +1277,19 @@ def financial_evaluation_calculate_view(request, bid_pk):
     except BidSubmission.DoesNotExist:
         return Response({'error': 'Bid not found'}, status=404)
 
+    committees = EvaluationCommittee.objects.filter(solicitation=bid.solicitation)
+    is_chair = any(str(c.chairperson.id) == str(request.user.id) for c in committees)
+    is_director = request.user.role == 'director_procurement'
+    if not is_chair and not is_director:
+        return Response({'error': 'Only the committee chair or Director of Procurement can calculate financial evaluations'}, status=403)
+
     err = _require_bid_opening_completed(bid.solicitation)
     if err:
         return err
     err = _require_coi_clearance(bid.solicitation)
+    if err:
+        return err
+    err = _require_preliminary_exam_completion(bid.solicitation)
     if err:
         return err
 
@@ -1081,6 +1312,13 @@ def financial_evaluation_calculate_view(request, bid_pk):
     preference_category = request.data.get('preference_category', '0')
     arithmetic_corrections = request.data.get('arithmetic_corrections', [])
 
+    if preference_margin not in (Decimal('0'), Decimal('4'), Decimal('8'), Decimal('12'), Decimal('15')):
+        return Response({'error': 'Invalid preference margin. Allowed values: 0, 4, 8, 12, 15'}, status=400)
+
+    valid_categories = {'non_citizen', 'citizen_owned', 'citizen_empowered', 'citizen_influenced'}
+    if preference_category not in valid_categories:
+        return Response({'error': f'Invalid preference category. Allowed: {", ".join(sorted(valid_categories))}'}, status=400)
+
     currency_converted_price = None
     if conversion_rate and source_currency != 'ZMW':
         currency_converted_price = corrected_price * Decimal(str(conversion_rate))
@@ -1088,26 +1326,29 @@ def financial_evaluation_calculate_view(request, bid_pk):
     price_for_eval = currency_converted_price if currency_converted_price else corrected_price
     evaluated_price = price_for_eval * (Decimal('1') - preference_margin / Decimal('100'))
 
-    min_price = FinancialEvaluation.objects.filter(bid__solicitation=bid.solicitation).order_by('evaluated_price').first()
-    min_evaluated = min_price.evaluated_price if min_price else evaluated_price
+    # Use the minimum evaluated price among OTHER bids (exclude current bid) to avoid self-referencing
+    other_min = FinancialEvaluation.objects.filter(
+        bid__solicitation=bid.solicitation
+    ).exclude(bid=bid).order_by('evaluated_price').values_list('evaluated_price', flat=True).first()
+    min_evaluated = other_min if other_min is not None else evaluated_price
     financial_score = (min_evaluated / evaluated_price) * Decimal('100') if evaluated_price > 0 else Decimal('100')
 
-
-    evaluation, _ = FinancialEvaluation.objects.update_or_create(
-        bid=bid,
-        defaults={
-            'original_price': original_price,
-            'corrected_price': corrected_price,
-            'currency_converted_price': currency_converted_price,
-            'source_currency': source_currency,
-            'conversion_rate': conversion_rate,
-            'preference_applied': preference_margin,
-            'preference_category': preference_category,
-            'arithmetic_corrections': arithmetic_corrections,
-            'evaluated_price': evaluated_price,
-            'financial_score': financial_score,
-        }
-    )
+    with transaction.atomic():
+        evaluation, _ = FinancialEvaluation.objects.update_or_create(
+            bid=bid,
+            defaults={
+                'original_price': original_price,
+                'corrected_price': corrected_price,
+                'currency_converted_price': currency_converted_price,
+                'source_currency': source_currency,
+                'conversion_rate': conversion_rate,
+                'preference_applied': preference_margin,
+                'preference_category': preference_category,
+                'arithmetic_corrections': arithmetic_corrections,
+                'evaluated_price': evaluated_price,
+                'financial_score': financial_score,
+            }
+        )
 
     return Response({
         'message': 'Financial evaluation complete',
@@ -1127,6 +1368,9 @@ def select_winner_view(request, solicitation_pk):
     if err:
         return err
     err = _require_coi_clearance(sol)
+    if err:
+        return err
+    err = _require_preliminary_exam_completion(sol)
     if err:
         return err
 
@@ -1185,22 +1429,58 @@ def select_winner_view(request, solicitation_pk):
     except BidSubmission.DoesNotExist:
         return Response({'error': 'Bid not found for this solicitation'}, status=404)
 
-    winner.status = 'awarded'
-    winner.save(update_fields=['status'])
+    with transaction.atomic():
+        winner.status = 'awarded'
+        winner.save(update_fields=['status'])
 
-    sol.status = 'awarded'
-    sol.save(update_fields=['status'])
+        sol.status = 'awarded'
+        sol.save(update_fields=['status'])
 
-    other_bids = BidSubmission.objects.filter(solicitation=sol).exclude(pk=bid_id)
-    other_bids.update(status='unsuccessful')
+        other_bids = BidSubmission.objects.filter(solicitation=sol).exclude(pk=bid_id)
+        other_bids.update(status='unsuccessful')
 
-    # Create Post-Qualification record for the winner
-    if not PostQualification.objects.filter(bidder=winner).exists():
-        PostQualification.objects.create(
-            bidder=winner,
-            status='pending',
-            verification_items=[],
-        )
+        if not PostQualification.objects.filter(bidder=winner).exists():
+            PostQualification.objects.create(
+                bidder=winner,
+                status='pending',
+                verification_items=[],
+            )
+
+    # Notify the successful bidder (winner)
+    if winner.supplier:
+        try:
+            notify_users(
+                [winner.supplier],
+                f'Award Confirmation — {sol.sol_number}',
+                (
+                    f'Dear {winner.supplier.full_name},\n\n'
+                    f'Congratulations! We are pleased to inform you that your bid has been '
+                    f'selected as the winning bid for solicitation {sol.sol_number} ({sol.title}).\n\n'
+                    f'Your bid reference: {winner.submission_id}\n'
+                    f'Bid amount: {winner.currency or "ZMW"} {winner.bid_price:,.2f}\n\n'
+                    f'A Bid Evaluation Report (BER) has been generated and will be submitted '
+                    f'to the Zambia Public Procurement Agency (ZPPA) for final approval.\n\n'
+                    f'Post-qualification verification is currently in progress. Once completed '
+                    f'and the BER is approved, you will be notified to proceed with contract signing.\n\n'
+                    f'Please ensure all your company documents (registration, tax clearance, '
+                    f'financial statements, etc.) are up to date for the post-qualification process.\n\n'
+                    f'Regards,\nZAMMSA Procurement Team'
+                ),
+                notification_type='approval',
+                priority='high',
+                source_module='evaluations',
+                object_id=str(winner.pk),
+                action_url=f'/vendor/appeals?solicitation={sol.solicitation_id}',
+                metadata={
+                    'alert_key': 'bid_awarded_success',
+                    'solicitation_id': str(sol.solicitation_id),
+                    'sol_number': sol.sol_number,
+                    'submission_id': winner.submission_id,
+                },
+                email_required=True,
+            )
+        except Exception:
+            pass
 
     # Notify unsuccessful bidders of their appeal rights (ZPPA standard practice)
     unsuccessful_bids = BidSubmission.objects.filter(solicitation=sol).exclude(pk=bid_id).select_related('supplier')
@@ -1256,6 +1536,12 @@ def select_winner_view(request, solicitation_pk):
 
     # NOTE: Temporary non-official member accounts are deactivated only after the
     # BER is submitted to ZPC (ber_submit_view), so they can still sign the BER.
+
+    try:
+        if _check_phase_completion(sol, 'financial'):
+            _notify_ec_phase_completion(sol, 'financial')
+    except Exception:
+        pass
 
     return Response({
         'message': f'Winner selected: {winner.submission_id}',
@@ -1643,6 +1929,30 @@ def ber_approve_view(request, pk):
         email_required=True,
     )
 
+    ec_members = _resolve_ec_members(ber.solicitation)
+    if ec_members.exists():
+        notify_users(
+            list(ec_members),
+            title=f'Evaluation Complete: {ber.solicitation.sol_number}',
+            message=(
+                f'The Bid Evaluation Report for {ber.solicitation.sol_number} ({ber.solicitation.title}) '
+                f'has been approved by ZPC. The solicitation has been awarded.\n\n'
+                f'Thank you for your participation in the evaluation committee.'
+            ),
+            notification_type='approval',
+            priority='high',
+            source_module='evaluations',
+            object_id=str(ber.pk),
+            action_url=f'/evaluations',
+            metadata={
+                'alert_key': 'evaluation_complete_awarded',
+                'ber_id': str(ber.pk),
+                'solicitation_id': str(ber.solicitation_id),
+                'sol_number': ber.solicitation.sol_number,
+            },
+            email_required=True,
+        )
+
     return Response({
         'message': 'BER approved. Solicitation awarded.',
         'status': ber.status,
@@ -1692,10 +2002,8 @@ def consolidated_scores_view(request, solicitation_pk):
     total_tech_weight = criteria.aggregate(s=Sum('weight'))['s'] or Decimal('100')
     threshold = Decimal(str(sol.minimum_technical_threshold or 70))
 
-    financial_authorized = CombinedScore.objects.filter(bid__solicitation=sol).exists()
+    bids = BidSubmission.objects.filter(solicitation=sol, status__in=['submitted', 'opened', 'responsive', 'non_responsive', 'unsuccessful', 'awarded'])
 
-    bids = BidSubmission.objects.filter(solicitation=sol, status__in=['submitted', 'opened', 'responsive', 'awarded'])
-    
     all_member_list = []
     member_ids_set = set()
     committees_list = []
@@ -1845,7 +2153,7 @@ def consolidated_scores_view(request, solicitation_pk):
             'financial_evaluation_id': str(financial_eval.evaluation_id) if financial_eval else None,
             'evaluated_price': float(financial_eval.evaluated_price) if financial_eval else None,
             'financial_score': float(financial_eval.financial_score) if financial_eval else None,
-            'financial_sealed': not financial_authorized,
+            'financial_sealed': opening_detail.financial_sealed if opening_detail else True,
             'details': details,
             'members': members_data,
             'all_members_submitted': len(members_submitted) >= len([m for m in all_member_list if m['id']]),
@@ -1965,6 +2273,9 @@ def pq_update_verification_item_view(request, pq_pk):
 
     pq.verification_items = items
     pq.save()
+
+    if pq.status == 'cleared':
+        _notify_ec_phase_completion(pq.bidder.solicitation, 'post-qual')
 
     return Response({
         'message': 'Verification item updated',
@@ -2234,57 +2545,105 @@ def evaluation_phase_status_view(request, solicitation_pk):
     from .models import PreliminaryExam, TechnicalScore, FinancialEvaluation, CombinedScore, BidEvaluationReport, PostQualification, EvaluationCommittee, ConflictOfInterest
     from bids.models import BidSubmission
 
-    total_bids = BidSubmission.objects.filter(solicitation=solicitation_pk).count()
+    from django.db.models import Count, Q
 
-    # COI: check if all committee members have declared
     committees = EvaluationCommittee.objects.filter(solicitation=solicitation_pk)
+
+    # Collect all member IDs and recused IDs in a single pass
     all_member_ids = set()
+    all_member_info = {}
     for c in committees:
         if c.chairperson_id:
-            all_member_ids.add(str(c.chairperson_id))
+            pid = str(c.chairperson_id)
+            all_member_ids.add(pid)
+            all_member_info[pid] = {'role': 'chairperson'}
         if c.secretary_id:
-            all_member_ids.add(str(c.secretary_id))
+            sid = str(c.secretary_id)
+            all_member_ids.add(sid)
+            all_member_info[sid] = {'role': 'secretary'}
         for m in (c.members or []):
             uid = m.get('user') if isinstance(m, dict) else m
             if uid:
-                all_member_ids.add(str(uid))
-    coi_declared_count = 0
-    if all_member_ids:
-        coi_declared_count = ConflictOfInterest.objects.filter(
-            committee__solicitation=solicitation_pk,
-            member_id__in=all_member_ids,
-        ).values('member').distinct().count()
+                uid_str = str(uid)
+                all_member_ids.add(uid_str)
+                all_member_info[uid_str] = {'role': 'member'}
+        for nom in (c.non_official_members or []):
+            uid = nom.get('user_id')
+            if uid:
+                uid_str = str(uid)
+                all_member_ids.add(uid_str)
+                all_member_info[uid_str] = {'role': 'external_member', 'name': f"{nom.get('first_name', '')} {nom.get('last_name', '')}".strip()}
+
+    # Single query for COI declarations and recused members
+    coi_qs = ConflictOfInterest.objects.filter(committee__solicitation=solicitation_pk)
+    coi_declared_count = coi_qs.values('member').distinct().count()
     coi_complete = coi_declared_count >= len(all_member_ids) and len(all_member_ids) > 0
 
-    preliminary_exams = PreliminaryExam.objects.filter(bid__solicitation=solicitation_pk)
-    prelim_done_bids = preliminary_exams.values('bid').distinct().count()
-    prelim_complete = prelim_done_bids >= total_bids and total_bids > 0
+    recused_ids = set(str(uid) for uid in coi_qs.filter(recused=True).values_list('member_id', flat=True))
 
+    # Required member IDs (non-recused) for preliminary
+    required_member_ids = all_member_ids - recused_ids
+
+    # Bids count
+    total_bids = BidSubmission.objects.filter(solicitation=solicitation_pk).count()
+
+    # Preliminary exam
+    prelim_exam_qs = PreliminaryExam.objects.filter(bid__solicitation=solicitation_pk)
+    prelim_done_bids = prelim_exam_qs.values('bid').distinct().count()
+
+    member_exam_counts = (
+        prelim_exam_qs.filter(evaluated_by__isnull=False)
+        .values('evaluated_by')
+        .annotate(bid_count=Count('bid', distinct=True))
+    )
+    member_bid_map = {str(e['evaluated_by']): e['bid_count'] for e in member_exam_counts}
+
+    member_progress = []
+    for mid in required_member_ids:
+        bids_examined = member_bid_map.get(mid, 0)
+        member_progress.append({
+            'member_id': mid,
+            'role': all_member_info.get(mid, {}).get('role', 'member'),
+            'name': all_member_info.get(mid, {}).get('name', ''),
+            'bids_examined': bids_examined,
+            'total_bids': total_bids,
+            'complete': bids_examined >= total_bids,
+        })
+
+    prelim_complete = total_bids > 0 and all(m['complete'] for m in member_progress)
+
+    # Technical scoring
     tech_scores = TechnicalScore.objects.filter(bid__solicitation=solicitation_pk)
     tech_unique_pairs = tech_scores.values('bid', 'evaluator').distinct().count()
     tech_bids_scored = tech_scores.values('bid').distinct().count()
     tech_evaluators = tech_scores.values('evaluator').distinct().count()
-    tech_total_members = 0
-    for c in committees:
-        official_count = len(c.members or [])
-        non_official_count = sum(1 for nom in (c.non_official_members or []) if nom.get('user_id'))
-        tech_total_members = max(tech_total_members, official_count + non_official_count)
+    tech_evaluator_ids = all_member_ids - recused_ids
+    tech_total_members = len(tech_evaluator_ids)
     tech_expected_pairs = total_bids * tech_total_members if tech_total_members > 0 else 0
     tech_complete = tech_unique_pairs >= tech_expected_pairs and tech_expected_pairs > 0
 
-    financial_evals = FinancialEvaluation.objects.filter(bid__solicitation=solicitation_pk)
-    financial_done = financial_evals.values('bid').distinct().count()
-    winner_selected = BidSubmission.objects.filter(solicitation=solicitation_pk, status='awarded').exists()
-    financial_complete = financial_done >= total_bids and total_bids > 0 and winner_selected
+    # Financial evaluation — single query with winner check
+    financial_done = FinancialEvaluation.objects.filter(bid__solicitation=solicitation_pk).values('bid').distinct().count()
+    winner_bid = BidSubmission.objects.filter(solicitation=solicitation_pk, status='awarded').first()
+    financial_complete = financial_done >= total_bids and total_bids > 0 and winner_bid is not None
 
-    consolidated = CombinedScore.objects.filter(bid__solicitation=solicitation_pk)
-    consolidation_complete = consolidated.exists()
+    # Consolidation
+    consolidated_bids = CombinedScore.objects.filter(bid__solicitation=solicitation_pk).values('bid').distinct().count()
+    consolidation_complete = consolidated_bids >= total_bids and total_bids > 0
 
-    ber = BidEvaluationReport.objects.filter(solicitation=solicitation_pk)
-    ber_complete = ber.filter(status__in=['submitted', 'approved']).exists()
+    # BER
+    ber_qs = BidEvaluationReport.objects.filter(solicitation=solicitation_pk)
+    ber_complete = ber_qs.filter(status__in=['submitted', 'approved']).exists()
 
+    # Post-qualification
     post_qual = PostQualification.objects.filter(bidder__solicitation=solicitation_pk)
-    post_qual_complete = post_qual.filter(status='cleared').exists()
+    post_qual_complete = post_qual.filter(bidder=winner_bid, status='cleared').exists() if winner_bid else False
+    pq_counts = post_qual.aggregate(
+        total=Count('pq_id'),
+        cleared=Count('pq_id', filter=Q(status='cleared')),
+        in_progress=Count('pq_id', filter=Q(status='in_progress')),
+        pending=Count('pq_id', filter=Q(status='pending')),
+    )
 
     return Response({
         'solicitation': str(solicitation_pk),
@@ -2299,6 +2658,7 @@ def evaluation_phase_status_view(request, solicitation_pk):
                 'complete': prelim_complete,
                 'examined_bids': prelim_done_bids,
                 'total_bids': total_bids,
+                'member_progress': member_progress,
             },
             'technical': {
                 'complete': tech_complete,
@@ -2311,7 +2671,9 @@ def evaluation_phase_status_view(request, solicitation_pk):
             },
             'consolidation': {
                 'complete': consolidation_complete,
-                'consolidated_count': consolidated.count(),
+                'consolidated_count': consolidated_bids,
+                'consolidated_bids': consolidated_bids,
+                'total_bids': total_bids,
             },
             'financial': {
                 'complete': financial_complete,
@@ -2320,16 +2682,18 @@ def evaluation_phase_status_view(request, solicitation_pk):
             },
             'post_qual': {
                 'complete': post_qual_complete,
-                'total': post_qual.count(),
-                'cleared': post_qual.filter(status='cleared').count(),
-                'in_progress': post_qual.filter(status='in_progress').count(),
-                'pending': post_qual.filter(status='pending').count(),
+                'total': pq_counts['total'],
+                'cleared': pq_counts['cleared'],
+                'in_progress': pq_counts['in_progress'],
+                'pending': pq_counts['pending'],
             },
             'ber': {
                 'complete': ber_complete,
-                'reports_count': ber.count(),
-                'submitted_count': ber.filter(status='submitted').count(),
-                'approved_count': ber.filter(status='approved').count(),
+                **ber_qs.aggregate(
+                    reports_count=Count('ber_id'),
+                    submitted_count=Count('ber_id', filter=Q(status='submitted')),
+                    approved_count=Count('ber_id', filter=Q(status='approved')),
+                ),
             },
             'appeal': {
                 'active_appeals': AwardAppeal.objects.filter(
@@ -2967,6 +3331,34 @@ class AwardAppealDetailView(generics.RetrieveUpdateDestroyAPIView):
                     priority='high',
                     email_required=True,
                 )
+            except Exception:
+                pass
+
+            # Notify other unsuccessful bidders (non-appellants) of the outcome
+            try:
+                other_unsuccessful = BidSubmission.objects.filter(
+                    solicitation=appeal.solicitation,
+                    status='unsuccessful',
+                ).exclude(
+                    pk=appeal.bidder_id,
+                ).select_related('supplier')
+                other_bidder_users = [b.supplier for b in other_unsuccessful if b.supplier]
+                if other_bidder_users:
+                    other_title = f'Award Appeal Outcome — {appeal.solicitation.sol_number}'
+                    other_msg = (
+                        f'An award appeal filed against solicitation {appeal.solicitation.sol_number} '
+                        f'({appeal.solicitation.title}) has been {new_status}.\n\n'
+                        f'Grounds: {appeal.get_grounds_display()}\n'
+                        f'Resolution: {resolution}\n\n'
+                        f'Please contact ZAMMSA Procurement for further details.'
+                    )
+                    notify_users(
+                        other_bidder_users,
+                        other_title,
+                        other_msg,
+                        priority='medium',
+                        email_required=True,
+                    )
             except Exception:
                 pass
 

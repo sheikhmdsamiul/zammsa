@@ -1248,6 +1248,8 @@ export interface QCBSResponse {
   message: string;
   tech_weight: number;
   fin_weight: number;
+  consolidated_by: string | null;
+  consolidated_at: string | null;
   results: QCBSResult[];
 }
 

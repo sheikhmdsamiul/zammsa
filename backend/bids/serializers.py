@@ -20,11 +20,8 @@ class BidDocumentSerializer(serializers.ModelSerializer):
             return ''
         if self._is_sealed_financial_document(obj):
             return ''
-        request = self.context.get('request')
         if obj.file_path.startswith('http://') or obj.file_path.startswith('https://'):
             return obj.file_path
-        if request:
-            return request.build_absolute_uri(f'/media/{obj.file_path}')
         return f'/media/{obj.file_path}'
 
     def to_representation(self, instance):

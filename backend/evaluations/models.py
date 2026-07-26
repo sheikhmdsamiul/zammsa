@@ -70,6 +70,7 @@ class PreliminaryExam(models.Model):
     criterion = models.CharField(max_length=255)
     is_compliant = models.BooleanField(default=False)
     comment = models.TextField(blank=True)
+    evaluated_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='preliminary_exams')
 
     class Meta:
         db_table = 'eval_preliminary_exam'
@@ -78,7 +79,8 @@ class PreliminaryExam(models.Model):
 
     def __str__(self):
         status = 'Compliant' if self.is_compliant else 'Non-Compliant'
-        return f'{self.bid.submission_id} - {self.criterion}: {status}'
+        evaluator = self.evaluated_by.full_name if self.evaluated_by else 'Unknown'
+        return f'{self.bid.submission_id} - {self.criterion}: {status} ({evaluator})'
 
 
 DECLARATION_TYPE_CHOICES = [
@@ -138,6 +140,13 @@ class TechnicalScore(models.Model):
         return f'{self.bid.submission_id} - {self.criterion.criterion_name}: {self.raw_score}'
 
 
+PREFERENCE_CATEGORY_CHOICES = [
+    ('non_citizen', 'Non-Citizen'),
+    ('citizen_owned', 'Citizen-Owned'),
+    ('citizen_empowered', 'Citizen-Empowered'),
+    ('citizen_influenced', 'Citizen-Influenced'),
+]
+
 PREFERENCE_MARGIN_CHOICES = [
     ('0', '0% (No Preference)'),
     ('4', '4%'),
@@ -156,7 +165,7 @@ class FinancialEvaluation(models.Model):
     source_currency = models.CharField(max_length=10, default='ZMW')
     conversion_rate = models.DecimalField(max_digits=10, decimal_places=4, null=True, blank=True)
     preference_applied = models.DecimalField(max_digits=5, decimal_places=2, default=0)
-    preference_category = models.CharField(max_length=5, choices=PREFERENCE_MARGIN_CHOICES, default='0')
+    preference_category = models.CharField(max_length=20, choices=PREFERENCE_CATEGORY_CHOICES, default='non_citizen')
     arithmetic_corrections = models.JSONField(default=list, blank=True,
         help_text='List of {line_item, unit_price, quantity, stated_total, corrected_total}')
     evaluated_price = models.DecimalField(max_digits=20, decimal_places=2)
@@ -178,6 +187,10 @@ class CombinedScore(models.Model):
     financial_score = models.DecimalField(max_digits=5, decimal_places=2)
     total_score = models.DecimalField(max_digits=5, decimal_places=2)
     rank = models.IntegerField()
+    consolidated_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='consolidated_scores', help_text='Chairperson who consolidated the scores')
+    consolidated_at = models.DateTimeField(null=True, blank=True,
+        help_text='When the scores were consolidated by the chairperson')
 
     class Meta:
         db_table = 'eval_combined_score'

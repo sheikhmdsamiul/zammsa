@@ -94,8 +94,45 @@ class EvaluationCommitteeSerializer(serializers.ModelSerializer):
                 ).values('member').distinct().count()
                 coi_done = declared_count >= len(all_member_ids)
 
-        prelim_bids = PreliminaryExam.objects.filter(bid__solicitation=sol).values('bid').distinct().count()
-        prelim_done = prelim_bids >= total_bids and total_bids > 0
+        prelim_done = False
+        if total_bids > 0:
+            required_member_ids = set()
+            for c in committees:
+                for m in (c.members or []):
+                    uid = m.get('user') if isinstance(m, dict) else m
+                    if uid:
+                        required_member_ids.add(str(uid))
+                if c.chairperson_id:
+                    required_member_ids.add(str(c.chairperson_id))
+                if c.secretary_id:
+                    required_member_ids.add(str(c.secretary_id))
+            for nom_m in committees.values_list('non_official_members', flat=True):
+                for nom in (nom_m or []):
+                    uid = nom.get('user_id') if isinstance(nom, dict) else None
+                    if uid:
+                        required_member_ids.add(str(uid))
+            recused_ids = set(ConflictOfInterest.objects.filter(
+                committee__solicitation=sol, recused=True
+            ).values_list('member_id', flat=True))
+            required_member_ids -= {str(uid) for uid in recused_ids}
+
+            if required_member_ids:
+                from django.db.models import Count
+                member_exam_counts = (
+                    PreliminaryExam.objects.filter(
+                        bid__solicitation=sol,
+                        evaluated_by__isnull=False,
+                    )
+                    .values('evaluated_by')
+                    .annotate(bid_count=Count('bid', distinct=True))
+                )
+                member_bid_map = {str(e['evaluated_by']): e['bid_count'] for e in member_exam_counts}
+                prelim_done = all(
+                    member_bid_map.get(mid, 0) >= total_bids
+                    for mid in required_member_ids
+                )
+            else:
+                prelim_done = False
 
         tech_scores = TechnicalScore.objects.filter(bid__solicitation=sol)
         tech_unique_pairs = tech_scores.values('bid', 'evaluator').distinct().count()
@@ -126,7 +163,9 @@ class EvaluationCommitteeSerializer(serializers.ModelSerializer):
 
     def get_current_phase(self, obj):
         sol = obj.solicitation
-        phase_done = self._check_phase_completion(sol)
+        if not hasattr(self, '_phase_cache') or self._phase_cache.get('sol_id') != sol.pk:
+            self._phase_cache = {'sol_id': sol.pk, 'result': self._check_phase_completion(sol)}
+        phase_done = self._phase_cache['result']
         for phase_id in self.PHASE_ORDER:
             if not phase_done.get(phase_id, False):
                 return {'id': phase_id, 'label': self.PHASE_LABELS[phase_id]}
@@ -134,29 +173,33 @@ class EvaluationCommitteeSerializer(serializers.ModelSerializer):
 
     def get_phase_progress(self, obj):
         sol = obj.solicitation
-        phase_done = self._check_phase_completion(sol)
+        if not hasattr(self, '_phase_cache') or self._phase_cache.get('sol_id') != sol.pk:
+            self._phase_cache = {'sol_id': sol.pk, 'result': self._check_phase_completion(sol)}
+        phase_done = self._phase_cache['result']
         completed = sum(1 for pid in self.PHASE_ORDER if phase_done.get(pid, False))
         total = len(self.PHASE_ORDER)
         return {'completed': completed, 'total': total, 'percent': round((completed / total) * 100) if total else 0}
 
     def _get_re_evaluation_context(self, obj):
         """Get the re-evaluation log and appeal for this solicitation."""
-        if not obj.solicitation_id:
-            return None, None
-        log = AppealActionLog.objects.filter(
-            action='re_evaluation_initiated',
-            appeal__solicitation=obj.solicitation,
-        ).order_by('-created_at').first()
-        if log:
-            return log, log.appeal
-        # Fallback: check for an upheld appeal where solicitation is in evaluation status
-        appeal = AwardAppeal.objects.filter(
-            solicitation=obj.solicitation,
-            status='upheld',
-        ).order_by('-resolved_at').first()
-        if appeal and obj.solicitation.status == 'evaluation':
-            return None, appeal
-        return None, None
+        if not hasattr(self, '_reeval_cache') or self._reeval_cache.get('sol_id') != obj.solicitation_id:
+            self._reeval_cache = {'sol_id': obj.solicitation_id, 'log': None, 'appeal': None}
+            if obj.solicitation_id:
+                log = AppealActionLog.objects.filter(
+                    action='re_evaluation_initiated',
+                    appeal__solicitation=obj.solicitation,
+                ).order_by('-created_at').first()
+                if log:
+                    self._reeval_cache['log'] = log
+                    self._reeval_cache['appeal'] = log.appeal
+                else:
+                    appeal = AwardAppeal.objects.filter(
+                        solicitation=obj.solicitation,
+                        status='upheld',
+                    ).order_by('-resolved_at').first()
+                    if appeal and obj.solicitation.status == 'evaluation':
+                        self._reeval_cache['appeal'] = appeal
+        return self._reeval_cache['log'], self._reeval_cache['appeal']
 
     def get_re_evaluation_required(self, obj):
         """Check if there's a pending re-evaluation for this solicitation."""
@@ -237,9 +280,12 @@ class EvaluationCommitteeSerializer(serializers.ModelSerializer):
 
 
 class PreliminaryExamSerializer(serializers.ModelSerializer):
+    evaluated_by_name = serializers.CharField(source='evaluated_by.full_name', read_only=True)
+
     class Meta:
         model = PreliminaryExam
         fields = '__all__'
+        read_only_fields = ('exam_id', 'evaluated_by')
 
 
 class TechnicalScoreSerializer(serializers.ModelSerializer):
