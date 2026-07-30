@@ -14,9 +14,22 @@ BER_STATUS_CHOICES = [
 
 PQ_STATUS_CHOICES = [
     ('pending', 'Pending'),
-    ('in_progress', 'In Progress'),
+    ('initiation', 'Initiation'),
+    ('desktop_review', 'Desktop Review'),
+    ('document_collection', 'Document Collection'),
+    ('site_inspection', 'Site Inspection'),
+    ('reference_check', 'Reference Check'),
+    ('evaluation', 'Evaluation'),
+    ('committee_review', 'Committee Review'),
     ('cleared', 'Cleared'),
     ('failed', 'Failed'),
+]
+
+PQ_RESULT_CHOICES = [
+    ('', 'Not Decided'),
+    ('award', 'Award — All Checks Passed'),
+    ('award_with_conditions', 'Award with Conditions'),
+    ('no_award', 'No Award — Failed'),
 ]
 
 
@@ -236,21 +249,21 @@ class BidEvaluationReport(models.Model):
 
     def has_all_signed(self):
         committees = EvaluationCommittee.objects.filter(solicitation=self.solicitation)
-        required = []
+        required = set()
         for c in committees:
             for m in c.members:
                 uid = m.get('user') if isinstance(m, dict) else m
                 if uid:
-                    required.append(str(uid))
+                    required.add(str(uid))
             if c.chairperson_id:
-                required.append(str(c.chairperson_id))
+                required.add(str(c.chairperson_id))
             if c.secretary_id:
-                required.append(str(c.secretary_id))
+                required.add(str(c.secretary_id))
             # Non-official members with a user_id are also required signatories
             for nom in (c.non_official_members or []):
                 uid = nom.get('user_id')
                 if uid:
-                    required.append(str(uid))
+                    required.add(str(uid))
         if not required:
             return False
         signed_ids = {s['member_id'] for s in self.signatures}
@@ -261,12 +274,56 @@ class PostQualification(models.Model):
     pq_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     ber = models.ForeignKey(BidEvaluationReport, on_delete=models.CASCADE, related_name='post_qualifications', null=True, blank=True)
     bidder = models.ForeignKey(BidSubmission, on_delete=models.CASCADE)
+    solicitation = models.ForeignKey('solicitations.Solicitation', on_delete=models.CASCADE, related_name='post_qualifications', null=True, blank=True,
+        help_text='Direct reference to the solicitation (denormalized for ease of querying)')
+    rank = models.IntegerField(null=True, blank=True, help_text='Rank from CombinedScore at time of PQ creation')
+
     verification_items = models.JSONField(default=list, blank=True,
-        help_text='List of {id, label, category, status, notes, verified_by, verified_at}')
+        help_text='List of {id, label, category, status, notes, verified_by, verified_at, verification_method, auto_data}')
+
+    workflow_stage = models.CharField(max_length=30, blank=True, default='initiation',
+        choices=[
+            ('initiation', 'Initiation'),
+            ('desktop_review', 'Desktop Review'),
+            ('document_collection', 'Document Collection'),
+            ('site_inspection', 'Site Inspection'),
+            ('reference_check', 'Reference Check'),
+            ('evaluation', 'Evaluation & Recommendation'),
+            ('committee_review', 'Committee Review'),
+            ('closed', 'Closed'),
+        ],
+        help_text='Current active workflow stage')
     status = models.CharField(max_length=20, choices=PQ_STATUS_CHOICES, default='pending')
     assigned_to = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='pq_assignments',
         help_text='Procurement Officer responsible for verification')
     notes = models.TextField(blank=True, default='')
+
+    result = models.CharField(max_length=30, blank=True, default='', choices=PQ_RESULT_CHOICES,
+        help_text='Final PQ result after committee decision')
+    conditions = models.JSONField(default=list, blank=True,
+        help_text='Structured list of conditions when result is award_with_conditions: {condition, deadline, status, verified_at}')
+    recommendation = models.TextField(blank=True, default='',
+        help_text='PQ Officer recommendation to the committee')
+    recommended_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='pq_recommendations',
+        help_text='PQ Officer who made the recommendation')
+
+    chair_decision = models.CharField(max_length=20, blank=True, default='',
+        choices=[('', 'Pending'), ('passed', 'Post-Qualification Passed'), ('failed', 'Post-Qualification Failed')],
+        help_text='Chair overall decision after reviewing all checks')
+    chair_decision_notes = models.TextField(blank=True, default='',
+        help_text='Chair narrative explaining the overall assessment')
+    chair_decided_at = models.DateTimeField(null=True, blank=True)
+
+    committee_review = models.JSONField(default=list, blank=True,
+        help_text='List of {member_id, member_name, decision, comments, decided_at} for committee review')
+
+    pq_document_requests = models.JSONField(default=list, blank=True,
+        help_text='List of {request_id, document_type, description, requested_at, requested_by, due_date, submitted_at, file_url, status}')
+
+    deadline = models.DateTimeField(null=True, blank=True,
+        help_text='SLA deadline for completing post-qualification verification')
+    initiation_date = models.DateTimeField(null=True, blank=True,
+        help_text='When the PQ process was formally initiated')
     verified_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -275,23 +332,90 @@ class PostQualification(models.Model):
         db_table = 'eval_post_qualification'
         verbose_name = 'Post Qualification'
         verbose_name_plural = 'Post Qualifications'
+        indexes = [
+            models.Index(fields=['status'], name='idx_pq_status'),
+            models.Index(fields=['workflow_stage'], name='idx_pq_workflow_stage'),
+            models.Index(fields=['deadline'], name='idx_pq_deadline'),
+            models.Index(fields=['assigned_to'], name='idx_pq_assigned_to'),
+            models.Index(fields=['created_at'], name='idx_pq_created_at'),
+            models.Index(fields=['rank'], name='idx_pq_rank'),
+            models.Index(fields=['solicitation', 'status'], name='idx_pq_sol_stat'),
+        ]
 
     def save(self, *args, **kwargs):
         items = self.verification_items or []
-        if items and all(item.get('status') == 'cleared' for item in items if item.get('status')):
-            if self.status != 'cleared':
-                self.status = 'cleared'
+        old_status = None
+        if self.pk:
+            try:
+                old = PostQualification.objects.get(pk=self.pk)
+                old_status = old.status
+            except PostQualification.DoesNotExist:
+                pass
+
+        if self.chair_decision == 'passed':
+            self.status = 'cleared'
+            self.result = 'award'
+            self.workflow_stage = 'closed'
+            if not self.verified_at:
                 self.verified_at = timezone.now()
-        elif items and any(item.get('status') == 'failed' for item in items):
-            if self.status != 'failed':
-                self.status = 'failed'
-        elif items and any(item.get('status') == 'in_progress' for item in items):
-            if self.status not in ('cleared', 'failed'):
-                self.status = 'in_progress'
+        elif self.chair_decision == 'failed':
+            self.status = 'failed'
+            self.result = 'no_award'
+            self.workflow_stage = 'closed'
+
+        if not self.initiation_date and self.status not in ('pending', 'initiation'):
+            self.initiation_date = timezone.now()
+
         super().save(*args, **kwargs)
 
     def __str__(self):
         return f'{self.bidder.submission_id} - {self.status}'
+
+
+PQ_ACTION_CHOICES = [
+    ('item_updated', 'Verification Item Updated'),
+    ('checklist_generated', 'Checklist Generated'),
+    ('pq_assigned', 'Post-Qualification Assigned'),
+    ('pq_reassigned', 'Post-Qualification Reassigned'),
+    ('pq_cleared', 'Post-Qualification Cleared'),
+    ('pq_failed', 'Post-Qualification Failed'),
+    ('notes_added', 'Overall Notes Added'),
+    ('chair_decision', 'Chair Decision Recorded'),
+    ('auto_verified', 'Auto-Verification Completed'),
+    ('reference_contacted', 'Reference Contacted'),
+    ('stage_changed', 'Workflow Stage Changed'),
+    ('document_requested', 'Document Requested'),
+    ('document_submitted', 'Document Submitted'),
+    ('condition_added', 'Condition Added'),
+    ('condition_verified', 'Condition Verified'),
+    ('recommendation_submitted', 'Recommendation Submitted'),
+    ('committee_reviewed', 'Committee Member Reviewed'),
+    ('pq_initiated', 'Post-Qualification Initiated'),
+]
+
+
+class PQActionLog(models.Model):
+    log_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    pq = models.ForeignKey(PostQualification, on_delete=models.CASCADE, related_name='action_logs')
+    action = models.CharField(max_length=30, choices=PQ_ACTION_CHOICES)
+    performed_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='pq_actions')
+    details = models.TextField(blank=True, default='')
+    metadata = models.JSONField(default=dict, blank=True,
+        help_text='Structured data about the action (e.g. item_id, old_status, new_status)')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'eval_pq_action_log'
+        verbose_name = 'PQ Action Log'
+        verbose_name_plural = 'PQ Action Logs'
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['pq', 'created_at'], name='idx_pqlog_pq_created'),
+            models.Index(fields=['action'], name='idx_pqlog_action'),
+        ]
+
+    def __str__(self):
+        return f'{self.pq.bidder.submission_id} - {self.action} - {self.created_at}'
 
 
 APPEAL_STATUS_CHOICES = [

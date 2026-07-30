@@ -253,6 +253,9 @@ export interface Clarification {
   answered_at: string | null;
 }
 
+export type BidStatus = 'draft' | 'submitted' | 'withdrawn' | 'modified' | 'opened' | 'evaluated' | 'unsuccessful' | 'awarded' | 'responsive';
+export type BidModificationReason = 'pricing_correction' | 'document_replacement' | 'addenda_response' | 'clarification' | 'other';
+
 export interface Bid {
   id: string;
   solicitation: string;
@@ -262,7 +265,7 @@ export interface Bid {
   submission_id?: string;
   bidder_name?: string;
   receipt_number?: string;
-  status: 'draft' | 'submitted' | 'withdrawn' | 'modified' | 'opened' | 'evaluated' | 'unsuccessful' | 'awarded' | 'responsive';
+  status: BidStatus;
   bid_amount: number;
   currency: string;
   validity_period_days: number;
@@ -275,6 +278,7 @@ export interface Bid {
   addenda_acknowledged?: boolean;
   addenda_acknowledged_at?: string;
   is_late?: boolean;
+  late_reason?: string;
   technical_doc_url?: string;
   financial_doc_url?: string;
   submission_timestamp?: string;
@@ -289,6 +293,15 @@ export interface Bid {
   solicitation_type?: string;
   solicitation_status?: string;
   closing_date?: string;
+  // New production fields
+  submitted_from_ip?: string;
+  lot_number?: string;
+  joint_venture_name?: string;
+  joint_venture_partners?: Array<{ name: string; registration_number?: string; role?: string }>;
+  modification_reason?: BidModificationReason;
+  modification_notes?: string;
+  parent_bid_id?: string | null;
+  version?: number;
 }
 
 export interface BidItem {
@@ -1733,6 +1746,283 @@ export interface ResourceRequirements {
   citizenPreference: boolean;
   closingTime?: string;
   openingTime?: string;
+}
+
+export interface PQVerificationItem {
+  id: string;
+  label: string;
+  category: 'legal' | 'financial' | 'technical' | 'reference';
+  verification_method?: 'auto' | 'manual';
+  auto_data?: Record<string, any>;
+  status: 'pending' | 'in_progress' | 'cleared' | 'failed';
+  notes: string;
+  contact_result?: string;
+  verified_by?: string;
+  verified_at?: string;
+  site_visit?: {
+    date: string;
+    visited_by: string;
+    location: string;
+    observations: string;
+    photos: string[];
+  };
+  reference_data?: {
+    organization: string;
+    contact_person: string;
+    contact_number: string;
+    questions: { question: string; response: string }[];
+    contact_attempts: number;
+    unable_to_reach: boolean;
+    unable_to_reach_reason?: string;
+  };
+}
+
+export interface PQActionLog {
+  log_id: string;
+  action: string;
+  action_display: string;
+  performed_by: string | null;
+  performed_by_name: string | null;
+  details: string;
+  metadata: Record<string, any>;
+  created_at: string;
+}
+
+export type PQStatus = 'pending' | 'initiation' | 'desktop_review' | 'document_collection' | 'site_inspection' | 'reference_check' | 'evaluation' | 'committee_review' | 'cleared' | 'failed';
+export type PQStage = 'initiation' | 'desktop_review' | 'document_collection' | 'site_inspection' | 'reference_check' | 'evaluation' | 'committee_review' | 'closed';
+export type PQResult = '' | 'award' | 'award_with_conditions' | 'no_award';
+
+export interface PQCondition {
+  condition_id: string;
+  condition: string;
+  deadline: string | null;
+  status: 'pending' | 'verified';
+  verified_at: string | null;
+  verified_by: string | null;
+  notes: string;
+}
+
+export interface PQDocumentRequest {
+  request_id: string;
+  document_type: string;
+  description: string;
+  requested_at: string;
+  requested_by: string;
+  due_date: string | null;
+  submitted_at: string | null;
+  file_url: string | null;
+  status: 'requested' | 'submitted' | 'overdue';
+  notes: string;
+}
+
+export interface PQCommitteeReview {
+  member_id: string;
+  member_name: string;
+  decision: 'approve' | 'approve_with_conditions' | 'reject';
+  comments: string;
+  decided_at: string;
+}
+
+export interface PostQualification {
+  id: string;
+  pq_id: string;
+  ber: string | null;
+  bidder: string;
+  bidder_name: string;
+  submission_id: string;
+  solicitation: string | null;
+  solicitation_number: string | null;
+  solicitation_title: string | null;
+  verification_items: PQVerificationItem[];
+  workflow_stage: PQStage;
+  stage_display: string;
+  status: PQStatus;
+  rank: number | null;
+  result: PQResult;
+  result_display: string;
+  conditions: PQCondition[];
+  open_conditions_count: number;
+  recommendation: string;
+  recommended_by: string | null;
+  recommended_by_name: string | null;
+  committee_review: PQCommitteeReview[];
+  pq_document_requests: PQDocumentRequest[];
+  pending_doc_requests: number;
+  chair_decision: 'passed' | 'failed' | null;
+  chair_decision_notes: string;
+  chair_decided_at: string | null;
+  auto_verified_count: number;
+  manual_check_count: number;
+  failed_count: number;
+  category_summary: {
+    legal: { total: number; cleared: number; failed: number; pending: number };
+    financial: { total: number; cleared: number; failed: number; pending: number };
+    technical: { total: number; cleared: number; failed: number; pending: number };
+    reference: { total: number; cleared: number; failed: number; pending: number };
+  };
+  assigned_to: string | null;
+  assigned_to_name: string | null;
+  notes: string;
+  deadline: string | null;
+  initiation_date: string | null;
+  verified_at: string | null;
+  total_items: number;
+  completed_items: number;
+  progress_percent: number;
+  days_until_deadline: number | null;
+  is_overdue: boolean;
+  action_logs: PQActionLog[];
+  created_at: string;
+  updated_at: string;
+}
+
+export interface PQVerificationContext {
+  pq_id: string;
+  status: string;
+  rank: number | null;
+  chair_decision: string | null;
+  chair_decision_notes: string;
+  chair_decided_at: string | null;
+  verification_items: PQVerificationItem[];
+  notes: string;
+  assigned_to_name: string | null;
+  deadline: string | null;
+  created_at: string | null;
+  updated_at: string | null;
+  bid: {
+    submission_id: string;
+    bid_price: number;
+    currency: string;
+    validity_period_days: number | null;
+    security_amount: number;
+    security_type: string;
+    status: string;
+    submitted_at: string | null;
+    line_items: any[];
+  };
+  supplier_user: {
+    full_name: string;
+    email: string;
+    employee_id: string;
+  };
+  supplier_profile: {
+    supplier_id: string | null;
+    registration_number: string | null;
+    tin: string | null;
+    name: string | null;
+    ceec_category: string | null;
+    status: string | null;
+    risk_score: number | null;
+    risk_level: string | null;
+    bank_name: string | null;
+    bank_account_number: string | null;
+    bank_account_name: string | null;
+    registered_at: string | null;
+    updated_at: string | null;
+    performances: {
+      performance_id: string;
+      evaluation_date: string | null;
+      metrics: Record<string, any>;
+      overall_score: number;
+      needs_improvement: boolean;
+      improvement_notes: string;
+    }[];
+    risk_scores: {
+      risk_id: string;
+      risk_score: number;
+      risk_level: string;
+      calculated_at: string | null;
+      factors: Record<string, any>;
+    }[];
+  } | null;
+  supplier_documents: {
+    document_id: string;
+    document_type: string;
+    file_path: string;
+    expiry_date: string | null;
+    verification_status: string;
+  }[];
+  blacklist: {
+    reason: string | null;
+    debarred_until: string | null;
+    source: string | null;
+  } | null;
+  bid_documents: {
+    document_id: string;
+    document_type: string;
+    file_path: string;
+    uploaded_at: string;
+  }[];
+  bid_securities: {
+    security_id: string;
+    security_type: string;
+    amount: number;
+    issuing_institution: string;
+    reference_number: string;
+    validity_date: string | null;
+    verification_status: string;
+  }[];
+  technical_scores: {
+    criterion: string;
+    evaluator: string;
+    raw_score: number;
+    weighted_score: number;
+  }[];
+  financial_evaluation: {
+    original_price: number;
+    corrected_price: number;
+    evaluated_price: number;
+    financial_score: number;
+    preference_category: string;
+    preference_margin: number;
+  } | null;
+  vendor_application: {
+    company_name: string;
+    business_type: string;
+    year_established: number;
+    employee_count: number;
+    annual_turnover: string | null;
+    contact_person: string;
+    contact_phone: string;
+    address: string;
+    pacra_validated: boolean;
+    ceec_validated: boolean;
+    status: string;
+  } | null;
+}
+
+export interface PQRankingSummary {
+  solicitation_id: string;
+  sol_number: string;
+  title: string;
+  rankings: {
+    rank: number;
+    bid_id: string;
+    submission_id: string;
+    bidder_name: string;
+    technical_score: number;
+    total_score: number;
+    evaluated_price: number | null;
+    original_price: number;
+    bid_status: string;
+    post_qual_status: string | null;
+    post_qual_id: string | null;
+    chair_decision: string | null;
+  }[];
+  current_pq: {
+    pq_id: string;
+    rank: number;
+    bidder_name: string;
+    status: string;
+  } | null;
+  pq_tracker: {
+    rank: number;
+    bidder_name: string;
+    submission_id: string;
+    status: string;
+    chair_decision: string | null;
+  }[];
+  all_failed: boolean;
 }
 
 export interface ProcurementMilestone {

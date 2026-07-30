@@ -13,20 +13,25 @@ from rest_framework.pagination import PageNumberPagination
 from django_filters.rest_framework import DjangoFilterBackend
 import django_filters
 import pdfkit
-from accounts.permissions import CanManageEvaluationCommittees
+from accounts.permissions import CanManageEvaluationCommittees, CanManagePostQualifications
 from accounts.models import User
 from accounts.serializers import UserCreateSerializer
 from system_config.notifications import notify_role, notify_users, send_external_email
 
 from .crypto_sign import sign_ber_payload, verify_signature
-from .models import EvaluationCommittee, ConflictOfInterest, PreliminaryExam, TechnicalScore, FinancialEvaluation, CombinedScore, BidEvaluationReport, PostQualification, AwardAppeal, AppealActionLog, PREFERENCE_MARGIN_CHOICES
+from .models import (
+    EvaluationCommittee, ConflictOfInterest, PreliminaryExam, TechnicalScore,
+    FinancialEvaluation, CombinedScore, BidEvaluationReport, PostQualification,
+    PQActionLog, AwardAppeal, AppealActionLog, PREFERENCE_MARGIN_CHOICES,
+)
 from .serializers import (
     EvaluationCommitteeSerializer, ConflictOfInterestSerializer, PreliminaryExamSerializer, TechnicalScoreSerializer,
     FinancialEvaluationSerializer, CombinedScoreSerializer, BidEvaluationReportSerializer,
     PostQualificationSerializer, AwardAppealSerializer, AwardAppealDetailSerializer, AppealActionLogSerializer,
 )
 from solicitations.models import Solicitation, EvaluationCriterion
-from bids.models import BidSubmission, BidOpening, BidOpeningDetail
+from bids.models import BidSubmission, BidOpening, BidOpeningDetail, BidDocument, BidSecurity
+from suppliers.models import Supplier as SupplierModel, VendorApplication, SupplierDocument, Blacklist
 
 
 def _require_bid_opening_completed(solicitation):
@@ -228,6 +233,26 @@ def _bid_failed_preliminary(bid):
     return PreliminaryExam.objects.filter(bid=bid, is_compliant=False).exists()
 
 
+def _resolve_supplier_profile(user):
+    """Resolve the Supplier profile for a bid submission user."""
+    from suppliers.models import Supplier as SupplierModel, VendorApplication
+    sup = None
+    emp_id = getattr(user, 'employee_id', None)
+    if emp_id and str(emp_id).startswith('SUP-'):
+        sup = SupplierModel.objects.filter(
+            registration_number=str(emp_id).replace('SUP-', '', 1)
+        ).first()
+    if not sup:
+        sup = SupplierModel.objects.filter(name=user.full_name).first()
+    if not sup:
+        va = VendorApplication.objects.filter(email=user.email, status='approved').order_by('-created_at').first()
+        if va:
+            sup = SupplierModel.objects.filter(
+                Q(registration_number=va.registration_number) | Q(tin=va.tin)
+            ).first()
+    return sup
+
+
 PHASE_LABELS = {
     'coi': 'COI Declaration',
     'preliminary': 'Preliminary Examination',
@@ -349,9 +374,12 @@ def _check_phase_completion(solicitation, phase):
         return fin_bids >= total_bids and total_bids > 0 and winner
 
     elif phase == 'post-qual':
-        return PostQualification.objects.filter(
-            bidder__solicitation=solicitation, status='cleared'
-        ).exists()
+        winner = BidSubmission.objects.filter(solicitation=solicitation, status='awarded').first()
+        if winner:
+            return PostQualification.objects.filter(
+                bidder=winner, status='cleared'
+            ).exists()
+        return False
 
     return False
 
@@ -473,13 +501,17 @@ class PreliminaryExamFilter(django_filters.FilterSet):
 class PostQualificationFilter(django_filters.FilterSet):
     solicitation = django_filters.UUIDFilter(method='filter_solicitation')
     status = django_filters.CharFilter(field_name='status', lookup_expr='iexact')
+    workflow_stage = django_filters.CharFilter(field_name='workflow_stage', lookup_expr='iexact')
+    result = django_filters.CharFilter(field_name='result', lookup_expr='iexact')
 
     class Meta:
         model = PostQualification
-        fields = ['solicitation', 'status', 'bidder']
+        fields = ['solicitation', 'status', 'workflow_stage', 'result', 'bidder', 'assigned_to']
 
     def filter_solicitation(self, queryset, name, value):
-        return queryset.filter(Q(ber__solicitation=value) | Q(bidder__solicitation=value))
+        return queryset.filter(
+            Q(solicitation=value) | Q(ber__solicitation=value) | Q(bidder__solicitation=value)
+        )
 
 
 class EvaluationCommitteeListView(BaseView, generics.ListCreateAPIView):
@@ -1440,10 +1472,15 @@ def select_winner_view(request, solicitation_pk):
         other_bids.update(status='unsuccessful')
 
         if not PostQualification.objects.filter(bidder=winner).exists():
+            winner_rank = CombinedScore.objects.filter(bid=winner).values_list('rank', flat=True).first()
             PostQualification.objects.create(
                 bidder=winner,
-                status='pending',
+                solicitation=sol,
+                status='initiation',
+                workflow_stage='initiation',
                 verification_items=[],
+                rank=winner_rank,
+                initiation_date=timezone.now(),
             )
 
     # Notify the successful bidder (winner)
@@ -1796,31 +1833,39 @@ def ber_committee_status_view(request, pk):
 
     committees = EvaluationCommittee.objects.filter(solicitation=ber.solicitation)
     members = []
+    seen_ids = set()
     for c in committees:
-        members.append({
-            'id': str(c.chairperson.id),
-            'full_name': c.chairperson.full_name,
-            'role': 'chairperson',
-            'signed': any(s['member_id'] == str(c.chairperson.id) for s in ber.signatures),
-        })
-        members.append({
-            'id': str(c.secretary.id),
-            'full_name': c.secretary.full_name,
-            'role': 'secretary',
-            'signed': any(s['member_id'] == str(c.secretary.id) for s in ber.signatures),
-        })
+        if c.chairperson_id and str(c.chairperson.id) not in seen_ids:
+            seen_ids.add(str(c.chairperson.id))
+            members.append({
+                'id': str(c.chairperson.id),
+                'full_name': c.chairperson.full_name,
+                'role': 'chairperson',
+                'signed': any(s['member_id'] == str(c.chairperson.id) for s in ber.signatures),
+            })
+        if c.secretary_id and str(c.secretary.id) not in seen_ids:
+            seen_ids.add(str(c.secretary.id))
+            members.append({
+                'id': str(c.secretary.id),
+                'full_name': c.secretary.full_name,
+                'role': 'secretary',
+                'signed': any(s['member_id'] == str(c.secretary.id) for s in ber.signatures),
+            })
         for m in c.members:
             uid = m.get('user') if isinstance(m, dict) else m
-            members.append({
-                'id': str(uid),
-                'full_name': m.get('full_name', str(uid)[:8]) if isinstance(m, dict) else str(uid)[:8],
-                'role': 'member',
-                'signed': any(s['member_id'] == str(uid) for s in ber.signatures),
-            })
+            if uid and str(uid) not in seen_ids:
+                seen_ids.add(str(uid))
+                members.append({
+                    'id': str(uid),
+                    'full_name': m.get('full_name', str(uid)[:8]) if isinstance(m, dict) else str(uid)[:8],
+                    'role': 'member',
+                    'signed': any(s['member_id'] == str(uid) for s in ber.signatures),
+                })
         for nom in (c.non_official_members or []):
             uid = nom.get('user_id')
-            if not uid:
+            if not uid or str(uid) in seen_ids:
                 continue
+            seen_ids.add(str(uid))
             full_name = ' '.join(filter(None, [nom.get('first_name', ''), nom.get('last_name', '')])) or nom.get('email', str(uid)[:8])
             members.append({
                 'id': str(uid),
@@ -2190,17 +2235,31 @@ class CombinedScoreListView(BaseView, generics.ListAPIView):
 
 
 class PostQualificationListView(BaseView, generics.ListCreateAPIView):
-    queryset = PostQualification.objects.select_related('ber', 'bidder', 'assigned_to').all()
+    queryset = PostQualification.objects.select_related('ber', 'bidder', 'bidder__supplier', 'assigned_to', 'recommended_by', 'solicitation').all()
     serializer_class = PostQualificationSerializer
     filterset_class = PostQualificationFilter
-    search_fields = ['bidder__submission_id', 'status', 'notes']
+    search_fields = ['bidder__submission_id', 'bidder__supplier__full_name', 'status', 'notes', 'workflow_stage']
     ordering = ['-pq_id']
+    permission_classes = [CanManagePostQualifications]
 
     def get_queryset(self):
         qs = super().get_queryset()
         solicitation = self.request.query_params.get('solicitation')
         if solicitation:
-            qs = qs.filter(Q(ber__solicitation_id=solicitation) | Q(bidder__solicitation_id=solicitation))
+            qs = qs.filter(
+                Q(solicitation_id=solicitation) |
+                Q(ber__solicitation_id=solicitation) |
+                Q(bidder__solicitation_id=solicitation)
+            )
+        stage = self.request.query_params.get('stage')
+        if stage:
+            qs = qs.filter(workflow_stage=stage)
+        result = self.request.query_params.get('result')
+        if result:
+            qs = qs.filter(result=result)
+        assigned_to_me = self.request.query_params.get('assigned_to_me')
+        if assigned_to_me and assigned_to_me.lower() in ('true', '1'):
+            qs = qs.filter(assigned_to=self.request.user)
         return qs
 
     def create(self, request, *args, **kwargs):
@@ -2225,57 +2284,247 @@ class PostQualificationListView(BaseView, generics.ListCreateAPIView):
 
         pq = PostQualification.objects.create(
             bidder=winner,
-            status='pending',
+            solicitation=sol,
+            status='initiation',
+            workflow_stage='initiation',
             verification_items=[],
+            assigned_to=request.user,
+            deadline=timezone.now() + timezone.timedelta(days=14),
         )
+
+        PQActionLog.objects.create(
+            pq=pq,
+            action='pq_initiated',
+            performed_by=request.user,
+            details=f'Post-qualification initiated and assigned to {request.user.full_name}. Deadline: {pq.deadline.isoformat() if pq.deadline else "N/A"}',
+            metadata={'assigned_to': str(request.user.id), 'deadline': pq.deadline.isoformat() if pq.deadline else None},
+        )
+
         return Response(PostQualificationSerializer(pq).data, status=201)
 
 
 class PostQualificationDetailView(generics.RetrieveUpdateDestroyAPIView):
-    queryset = PostQualification.objects.select_related('ber', 'bidder', 'assigned_to').all()
+    queryset = PostQualification.objects.select_related('ber', 'bidder', 'bidder__supplier', 'assigned_to', 'recommended_by', 'solicitation').all()
     serializer_class = PostQualificationSerializer
-    permission_classes = [IsAuthenticated]
+    permission_classes = [CanManagePostQualifications]
 
 
 @api_view(['POST'])
-@permission_classes([IsAuthenticated])
+@permission_classes([CanManagePostQualifications])
 def pq_update_verification_item_view(request, pq_pk):
-    try:
-        pq = PostQualification.objects.get(pk=pq_pk)
-    except PostQualification.DoesNotExist:
-        return Response({'error': 'Post-qualification record not found'}, status=404)
+    with transaction.atomic():
+        try:
+            pq = PostQualification.objects.select_for_update().get(pk=pq_pk)
+        except PostQualification.DoesNotExist:
+            return Response({'error': 'Post-qualification record not found'}, status=404)
 
-    item_id = request.data.get('item_id')
-    status = request.data.get('status')
-    notes = request.data.get('notes', '')
-    contact_result = request.data.get('contact_result', '')
+        item_id = request.data.get('item_id')
+        status_val = request.data.get('status')
+        notes = request.data.get('notes', '')
+        contact_result = request.data.get('contact_result', '')
 
-    if not item_id:
-        return Response({'error': 'item_id is required'}, status=400)
+        if not item_id:
+            return Response({'error': 'item_id is required'}, status=400)
 
-    items = list(pq.verification_items or [])
-    updated = False
-    for item in items:
-        if item.get('id') == item_id:
-            if status:
-                item['status'] = status
-            if notes:
-                item['notes'] = notes
-            if contact_result:
-                item['contact_result'] = contact_result
-            item['verified_by'] = str(request.user.full_name)
-            item['verified_at'] = timezone.now().isoformat()
-            updated = True
-            break
+        if not status_val:
+            return Response({'error': 'status is required'}, status=400)
 
-    if not updated:
-        return Response({'error': 'Verification item not found'}, status=404)
+        VALID_ITEM_STATUSES = {'pending', 'in_progress', 'cleared', 'failed'}
+        if status_val not in VALID_ITEM_STATUSES:
+            return Response({'error': f'Invalid status. Must be one of: {", ".join(sorted(VALID_ITEM_STATUSES))}'}, status=400)
 
-    pq.verification_items = items
-    pq.save()
+        if len(notes) > 2000:
+            return Response({'error': 'Notes must be 2000 characters or fewer'}, status=400)
+
+        if len(contact_result) > 500:
+            return Response({'error': 'Contact result must be 500 characters or fewer'}, status=400)
+
+        items = list(pq.verification_items or [])
+        updated = False
+        old_status = None
+        for item in items:
+            if item.get('id') == item_id:
+                old_status = item.get('status')
+                item['status'] = status_val
+                if notes:
+                    item['notes'] = notes
+                if contact_result:
+                    item['contact_result'] = contact_result
+                item['verified_by'] = str(request.user.full_name)
+                item['verified_at'] = timezone.now().isoformat()
+                updated = True
+                break
+
+        if not updated:
+            return Response({'error': 'Verification item not found'}, status=404)
+
+        # Auto-advance workflow stage based on item category completion
+        pq.verification_items = items
+        pq.status = 'in_progress'
+        if pq.workflow_stage == 'initiation':
+            pq.workflow_stage = 'desktop_review'
+        pq.save()
+
+    PQActionLog.objects.create(
+        pq=pq,
+        action='item_updated',
+        performed_by=request.user,
+        details=f'Item "{item_id}" status changed from "{old_status}" to "{status_val}"',
+        metadata={'item_id': item_id, 'old_status': old_status, 'new_status': status_val},
+    )
 
     if pq.status == 'cleared':
         _notify_ec_phase_completion(pq.bidder.solicitation, 'post-qual')
+        try:
+            if pq.bidder.supplier:
+                notify_users(
+                    [pq.bidder.supplier],
+                    f'Post-Qualification Cleared — {pq.bidder.solicitation.sol_number}',
+                    (
+                        f'Dear {pq.bidder.supplier.full_name},\n\n'
+                        f'Your post-qualification verification for solicitation '
+                        f'{pq.bidder.solicitation.sol_number} ({pq.bidder.solicitation.title}) '
+                        f'has been completed successfully.\n\n'
+                        f'Your bid reference: {pq.bidder.submission_id}\n\n'
+                        f'You may now proceed with contract signing. Please check the system for further instructions.\n\n'
+                        f'Regards,\nZAMMSA Procurement Team'
+                    ),
+                    notification_type='approval',
+                    priority='high',
+                    source_module='evaluations',
+                    object_id=str(pq.pk),
+                    action_url=f'/vendor/contracts?solicitation={pq.bidder.solicitation_id}',
+                    metadata={
+                        'alert_key': 'post_qualification_cleared',
+                        'solicitation_id': str(pq.bidder.solicitation_id),
+                        'sol_number': pq.bidder.solicitation.sol_number,
+                        'submission_id': pq.bidder.submission_id,
+                    },
+                    email_required=True,
+                )
+        except Exception as e:
+            import logging
+            logging.getLogger('evaluations').warning(f'Failed to send PQ cleared notification: {e}')
+
+    elif pq.status == 'failed':
+        try:
+            if pq.bidder.supplier:
+                notify_users(
+                    [pq.bidder.supplier],
+                    f'Post-Qualification Failed — {pq.bidder.solicitation.sol_number}',
+                    (
+                        f'Dear {pq.bidder.supplier.full_name},\n\n'
+                        f'We regret to inform you that your post-qualification verification for '
+                        f'solicitation {pq.bidder.solicitation.sol_number} ({pq.bidder.solicitation.title}) '
+                        f'has not been passed.\n\n'
+                        f'Your bid reference: {pq.bidder.submission_id}\n\n'
+                        f'Please contact the procurement office for further details.\n\n'
+                        f'Regards,\nZAMMSA Procurement Team'
+                    ),
+                    notification_type='rejection',
+                    priority='high',
+                    source_module='evaluations',
+                    object_id=str(pq.pk),
+                    action_url=f'/vendor/dashboard',
+                    metadata={
+                        'alert_key': 'post_qualification_failed',
+                        'solicitation_id': str(pq.bidder.solicitation_id),
+                        'sol_number': pq.bidder.solicitation.sol_number,
+                        'submission_id': pq.bidder.submission_id,
+                    },
+                    email_required=True,
+                )
+        except Exception as e:
+            import logging
+            logging.getLogger('evaluations').warning(f'Failed to send PQ failed notification to supplier: {e}')
+
+        try:
+            pq.bidder.status = 'unsuccessful'
+            pq.bidder.save(update_fields=['status'])
+
+            PQActionLog.objects.create(
+                pq=pq,
+                action='pq_failed',
+                performed_by=request.user,
+                details=f'Bid {pq.bidder.submission_id} marked unsuccessful due to PQ failure',
+                metadata={'submission_id': str(pq.bidder.submission_id)},
+            )
+
+            solicitation = pq.bidder.solicitation
+            current_rank = CombinedScore.objects.filter(
+                bid=pq.bidder
+            ).values_list('rank', flat=True).first()
+
+            next_ranked = None
+            if current_rank is not None:
+                next_ranked = (
+                    CombinedScore.objects
+                    .filter(bid__solicitation=solicitation, rank__gt=current_rank)
+                    .select_related('bid', 'bid__supplier')
+                    .order_by('rank')
+                    .first()
+                )
+
+            if next_ranked and next_ranked.bid.status not in ('unsuccessful', 'withdrawn', 'non_responsive'):
+                next_bid = next_ranked.bid
+
+                next_pq, created = PostQualification.objects.get_or_create(
+                    bidder=next_bid,
+                    defaults={
+                        'solicitation': solicitation,
+                        'status': 'initiation',
+                        'workflow_stage': 'initiation',
+                        'verification_items': [],
+                    },
+                )
+
+                if created:
+                    PQActionLog.objects.create(
+                        pq=next_pq,
+                        action='pq_failed',
+                        performed_by=request.user,
+                        details=(
+                            f'Auto-created PQ for next-ranked bidder (Rank {next_ranked.rank}): '
+                            f'{next_bid.supplier.full_name if next_bid.supplier else next_bid.submission_id}'
+                        ),
+                        metadata={
+                            'previous_bidder': str(pq.bidder.submission_id),
+                            'next_bidder': str(next_bid.submission_id),
+                            'next_rank': next_ranked.rank,
+                        },
+                    )
+
+                    ec_members = _resolve_ec_members(solicitation)
+                    if ec_members.exists():
+                        notify_users(
+                            list(ec_members),
+                            f'Winner PQ Failed — Next Bidder Considered — {solicitation.sol_number}',
+                            (
+                                f'The post-qualification verification for the selected winner '
+                                f'({pq.bidder.supplier.full_name if pq.bidder.supplier else pq.bidder.submission_id}) '
+                                f'has failed for solicitation {solicitation.sol_number} ({solicitation.title}).\n\n'
+                                f'The next-ranked bidder, {next_bid.supplier.full_name if next_bid.supplier else next_bid.submission_id} '
+                                f'(Rank {next_ranked.rank}), is now being considered for post-qualification.\n\n'
+                                f'Please log in to the ZAMMSA Procurement System to review and proceed.'
+                            ),
+                            notification_type='workflow',
+                            priority='high',
+                            source_module='evaluations',
+                            object_id=str(solicitation.solicitation_id),
+                            action_url=f'/evaluations',
+                            metadata={
+                                'alert_key': 'pq_failed_next_bidder',
+                                'solicitation_id': str(solicitation.solicitation_id),
+                                'sol_number': solicitation.sol_number,
+                                'failed_bidder': str(pq.bidder.submission_id),
+                                'next_bidder': str(next_bid.submission_id),
+                                'next_rank': next_ranked.rank,
+                            },
+                            email_required=True,
+                        )
+        except Exception as e:
+            import logging
+            logging.getLogger('evaluations').warning(f'Failed to process PQ failure fallback: {e}')
 
     return Response({
         'message': 'Verification item updated',
@@ -2284,32 +2533,285 @@ def pq_update_verification_item_view(request, pq_pk):
 
 
 @api_view(['POST'])
-@permission_classes([IsAuthenticated])
+@permission_classes([CanManagePostQualifications])
 def pq_generate_checklist_view(request, pq_pk):
     try:
         pq = PostQualification.objects.get(pk=pq_pk)
     except PostQualification.DoesNotExist:
         return Response({'error': 'Post-qualification record not found'}, status=404)
 
+    if pq.verification_items and len(pq.verification_items) > 0:
+        return Response({'error': 'Checklist already generated. Update existing items or reset first.'}, status=400)
+
+    if not pq.assigned_to:
+        pq.assigned_to = request.user
+
+    pq.deadline = timezone.now() + timezone.timedelta(days=14)
+
+    bid = pq.bidder
+    supplier_profile = _resolve_supplier_profile(bid.supplier)
+
+    auto_data_pacra = {}
+    auto_data_zppa = {}
+    auto_data_zra = {}
+    if supplier_profile:
+        try:
+            from integrations.clients import pacra_client
+            pacra_result = pacra_client.verify_company(
+                supplier_profile.registration_number,
+                supplier_profile.name,
+            )
+            auto_data_pacra = {
+                'company_name': pacra_result.company_name,
+                'registration_number': pacra_result.registration_number,
+                'status': pacra_result.status,
+                'directors': pacra_result.directors,
+                'verified': pacra_result.verified,
+                'verification_time': pacra_result.verification_time,
+                'source': pacra_result.source,
+            }
+            PQActionLog.objects.create(
+                pq=pq, action='auto_verified', performed_by=request.user,
+                details=f'PACRA check completed for {supplier_profile.registration_number} — source: {pacra_result.source}',
+                metadata={'check': 'pacra', 'registration_number': supplier_profile.registration_number, 'source': pacra_result.source},
+            )
+        except Exception as e:
+            auto_data_pacra = {'error': str(e), 'source': 'error'}
+
+        try:
+            from integrations.clients import zppa_debarment_client
+            zppa_result = zppa_debarment_client.check_debarment(
+                supplier_profile.name,
+                supplier_profile.registration_number,
+                supplier_profile.tin,
+            )
+            auto_data_zppa = {
+                'is_debarred': zppa_result.is_debarred,
+                'company_name': zppa_result.company_name,
+                'verified': zppa_result.verified,
+                'verification_time': zppa_result.verification_time,
+                'source': zppa_result.source,
+            }
+            PQActionLog.objects.create(
+                pq=pq, action='auto_verified', performed_by=request.user,
+                details=f'ZPPA debarment check — {"DEBARRED" if zppa_result.is_debarred else "NOT LISTED"} — source: {zppa_result.source}',
+                metadata={'check': 'zppa', 'is_debarred': zppa_result.is_debarred, 'source': zppa_result.source},
+            )
+        except Exception as e:
+            auto_data_zppa = {'error': str(e), 'source': 'error'}
+
+        try:
+            from integrations.clients import zra_client
+            zra_result = zra_client.verify_tax_clearance(supplier_profile.tin, supplier_profile.name)
+            auto_data_zra = {
+                'tax_clearance_valid': zra_result.tax_clearance_valid,
+                'expiry_date': zra_result.expiry_date,
+                'tin': zra_result.tin,
+                'verified': zra_result.verified,
+                'verification_time': zra_result.verification_time,
+                'source': zra_result.source,
+            }
+            PQActionLog.objects.create(
+                pq=pq, action='auto_verified', performed_by=request.user,
+                details=f'ZRA tax clearance check for TIN {supplier_profile.tin} — source: {zra_result.source}',
+                metadata={'check': 'zra', 'tin': supplier_profile.tin, 'source': zra_result.source},
+            )
+        except Exception as e:
+            auto_data_zra = {'error': str(e), 'source': 'error'}
+
     DEFAULT_CHECKLIST = [
-        {'id': 'company-registration', 'label': 'Company Registration Certificate', 'category': 'legal', 'status': 'pending', 'notes': ''},
-        {'id': 'tax-clearance', 'label': 'Tax Clearance Certificate', 'category': 'legal', 'status': 'pending', 'notes': ''},
-        {'id': 'zppa-registration', 'label': 'ZPPA Registration Status', 'category': 'legal', 'status': 'pending', 'notes': ''},
-        {'id': 'financial-statements', 'label': 'Audited Financial Statements (last 2 years)', 'category': 'financial', 'status': 'pending', 'notes': ''},
-        {'id': 'bank-reference', 'label': 'Bank Reference Letter', 'category': 'financial', 'status': 'pending', 'notes': ''},
-        {'id': 'experience-cert', 'label': 'Similar Works Experience Certificate', 'category': 'technical', 'status': 'pending', 'notes': ''},
-        {'id': 'technical-capacity', 'label': 'Technical Capacity Documentation', 'category': 'technical', 'status': 'pending', 'notes': ''},
-        {'id': 'personnel-qual', 'label': 'Key Personnel Qualifications', 'category': 'technical', 'status': 'pending', 'notes': ''},
-        {'id': 'equipment-capacity', 'label': 'Equipment & Capacity Verification', 'category': 'technical', 'status': 'pending', 'notes': ''},
-        {'id': 'reference-1', 'label': 'Client Reference 1', 'category': 'reference', 'status': 'pending', 'notes': ''},
-        {'id': 'reference-2', 'label': 'Client Reference 2', 'category': 'reference', 'status': 'pending', 'notes': ''},
-        {'id': 'labor-compliance', 'label': 'Labour Law Compliance', 'category': 'compliance', 'status': 'pending', 'notes': ''},
-        {'id': 'safety-cert', 'label': 'Safety & Environmental Compliance', 'category': 'compliance', 'status': 'pending', 'notes': ''},
+        {
+            'id': 'pacra-registration',
+            'label': 'PACRA Company Registration',
+            'category': 'legal',
+            'status': 'cleared' if auto_data_pacra.get('verified') and not auto_data_pacra.get('error') else 'pending',
+            'notes': '',
+            'verification_method': 'auto',
+            'auto_data': auto_data_pacra,
+        },
+        {
+            'id': 'zppa-debarment',
+            'label': 'ZPPA Debarment List Check',
+            'category': 'legal',
+            'status': 'failed' if auto_data_zppa.get('is_debarred') else ('cleared' if auto_data_zppa.get('verified') and not auto_data_zppa.get('error') else 'pending'),
+            'notes': '',
+            'verification_method': 'auto',
+            'auto_data': auto_data_zppa,
+        },
+        {
+            'id': 'zra-tax-clearance',
+            'label': 'ZRA Tax Clearance',
+            'category': 'legal',
+            'status': 'cleared' if auto_data_zra.get('verified') and auto_data_zra.get('tax_clearance_valid') and not auto_data_zra.get('error') else 'pending',
+            'notes': '',
+            'verification_method': 'auto',
+            'auto_data': auto_data_zra,
+        },
+        {
+            'id': 'zamra-registration',
+            'label': 'ZAMRA Product Registration',
+            'category': 'legal',
+            'status': 'pending',
+            'notes': '',
+            'verification_method': 'manual',
+        },
+        {
+            'id': 'financial-statements',
+            'label': 'Financial Statements Review',
+            'category': 'financial',
+            'status': 'pending',
+            'notes': '',
+            'verification_method': 'manual',
+        },
+        {
+            'id': 'bank-reference',
+            'label': 'Bank Reference Letter',
+            'category': 'financial',
+            'status': 'pending',
+            'notes': '',
+            'verification_method': 'manual',
+        },
+        {
+            'id': 'litigation-insolvency',
+            'label': 'Litigation and Insolvency Check',
+            'category': 'financial',
+            'status': 'pending',
+            'notes': '',
+            'verification_method': 'manual',
+        },
+        {
+            'id': 'warehouse-storage',
+            'label': 'Warehouse / Storage Capacity',
+            'category': 'technical',
+            'status': 'pending',
+            'notes': '',
+            'verification_method': 'manual',
+            'site_visit': {
+                'conducted': False,
+                'date': None,
+                'visited_by': None,
+                'location': None,
+                'observations': {},
+                'photos': [],
+            },
+        },
+        {
+            'id': 'cold-chain',
+            'label': 'Cold Chain Capability',
+            'category': 'technical',
+            'status': 'pending',
+            'notes': '',
+            'verification_method': 'manual',
+            'site_visit': {
+                'conducted': False,
+                'date': None,
+                'visited_by': None,
+                'location': None,
+                'observations': {},
+                'photos': [],
+            },
+        },
+        {
+            'id': 'delivery-logistics',
+            'label': 'Delivery Capacity and Logistics',
+            'category': 'technical',
+            'status': 'pending',
+            'notes': '',
+            'verification_method': 'manual',
+            'site_visit': {
+                'conducted': False,
+                'date': None,
+                'visited_by': None,
+                'location': None,
+                'observations': {},
+                'photos': [],
+            },
+        },
+        {
+            'id': 'key-personnel',
+            'label': 'Key Personnel Verification',
+            'category': 'technical',
+            'status': 'pending',
+            'notes': '',
+            'verification_method': 'manual',
+            'site_visit': {
+                'conducted': False,
+                'date': None,
+                'visited_by': None,
+                'location': None,
+                'observations': {},
+                'photos': [],
+            },
+        },
+        {
+            'id': 'reference-1',
+            'label': 'Reference 1',
+            'category': 'reference',
+            'status': 'pending',
+            'notes': '',
+            'verification_method': 'manual',
+            'reference_data': {
+                'organization': '',
+                'contact_name': '',
+                'contact_phone': '',
+                'contract_ref': '',
+                'contract_value': None,
+                'contract_period': '',
+                'contact_method': 'phone',
+                'contact_attempts': [],
+                'responses': {
+                    'delivery_on_time': None,
+                    'quality_acceptable': None,
+                    'quantities_correct': None,
+                    'communication_responsive': None,
+                    'would_use_again': None,
+                    'complaints': '',
+                },
+                'summary': '',
+            },
+        },
+        {
+            'id': 'reference-2',
+            'label': 'Reference 2',
+            'category': 'reference',
+            'status': 'pending',
+            'notes': '',
+            'verification_method': 'manual',
+            'reference_data': {
+                'organization': '',
+                'contact_name': '',
+                'contact_phone': '',
+                'contract_ref': '',
+                'contract_value': None,
+                'contract_period': '',
+                'contact_method': 'phone',
+                'contact_attempts': [],
+                'responses': {
+                    'delivery_on_time': None,
+                    'quality_acceptable': None,
+                    'quantities_correct': None,
+                    'communication_responsive': None,
+                    'would_use_again': None,
+                    'complaints': '',
+                },
+                'summary': '',
+            },
+        },
     ]
 
-    pq.verification_items = DEFAULT_CHECKLIST
-    pq.status = 'in_progress'
-    pq.save()
+    with transaction.atomic():
+        pq.verification_items = DEFAULT_CHECKLIST
+        pq.status = 'in_progress'
+        pq.workflow_stage = 'desktop_review'
+        pq.save()
+
+    PQActionLog.objects.create(
+        pq=pq,
+        action='checklist_generated',
+        performed_by=request.user,
+        details=f'Verification checklist generated with {len(DEFAULT_CHECKLIST)} items. Auto-verified: PACRA, ZPPA, ZRA. Workflow stage: Desktop Review. Deadline: {pq.deadline.isoformat() if pq.deadline else "N/A"}',
+        metadata={'item_count': len(DEFAULT_CHECKLIST), 'deadline': pq.deadline.isoformat() if pq.deadline else None},
+    )
 
     return Response({
         'message': 'Verification checklist generated',
@@ -2318,10 +2820,12 @@ def pq_generate_checklist_view(request, pq_pk):
 
 
 @api_view(['GET'])
-@permission_classes([IsAuthenticated])
+@permission_classes([CanManagePostQualifications])
 def pq_verification_context_view(request, pq_pk):
     try:
-        pq = PostQualification.objects.select_related('bidder', 'bidder__supplier', 'assigned_to').get(pk=pq_pk)
+        pq = PostQualification.objects.select_related(
+            'bidder', 'bidder__supplier', 'assigned_to', 'ber'
+        ).get(pk=pq_pk)
     except PostQualification.DoesNotExist:
         return Response({'error': 'Post-qualification record not found'}, status=404)
 
@@ -2329,7 +2833,6 @@ def pq_verification_context_view(request, pq_pk):
     user = bid.supplier
 
     supplier_profile = None
-    from suppliers.models import Supplier as SupplierModel, VendorApplication, SupplierDocument
     if user.employee_id and str(user.employee_id).startswith('SUP-'):
         supplier_profile = SupplierModel.objects.filter(
             registration_number=str(user.employee_id).replace('SUP-', '', 1)
@@ -2345,17 +2848,38 @@ def pq_verification_context_view(request, pq_pk):
 
     supplier_docs = []
     blacklist_entry = None
+    supplier_performances = []
+    supplier_risk_scores = []
     if supplier_profile:
         supplier_docs = list(SupplierDocument.objects.filter(supplier=supplier_profile).values(
             'document_id', 'document_type', 'file_path', 'expiry_date', 'verification_status'
         ))
-        from suppliers.models import Blacklist
         blacklist_entry = Blacklist.objects.filter(
             Q(registration_number=supplier_profile.registration_number) |
             Q(tin=supplier_profile.tin)
         ).order_by('-created_at').first()
 
-    from bids.models import BidDocument, BidSecurity
+        from suppliers.models import SupplierPerformance, SupplierRiskScore
+        supplier_performances = list(
+            SupplierPerformance.objects.filter(supplier=supplier_profile)
+            .select_related('contract', 'evaluated_by')
+            .values(
+                'performance_id', 'evaluation_date', 'metrics', 'overall_score',
+                'needs_improvement', 'improvement_notes',
+            )[:10]
+        )
+        for perf in supplier_performances:
+            perf['evaluation_date'] = perf['evaluation_date'].isoformat() if perf['evaluation_date'] else None
+            perf['overall_score'] = float(perf['overall_score']) if perf['overall_score'] else 0
+
+        supplier_risk_scores = list(
+            SupplierRiskScore.objects.filter(supplier=supplier_profile)
+            .values('risk_id', 'risk_score', 'risk_level', 'calculated_at', 'factors')[:5]
+        )
+        for risk in supplier_risk_scores:
+            risk['risk_score'] = float(risk['risk_score']) if risk['risk_score'] else 0
+            risk['calculated_at'] = risk['calculated_at'].isoformat() if risk['calculated_at'] else None
+
     bid_docs = list(BidDocument.objects.filter(bid=bid).values(
         'document_id', 'document_type', 'file_path', 'uploaded_at'
     ))
@@ -2364,16 +2888,18 @@ def pq_verification_context_view(request, pq_pk):
         'reference_number', 'validity_date', 'verification_status'
     ))
 
-    from evaluations.models import TechnicalScore, FinancialEvaluation
-    tech_scores = TechnicalScore.objects.filter(bid=bid, is_final=True).select_related('criterion', 'evaluator')
-    tech_data = []
-    for ts in tech_scores:
-        tech_data.append({
+    tech_scores = TechnicalScore.objects.filter(
+        bid=bid, is_final=True
+    ).select_related('criterion', 'evaluator')
+    tech_data = [
+        {
             'criterion': ts.criterion.criterion_name if ts.criterion else '',
             'evaluator': ts.evaluator.full_name if ts.evaluator else '',
             'raw_score': float(ts.raw_score),
             'weighted_score': float(ts.weighted_score),
-        })
+        }
+        for ts in tech_scores
+    ]
 
     fin_eval = FinancialEvaluation.objects.filter(bid=bid).first()
     fin_data = None
@@ -2407,9 +2933,16 @@ def pq_verification_context_view(request, pq_pk):
     return Response({
         'pq_id': str(pq.pq_id),
         'status': pq.status,
+        'rank': pq.rank,
+        'chair_decision': pq.chair_decision,
+        'chair_decision_notes': pq.chair_decision_notes,
+        'chair_decided_at': pq.chair_decided_at.isoformat() if pq.chair_decided_at else None,
         'verification_items': pq.verification_items or [],
         'notes': pq.notes,
         'assigned_to_name': pq.assigned_to.full_name if pq.assigned_to else None,
+        'deadline': pq.deadline.isoformat() if pq.deadline else None,
+        'created_at': pq.created_at.isoformat() if pq.created_at else None,
+        'updated_at': pq.updated_at.isoformat() if pq.updated_at else None,
         'bid': {
             'submission_id': bid.submission_id,
             'bid_price': float(bid.bid_price or 0),
@@ -2433,9 +2966,15 @@ def pq_verification_context_view(request, pq_pk):
             'name': supplier_profile.name if supplier_profile else None,
             'ceec_category': supplier_profile.ceec_category if supplier_profile else None,
             'status': supplier_profile.status if supplier_profile else None,
+            'risk_score': float(supplier_profile.risk_score) if supplier_profile and supplier_profile.risk_score else None,
             'risk_level': supplier_profile.risk_level if supplier_profile else None,
             'bank_name': supplier_profile.bank_name if supplier_profile else None,
             'bank_account_number': supplier_profile.bank_account_number if supplier_profile else None,
+            'bank_account_name': supplier_profile.bank_account_name if supplier_profile else None,
+            'registered_at': supplier_profile.registered_at.isoformat() if supplier_profile and supplier_profile.registered_at else None,
+            'updated_at': supplier_profile.updated_at.isoformat() if supplier_profile and supplier_profile.updated_at else None,
+            'performances': supplier_performances,
+            'risk_scores': supplier_risk_scores,
         } if supplier_profile else None,
         'supplier_documents': supplier_docs,
         'blacklist': {
@@ -2448,6 +2987,652 @@ def pq_verification_context_view(request, pq_pk):
         'technical_scores': tech_data,
         'financial_evaluation': fin_data,
         'vendor_application': va_data,
+    })
+
+
+@api_view(['POST'])
+@permission_classes([CanManagePostQualifications])
+def pq_reassign_view(request, pq_pk):
+    try:
+        pq = PostQualification.objects.get(pk=pq_pk)
+    except PostQualification.DoesNotExist:
+        return Response({'error': 'Post-qualification record not found'}, status=404)
+
+    new_assignee_id = request.data.get('assigned_to')
+    if not new_assignee_id:
+        return Response({'error': 'assigned_to user ID is required'}, status=400)
+
+    try:
+        new_assignee = User.objects.get(pk=new_assignee_id)
+    except User.DoesNotExist:
+        return Response({'error': 'User not found'}, status=404)
+
+    old_assignee = pq.assigned_to
+    pq.assigned_to = new_assignee
+    pq.save(update_fields=['assigned_to'])
+
+    PQActionLog.objects.create(
+        pq=pq,
+        action='pq_reassigned',
+        performed_by=request.user,
+        details=f'Post-qualification reassigned from {old_assignee.full_name if old_assignee else "unassigned"} to {new_assignee.full_name}',
+        metadata={'old_assignee': str(old_assignee.id) if old_assignee else None, 'new_assignee': str(new_assignee.id)},
+    )
+
+    return Response({
+        'message': 'Post-qualification reassigned',
+        'pq': PostQualificationSerializer(pq).data,
+    })
+
+
+@api_view(['POST'])
+@permission_classes([CanManagePostQualifications])
+def pq_add_notes_view(request, pq_pk):
+    try:
+        pq = PostQualification.objects.get(pk=pq_pk)
+    except PostQualification.DoesNotExist:
+        return Response({'error': 'Post-qualification record not found'}, status=404)
+
+    notes = request.data.get('notes', '')
+    if not notes:
+        return Response({'error': 'notes is required'}, status=400)
+
+    if len(notes) > 5000:
+        return Response({'error': 'Notes must be 5000 characters or fewer'}, status=400)
+
+    pq.notes = notes
+    pq.save(update_fields=['notes'])
+
+    PQActionLog.objects.create(
+        pq=pq,
+        action='notes_added',
+        performed_by=request.user,
+        details='Overall verification notes added/updated',
+        metadata={'notes_length': len(notes)},
+    )
+
+    return Response({
+        'message': 'Notes saved',
+        'pq': PostQualificationSerializer(pq).data,
+    })
+
+
+@api_view(['POST'])
+@permission_classes([CanManagePostQualifications])
+
+
+
+@api_view(['GET'])
+@permission_classes([CanManagePostQualifications])
+def pq_ranking_summary_view(request, solicitation_pk):
+    try:
+        sol = Solicitation.objects.get(pk=solicitation_pk)
+    except Solicitation.DoesNotExist:
+        return Response({'error': 'Solicitation not found'}, status=404)
+
+    combined_scores = CombinedScore.objects.filter(
+        bid__solicitation=sol
+    ).select_related('bid', 'bid__supplier').order_by('rank')
+
+    financial_evals = {
+        str(fe.bid_id): fe
+        for fe in FinancialEvaluation.objects.filter(bid__solicitation=sol)
+    }
+
+    pq_records = {
+        str(pq.bidder_id): pq
+        for pq in PostQualification.objects.filter(bidder__solicitation=sol)
+    }
+
+    rankings = []
+    for cs in combined_scores:
+        fin_eval = financial_evals.get(str(cs.bid_id))
+        pq_rec = pq_records.get(str(cs.bid_id))
+        rankings.append({
+            'rank': cs.rank,
+            'bid_id': str(cs.bid_id),
+            'submission_id': cs.bid.submission_id,
+            'bidder_name': cs.bid.supplier.full_name if cs.bid.supplier else 'Unknown',
+            'technical_score': float(cs.technical_score),
+            'total_score': float(cs.total_score),
+            'evaluated_price': float(fin_eval.evaluated_price) if fin_eval else None,
+            'original_price': float(cs.bid.bid_price or 0),
+            'bid_status': cs.bid.status,
+            'post_qual_status': pq_rec.status if pq_rec else None,
+            'post_qual_id': str(pq_rec.pq_id) if pq_rec else None,
+            'chair_decision': pq_rec.chair_decision if pq_rec else None,
+        })
+
+    current_pq = PostQualification.objects.filter(
+        bidder__solicitation=sol
+    ).exclude(status__in=['cleared', 'failed']).order_by('rank').first()
+
+    all_pqs = PostQualification.objects.filter(
+        bidder__solicitation=sol
+    ).order_by('rank')
+
+    pq_tracker = []
+    for pq in all_pqs:
+        pq_tracker.append({
+            'rank': pq.rank,
+            'bidder_name': pq.bidder.supplier.full_name if pq.bidder.supplier else 'Unknown',
+            'submission_id': pq.bidder.submission_id,
+            'status': pq.status,
+            'chair_decision': pq.chair_decision,
+        })
+
+    return Response({
+        'solicitation_id': str(sol.solicitation_id),
+        'sol_number': sol.sol_number,
+        'title': sol.title,
+        'rankings': rankings,
+        'current_pq': {
+            'pq_id': str(current_pq.pq_id),
+            'rank': current_pq.rank,
+            'bidder_name': current_pq.bidder.supplier.full_name if current_pq.bidder.supplier else 'Unknown',
+            'status': current_pq.status,
+        } if current_pq else None,
+        'pq_tracker': pq_tracker,
+        'all_failed': all(p.status == 'failed' for p in all_pqs) if all_pqs.exists() else False,
+    })
+
+
+@api_view(['POST'])
+@permission_classes([CanManagePostQualifications])
+def pq_advance_stage_view(request, pq_pk):
+    """Advance the workflow stage to the next logical step."""
+    try:
+        pq = PostQualification.objects.get(pk=pq_pk)
+    except PostQualification.DoesNotExist:
+        return Response({'error': 'Post-qualification record not found'}, status=404)
+
+    target_stage = request.data.get('stage')
+    valid_stages = {'initiation', 'desktop_review', 'document_collection', 'site_inspection', 'reference_check', 'evaluation', 'committee_review', 'closed'}
+    if not target_stage or target_stage not in valid_stages:
+        return Response({'error': f'Valid stage required. Options: {", ".join(sorted(valid_stages))}'}, status=400)
+
+    if pq.status in ('cleared', 'failed'):
+        return Response({'error': 'Cannot change stage on a closed post-qualification'}, status=400)
+
+    old_stage = pq.workflow_stage
+    pq.workflow_stage = target_stage
+
+    stage_ordering = ['initiation', 'desktop_review', 'document_collection', 'site_inspection', 'reference_check', 'evaluation', 'committee_review']
+    if target_stage in stage_ordering:
+        pq.status = 'in_progress'
+
+    pq.save(update_fields=['workflow_stage', 'status'])
+
+    PQActionLog.objects.create(
+        pq=pq,
+        action='stage_changed',
+        performed_by=request.user,
+        details=f'Workflow stage changed from "{old_stage or "initiation"}" to "{target_stage}"',
+        metadata={'old_stage': old_stage, 'new_stage': target_stage},
+    )
+
+    return Response({
+        'message': f'Stage advanced to {target_stage}',
+        'pq': PostQualificationSerializer(pq).data,
+    })
+
+
+@api_view(['POST', 'GET'])
+@permission_classes([CanManagePostQualifications])
+def pq_document_requests_view(request, pq_pk):
+    """Manage document requests to the supplier."""
+    try:
+        pq = PostQualification.objects.get(pk=pq_pk)
+    except PostQualification.DoesNotExist:
+        return Response({'error': 'Post-qualification record not found'}, status=404)
+
+    if request.method == 'GET':
+        return Response({
+            'document_requests': pq.pq_document_requests or [],
+        })
+
+    action = request.data.get('action', 'request')
+    doc_requests = list(pq.pq_document_requests or [])
+
+    if action == 'request':
+        doc_type = request.data.get('document_type', '')
+        description = request.data.get('description', '')
+        due_date = request.data.get('due_date')
+
+        if not doc_type or not description:
+            return Response({'error': 'document_type and description are required'}, status=400)
+
+        doc_request = {
+            'request_id': str(uuid.uuid4()),
+            'document_type': doc_type,
+            'description': description,
+            'requested_at': timezone.now().isoformat(),
+            'requested_by': request.user.full_name,
+            'due_date': due_date,
+            'submitted_at': None,
+            'file_url': None,
+            'status': 'requested',
+            'notes': request.data.get('notes', ''),
+        }
+        doc_requests.append(doc_request)
+        pq.pq_document_requests = doc_requests
+        pq.save(update_fields=['pq_document_requests'])
+
+        PQActionLog.objects.create(
+            pq=pq,
+            action='document_requested',
+            performed_by=request.user,
+            details=f'Document requested: {doc_type} - {description}',
+            metadata={'document_type': doc_type, 'request_id': doc_request['request_id']},
+        )
+
+        return Response({'message': 'Document request created', 'document_request': doc_request})
+
+    elif action == 'submit':
+        request_id = request.data.get('request_id')
+        file_url = request.data.get('file_url', '')
+
+        if not request_id:
+            return Response({'error': 'request_id is required'}, status=400)
+
+        found = False
+        for dr in doc_requests:
+            if dr.get('request_id') == request_id:
+                dr['status'] = 'submitted'
+                dr['submitted_at'] = timezone.now().isoformat()
+                if file_url:
+                    dr['file_url'] = file_url
+                found = True
+                break
+
+        if not found:
+            return Response({'error': 'Document request not found'}, status=404)
+
+        pq.pq_document_requests = doc_requests
+        pq.save(update_fields=['pq_document_requests'])
+
+        PQActionLog.objects.create(
+            pq=pq,
+            action='document_submitted',
+            performed_by=request.user,
+            details=f'Document submitted for request {request_id}',
+            metadata={'request_id': request_id, 'file_url': file_url},
+        )
+
+        return Response({'message': 'Document submission recorded'})
+
+    return Response({'error': 'Invalid action'}, status=400)
+
+
+@api_view(['POST', 'GET'])
+@permission_classes([CanManagePostQualifications])
+def pq_conditions_view(request, pq_pk):
+    """Manage conditions when awarding with conditions."""
+    try:
+        pq = PostQualification.objects.get(pk=pq_pk)
+    except PostQualification.DoesNotExist:
+        return Response({'error': 'Post-qualification record not found'}, status=404)
+
+    if request.method == 'GET':
+        return Response({
+            'conditions': pq.conditions or [],
+        })
+
+    action = request.data.get('action', 'add')
+    conditions = list(pq.conditions or [])
+
+    if action == 'add':
+        condition_desc = request.data.get('condition', '')
+        deadline = request.data.get('deadline')
+
+        if not condition_desc:
+            return Response({'error': 'condition description is required'}, status=400)
+
+        new_condition = {
+            'condition_id': str(uuid.uuid4()),
+            'condition': condition_desc,
+            'deadline': deadline,
+            'status': 'pending',
+            'verified_at': None,
+            'verified_by': None,
+            'notes': request.data.get('notes', ''),
+        }
+        conditions.append(new_condition)
+        pq.conditions = conditions
+        pq.save(update_fields=['conditions'])
+
+        PQActionLog.objects.create(
+            pq=pq,
+            action='condition_added',
+            performed_by=request.user,
+            details=f'Condition added: {condition_desc[:100]}',
+            metadata={'condition_id': new_condition['condition_id']},
+        )
+
+        return Response({'message': 'Condition added', 'condition': new_condition})
+
+    elif action == 'verify':
+        condition_id = request.data.get('condition_id')
+        if not condition_id:
+            return Response({'error': 'condition_id is required'}, status=400)
+
+        found = False
+        for c in conditions:
+            if c.get('condition_id') == condition_id:
+                c['status'] = 'verified'
+                c['verified_at'] = timezone.now().isoformat()
+                c['verified_by'] = request.user.full_name
+                c['notes'] = request.data.get('notes', c.get('notes', ''))
+                found = True
+                break
+
+        if not found:
+            return Response({'error': 'Condition not found'}, status=404)
+
+        pq.conditions = conditions
+        pq.save(update_fields=['conditions'])
+
+        PQActionLog.objects.create(
+            pq=pq,
+            action='condition_verified',
+            performed_by=request.user,
+            details=f'Condition verified: {condition_id}',
+            metadata={'condition_id': condition_id},
+        )
+
+        return Response({'message': 'Condition verified'})
+
+    return Response({'error': 'Invalid action'}, status=400)
+
+
+@api_view(['POST'])
+@permission_classes([CanManagePostQualifications])
+def pq_submit_recommendation_view(request, pq_pk):
+    """Submit PQ officer recommendation before committee review."""
+    try:
+        pq = PostQualification.objects.get(pk=pq_pk)
+    except PostQualification.DoesNotExist:
+        return Response({'error': 'Post-qualification record not found'}, status=404)
+
+    recommendation = request.data.get('recommendation', '')
+    if not recommendation:
+        return Response({'error': 'recommendation text is required'}, status=400)
+
+    pq.recommendation = recommendation
+    pq.recommended_by = request.user
+    pq.workflow_stage = 'committee_review'
+    pq.save(update_fields=['recommendation', 'recommended_by', 'workflow_stage'])
+
+    PQActionLog.objects.create(
+        pq=pq,
+        action='recommendation_submitted',
+        performed_by=request.user,
+        details=f'PQ Officer recommendation submitted. Stage advanced to Committee Review',
+        metadata={'recommendation_length': len(recommendation)},
+    )
+
+    return Response({
+        'message': 'Recommendation submitted',
+        'pq': PostQualificationSerializer(pq).data,
+    })
+
+
+@api_view(['POST', 'GET'])
+@permission_classes([CanManagePostQualifications])
+def pq_committee_review_view(request, pq_pk):
+    """Committee members submit their review of the PQ findings."""
+    try:
+        pq = PostQualification.objects.select_related('bidder', 'bidder__solicitation').get(pk=pq_pk)
+    except PostQualification.DoesNotExist:
+        return Response({'error': 'Post-qualification record not found'}, status=404)
+
+    if request.method == 'GET':
+        return Response({
+            'committee_review': pq.committee_review or [],
+        })
+
+    action = request.data.get('action', 'review')
+    reviews = list(pq.committee_review or [])
+
+    if action == 'review':
+        decision = request.data.get('decision', '')
+        comments = request.data.get('comments', '')
+
+        if decision not in ('approve', 'approve_with_conditions', 'reject'):
+            return Response({'error': 'decision must be approve, approve_with_conditions, or reject'}, status=400)
+
+        # Check if user already reviewed
+        for r in reviews:
+            if r.get('member_id') == str(request.user.id):
+                return Response({'error': 'You have already submitted your review'}, status=400)
+
+        review_entry = {
+            'member_id': str(request.user.id),
+            'member_name': request.user.full_name,
+            'decision': decision,
+            'comments': comments,
+            'decided_at': timezone.now().isoformat(),
+        }
+        reviews.append(review_entry)
+        pq.committee_review = reviews
+        pq.save(update_fields=['committee_review'])
+
+        PQActionLog.objects.create(
+            pq=pq,
+            action='committee_reviewed',
+            performed_by=request.user,
+            details=f'Committee review submitted: {decision}',
+            metadata={'member_id': str(request.user.id), 'decision': decision},
+        )
+
+        return Response({'message': 'Review submitted', 'review': review_entry})
+
+    return Response({'error': 'Invalid action'}, status=400)
+
+
+@api_view(['POST'])
+@permission_classes([CanManagePostQualifications])
+def pq_chair_decision_view(request, pq_pk):
+    try:
+        pq = PostQualification.objects.select_related('bidder', 'bidder__supplier', 'bidder__solicitation').get(pk=pq_pk)
+    except PostQualification.DoesNotExist:
+        return Response({'error': 'Post-qualification record not found'}, status=404)
+
+    committees = EvaluationCommittee.objects.filter(solicitation=pq.bidder.solicitation)
+    is_chair = any(str(c.chairperson.id) == str(request.user.id) for c in committees)
+    is_director = request.user.role in ('director_procurement', 'procurement_manager')
+    if not is_chair and not is_director:
+        return Response({'error': 'Only the committee chair or Director of Procurement can record the chair decision'}, status=403)
+
+    decision = request.data.get('decision', '')
+    if decision not in ('passed', 'failed', 'passed_with_conditions'):
+        return Response({'error': 'decision must be "passed", "passed_with_conditions", or "failed"'}, status=400)
+
+    decision_notes = request.data.get('decision_notes', '')
+    conditions_data = request.data.get('conditions', [])
+
+    if decision == 'failed':
+        failed_items = [i for i in (pq.verification_items or []) if i.get('status') == 'failed']
+        if not failed_items and not decision_notes:
+            return Response({'error': 'At least one failed check or a reason is required for a failed decision'}, status=400)
+
+    with transaction.atomic():
+        if decision == 'passed_with_conditions':
+            pq.chair_decision = 'passed'
+            pq.result = 'award_with_conditions'
+            if conditions_data:
+                pq.conditions = conditions_data
+        elif decision == 'passed':
+            pq.chair_decision = 'passed'
+            pq.result = 'award'
+            pq.conditions = []
+        else:
+            pq.chair_decision = 'failed'
+            pq.result = 'no_award'
+
+        pq.chair_decision_notes = decision_notes
+        pq.chair_decided_at = timezone.now()
+
+        if decision in ('passed', 'passed_with_conditions'):
+            pq.status = 'cleared'
+            pq.verified_at = timezone.now()
+        else:
+            pq.status = 'failed'
+
+        pq.workflow_stage = 'closed'
+        pq.save()
+
+    PQActionLog.objects.create(
+        pq=pq,
+        action='chair_decision',
+        performed_by=request.user,
+        details=f'Chair decision: {decision.upper()}. Result: {pq.result}. {decision_notes[:500] if decision_notes else ""}',
+        metadata={'decision': decision, 'result': pq.result, 'notes': decision_notes},
+    )
+
+    # Notifications
+    if decision in ('passed', 'passed_with_conditions'):
+        _notify_ec_phase_completion(pq.bidder.solicitation, 'post-qual')
+        try:
+            if pq.bidder.supplier:
+                notify_users(
+                    [pq.bidder.supplier],
+                    f'Post-Qualification Cleared — {pq.bidder.solicitation.sol_number}',
+                    (
+                        f'Dear {pq.bidder.supplier.full_name},\n\n'
+                        f'Your post-qualification verification for solicitation '
+                        f'{pq.bidder.solicitation.sol_number} ({pq.bidder.solicitation.title}) '
+                        f'has been completed successfully.\n\n'
+                        f'Your bid reference: {pq.bidder.submission_id}\n\n'
+                        f'You may now proceed with contract signing. Please check the system for further instructions.\n\n'
+                        f'Regards,\nZAMMSA Procurement Team'
+                    ),
+                    notification_type='approval',
+                    priority='high',
+                    source_module='evaluations',
+                    object_id=str(pq.pk),
+                    action_url=f'/vendor/contracts?solicitation={pq.bidder.solicitation_id}',
+                    metadata={
+                        'alert_key': 'post_qualification_cleared',
+                        'solicitation_id': str(pq.bidder.solicitation_id),
+                        'sol_number': pq.bidder.solicitation.sol_number,
+                        'submission_id': pq.bidder.submission_id,
+                    },
+                    email_required=True,
+                )
+        except Exception:
+            pass
+
+    elif decision == 'failed':
+        try:
+            pq.bidder.status = 'unsuccessful'
+            pq.bidder.save(update_fields=['status'])
+
+            solicitation = pq.bidder.solicitation
+            current_rank = pq.rank
+
+            next_ranked = None
+            if current_rank is not None:
+                next_ranked = (
+                    CombinedScore.objects
+                    .filter(bid__solicitation=solicitation, rank__gt=current_rank)
+                    .select_related('bid', 'bid__supplier')
+                    .order_by('rank')
+                    .first()
+                )
+
+            if next_ranked and next_ranked.bid.status not in ('unsuccessful', 'withdrawn', 'non_responsive'):
+                next_bid = next_ranked.bid
+                next_pq, created = PostQualification.objects.get_or_create(
+                    bidder=next_bid,
+                    defaults={
+                        'solicitation': solicitation,
+                        'status': 'initiation',
+                        'workflow_stage': 'initiation',
+                        'verification_items': [],
+                        'rank': next_ranked.rank,
+                    },
+                )
+                if created:
+                    PQActionLog.objects.create(
+                        pq=next_pq,
+                        action='pq_failed',
+                        performed_by=request.user,
+                        details=(
+                            f'Auto-created PQ for next-ranked bidder (Rank {next_ranked.rank}): '
+                            f'{next_bid.supplier.full_name if next_bid.supplier else next_bid.submission_id}'
+                        ),
+                        metadata={
+                            'previous_bidder': str(pq.bidder.submission_id),
+                            'next_bidder': str(next_bid.submission_id),
+                            'next_rank': next_ranked.rank,
+                        },
+                    )
+                    ec_members = _resolve_ec_members(solicitation)
+                    if ec_members.exists():
+                        notify_users(
+                            list(ec_members),
+                            f'Winner PQ Failed — Next Bidder Considered — {solicitation.sol_number}',
+                            (
+                                f'The post-qualification verification for the selected winner '
+                                f'({pq.bidder.supplier.full_name if pq.bidder.supplier else pq.bidder.submission_id}) '
+                                f'has failed for solicitation {solicitation.sol_number} ({solicitation.title}).\n\n'
+                                f'The next-ranked bidder, {next_bid.supplier.full_name if next_bid.supplier else next_bid.submission_id} '
+                                f'(Rank {next_ranked.rank}), is now being considered for post-qualification.\n\n'
+                                f'Please log in to the ZAMMSA Procurement System to review and proceed.'
+                            ),
+                            notification_type='workflow',
+                            priority='high',
+                            source_module='evaluations',
+                            object_id=str(solicitation.solicitation_id),
+                            action_url=f'/evaluations',
+                            metadata={
+                                'alert_key': 'pq_failed_next_bidder',
+                                'solicitation_id': str(solicitation.solicitation_id),
+                                'sol_number': solicitation.sol_number,
+                                'failed_bidder': str(pq.bidder.submission_id),
+                                'next_bidder': str(next_bid.submission_id),
+                                'next_rank': next_ranked.rank,
+                            },
+                            email_required=True,
+                        )
+            else:
+                try:
+                    if pq.bidder.supplier:
+                        notify_users(
+                            [pq.bidder.supplier],
+                            f'Post-Qualification Failed — {pq.bidder.solicitation.sol_number}',
+                            (
+                                f'Dear {pq.bidder.supplier.full_name},\n\n'
+                                f'We regret to inform you that your post-qualification verification for '
+                                f'solicitation {pq.bidder.solicitation.sol_number} ({pq.bidder.solicitation.title}) '
+                                f'has not been passed.\n\n'
+                                f'Your bid reference: {pq.bidder.submission_id}\n\n'
+                                f'Please contact the procurement office for further details.\n\n'
+                                f'Regards,\nZAMMSA Procurement Team'
+                            ),
+                            notification_type='rejection',
+                            priority='high',
+                            source_module='evaluations',
+                            object_id=str(pq.pk),
+                            action_url=f'/vendor/dashboard',
+                            metadata={
+                                'alert_key': 'post_qualification_failed',
+                                'solicitation_id': str(pq.bidder.solicitation_id),
+                                'sol_number': pq.bidder.solicitation.sol_number,
+                                'submission_id': pq.bidder.submission_id,
+                            },
+                            email_required=True,
+                        )
+                except Exception:
+                    pass
+        except Exception as e:
+            import logging
+            logging.getLogger('evaluations').warning(f'Failed to process PQ chair decision failure: {e}')
+
+    return Response({
+        'message': f'Chair decision recorded: {decision.upper()}. Result: {pq.result}',
+        'pq': PostQualificationSerializer(pq).data,
     })
 
 
@@ -2637,7 +3822,27 @@ def evaluation_phase_status_view(request, solicitation_pk):
 
     # Post-qualification
     post_qual = PostQualification.objects.filter(bidder__solicitation=solicitation_pk)
-    post_qual_complete = post_qual.filter(bidder=winner_bid, status='cleared').exists() if winner_bid else False
+    target_pq = None
+    if winner_bid:
+        target_pq = post_qual.filter(bidder=winner_bid).first()
+    if not target_pq:
+        target_pq = post_qual.order_by('rank').first()
+
+    if target_pq:
+        items = target_pq.verification_items or []
+        all_items_cleared = len(items) > 0 and all(item.get('status') == 'cleared' for item in items)
+        post_qual_complete = (
+            target_pq.status == 'cleared' or
+            target_pq.chair_decision == 'passed' or
+            all_items_cleared
+        )
+        if (all_items_cleared or target_pq.chair_decision == 'passed') and target_pq.status != 'cleared':
+            target_pq.status = 'cleared'
+            target_pq.verified_at = timezone.now()
+            target_pq.save(update_fields=['status', 'verified_at'])
+    else:
+        post_qual_complete = post_qual.filter(Q(status='cleared') | Q(chair_decision='passed')).exists()
+
     pq_counts = post_qual.aggregate(
         total=Count('pq_id'),
         cleared=Count('pq_id', filter=Q(status='cleared')),

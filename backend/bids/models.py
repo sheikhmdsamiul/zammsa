@@ -1,6 +1,9 @@
 import uuid
+import hashlib
+import os
 from django.db import models
 from django.utils import timezone
+from django.core.exceptions import ValidationError
 from accounts.models import User
 from solicitations.models import Solicitation
 
@@ -11,7 +14,26 @@ BID_STATUS_CHOICES = [
     ('responsive', 'Responsive'),
     ('non_responsive', 'Non-Responsive'),
     ('withdrawn', 'Withdrawn'),
+    ('modified', 'Modified'),
     ('awarded', 'Awarded'),
+]
+
+BID_MODIFICATION_REASON_CHOICES = [
+    ('pricing_correction', 'Pricing Correction'),
+    ('document_replacement', 'Document Replacement'),
+    ('addenda_response', 'Addenda Response'),
+    ('clarification', 'Clarification'),
+    ('other', 'Other'),
+]
+
+BID_SUBMISSION_METHOD_CHOICES = [
+    ('online', 'Online'),
+    ('physical', 'Physical'),
+]
+
+BID_LOT_TYPE_CHOICES = [
+    ('single', 'Single Lot'),
+    ('multiple', 'Multiple Lots'),
 ]
 
 BID_SECURITY_TYPE_CHOICES = [
@@ -30,6 +52,14 @@ BID_DOCUMENT_TYPE_CHOICES = [
     ('technical_proposal', 'Technical Proposal'),
     ('financial_proposal', 'Financial Proposal'),
     ('bid_security', 'Bid Security'),
+    ('pacra_registration', 'PACRA Registration Certificate'),
+    ('tax_clearance', 'Tax Clearance Certificate'),
+    ('zamra_registration', 'ZAMRA Product Registration'),
+    ('financial_statements', 'Audited Financial Statements'),
+    ('bank_reference', 'Bank Reference Letter'),
+    ('statutory_declaration', 'Statutory Declaration (Litigation/Insolvency)'),
+    ('site_visit_report', 'Site Visit Report'),
+    ('reference_letter', 'Reference Letter'),
     ('other', 'Other'),
 ]
 
@@ -48,9 +78,12 @@ class BidSubmission(models.Model):
     security_type = models.CharField(max_length=50, blank=True, default='')
     security_expiry = models.DateField(null=True, blank=True)
     security_verified = models.BooleanField(default=False)
-    submission_method = models.CharField(max_length=20, default='online')
+    submission_method = models.CharField(
+        max_length=20, choices=BID_SUBMISSION_METHOD_CHOICES, default='online'
+    )
     status = models.CharField(max_length=20, choices=BID_STATUS_CHOICES, default='submitted')
     is_late = models.BooleanField(default=False)
+    late_reason = models.TextField(blank=True, default='')
     technical_doc_url = models.URLField(blank=True)
     financial_doc_url = models.URLField(blank=True, help_text='Encrypted financial document URL')
     financial_envelope_encrypted = models.BooleanField(default=False)
@@ -59,6 +92,25 @@ class BidSubmission(models.Model):
     submitted_at = models.DateTimeField(auto_now_add=True)
     opened_at = models.DateTimeField(null=True, blank=True)
     line_items = models.JSONField(default=list, blank=True)
+    submitted_from_ip = models.GenericIPAddressField(blank=True, null=True)
+
+    # Lot-based bidding
+    lot_number = models.CharField(max_length=50, blank=True, default='')
+
+    # Joint venture
+    joint_venture_name = models.CharField(max_length=255, blank=True, default='')
+    joint_venture_partners = models.JSONField(default=list, blank=True)
+
+    # Modification tracking
+    modification_reason = models.CharField(
+        max_length=50, choices=BID_MODIFICATION_REASON_CHOICES, blank=True, default=''
+    )
+    parent_bid = models.ForeignKey(
+        'self', on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='modifications'
+    )
+    modification_notes = models.TextField(blank=True, default='')
+    version = models.IntegerField(default=1)
 
     class Meta:
         db_table = 'bid_submission'
@@ -89,6 +141,9 @@ class BidDocument(models.Model):
     bid = models.ForeignKey(BidSubmission, on_delete=models.CASCADE, related_name='bid_documents')
     document_type = models.CharField(max_length=50, choices=BID_DOCUMENT_TYPE_CHOICES)
     file_path = models.CharField(max_length=500)
+    file_size = models.BigIntegerField(null=True, blank=True)
+    mime_type = models.CharField(max_length=100, blank=True, default='')
+    file_hash = models.CharField(max_length=64, blank=True, default='')
     uploaded_at = models.DateTimeField(default=timezone.now)
 
     class Meta:

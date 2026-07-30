@@ -1,5 +1,9 @@
 from rest_framework import serializers
-from .models import EvaluationCommittee, ConflictOfInterest, PreliminaryExam, TechnicalScore, FinancialEvaluation, CombinedScore, BidEvaluationReport, PostQualification, AwardAppeal, AppealActionLog
+from .models import (
+    EvaluationCommittee, ConflictOfInterest, PreliminaryExam, TechnicalScore,
+    FinancialEvaluation, CombinedScore, BidEvaluationReport, PostQualification,
+    PQActionLog, AwardAppeal, AppealActionLog,
+)
 from bids.models import BidSubmission
 
 
@@ -149,7 +153,12 @@ class EvaluationCommitteeSerializer(serializers.ModelSerializer):
 
         ber_done = BidEvaluationReport.objects.filter(solicitation=sol, status__in=['submitted', 'approved']).exists()
 
-        pq_done = PostQualification.objects.filter(ber__solicitation=sol, status='cleared').exists()
+        pq_done = False
+        winner = BidSubmission.objects.filter(solicitation=sol, status='awarded').first()
+        if winner:
+            pq_done = PostQualification.objects.filter(
+                bidder=winner, status='cleared'
+            ).exists()
 
         return {
             'coi': coi_done,
@@ -169,7 +178,7 @@ class EvaluationCommitteeSerializer(serializers.ModelSerializer):
         for phase_id in self.PHASE_ORDER:
             if not phase_done.get(phase_id, False):
                 return {'id': phase_id, 'label': self.PHASE_LABELS[phase_id]}
-        return {'id': 'post-qual', 'label': 'Post-Qualification'}
+        return {'id': 'ber', 'label': 'BER Workflow'}
 
     def get_phase_progress(self, obj):
         sol = obj.solicitation
@@ -357,7 +366,28 @@ class BidEvaluationReportSerializer(serializers.ModelSerializer):
                     uid = member
                 if uid:
                     member_ids.add(str(uid))
+            for nom in (c.non_official_members or []):
+                uid = nom.get('user_id')
+                if uid:
+                    member_ids.add(str(uid))
+                # Non-official members without a user_id cannot log in and therefore
+                # cannot sign the BER — they must NOT be counted in required_count,
+                # consistent with has_all_signed() which also skips them.
         return len(member_ids) if member_ids else 0
+
+
+class PQActionLogSerializer(serializers.ModelSerializer):
+    id = serializers.UUIDField(source='log_id', read_only=True)
+    performed_by_name = serializers.SerializerMethodField()
+    action_display = serializers.CharField(source='get_action_display', read_only=True)
+
+    class Meta:
+        model = PQActionLog
+        fields = '__all__'
+        read_only_fields = ('log_id', 'created_at')
+
+    def get_performed_by_name(self, obj):
+        return obj.performed_by.full_name if obj.performed_by else None
 
 
 class PostQualificationSerializer(serializers.ModelSerializer):
@@ -365,18 +395,34 @@ class PostQualificationSerializer(serializers.ModelSerializer):
     bidder_name = serializers.CharField(source='bidder.supplier.full_name', read_only=True)
     submission_id = serializers.CharField(source='bidder.submission_id', read_only=True)
     assigned_to_name = serializers.SerializerMethodField()
+    recommended_by_name = serializers.SerializerMethodField()
+    solicitation_number = serializers.CharField(source='solicitation.sol_number', read_only=True, default=None)
+    solicitation_title = serializers.CharField(source='solicitation.title', read_only=True, default=None)
     total_items = serializers.SerializerMethodField()
     completed_items = serializers.SerializerMethodField()
     progress_percent = serializers.SerializerMethodField()
+    action_logs = PQActionLogSerializer(many=True, read_only=True)
+    days_until_deadline = serializers.SerializerMethodField()
+    is_overdue = serializers.SerializerMethodField()
+    auto_verified_count = serializers.SerializerMethodField()
+    manual_check_count = serializers.SerializerMethodField()
+    failed_count = serializers.SerializerMethodField()
+    category_summary = serializers.SerializerMethodField()
+    stage_display = serializers.SerializerMethodField()
+    result_display = serializers.SerializerMethodField()
+    open_conditions_count = serializers.SerializerMethodField()
+    pending_doc_requests = serializers.SerializerMethodField()
 
     class Meta:
         model = PostQualification
         fields = '__all__'
+        read_only_fields = ('pq_id', 'created_at', 'updated_at')
 
     def get_assigned_to_name(self, obj):
-        if obj.assigned_to:
-            return obj.assigned_to.full_name
-        return None
+        return obj.assigned_to.full_name if obj.assigned_to else None
+
+    def get_recommended_by_name(self, obj):
+        return obj.recommended_by.full_name if obj.recommended_by else None
 
     def get_total_items(self, obj):
         items = obj.verification_items or []
@@ -392,6 +438,74 @@ class PostQualificationSerializer(serializers.ModelSerializer):
             return 0
         done = len([i for i in items if i.get('status') in ('cleared', 'failed')])
         return round((done / len(items)) * 100) if items else 0
+
+    def get_days_until_deadline(self, obj):
+        if not obj.deadline:
+            return None
+        from django.utils import timezone
+        delta = obj.deadline - timezone.now()
+        return delta.days
+
+    def get_is_overdue(self, obj):
+        if not obj.deadline:
+            return False
+        from django.utils import timezone
+        return timezone.now() > obj.deadline and obj.status not in ('cleared', 'failed')
+
+    def get_auto_verified_count(self, obj):
+        items = obj.verification_items or []
+        return len([i for i in items if i.get('verification_method') == 'auto'])
+
+    def get_manual_check_count(self, obj):
+        items = obj.verification_items or []
+        return len([i for i in items if i.get('verification_method') != 'auto'])
+
+    def get_failed_count(self, obj):
+        items = obj.verification_items or []
+        return len([i for i in items if i.get('status') == 'failed'])
+
+    def get_category_summary(self, obj):
+        items = obj.verification_items or []
+        summary = {}
+        for item in items:
+            cat = item.get('category', 'other')
+            if cat not in summary:
+                summary[cat] = {'total': 0, 'cleared': 0, 'failed': 0, 'pending': 0}
+            summary[cat]['total'] += 1
+            status = item.get('status', 'pending')
+            if status in summary[cat]:
+                summary[cat][status] += 1
+        return summary
+
+    def get_stage_display(self, obj):
+        stage = obj.workflow_stage or 'initiation'
+        stage_labels = dict([
+            ('initiation', 'Initiation'),
+            ('desktop_review', 'Desktop Review'),
+            ('document_collection', 'Document Collection'),
+            ('site_inspection', 'Site Inspection'),
+            ('reference_check', 'Reference Check'),
+            ('evaluation', 'Evaluation & Recommendation'),
+            ('committee_review', 'Committee Review'),
+            ('closed', 'Closed'),
+        ])
+        return stage_labels.get(stage, stage.replace('_', ' ').title())
+
+    def get_result_display(self, obj):
+        if not obj.result:
+            return 'Not Yet Decided'
+        labels = dict(PQ_RESULT_CHOICES)
+        return labels.get(obj.result, obj.result.replace('_', ' ').title())
+
+    def get_open_conditions_count(self, obj):
+        if not obj.conditions:
+            return 0
+        return len([c for c in obj.conditions if c.get('status') != 'verified'])
+
+    def get_pending_doc_requests(self, obj):
+        if not obj.pq_document_requests:
+            return 0
+        return len([d for d in obj.pq_document_requests if d.get('status') in ('requested', 'overdue')])
 
 
 class AwardAppealSerializer(serializers.ModelSerializer):

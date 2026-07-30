@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import { fetchZPCDashboard, approveBER, rejectBER } from '../../api/dashboards';
+import { evaluationsApi } from '../../api/evaluations';
 import { LoadingSpinner } from '../common/LoadingSpinner';
 import { useAppSelector } from '../../hooks/useRedux';
 import { PageHeader } from '../common/PageHeader';
@@ -10,7 +11,7 @@ import { StatusBadge } from '../common/StatusBadge';
 import {
   ShieldCheckIcon, ClipboardCheckIcon, ScaleIcon,
   ChatAlt2Icon, CalendarIcon, ClockIcon,
-  CheckIcon, XIcon, ExclamationIcon, DocumentTextIcon,
+  CheckIcon, XIcon, ExclamationIcon, DocumentTextIcon, EyeIcon,
 } from '@heroicons/react/outline';
 
 const ZPCDashboard: React.FC = () => {
@@ -29,10 +30,17 @@ const ZPCDashboard: React.FC = () => {
     refetchInterval: pollInterval,
   });
 
+  const { data: bers } = useQuery({
+    queryKey: ['zpc-ber-list'],
+    queryFn: () => evaluationsApi.listBERs({ status: 'submitted', page_size: 50 }),
+  });
+  const pendingBERs = bers?.results || [];
+
   const approveMut = useMutation({
     mutationFn: ({ id, c }: { id: string; c: string }) => approveBER(id, c),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['zpcDashboard'] });
+      queryClient.invalidateQueries({ queryKey: ['zpc-ber-list'] });
       toast.success('BER approved successfully');
       setActionTarget(null);
       setComment('');
@@ -44,6 +52,7 @@ const ZPCDashboard: React.FC = () => {
     mutationFn: ({ id, reason }: { id: string; reason: string }) => rejectBER(id, reason),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['zpcDashboard'] });
+      queryClient.invalidateQueries({ queryKey: ['zpc-ber-list'] });
       toast.success('BER rejected');
       setActionTarget(null);
       setRejectReason('');
@@ -53,7 +62,7 @@ const ZPCDashboard: React.FC = () => {
 
   if (isLoading) return <LoadingSpinner />;
 
-  const bersPending = data?.pending_ber_approvals?.length || 2;
+  const bersPending = pendingBERs.length || data?.pending_ber_approvals?.length || 0;
   const appsPending = 1;
   const cppsNonOpen = 1;
   const amendmentsPending = 0;
@@ -186,88 +195,90 @@ const ZPCDashboard: React.FC = () => {
       )}
 
       {activeTab === 'ber-review' && (
-        <div className="max-w-4xl mx-auto space-y-6">
-          {/* BER Summary */}
-          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
-            <h2 className="text-sm font-black text-gray-400 uppercase tracking-[0.2em] mb-4">BER Summary — BER-2026-LAB-07</h2>
-            <div className="grid grid-cols-2 gap-4 text-sm">
-              {[
-                ['Solicitation', 'SOL-2026-LAB-07 — Lab Reagents'],
-                ['Bids Received / Evaluated / Eliminated', '6 / 5 / 1'],
-                ['Recommended', 'Lusaka Reagents Ltd'],
-                ['Award Value', 'K 1,155,000'],
-                ['Method Used', 'Open National Bidding ✅'],
-                ['Citizen Preference', '12% applied to winner'],
-                ['Committee Signatures', 'All 4 members signed ✅'],
-              ].map(([label, value]) => (
-                <div key={label}>
-                  <p className="text-xs text-gray-500">{label}</p>
-                  <p className="font-bold text-gray-900">{value}</p>
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <h2 className="text-lg font-semibold text-gray-900">BERs Pending Review ({pendingBERs.length})</h2>
+            <button
+              onClick={() => navigate('/evaluations/zpc-approval')}
+              className="px-4 py-2 text-xs font-bold text-zammsa-green bg-zammsa-green/5 border border-zammsa-green/20 rounded-lg"
+            >
+              View All BERs
+            </button>
+          </div>
+
+          {pendingBERs.length === 0 ? (
+            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-12 text-center">
+              <CheckIcon className="w-12 h-12 mx-auto text-gray-300 mb-3" />
+              <p className="text-gray-500 font-medium">No BERs pending approval</p>
+              <p className="text-sm text-gray-400 mt-1">Submitted BERs will appear here for ZPC review</p>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {pendingBERs.slice(0, 5).map((ber: any) => (
+                <div key={ber.id} className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+                  <div className="flex items-start justify-between mb-3">
+                    <div>
+                      <p className="font-bold text-gray-900">{ber.solicitation_title || 'BER'}</p>
+                      <p className="text-xs text-gray-500">{ber.solicitation_number || ''} — BER-{ber.id?.slice(0, 8) || ''}</p>
+                    </div>
+                    <StatusBadge status={ber.status || 'submitted'} />
+                  </div>
+                  <div className="grid grid-cols-3 gap-4 text-sm mb-4">
+                    <div>
+                      <p className="text-xs text-gray-500">Award Value</p>
+                      <p className="font-bold text-gray-900 font-mono">
+                        {ber.report_content?.winner?.price
+                          ? `ZMW ${Number(ber.report_content.winner.price).toLocaleString()}`
+                          : '-'}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-gray-500">Signatures</p>
+                      <p className="font-bold text-gray-900">{ber.signed_count || 0}/{ber.required_count || 0}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-gray-500">Submitted</p>
+                      <p className="font-bold text-gray-900">{ber.submitted_at ? new Date(ber.submitted_at).toLocaleDateString() : '-'}</p>
+                    </div>
+                  </div>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => {
+                        evaluationsApi.downloadBER(ber.id).then((blob: Blob) => {
+                          const url = window.URL.createObjectURL(blob);
+                          window.open(url, '_blank');
+                          setTimeout(() => window.URL.revokeObjectURL(url), 60000);
+                        }).catch(() => toast.error('Failed to load BER PDF'));
+                      }}
+                      className="px-3 py-1.5 text-xs font-bold text-zammsa-green bg-zammsa-green/5 border border-zammsa-green/20 rounded-lg flex items-center gap-1"
+                    >
+                      <DocumentTextIcon className="w-3.5 h-3.5" /> View BER
+                    </button>
+                    <button
+                      onClick={() => setActionTarget({ id: ber.id, action: 'approve' })}
+                      className="px-3 py-1.5 text-xs font-bold text-white bg-emerald-500 rounded-lg hover:bg-emerald-600"
+                    >
+                      Approve
+                    </button>
+                    <button
+                      onClick={() => setActionTarget({ id: ber.id, action: 'reject' })}
+                      className="px-3 py-1.5 text-xs font-bold text-white bg-rose-500 rounded-lg hover:bg-rose-600"
+                    >
+                      Reject
+                    </button>
+                  </div>
                 </div>
               ))}
+              {pendingBERs.length > 5 && (
+                <button
+                  onClick={() => navigate('/evaluations/zpc-approval')}
+                  className="w-full py-3 text-sm font-bold text-zammsa-green bg-white border border-gray-200 rounded-xl hover:bg-gray-50"
+                >
+                  View all {pendingBERs.length} pending BERs
+                </button>
+              )}
             </div>
-            <button className="mt-4 px-4 py-2 text-xs font-bold text-zammsa-green bg-zammsa-green/5 border border-zammsa-green/20 rounded-lg flex items-center gap-2">
-              <DocumentTextIcon className="w-4 h-4" /> Download Full BER PDF
-            </button>
-          </div>
-
-          {/* ZPC Checklist */}
-          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
-            <h2 className="text-sm font-black text-gray-400 uppercase tracking-[0.2em] mb-4">ZPC Checklist</h2>
-            <div className="space-y-3">
-              {[
-                'Evaluation methodology was appropriate for procurement type',
-                'All bids treated equally and fairly',
-                'Preference scheme correctly applied',
-                'Post-qualification verification was adequate',
-                'Recommended supplier is eligible (not debarred)',
-                'Award value is within approved budget',
-              ].map((item, i) => (
-                <label key={i} className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg cursor-pointer">
-                  <input type="checkbox" defaultChecked className="accent-zammsa-green" />
-                  <span className="text-sm text-gray-700">{item}</span>
-                </label>
-              ))}
-            </div>
-          </div>
-
-          {/* ZPC Decision */}
-          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
-            <h2 className="text-sm font-black text-gray-400 uppercase tracking-[0.2em] mb-4">ZPC Decision</h2>
-            <div className="space-y-4">
-              {[
-                { value: 'approve', label: 'Approve BER and recommended award' },
-                { value: 'reject', label: 'Reject — return for re-evaluation' },
-                { value: 'clarify', label: 'Request clarification before deciding' },
-              ].map((opt) => (
-                <label key={opt.value} className="flex items-center gap-3 p-3 border border-gray-200 rounded-lg cursor-pointer hover:bg-gray-50">
-                  <input type="radio" name="zpc-decision" className="accent-zammsa-green" />
-                  <span className="text-sm font-medium text-gray-800">{opt.label}</span>
-                </label>
-              ))}
-            </div>
-
-            <div className="mt-4">
-              <label className="text-xs font-medium text-gray-700 block mb-1">ZPC Resolution Reference</label>
-              <input defaultValue="ZPC-2026-MTG-07 / Item 2" className="w-full border border-gray-200 rounded-lg px-4 py-2 text-sm" />
-            </div>
-
-            <div className="mt-4">
-              <label className="text-xs font-medium text-gray-700 block mb-1">ZPC Comments</label>
-              <textarea
-                defaultValue="Evaluation sound. Citizen preference correctly applied. Post-qualification adequate. Award approved."
-                rows={3}
-                className="w-full border border-gray-200 rounded-lg px-4 py-2 text-sm"
-              />
-            </div>
-
-            <button
-              onClick={() => setActionTarget({ id: 'ber-1', action: 'approve' })}
-              className="mt-4 px-6 py-3 bg-zammsa-green text-white text-sm font-bold rounded-lg hover:bg-green-700"
-            >
-              Submit ZPC Decision
-            </button>
-          </div>
+          )}
         </div>
       )}
 

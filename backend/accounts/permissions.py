@@ -62,3 +62,18 @@ class CanManageEvaluationCommittees(BasePermission):
             'director_procurement',
             'system_admin',
         )
+
+
+class CanManagePostQualifications(BasePermission):
+    def has_permission(self, request, view):
+        if request.method in ('GET', 'HEAD', 'OPTIONS'):
+            return request.user.is_authenticated
+
+        return request.user.is_authenticated and request.user.role in (
+            'procurement_officer',
+            'procurement_manager',
+            'director_procurement',
+            'evaluation_committee_chair',
+            'evaluation_committee_member',
+            'system_admin',
+        )

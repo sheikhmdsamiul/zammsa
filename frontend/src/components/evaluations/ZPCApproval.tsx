@@ -171,7 +171,15 @@ const ZPCApproval: React.FC = () => {
                   </div>
                   <div>
                     <dt className="text-gray-500">Signatures</dt>
-                    <dd className="font-semibold text-emerald-600">{reviewPanel.signed_count || 0}/{reviewPanel.required_count || 0} ✅</dd>
+                    <dd className="font-semibold text-emerald-600">
+                      {reviewPanel.signed_count || 0}/{reviewPanel.required_count || 0} {reviewPanel.all_signed || (reviewPanel.signed_count >= reviewPanel.required_count && reviewPanel.required_count > 0) ? '✅' : '⏳'}
+                    </dd>
+                    <div>
+                      <dt className="text-gray-500">Status</dt>
+                      <dd className="font-semibold">
+                        <span className={`px-2 py-1 rounded-full text-xs font-bold ${reviewPanel.all_signed ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'} be`}>{reviewPanel.status || 'pending'}</span>
+                      </dd>
+                    </div>
                   </div>
                 </dl>
               </div>

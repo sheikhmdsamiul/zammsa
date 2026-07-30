@@ -1,5 +1,8 @@
 from rest_framework import serializers
-from .models import BidSubmission, BidDocument, BidSecurity, BidOpening, BidOpeningDetail, PreBidConference
+from .models import (
+    BidSubmission, BidDocument, BidSecurity,
+    BidOpening, BidOpeningDetail, PreBidConference,
+)
 
 
 class BidDocumentSerializer(serializers.ModelSerializer):
@@ -10,7 +13,7 @@ class BidDocumentSerializer(serializers.ModelSerializer):
     class Meta:
         model = BidDocument
         fields = '__all__'
-        read_only_fields = ('document_id', 'uploaded_at')
+        read_only_fields = ('document_id', 'uploaded_at', 'file_size', 'mime_type', 'file_hash')
 
     def get_filename(self, obj):
         return obj.file_path.split('/')[-1] if '/' in obj.file_path else obj.file_path
@@ -29,6 +32,9 @@ class BidDocumentSerializer(serializers.ModelSerializer):
         if self._is_sealed_financial_document(instance):
             data['file_path'] = ''
             data['filename'] = '[SEALED]'
+            data['file_size'] = None
+            data['mime_type'] = ''
+            data['file_hash'] = ''
         return data
 
     def _is_sealed_financial_document(self, obj):
@@ -65,14 +71,30 @@ class BidSubmissionSerializer(serializers.ModelSerializer):
     solicitation_type = serializers.CharField(source='solicitation.method', read_only=True)
     solicitation_status = serializers.CharField(source='solicitation.status', read_only=True)
     closing_date = serializers.DateTimeField(source='solicitation.closing_date', read_only=True)
+    submitted_from_ip = serializers.IPAddressField(read_only=True)
+    parent_bid_id = serializers.UUIDField(source='parent_bid.bid_id', read_only=True, allow_null=True)
 
     class Meta:
         model = BidSubmission
         fields = '__all__'
-        read_only_fields = ('bid_id', 'submission_id', 'receipt_number', 'submission_timestamp', 'submitted_at', 'created_at', 'updated_at')
+        read_only_fields = (
+            'bid_id', 'submission_id', 'receipt_number', 'submission_timestamp',
+            'submitted_at', 'created_at', 'updated_at', 'is_late', 'late_reason',
+            'submitted_from_ip', 'version', 'parent_bid',
+        )
+
+    def validate_bid_price(self, value):
+        if value is not None and value < 0:
+            raise serializers.ValidationError('Bid price cannot be negative')
+        return value
+
+    def validate_security_amount(self, value):
+        if value is not None and value < 0:
+            raise serializers.ValidationError('Security amount cannot be negative')
+        return value
 
     def create(self, validated_data):
-        for f in ('bid_amount', 'bid_number', 'vendor', 'vendor_name', 'receipt_number'):
+        for f in ('bid_amount', 'bid_number', 'vendor', 'vendor_name', 'receipt_number', 'submitted_from_ip'):
             self.initial_data.pop(f, None)
         currency = self.initial_data.get('currency')
         if currency and 'currency' not in validated_data:
@@ -93,7 +115,14 @@ class BidSubmissionListSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = BidSubmission
-        fields = ('id', 'bid_id', 'submission_id', 'receipt_number', 'bid_number', 'vendor_name', 'supplier_name', 'bid_price', 'bid_amount', 'currency', 'status', 'is_late', 'financial_envelope_encrypted', 'addenda_acknowledged', 'submitted_at', 'solicitation_title', 'solicitation_number', 'solicitation_type', 'closing_date', 'line_items')
+        fields = (
+            'id', 'bid_id', 'submission_id', 'receipt_number', 'bid_number',
+            'vendor_name', 'supplier_name', 'bid_price', 'bid_amount',
+            'currency', 'status', 'is_late', 'financial_envelope_encrypted',
+            'addenda_acknowledged', 'submitted_at', 'solicitation_title',
+            'solicitation_number', 'solicitation_type', 'closing_date',
+            'line_items', 'version', 'lot_number',
+        )
 
 
 class BidOpeningDetailSerializer(serializers.ModelSerializer):

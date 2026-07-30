@@ -4,6 +4,8 @@ import {
   MyScoresResponse, ScoreAverageResult, ScoreThresholdResult,
   ConsolidatedScoresResponse, QCBSResponse,
   SelectWinnerResponse, AuthorizeOpeningResponse, PassedTechBidsResponse,
+  PostQualification, PQVerificationContext, PQRankingSummary, PQStage,
+  PQCondition, PQCommitteeReview,
 } from '../types';
 
 export const evaluationsApi = {
@@ -97,19 +99,32 @@ export const evaluationsApi = {
     api.get(`/evaluations/reports/${reportId}/pdf/?format=pdf`, { responseType: 'blob' }).then((r) => r.data),
 
   listPostQuals: (params?: Record<string, any>) =>
-    api.get<PaginatedResponse<any>>('/evaluations/post-qualifications/', { params }).then((r) => r.data),
+    api.get<PaginatedResponse<PostQualification>>('/evaluations/post-qualifications/', { params }).then((r) => r.data),
 
   getPostQual: (pqId: string) =>
-    api.get<any>(`/evaluations/post-qualifications/${pqId}/`).then((r) => r.data),
+    api.get<PostQualification>(`/evaluations/post-qualifications/${pqId}/`).then((r) => r.data),
 
-  updatePQItem: (pqId: string, data: { item_id: string; status?: string; notes?: string; contact_result?: string }) =>
-    api.post<any>(`/evaluations/post-qualifications/${pqId}/update-item/`, data).then((r) => r.data),
+  updatePQItem: (pqId: string, data: {
+    item_id: string;
+    status?: string;
+    notes?: string;
+    contact_result?: string;
+    site_visit?: { date: string; visited_by: string; location: string; observations: string; photos?: string[] };
+    reference_data?: { organization: string; contact_person: string; contact_number: string; questions: { question: string; response: string }[]; contact_attempts: number; unable_to_reach: boolean; unable_to_reach_reason?: string };
+  }) =>
+    api.post<{ message: string; pq: PostQualification }>(`/evaluations/post-qualifications/${pqId}/update-item/`, data).then((r) => r.data),
 
   generatePQChecklist: (pqId: string) =>
-    api.post<any>(`/evaluations/post-qualifications/${pqId}/generate-checklist/`).then((r) => r.data),
+    api.post<{ message: string; pq: PostQualification; auto_verified_count: number }>(`/evaluations/post-qualifications/${pqId}/generate-checklist/`).then((r) => r.data),
 
   getPQVerificationContext: (pqId: string) =>
-    api.get<any>(`/evaluations/post-qualifications/${pqId}/verification-context/`).then((r) => r.data),
+    api.get<PQVerificationContext>(`/evaluations/post-qualifications/${pqId}/verification-context/`).then((r) => r.data),
+
+  reassignPQ: (pqId: string, assignedTo: string) =>
+    api.post<{ message: string; pq: PostQualification }>(`/evaluations/post-qualifications/${pqId}/reassign/`, { assigned_to: assignedTo }).then((r) => r.data),
+
+  savePQNotes: (pqId: string, notes: string) =>
+    api.post<{ message: string; pq: PostQualification }>(`/evaluations/post-qualifications/${pqId}/notes/`, { notes }).then((r) => r.data),
 
   listBERs: (params?: Record<string, any>) =>
     api.get<PaginatedResponse<any>>('/evaluations/reports/', { params }).then((r) => r.data),
@@ -166,4 +181,34 @@ export const evaluationsApi = {
 
   getAppealActionLogs: (appealId: string) =>
     api.get<any>(`/evaluations/award-appeals/${appealId}/action-logs/`).then((r) => r.data),
+
+  submitPQChairDecision: (pqId: string, data: { decision: 'passed' | 'failed' | 'passed_with_conditions'; decision_notes?: string; conditions?: PQCondition[] }) =>
+    api.post<{ message: string; pq: PostQualification }>(`/evaluations/post-qualifications/${pqId}/chair-decision/`, data).then((r) => r.data),
+
+  advancePQStage: (pqId: string, stage: PQStage) =>
+    api.post<{ message: string; pq: PostQualification }>(`/evaluations/post-qualifications/${pqId}/advance-stage/`, { stage }).then((r) => r.data),
+
+  managePQDocuments: (pqId: string, data: any) =>
+    api.post<any>(`/evaluations/post-qualifications/${pqId}/documents/`, data).then((r) => r.data),
+
+  getPQDocuments: (pqId: string) =>
+    api.get<any>(`/evaluations/post-qualifications/${pqId}/documents/`).then((r) => r.data),
+
+  managePQConditions: (pqId: string, data: any) =>
+    api.post<any>(`/evaluations/post-qualifications/${pqId}/conditions/`, data).then((r) => r.data),
+
+  getPQConditions: (pqId: string) =>
+    api.get<any>(`/evaluations/post-qualifications/${pqId}/conditions/`).then((r) => r.data),
+
+  submitPQRecommendation: (pqId: string, recommendation: string) =>
+    api.post<{ message: string; pq: PostQualification }>(`/evaluations/post-qualifications/${pqId}/recommendation/`, { recommendation }).then((r) => r.data),
+
+  submitPQCommitteeReview: (pqId: string, data: { decision: 'approve' | 'approve_with_conditions' | 'reject'; comments?: string }) =>
+    api.post<{ message: string; review: PQCommitteeReview }>(`/evaluations/post-qualifications/${pqId}/committee-review/`, { action: 'review', ...data }).then((r) => r.data),
+
+  getPQCommitteeReviews: (pqId: string) =>
+    api.get<any>(`/evaluations/post-qualifications/${pqId}/committee-review/`).then((r) => r.data),
+
+  getPQRankingSummary: (solicitationId: string) =>
+    api.get<PQRankingSummary>(`/evaluations/post-qualifications/ranking-summary/${solicitationId}/`).then((r) => r.data),
 };

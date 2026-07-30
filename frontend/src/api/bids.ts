@@ -21,11 +21,11 @@ export const bidsApi = {
       headers: { 'Content-Type': 'multipart/form-data' },
     }).then((r) => r.data),
 
-  withdraw: (id: string) =>
-    api.patch(`/bids/${id}/`, { status: 'withdrawn' }).then((r) => r.data),
+  withdraw: (id: string, reason?: string) =>
+    api.post(`/bids/${id}/withdraw/`, { reason }).then((r) => r.data),
 
-  modify: (id: string, data: Partial<Bid>) =>
-    api.patch<Bid>(`/bids/${id}/`, data).then((r) => r.data),
+  modify: (id: string, data: Record<string, any>) =>
+    api.post(`/bids/${id}/modify/`, data).then((r) => r.data),
 
   verifySecurity: (id: string, data: { verified: boolean; notes?: string }) =>
     api.post(`/bids/securities/`, { bid: id, ...data }).then((r) => r.data),

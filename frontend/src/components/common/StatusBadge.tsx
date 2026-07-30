@@ -28,6 +28,8 @@ const statusStyles: Record<string, { bg: string; text: string; dot: string }> = 
   sent: { bg: 'bg-indigo-50', text: 'text-indigo-600', dot: 'bg-indigo-500' },
   confirmed: { bg: 'bg-emerald-50', text: 'text-emerald-600', dot: 'bg-emerald-500' },
   pending: { bg: 'bg-amber-50', text: 'text-amber-600', dot: 'bg-amber-500' },
+  in_progress: { bg: 'bg-blue-50', text: 'text-blue-600', dot: 'bg-blue-500' },
+  cleared: { bg: 'bg-emerald-50', text: 'text-emerald-600', dot: 'bg-emerald-500' },
   verified: { bg: 'bg-emerald-50', text: 'text-emerald-600', dot: 'bg-emerald-500' },
   failed: { bg: 'bg-rose-50', text: 'text-rose-600', dot: 'bg-rose-500' },
   overdue: { bg: 'bg-rose-50', text: 'text-rose-600', dot: 'bg-rose-500' },

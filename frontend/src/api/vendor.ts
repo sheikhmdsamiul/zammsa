@@ -64,10 +64,10 @@ export const vendorApi = {
     },
     getAddenda: (solicitationId: string) =>
       api.get<{ solicitation: string; addenda: any[]; total_addenda: number }>(`/bids/addenda/${solicitationId}/`).then((r) => r.data),
-    withdraw: (id: string) =>
-      api.patch(`/bids/${id}/`, { status: 'withdrawn' }).then((r) => r.data),
-    modify: (id: string, data: FormData) =>
-      api.patch<Bid>(`/bids/${id}/`, data).then((r) => r.data),
+    withdraw: (id: string, reason?: string) =>
+      api.post(`/bids/${id}/withdraw/`, { reason }).then((r) => r.data),
+    modify: (id: string, data: Record<string, any>) =>
+      api.post(`/bids/${id}/modify/`, data).then((r) => r.data),
     downloadDocument: (bidId: string, documentId: string) =>
       api.get(`/bids/${bidId}/`, { responseType: 'blob' }),
   },
